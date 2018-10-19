@@ -1,5 +1,5 @@
 import logging
-logger = logging.getLogger("mlbstreamer")
+logger = logging.getLogger(__name__)
 import os
 import re
 import base64
@@ -607,7 +607,7 @@ class MLBStreamSession(BAMStreamSessionMixin, StreamSession):
 
         if sport_code != "mlb":
             media_title = "MiLBTV"
-            raise MLBPlayException("Sorry, MiLB.tv streams are not yet supported")
+            raise SGException("Sorry, MiLB.tv streams are not yet supported")
 
         sports_url = (
             "http://statsapi.mlb.com/api/v1/sports"

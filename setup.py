@@ -6,13 +6,13 @@ import sys
 from os import path
 from glob import glob
 
-name = "mlbstreamer"
+name = "streamglob"
 setup(name=name,
       version="0.0.11.dev0",
-      description="MLB.tv Stream Browser",
+      description="Streaming video browser and player frontend",
       author="Tony Cebzanov",
       author_email="tonycpsu@gmail.com",
-      url="https://github.com/tonycpsu/mlbstreamer",
+      url="https://github.com/tonycpsu/streamglob",
       classifiers=[
           "Environment :: Console",
           "License :: OSI Approved :: GNU General Public License v2 (GPLv2)",
@@ -43,8 +43,8 @@ setup(name=name,
       test_suite="test",
       entry_points = {
           "console_scripts": [
-              "mlbstreamer=mlbstreamer.__main__:main",
-              "mlbplay=mlbstreamer.play:main"
+              "streamglob=streamglob.__main__:main",
+              "sgplay=streamglob.play:main"
           ],
       }
      )

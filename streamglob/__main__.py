@@ -33,6 +33,7 @@ from . import utils
 from . import session
 from .exceptions import *
 
+PACKAGE_NAME=__name__.split('.')[0]
 
 class UrwidLoggingHandler(logging.Handler):
 
@@ -660,7 +661,7 @@ class ScheduleView(BaseView):
                 preferred_stream = preferred_stream,
                 offset = offset
             )
-        except play.MLBPlayException as e:
+        except play.SGException as e:
             logger.warning(e)
 
 
@@ -696,7 +697,7 @@ def main():
                         help="game specifier", nargs="?")
     options, args = parser.parse_known_args()
 
-    log_file = os.path.join(config.CONFIG_DIR, "mlbstreamer.log")
+    log_file = os.path.join(config.CONFIG_DIR, f"{PACKAGE_NAME}.log")
 
     # formatter = logging.Formatter(
     #     "%(asctime)s [%(module)16s:%(lineno)-4d] [%(levelname)8s] %(message)s",
@@ -707,7 +708,7 @@ def main():
     fh.setLevel(logging.DEBUG)
     # fh.setFormatter(formatter)
 
-    logger = logging.getLogger("mlbstreamer")
+    logger = logging.getLogger(PACKAGE_NAME)
     # logger.setLevel(logging.INFO)
     # logger.addHandler(fh)
 
@@ -730,10 +731,7 @@ def main():
             provider = list(config.settings.profile.providers.keys())[0]
             game_date = dateutil.parser.parse(options.game)
 
-
-
-
-    logger.debug("mlbstreamer starting")
+    logger.debug(f"{PACKAGE_NAME} starting")
 
     entries = Dropdown.get_palette_entries()
     entries.update(ScrollingListBox.get_palette_entries())
@@ -766,7 +764,6 @@ def main():
         pop_ups=True
     )
     ulh.connect(state.loop.watch_pipe(log_console.log_message))
-    logger.info("mlbstreamer starting")
     if options.verbose:
         logger.setLevel(logging.DEBUG)
 

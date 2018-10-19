@@ -98,7 +98,7 @@ def play_stream(game_specifier, resolution=None,
         game = date["games"][game_number-1]
         game_id = game["gamePk"]
     except IndexError:
-        raise MLBPlayException("No game %d found for %s on %s" %(
+        raise SGException("No game %d found for %s on %s" %(
             game_number, team, game_date)
         )
 
@@ -125,7 +125,7 @@ def play_stream(game_specifier, resolution=None,
             call_letters = call_letters
         ))
     except StopIteration:
-        raise MLBPlayException("no matching media for game %d" %(game_id))
+        raise SGException("no matching media for game %d" %(game_id))
 
     # media_id = media["mediaId"] if "mediaId" in media else media["guid"]
 
@@ -156,7 +156,7 @@ def play_stream(game_specifier, resolution=None,
             # media_url = stream["stream"]["complete"]
             media_url = stream.url
         except (TypeError, AttributeError):
-            raise MLBPlayException("no stream URL for game %d" %(game_id))
+            raise SGException("no stream URL for game %d" %(game_id))
 
     offset_timestamp = None
     offset_seconds = None
@@ -167,7 +167,7 @@ def play_stream(game_specifier, resolution=None,
 
         if isinstance(offset, str):
             if not offset in timestamps:
-                raise MLBPlayException("Couldn't find inning %s" %(offset))
+                raise SGException("Couldn't find inning %s" %(offset))
             offset = timestamps[offset] - timestamps["SO"]
             logger.debug("inning offset: %s" %(offset))
 
@@ -380,9 +380,9 @@ def main():
             verbose = options.verbose
         )
         proc.wait()
-    except MLBPlayInvalidArgumentError as e:
+    except SGPlayInvalidArgumentError as e:
         raise argparse.ArgumentTypeError(str(e))
-    except MLBPlayException as e:
+    except SGException as e:
         logger.error(e)
 
 

@@ -1,4 +1,4 @@
 build
 dist
-mlbstreamer.egg-info
+streamglob.egg-info
 *.pyc

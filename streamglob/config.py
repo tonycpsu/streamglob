@@ -20,9 +20,10 @@ from prompt_toolkit.shortcuts import confirm
 from prompt_toolkit.shortcuts import prompt
 import getpass
 
-CONFIG_DIR=os.path.expanduser("~/.config/mlbstreamer")
+PACKAGE_NAME=__name__.split('.')[0]
+CONFIG_DIR=os.path.expanduser(f"~/.config/{PACKAGE_NAME}")
 CONFIG_FILE=os.path.join(CONFIG_DIR, "config.yaml")
-LOG_FILE=os.path.join(CONFIG_DIR, "mlbstreamer.log")
+LOG_FILE=os.path.join(CONFIG_DIR, f"{PACKAGE_NAME}.log")
 
 KNOWN_PLAYERS = ["mpv", "vlc"]
 
