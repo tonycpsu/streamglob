@@ -683,9 +683,6 @@ def main():
         config.settings.set_profile(options.profile)
 
     parser = argparse.ArgumentParser()
-    # parser.add_argument("-d", "--date", help="game date",
-    #                     type=utils.valid_date,
-    #                     default=today)
     parser.add_argument("-r", "--resolution", help="stream resolution",
                         default=config.settings.profile.default_resolution)
     group = parser.add_mutually_exclusive_group()
@@ -722,14 +719,15 @@ def main():
                         quiet_stdout=True)
 
     try:
-        (provider, game_date) = options.game.split("/", 1)
+        (provider, game_date) = options.game.split("/")
+        game_date = dateutil.parser.parse(game_date)
     except (ValueError, AttributeError):
-        if options.game in session.PROVIDERS:
-            provider = options.game
-            game_date = datetime.now().date()
-        else:
-            provider = list(config.settings.profile.providers.keys())[0]
+        try:
             game_date = dateutil.parser.parse(options.game)
+            provider = list(config.settings.profile.providers.keys())[0]
+        except (TypeError, ValueError):
+            game_date = datetime.now().date()
+            provider = options.game
 
     logger.debug(f"{PACKAGE_NAME} starting")
 
