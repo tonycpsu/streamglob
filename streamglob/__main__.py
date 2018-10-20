@@ -364,42 +364,37 @@ class ResolutionDropdown(Dropdown):
         return self.resolutions
 
 
-class Toolbar(urwid.WidgetWrap):
+class ProviderToolbar(urwid.WidgetWrap):
 
     signals = ["provider_change"]
 
     def __init__(self):
 
-        # self.league_dropdown = Dropdown(AttrDict([
-        #         ("MLB", 1),
-        #         ("AAA", 11),
-        #     ]) , label="League")
-
-
-        self.provider_dropdown = Dropdown(AttrDict(
-            [ (p.upper(), p)
-              for p in session.PROVIDERS]
-        ) , label="Provider", margin=1)
-
-        urwid.connect_signal(
-            self.provider_dropdown, "change",
-            lambda w, b, v: self._emit("provider_change", v)
-        )
+        self.league_dropdown = Dropdown(AttrDict([
+                ("MLB", 1),
+                ("AAA", 11),
+            ]) , label="League")
 
         self.live_stream_dropdown = Dropdown([
             "live",
             "from start"
         ], label="Live streams")
 
-        self.resolution_dropdown_placeholder = urwid.WidgetPlaceholder(urwid.Text(""))
+        self.resolution_dropdown = ResolutionDropdown(
+            state.session.RESOLUTIONS,
+            default=options.resolution
+        )
+
+        # self.resolution_dropdown_placeholder.original_widget = self.resolution_dropdown
+
+        # self.resolution_dropdown_placeholder = urwid.WidgetPlaceholder(urwid.Text(""))
         self.columns = urwid.Columns([
-            ('weight', 1, self.provider_dropdown),
             ('weight', 1, self.live_stream_dropdown),
-            ('weight', 1, self.resolution_dropdown_placeholder),
+            ('weight', 1, self.resolution_dropdown),
             # ("weight", 1, urwid.Padding(urwid.Text("")))
         ])
         self.filler = urwid.Filler(self.columns)
-        super(Toolbar, self).__init__(self.filler)
+        super(ProviderToolbar, self).__init__(self.filler)
 
     @property
     def provider(self):
@@ -418,13 +413,13 @@ class Toolbar(urwid.WidgetWrap):
         return self.live_stream_dropdown.selected_label == "from start"
 
 
-    def set_resolutions(self, resolutions):
+    # def set_resolutions(self, resolutions):
 
-        self.resolution_dropdown = ResolutionDropdown(
-            resolutions,
-            default=options.resolution
-        )
-        self.resolution_dropdown_placeholder.original_widget = self.resolution_dropdown
+    #     self.resolution_dropdown = ResolutionDropdown(
+    #         resolutions,
+    #         default=options.resolution
+    #     )
+    #     self.resolution_dropdown_placeholder.original_widget = self.resolution_dropdown
 
 
 class DateBar(urwid.WidgetWrap):
@@ -566,42 +561,31 @@ class WatchDialog(BasePopUp):
 
 class ScheduleView(BaseView):
 
-    def __init__(self, provider, date):
+    def __init__(self, provider, date=None):
 
+        if not date:
+            date = datetime.now().date()
         self.game_date = date
 
-        self.toolbar = Toolbar()
-        urwid.connect_signal(
-            self.toolbar, "provider_change",
-            lambda w, p: self.set_provider(p)
-        )
+        self.toolbar = ProviderToolbar()
+        # urwid.connect_signal(
+        #     self.toolbar, "provider_change",
+        #     lambda w, p: self.set_provider(p)
+        # )
 
         self.table_placeholder = urwid.WidgetPlaceholder(urwid.Text(""))
 
         self.datebar = DateBar(self.game_date)
-        # self.table = GamesDataTable(self.toolbar.sport_id, self.game_date) # preseason
+        self.table = GamesDataTable(provider, self.game_date) # preseason
         self.pile  = urwid.Pile([
             (1, self.toolbar),
             (1, self.datebar),
-            ("weight", 1, self.table_placeholder)
+            ("weight", 1, self.table)
         ])
         self.pile.focus_position = 2
 
         super(ScheduleView, self).__init__(self.pile)
-        self.set_provider(provider)
-
-    def set_provider(self, provider):
-
-        logger.warning("set provider")
-        self.provider = provider
-        state.session = session.new(self.provider)
-        self.toolbar.set_resolutions(state.session.RESOLUTIONS)
-
-        self.table = GamesDataTable(self.provider, self.game_date) # preseason
-        self.table_placeholder.original_widget = self.table
-        urwid.connect_signal(self.table, "select",
-                             lambda source, selection: self.open_watch_dialog(selection["game_id"]))
-
+        # self.set_provider(provider)
 
 
     def open_watch_dialog(self, game_id):
@@ -663,6 +647,69 @@ class ScheduleView(BaseView):
             )
         except play.SGException as e:
             logger.warning(e)
+
+
+class MainToolbar(urwid.WidgetWrap):
+
+    signals = ["provider_change"]
+    def __init__(self, provider):
+
+        self.provider_dropdown = Dropdown(AttrDict(
+            [ (p.upper(), p)
+              for p in session.PROVIDERS]
+        ) , label="Provider", default=provider, margin=1)
+
+        urwid.connect_signal(
+            self.provider_dropdown, "change",
+            lambda w, b, v: self._emit("provider_change", v)
+        )
+
+        self.columns = urwid.Columns([
+            ('weight', 1, self.provider_dropdown),
+        ])
+        self.filler = urwid.Filler(self.columns)
+        super(MainToolbar, self).__init__(self.filler)
+
+    @property
+    def provider(self):
+        return (self.provider_dropdown.selected_value)
+
+
+
+class MainView(BaseView):
+
+    def __init__(self, provider):
+
+        self.provider = provider
+        self.toolbar = MainToolbar(self.provider)
+        urwid.connect_signal(
+            self.toolbar, "provider_change",
+            lambda w, p: self.set_provider(p)
+        )
+
+        self.provider_view_placeholder = urwid.WidgetPlaceholder(urwid.Text(""))
+
+        self.pile  = urwid.Pile([
+            (1, self.toolbar),
+            ('weight', 1, self.provider_view_placeholder),
+        ])
+        # self.pile.focus_position = 2
+        super(MainView, self).__init__(self.pile)
+        self.set_provider(self.provider)
+
+    def set_provider(self, provider):
+
+        logger.warning("set provider")
+        self.provider = provider
+        state.session = session.new(provider)
+        # self.toolbar.set_resolutions(state.session.RESOLUTIONS)
+
+        self.provider_view = ScheduleView(provider)
+        self.provider_view_placeholder.original_widget = self.provider_view
+        # self.table = GamesDataTable(self.provider, self.game_date) # preseason
+        # self.table_placeholder.original_widget = self.table
+        # urwid.connect_signal(self.table, "select",
+        #                      lambda source, selection: self.open_watch_dialog(selection["game_id"]))
 
 
 
@@ -739,7 +786,7 @@ def main():
     screen = urwid.raw_display.Screen()
     screen.set_terminal_properties(256)
 
-    view = ScheduleView(provider, game_date)
+    view = MainView(provider)
 
     log_console = widgets.ConsoleWindow()
     # log_box = urwid.BoxAdapter(urwid.LineBox(log_console), 10)
