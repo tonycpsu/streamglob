@@ -1,7 +1,10 @@
 import abc
+import re
 
 import urwid
 import panwid
+
+from orderedattrdict import AttrDict
 
 from ... import session
 from functools import wraps
@@ -11,11 +14,18 @@ def get(provider, *args, **kwargs):
                            if k.lower() == f"{provider}Provider".lower())
     return provider_class(*args, **kwargs)
 
+class MediaItem(AttrDict):
+
+    def __repr__(self):
+        s = ",".join(f"{k}={v}" for k, v in self.items() if k != "title")
+        return f"<{self.__class__.__name__}: {self.title}{ ' (' + s if s else ''})>"
+
 
 class BaseProvider(abc.ABC):
 
     SESSION_CLASS = session.StreamSession
     FILTERS = []
+    ATTRIBUTES = ["title"]
 
     def __init__(self, *args, **kwargs):
         self.session = self.SESSION_CLASS(*args, **kwargs)
@@ -50,10 +60,15 @@ class FilterToolbar(urwid.WidgetWrap):
 
 class ProviderDataTable(panwid.DataTable):
     
-    columns = [panwid.DataTableColumn("item")]
+    # columns = [panwid.DataTableColumn("item")]
+
+    def __init__(self, listings_method, columns, *args, **kwargs):
+        self.listings_method = listings_method
+        self.columns = columns
+        super(ProviderDataTable,  self).__init__(*args, **kwargs)
 
     def query(self, *args, **kwargs):
-        return []
+        return self.listings_method()
         
     
 class SimpleProviderViewMixin(object):
@@ -61,7 +76,10 @@ class SimpleProviderViewMixin(object):
     def make_view(self):        
 
         self.toolbar = FilterToolbar(self.FILTERS)
-        self.table = ProviderDataTable()
+        self.table = ProviderDataTable(
+            self.listings,
+            [ panwid.DataTableColumn(a) for a in self.ATTRIBUTES ]
+        )
         
         self.pile  = urwid.Pile([
             (1, self.toolbar),
@@ -127,5 +145,9 @@ class TestProvider(SimpleProviderViewMixin, BaseProvider):
         print(self.session)
 
     def listings(self):
-        pass
+        return [ MediaItem(title=t) for t in ["a", "b" ,"c" ] ]
         
+PROVIDERS_RE = re.compile(r"(.+)Provider$")
+PROVIDERS = [ k.replace("Provider", "").lower()
+              for k in globals() if PROVIDERS_RE.search(k) ]
+    

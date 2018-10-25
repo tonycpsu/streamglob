@@ -31,6 +31,7 @@ from . import play
 from . import widgets
 from . import utils
 from . import session
+from . import providers
 from .exceptions import *
 
 PACKAGE_NAME=__name__.split('.')[0]
@@ -656,7 +657,7 @@ class MainToolbar(urwid.WidgetWrap):
 
         self.provider_dropdown = Dropdown(AttrDict(
             [ (p.upper(), p)
-              for p in session.PROVIDERS]
+              for p in providers.base.PROVIDERS]
         ) , label="Provider", default=provider, margin=1)
 
         urwid.connect_signal(
