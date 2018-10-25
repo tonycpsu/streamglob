@@ -27,7 +27,7 @@ import dateutil.parser
 
 from . import config
 from . import state
-from .state import memo
+# from .state import memo
 from .exceptions import *
 
 USER_AGENT = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10.12; rv:56.0) "
@@ -48,6 +48,8 @@ class Media(AttrDict):
 class Stream(AttrDict):
     pass
 
+
+
 class StreamSession(object):
     """
     Top-level stream session interface
@@ -65,7 +67,6 @@ class StreamSession(object):
 
     def __init__(
             self,
-            username, password,
             proxies=None,
             no_cache=False,
             *args, **kwargs
@@ -78,8 +79,6 @@ class StreamSession(object):
         self.cookies.load(self.COOKIES_FILE, ignore_discard=True)
         self.session.headers = self.HEADERS
         self._state = AttrDict([
-            ("username", username),
-            ("password", password),
             ("proxies", proxies)
         ])
         self.no_cache = no_cache
@@ -93,9 +92,10 @@ class StreamSession(object):
         # if not self.logged_in:
         self.login()
         # logger.debug("already logged in")
-            # return
+            # return\
 
-
+    def login(self):
+        pass
 
     @classmethod
     def session_type(cls):
@@ -118,15 +118,12 @@ class StreamSession(object):
         return self._SESSION_FILE()
 
     @classmethod
-    def new(cls, **kwargs):
+    def new(cls, *args, **kwargs):
         try:
-            return cls.load(**kwargs)
+            return cls.load(*args, **kwargs)
         except FileNotFoundError:
-            logger.trace(f"creating new session: {kwargs}")
-            provider = config.settings.profile.providers.get(cls.session_type())
-            return cls(username=provider.username,
-                       password=provider.password,
-                       **kwargs)
+            logger.trace(f"creating new session: {args}, {kwargs}")
+            return cls(*args, **kwargs)
 
     @property
     def cookies(self):
@@ -206,14 +203,6 @@ class StreamSession(object):
         return response
 
     @property
-    def username(self):
-        return self._state.username
-
-    @property
-    def password(self):
-        return self._state.password
-
-    @property
     def proxies(self):
         return self._state.proxies
 
@@ -268,6 +257,28 @@ class StreamSession(object):
             "WHERE last_seen < datetime('now', '-%d days')" %(days)
         )
 
+class AuthenticatedStreamSession(StreamSession):
+
+    def __init__(
+        self,
+        username, password,
+        *args, **kwargs
+    ):
+        super(MLBStreamSession, self).__init__(
+            *args, **kwargs
+        )
+        self._state.username = username
+        self._state.password = password
+
+    @property
+    def username(self):
+        return self._state.username
+
+    @property
+    def password(self):
+        return self._state.password
+
+
 class BAMStreamSessionMixin(object):
     """
     StreamSession subclass for BAMTech Media stream providers, which currently
@@ -275,7 +286,7 @@ class BAMStreamSessionMixin(object):
     """
     sport_id = 1 # FIXME
 
-    @memo(region="short")
+    # @memo(region="short")
     def schedule(
             self,
             # sport_id=None,
@@ -307,7 +318,7 @@ class BAMStreamSessionMixin(object):
         with self.cache_responses_short():
             return self.get(url).json()
 
-    @memo(region="short")
+    # @memo(region="short")
     def get_epgs(self, game_id, title=None):
 
         schedule = self.schedule(game_id=game_id)
@@ -355,7 +366,8 @@ class BAMStreamSessionMixin(object):
 
 
 
-class MLBStreamSession(BAMStreamSessionMixin, StreamSession):
+
+class MLBStreamSession(BAMStreamSessionMixin, AuthenticatedStreamSession):
 
     SCHEDULE_TEMPLATE = (
         "http://statsapi.mlb.com/api/v1/schedule"
@@ -602,7 +614,7 @@ class MLBStreamSession(BAMStreamSessionMixin, StreamSession):
 
     #     return self.get(GAME_FEED_URL.format(game_id=game_id)).json()
 
-    @memo(region="long")
+    # @memo(region="long")
     def teams(self, sport_code="mlb", season=None):
 
         if sport_code != "mlb":
@@ -742,7 +754,7 @@ class MLBStreamSession(BAMStreamSessionMixin, StreamSession):
 
 
 
-class NHLStreamSession(BAMStreamSessionMixin, StreamSession):
+class NHLStreamSession(BAMStreamSessionMixin, AuthenticatedStreamSession):
 
     AUTH = b"web_nhl-v1.0.0:2d1d846ea3b194a18ef40ac9fbce97e3"
 
@@ -851,7 +863,7 @@ class NHLStreamSession(BAMStreamSessionMixin, StreamSession):
         self._state.token = value
 
 
-    @memo(region="long")
+    # @memo(region="long")
     def teams(self, sport_code="mlb", season=None):
 
         teams_url = (

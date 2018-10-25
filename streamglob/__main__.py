@@ -676,6 +676,7 @@ class MainToolbar(urwid.WidgetWrap):
 
 
 
+
 class MainView(BaseView):
 
     def __init__(self, provider):
@@ -701,11 +702,15 @@ class MainView(BaseView):
 
         logger.warning("set provider")
         self.provider = provider
-        state.session = session.new(provider)
+        # state.session = session.new(provider)
         # self.toolbar.set_resolutions(state.session.RESOLUTIONS)
 
-        self.provider_view = ScheduleView(provider)
-        self.provider_view_placeholder.original_widget = self.provider_view
+        state.set_provider(provider)
+        self.provider_view_placeholder.original_widget = state.provider.make_view()
+
+        # self.provider_view = ScheduleView(provider)
+        # self.provider_view_placeholder.original_widget = self.provider_view
+
         # self.table = GamesDataTable(self.provider, self.game_date) # preseason
         # self.table_placeholder.original_widget = self.table
         # urwid.connect_signal(self.table, "select",

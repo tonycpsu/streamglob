@@ -19,7 +19,7 @@ setup(name=name,
           "Intended Audience :: End Users/Desktop"
       ],
       license = "GPLv2",
-      packages=find_packages(),
+      packages=find_packages() + ["streamgrab.providers"],
       data_files=[
           ('share/doc/%s' % name, ["docs/config.yaml.sample"]),
       ],
@@ -38,7 +38,8 @@ setup(name=name,
           "prompt_toolkit",
           "urwid",
           "urwid_utils>=0.1.2",
-          "panwid>=0.2.5"
+          "panwid>=0.2.5",
+          "stevedore"
       ],
       test_suite="test",
       entry_points = {
