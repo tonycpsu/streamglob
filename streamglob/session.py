@@ -264,7 +264,7 @@ class AuthenticatedStreamSession(StreamSession):
         username, password,
         *args, **kwargs
     ):
-        super(MLBStreamSession, self).__init__(
+        super(AuthenticatedStreamSession, self).__init__(
             *args, **kwargs
         )
         self._state.username = username

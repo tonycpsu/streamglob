@@ -706,7 +706,8 @@ class MainView(BaseView):
         # state.session = session.new(provider)
         # self.toolbar.set_resolutions(state.session.RESOLUTIONS)
 
-        state.set_provider(provider)
+        cfg = config.settings.profile.providers.get(provider, {})
+        state.set_provider(provider, **cfg)
         self.provider_view_placeholder.original_widget = state.provider.make_view()
 
         # self.provider_view = ScheduleView(provider)

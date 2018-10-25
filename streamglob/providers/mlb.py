@@ -1,8 +1,12 @@
-from .base import BaseProvider
-
 from ..session import *
 
-class MLBProvider(SimpleProviderViewMixin, base.BaseProvider):
+from . import base
+from . import bam
+from .filters import *
+
+class MLBProvider(base.SimpleProviderViewMixin,
+                  bam.BAMProviderMixin,
+                  base.BaseProvider):
 
     SESSION_CLASS = AuthenticatedStreamSession
     FILTERS = [
@@ -13,4 +17,4 @@ class MLBProvider(SimpleProviderViewMixin, base.BaseProvider):
         print(self.session)
 
     def listings(self):
-        return [ MediaItem(title=t) for t in ["a", "b" ,"c" ] ]
+        return [ base.MediaItem(title=t) for t in ["a", "b" ,"c" ] ]

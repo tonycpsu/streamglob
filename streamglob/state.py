@@ -8,7 +8,7 @@ memo = Memoizer(store)
 memo.regions['short'] = {'max_age': 60}
 memo.regions['long'] = {'max_age': 900}
 
-def set_provider(p):
+def set_provider(p, **kwargs):
 
     global provider
-    provider = providers.get(p)
+    provider = providers.get(p, **kwargs)
