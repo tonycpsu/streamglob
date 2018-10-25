@@ -1,5 +1,5 @@
 from memoize import *
-from .providers import base
+from . import providers
 
 provider = None
 session = None
@@ -11,4 +11,4 @@ memo.regions['long'] = {'max_age': 900}
 def set_provider(p):
 
     global provider
-    provider = base.get(p)
+    provider = providers.get(p)

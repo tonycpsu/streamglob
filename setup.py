@@ -19,7 +19,7 @@ setup(name=name,
           "Intended Audience :: End Users/Desktop"
       ],
       license = "GPLv2",
-      packages=find_packages() + ["streamgrab.providers"],
+      packages=find_packages(),
       data_files=[
           ('share/doc/%s' % name, ["docs/config.yaml.sample"]),
       ],
