@@ -1,5 +1,4 @@
 import logging
-# global logger
 # logger = logging.getLogger(__name__)
 import os
 from datetime import datetime, timedelta
@@ -15,6 +14,7 @@ from panwid.datatable import *
 from panwid.listbox import ScrollingListBox
 from panwid.dropdown import *
 from panwid.dialog import *
+from tonyc_utils.logging import *
 
 import pytz
 from orderedattrdict import AttrDict
@@ -760,17 +760,12 @@ def main():
     # fh.setFormatter(formatter)
 
     logger = logging.getLogger(PACKAGE_NAME)
-    # logger.setLevel(logging.INFO)
-    # logger.addHandler(fh)
 
     ulh = UrwidLoggingHandler()
-    # ulh.setLevel(logging.DEBUG)
-    # ulh.setFormatter(formatter)
-    # logger.addHandler(ulh)
 
-    utils.setup_logging(options.verbose - options.quiet,
-                        handlers=[fh, ulh],
-                        quiet_stdout=True)
+    setup_logging(options.verbose - options.quiet,
+                  handlers=[fh, ulh],
+                  quiet_stdout=True)
 
     try:
         (provider, game_date) = options.game.split("/")

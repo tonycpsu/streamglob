@@ -1,3 +1,5 @@
+import logging
+logger = logging.getLogger(__name__)
 
 class BAMProviderMixin(object):
     """
@@ -35,8 +37,8 @@ class BAMProviderMixin(object):
             team_id = team_id if team_id else "",
             game_id = game_id if game_id else ""
         )
-        with self.cache_responses_short():
-            return self.get(url).json()
+        # with self.cache_responses_short():
+        return self.session.get(url).json()
 
     # @memo(region="short")
     def get_epgs(self, game_id, title=None):

@@ -1,7 +1,8 @@
 import abc
 
-from ..session import *
+from orderedattrdict import AttrDict
 
+from ..session import *
 from .widgets import *
 
 class MediaItem(AttrDict):
@@ -10,6 +11,12 @@ class MediaItem(AttrDict):
         s = ",".join(f"{k}={v}" for k, v in self.items() if k != "title")
         return f"<{self.__class__.__name__}: {self.title}{ ' (' + s if s else ''})>"
 
+class MediaAttributes(AttrDict):
+
+    def __repr__(self):
+        state = "!" if self.state == "MEDIA_ON" else "."
+        free = "_" if self.free else "$"
+        return f"{state}{free}"
 
 class BaseProvider(abc.ABC):
 
@@ -40,7 +47,7 @@ class SimpleProviderViewMixin(object):
         self.toolbar = FilterToolbar(self.FILTERS)
         self.table = ProviderDataTable(
             self.listings,
-            [ panwid.DataTableColumn(a) for a in self.ATTRIBUTES ]
+            [ panwid.DataTableColumn(k, **v if v else {}) for k, v in self.ATTRIBUTES.items() ]
         )
 
         self.pile  = urwid.Pile([
