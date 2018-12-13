@@ -1,6 +1,7 @@
 import logging
 logger = logging.getLogger(__name__)
 
+from orderedattrdict import AttrDict
 from panwid.datatable import *
 
 from ..session import *
@@ -98,6 +99,11 @@ def format_start_time(d):
         s = s[1:]
     return s
 
+class MLBListingFilter(ListingFilter):
+
+    @property
+    def values(self):
+        return ["foo", "bar", "baz"]
 
 class MLBProvider(SimpleProviderViewMixin,
                   bam.BAMProviderMixin,
@@ -112,9 +118,7 @@ class MLBProvider(SimpleProviderViewMixin,
     )
 
     SESSION_CLASS = AuthenticatedStreamSession
-    FILTERS = [
-        FixedListingFilter(["foo", "bar", "baz"])
-    ]
+
     ATTRIBUTES = {
         "attrs": {"width": 6},
         "start": {"width": 6, "format_fn": format_start_time},
@@ -123,16 +127,22 @@ class MLBProvider(SimpleProviderViewMixin,
         "line": {}
     }
 
+    FILTERS = AttrDict([
+        ("date", DateFilter),
+        ("foo", MLBListingFilter)
+    ])
+
     def login(self):
         print(self.session)
 
     def listings(self):
         # return [ MediaItem(line=t) for t in ["a", "b" ,"c" ] ]
 
+        # logger.info(f"listings: {self.filters.date.value}")
         j = self.schedule(
         #     # sport_id=self.sport_id,
-            start = datetime(2018, 9, 29),
-            end = datetime(2018, 9, 29),
+            start = self.filters.date.value,
+            end = self.filters.date.value,
             # game_type = "R"
         )
         # logger.info(j)
@@ -193,4 +203,3 @@ class MLBProvider(SimpleProviderViewMixin,
                     line = self.line_score,
                     attrs = attrs
                 ))
-        # return []

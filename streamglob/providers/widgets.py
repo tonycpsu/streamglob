@@ -3,14 +3,21 @@ import panwid
 
 class FilterToolbar(urwid.WidgetWrap):
 
-    signals = ["provider_change"]
+    signals = ["filter_change"]
+
     def __init__(self, filters):
 
-        self.filters = [ f.make_widget() for f in filters ]
+        self.filters = filters
         self.columns = urwid.Columns([
-            ('weight', 1, f)
-            for f in self.filters
+            ('weight', 1, f.widget)
+            for f in self.filters.values()
         ])
+
+        for n, f in self.filters.items():
+            urwid.connect_signal(
+                f.widget, "change",
+                lambda s, w, v: self._emit("filter_change", n, v)
+            )
         self.filler = urwid.Filler(self.columns)
         super(FilterToolbar, self).__init__(self.filler)
 

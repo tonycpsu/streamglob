@@ -54,7 +54,7 @@ class UrwidLoggingHandler(logging.Handler):
         msg = self.format(rec)
         (ignore, ready, ignore) = select.select([], [self.pipe], [])
         if self.pipe in ready:
-            os.write(self.pipe, (msg+"\n").encode("utf-8"))
+            os.write(self.pipe, (msg[:512]+"\n").encode("utf-8"))
 
 
 def parse_int(n):

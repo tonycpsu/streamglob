@@ -11,6 +11,7 @@ class MediaItem(AttrDict):
         s = ",".join(f"{k}={v}" for k, v in self.items() if k != "title")
         return f"<{self.__class__.__name__}: {self.title}{ ' (' + s if s else ''})>"
 
+
 class MediaAttributes(AttrDict):
 
     def __repr__(self):
@@ -18,15 +19,21 @@ class MediaAttributes(AttrDict):
         free = "_" if self.free else "$"
         return f"{state}{free}"
 
+
 class BaseProvider(abc.ABC):
 
     SESSION_CLASS = StreamSession
-    FILTERS = []
+    # FILTERS = AttrDict()
     ATTRIBUTES = ["title"]
 
     def __init__(self, *args, **kwargs):
         self.session = self.SESSION_CLASS(*args, **kwargs)
-        # self.filters = [ f() for f in self.FILTERS ]
+        self.filters = AttrDict({n: f() for n, f in self.FILTERS.items() })
+
+    # @property
+    # @abc.abstractmethod
+    # def filters(self):
+    #     pass
 
     @abc.abstractmethod
     def login(self):
@@ -40,19 +47,33 @@ class BaseProvider(abc.ABC):
     def make_view(self):
         pass
 
+    @abc.abstractmethod
+    def update(self):
+        pass
+
+
 class SimpleProviderViewMixin(object):
 
     def make_view(self):
 
-        self.toolbar = FilterToolbar(self.FILTERS)
+        self.toolbar = FilterToolbar(self.filters)
         self.table = ProviderDataTable(
             self.listings,
             [ panwid.DataTableColumn(k, **v if v else {}) for k, v in self.ATTRIBUTES.items() ]
         )
+        urwid.connect_signal(self.toolbar, "filter_change", self.on_filter_change)
 
         self.pile  = urwid.Pile([
-            (1, self.toolbar),
+            (12, self.toolbar),
             ("weight", 1, self.table)
         ])
         self.pile.focus_position = 1
         return self.pile
+
+    def on_filter_change(self, source, widget, value):
+        self.update()
+
+    def update(self):
+
+        self.table.reset()
+        # self.table.requery()

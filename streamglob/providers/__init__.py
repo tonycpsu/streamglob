@@ -19,9 +19,11 @@ def get(provider, *args, **kwargs):
 class TestProvider(base.SimpleProviderViewMixin, base.BaseProvider):
 
     SESSION_CLASS = session.StreamSession
-    FILTERS = [
-        FixedListingFilter(["foo", "bar", "baz"])
-    ]
+    @property
+    def filters(self):
+        return AttrDict([
+            ("foo",  FixedListingFilter(["foo", "bar", "baz"]))
+        ])
 
     def login(self):
         print(self.session)
