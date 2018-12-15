@@ -12,6 +12,7 @@ class FilterToolbar(urwid.WidgetWrap):
             ('weight', 1, f.widget)
             for f in self.filters.values()
         ])
+        # self.columns.focus_position = 0
 
         for n, f in self.filters.items():
             urwid.connect_signal(
@@ -21,6 +22,8 @@ class FilterToolbar(urwid.WidgetWrap):
         self.filler = urwid.Filler(self.columns)
         super(FilterToolbar, self).__init__(self.filler)
 
+    def keypress(self, size, key):
+        return super(FilterToolbar, self).keypress(size, key)
 
 class ProviderDataTable(panwid.DataTable):
 

@@ -64,10 +64,10 @@ class SimpleProviderViewMixin(object):
         urwid.connect_signal(self.toolbar, "filter_change", self.on_filter_change)
 
         self.pile  = urwid.Pile([
-            (12, self.toolbar),
+            (3, self.toolbar),
             ("weight", 1, self.table)
         ])
-        self.pile.focus_position = 1
+        self.pile.focus_position = 0
         return self.pile
 
     def on_filter_change(self, source, widget, value):

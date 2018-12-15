@@ -666,6 +666,8 @@ class MainToolbar(urwid.WidgetWrap):
         )
 
         self.columns = urwid.Columns([
+            (4, urwid.Padding(urwid.Text(""))),
+            # ('weight', 1, urwid.Padding(urwid.Edit("foo"))),
             ('weight', 1, self.provider_dropdown),
         ])
         self.filler = urwid.Filler(self.columns)
@@ -695,7 +697,7 @@ class MainView(BaseView):
             (1, self.toolbar),
             ('weight', 1, self.provider_view_placeholder),
         ])
-        # self.pile.focus_position = 2
+        self.pile.focus_position = 1
         super(MainView, self).__init__(self.pile)
         self.set_provider(self.provider)
 
@@ -783,6 +785,28 @@ def main():
     entries = Dropdown.get_palette_entries()
     entries.update(ScrollingListBox.get_palette_entries())
     entries.update(DataTable.get_palette_entries())
+
+    for (n, f, b) in  [
+            ("reveal_focus",             "black",            "light green"),
+           ("dp_barActive_focus",       "light gray",       "black"),
+           ("dp_barActive_offFocus",    "black",            "black"),
+           ("dp_barInactive_focus",     "dark gray",        "black"),
+           ("dp_barInactive_offFocus",  "black",            "black"),
+           ("dp_highlight_focus",       "black",            "yellow"),
+           ("dp_highlight_offFocus",    "white",            "black"),
+           ("text_highlight",           "yellow",           "black"),
+           ("text_bold",                "white",             "black"),
+           ("text_esc",                 "light red",   "black")
+    ]:
+        entries[n] = PaletteEntry(
+            name=n,
+            mono="white",
+            foreground=f,
+            background=b,
+            foreground_high=f,
+            background_high=b
+        )
+
     # raise Exception(entries)
     palette = Palette("default", **entries)
     screen = urwid.raw_display.Screen()
