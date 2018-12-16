@@ -950,9 +950,9 @@ def new(provider, *args, **kwargs):
     session_class = globals().get(f"{provider.upper()}StreamSession")
     return session_class.new(*args, **kwargs)
 
-PROVIDERS_RE = re.compile(r"(.+)StreamSession$")
-PROVIDERS = [ k.replace("StreamSession", "").lower()
-              for k in globals() if PROVIDERS_RE.search(k) ]
+# PROVIDERS_RE = re.compile(r"(.+)StreamSession$")
+# PROVIDERS = [ k.replace("StreamSession", "").lower()
+#               for k in globals() if PROVIDERS_RE.search(k) ]
 
 
 def main():

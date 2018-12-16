@@ -7,8 +7,8 @@ class State(AttrDict):
 
     @property
     def session(self):
-        return None
-        # return self._provider.session
+        # return None
+        return self._provider.session
 
     @property
     def provider(self):

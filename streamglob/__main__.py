@@ -531,7 +531,7 @@ class MainToolbar(urwid.WidgetWrap):
 
         self.provider_dropdown = Dropdown(AttrDict(
             [ (p.upper(), p)
-              for p in providers.base.PROVIDERS]
+              for p in providers.PROVIDERS]
         ) , label="Provider", default=provider, margin=1)
 
         urwid.connect_signal(

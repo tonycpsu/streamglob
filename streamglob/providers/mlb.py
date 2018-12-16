@@ -1,6 +1,10 @@
 import logging
 logger = logging.getLogger(__name__)
 
+import shlex
+import subprocess
+from itertools import chain
+
 import urwid
 
 from orderedattrdict import AttrDict
@@ -255,7 +259,7 @@ class MLBProvider(SimpleProviderViewMixin,
         "&hydrate=linescore,team,game(content(summary,media(epg)),tickets)"
     )
 
-    SESSION_CLASS = NHLStreamSession
+    SESSION_CLASS = MLBStreamSession
 
     ATTRIBUTES = {
         "attrs": {"width": 6},
