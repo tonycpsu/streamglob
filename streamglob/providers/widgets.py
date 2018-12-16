@@ -25,6 +25,8 @@ class FilterToolbar(urwid.WidgetWrap):
     def keypress(self, size, key):
         return super(FilterToolbar, self).keypress(size, key)
 
+
+
 class ProviderDataTable(panwid.DataTable):
 
     # columns = [panwid.DataTableColumn("item")]

@@ -1,7 +1,7 @@
 
 import urwid
 import panwid
-from . import state
+from .state import *
 
 class ScrollbackListBox(panwid.listbox.ScrollingListBox):
 

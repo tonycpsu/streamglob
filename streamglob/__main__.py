@@ -24,7 +24,7 @@ import yaml
 import orderedattrdict.yamlutils
 from orderedattrdict.yamlutils import AttrDictYAMLLoader
 
-from . import state
+from .state import *
 from .state import memo
 from . import config
 from . import play
@@ -434,132 +434,6 @@ class DateBar(urwid.WidgetWrap):
         self.text.set_text(game_date.strftime("%A, %Y-%m-%d"))
 
 
-class WatchDialog(BasePopUp):
-
-    signals = ["watch"]
-
-    def __init__(self, game_id,
-                 resolution=None, from_beginning=None):
-
-        self.game_id = game_id
-        self.resolution = resolution
-        self.from_beginning = from_beginning
-
-        self.game_data = state.session.schedule(
-            game_id=self.game_id,
-        )["dates"][0]["games"][0]
-        # raise Exception(self.game_data)
-
-        self.title = urwid.Text("%s@%s" %(
-            self.game_data["teams"]["away"]["team"]["abbreviation"],
-            self.game_data["teams"]["home"]["team"]["abbreviation"],
-        ))
-
-        feed_map = sorted([
-            ("%s (%s)" %(e["mediaFeedType"].title(),
-                         e["callLetters"]), e["mediaId"].lower())
-            for e in state.session.get_media(self.game_id)
-        ], key=lambda v: v[0])
-        home_feed = next(state.session.get_media(
-            self.game_id,
-            preferred_stream = "home"
-        ))
-        self.live_stream = (home_feed.get("mediaState") == "MEDIA_ON")
-        self.feed_dropdown = Dropdown(
-            feed_map,
-            label="Feed",
-            default=home_feed["mediaId"]
-        )
-        urwid.connect_signal(
-            self.feed_dropdown,
-            "change",
-            lambda s, b, media_id: self.update_inning_dropdown(media_id)
-        )
-
-        self.resolution_dropdown = ResolutionDropdown(
-            default=resolution
-        )
-
-        self.inning_dropdown_placeholder = urwid.WidgetPlaceholder(urwid.Text(""))
-        self.update_inning_dropdown(self.feed_dropdown.selected_value)
-
-        self.ok_button = urwid.Button("OK")
-        urwid.connect_signal(self.ok_button, "click", self.watch)
-
-        self.cancel_button = urwid.Button("Cancel")
-        urwid.connect_signal(
-            self.cancel_button, "click",
-            lambda b: urwid.signals.emit_signal(self, "close_popup")
-        )
-
-        pile = urwid.Pile([
-            ("pack", self.title),
-            ("weight", 1, urwid.Pile([
-                ("weight", 1, urwid.Filler(
-                    urwid.Columns([
-                        ("weight", 1, self.feed_dropdown),
-                        ("weight", 1, self.resolution_dropdown),
-                    ]))),
-                ("weight", 1, urwid.Filler(self.inning_dropdown_placeholder)),
-                ("weight", 1, urwid.Filler(
-                    urwid.Columns([
-                    ("weight", 1, self.ok_button),
-                    ("weight", 1, self.cancel_button),
-                ])))
-            ]))
-        ])
-        super(WatchDialog, self).__init__(pile)
-
-    def update_inning_dropdown(self, media_id):
-        # raise Exception(media_id)
-        self.timestamps = state.session.media_timestamps(
-            self.game_id, media_id
-        )
-        del self.timestamps["S"]
-        timestamp_map = AttrDict(
-            ( k if k[0] in "TB" else "Start", k ) for k in self.timestamps.keys()
-        )
-        timestamp_map["Live"] = False
-        self.inning_dropdown = Dropdown(
-            timestamp_map, label="Begin playback",
-            default = (
-                timestamp_map["Start"] if (
-                    not self.live_stream or self.from_beginning
-                ) else timestamp_map["Live"]
-            )
-        )
-        self.inning_dropdown_placeholder.original_widget = self.inning_dropdown
-
-
-    def watch(self, source):
-        urwid.signals.emit_signal(
-            self,
-            "watch",
-            self.game_id,
-            self.resolution_dropdown.selected_value,
-            self.feed_dropdown.selected_value,
-            self.inning_dropdown.selected_value
-        )
-        urwid.signals.emit_signal(self, "close_popup")
-
-    def keypress(self, size, key):
-
-        if key == "meta enter":
-            self.ok_button.keypress(size, "enter")
-        elif key in ["<", ">"]:
-            self.resolution_dropdown.cycle(1 if key == "<" else -1)
-        elif key in ["[", "]"]:
-            self.feed_dropdown.cycle(-1 if key == "[" else 1)
-        elif key in ["-", "="]:
-            self.inning_dropdown.cycle(-1 if key == "-" else 1)
-        else:
-            # return super(WatchDialog, self).keypress(size, key)
-            key = super(WatchDialog, self).keypress(size, key)
-        if key:
-            return
-        return key
-
-
 class ScheduleView(BaseView):
 
     def __init__(self, provider, date=None):
@@ -752,6 +626,7 @@ def main():
 
     log_file = os.path.join(config.CONFIG_DIR, f"{PACKAGE_NAME}.log")
 
+
     # formatter = logging.Formatter(
     #     "%(asctime)s [%(module)16s:%(lineno)-4d] [%(levelname)8s] %(message)s",
     #     datefmt="%Y-%m-%d %H:%M:%S"
@@ -781,6 +656,8 @@ def main():
             provider = options.game
 
     logger.debug(f"{PACKAGE_NAME} starting")
+
+    providers.load()
 
     entries = Dropdown.get_palette_entries()
     entries.update(ScrollingListBox.get_palette_entries())

@@ -26,7 +26,7 @@ from datetime import datetime, timedelta
 import dateutil.parser
 
 from . import config
-from . import state
+from .state import *
 # from .state import memo
 from .exceptions import *
 
@@ -957,7 +957,7 @@ PROVIDERS = [ k.replace("StreamSession", "").lower()
 
 def main():
 
-    from . import state
+    # from .state import *
     from . import utils
     import argparse
 

@@ -47,5 +47,8 @@ setup(name=name,
               "streamglob=streamglob.__main__:main",
               "sgplay=streamglob.play:main"
           ],
+          "streamglob.providers": [
+              "mlb = streamglob.providers.mlb:MLBProvider"
+          ]
       }
      )

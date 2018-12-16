@@ -15,12 +15,11 @@ import dateutil.parser
 from orderedattrdict import AttrDict
 
 from . import config
-from . import state
+from .state import *
 from . import session
 from . import utils
 from .exceptions import *
 # from .session import *
-
 
 def handle_exception(exc_type, exc_value, exc_traceback):
     if state.session:

@@ -62,6 +62,7 @@ class SimpleProviderViewMixin(object):
             [ panwid.DataTableColumn(k, **v if v else {}) for k, v in self.ATTRIBUTES.items() ]
         )
         urwid.connect_signal(self.toolbar, "filter_change", self.on_filter_change)
+        urwid.connect_signal(self.table, "select", self.on_select)
 
         self.pile  = urwid.Pile([
             (3, self.toolbar),
@@ -72,6 +73,9 @@ class SimpleProviderViewMixin(object):
 
     def on_filter_change(self, source, widget, value):
         self.update()
+
+    def on_select(self, widget, selection):
+        self.play(selection)
 
     def update(self):
 
