@@ -1,10 +1,6 @@
 import logging
 logger = logging.getLogger(__name__)
 
-import shlex
-import subprocess
-from itertools import chain
-
 import urwid
 
 from orderedattrdict import AttrDict
@@ -119,7 +115,7 @@ class BasePopUp(urwid.WidgetWrap):
 
     def selectable(self):
         return True
-    
+
 
 class MLBWatchDialog(BasePopUp):
 
@@ -244,9 +240,9 @@ class MLBWatchDialog(BasePopUp):
             key = super(MLBWatchDialog, self).keypress(size, key)
         if key:
             return
-        return key    
+        return key
 
-    
+
 class MLBProvider(SimpleProviderViewMixin,
                   bam.BAMProviderMixin,
                   BaseProvider):
@@ -349,31 +345,56 @@ class MLBProvider(SimpleProviderViewMixin,
     def play(self, selection):
 
         game_id = selection.get("game_id")
-        self.watch(game_id)
+        url = self.get_url(game_id)
+        self.play_stream(url)
 
-    def watch(self, game_id,
-              resolution=None, feed=None,
-              offset=None, preferred_stream=None):
+    # def watch(self, game_id,
+    #           resolution=None, feed=None,
+    #           offset=None, preferred_stream=None):
+
+    #     try:
+    #         state.proc = self.play_stream(
+    #             game_id,
+    #             resolution,
+    #             call_letters = feed,
+    #             preferred_stream = preferred_stream,
+    #             offset = offset
+    #         )
+    #     except SGException as e:
+    #         logger.warning(e)
+
+
+    # FIXME: move
+    def get_output_filename(self, game, station, resolution, offset=None):
 
         try:
-            state.proc = self.play_stream(
-                game_id,
-                resolution,
-                call_letters = feed,
-                preferred_stream = preferred_stream,
-                offset = offset
-            )
-        except SGException as e:
-            logger.warning(e)
+            start_time = dateutil.parser.parse(
+                game["gameDate"]
+            ).astimezone(pytz.timezone("US/Eastern"))
+
+            game_date = start_time.date().strftime("%Y%m%d")
+            game_time = start_time.time().strftime("%H%M")
+            if offset:
+                game_time = "%s_%s" %(game_time, offset)
+            return "mlb.%s.%s@%s.%s.%s.ts" \
+                   % (game_date,
+                      game["teams"]["away"]["team"]["fileCode"],
+                      game["teams"]["home"]["team"]["fileCode"],
+                      game_time,
+                      station.lower()
+                      )
+        except KeyError:
+            return "mlb.%d.%s.ts" % (game["gamePk"], resolution)
 
 
-    def play_stream(self, game_specifier, resolution=None,
-                    offset=None,
-                    media_id = None,
-                    preferred_stream=None,
-                    call_letters=None,
-                    output=None,
-                    verbose=0):
+
+    def get_url(self, game_specifier, resolution=None,
+                offset=None,
+                media_id = None,
+                preferred_stream=None,
+                call_letters=None,
+                output=None,
+                verbose=0):
 
         live = False
         team = None
@@ -492,97 +513,6 @@ class MLBProvider(SimpleProviderViewMixin,
             except (TypeError, AttributeError):
                 raise SGException("no stream URL for game %d" %(game_id))
 
-        offset_timestamp = None
-        offset_seconds = None
-
-        if (offset is not False and offset is not None):
-
-            timestamps = state.session.media_timestamps(game_id, media_id)
-
-            if isinstance(offset, str):
-                if not offset in timestamps:
-                    raise SGException("Couldn't find inning %s" %(offset))
-                offset = timestamps[offset] - timestamps["SO"]
-                logger.debug("inning offset: %s" %(offset))
-
-            if (media_state == "MEDIA_ON"): # live stream
-                logger.debug("live stream")
-                # calculate HLS offset, which is negative from end of stream
-                # for live streams
-                start_time = dateutil.parser.parse(timestamps["S"])
-                offset_delta = (
-                    datetime.now(pytz.utc)
-                    - start_time.astimezone(pytz.utc)
-                    + (timedelta(seconds=-offset))
-                )
-            else:
-                logger.debug("recorded stream")
-                offset_delta = timedelta(seconds=offset)
-
-            offset_seconds = offset_delta.seconds
-            offset_timestamp = str(offset_delta)
-            logger.info("starting at time offset %s" %(offset))
-
-        header_args = []
-        cookie_args = []
-
-        if state.session.headers:
-            header_args = list(
-                chain.from_iterable([
-                    ("--http-header", f"{k}={v}")
-                for k, v in state.session.headers.items()
-            ]))
-
-        if state.session.cookies:
-            cookie_args = list(
-                chain.from_iterable([
-                    ("--http-cookie", f"{c.name}={c.value}")
-                for c in state.session.cookies
-            ]))
-
-        cmd = [
-            "streamlink",
-            # "-l", "debug",
-            "--player", config.settings.profile.player,
-        ] + cookie_args + header_args + [
-            media_url,
-            resolution,
-        ]
-
-        if config.settings.profile.streamlink_args:
-            cmd += shlex.split(config.settings.profile.streamlink_args)
-
-        if offset_timestamp:
-            cmd += ["--hls-start-offset", offset_timestamp]
-
-        if verbose > 1:
-
-            allow_stdout=True
-            cmd += ["-l", "debug"]
-
-            if verbose > 2:
-                if not output:
-                    cmd += ["-v"]
-                cmd += ["--ffmpeg-verbose"]
-
-        if output is not None:
-            if output == True or os.path.isdir(output):
-                outfile = get_output_filename(
-                    game,
-                    media["callLetters"],
-                    resolution,
-                    offset=str(offset_seconds)
-                )
-                if os.path.isdir(output):
-                    outfile = os.path.join(output, outfile)
-            else:
-                outfile = output
-
-            cmd += ["-o", outfile]
-
-        logger.debug("Running cmd: %s" % " ".join(cmd))
-        proc = subprocess.Popen(cmd, stdout=None if allow_stdout else open(os.devnull, 'w'))
-        return proc
-            
+        return media_url
 
 # register_provider(MLBProvider)

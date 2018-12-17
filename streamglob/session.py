@@ -90,7 +90,7 @@ class StreamSession(object):
         self.cursor = self.conn.cursor()
         self.cache_purge()
         # if not self.logged_in:
-        self.login()
+        # self.login()
         # logger.debug("already logged in")
             # return\
 
@@ -122,7 +122,7 @@ class StreamSession(object):
         try:
             return cls.load(*args, **kwargs)
         except FileNotFoundError:
-            logger.trace(f"creating new session: {args}, {kwargs}")
+            logger.debug(f"creating new session: {args}, {kwargs}")
             return cls(*args, **kwargs)
 
     @property
@@ -167,6 +167,7 @@ class StreamSession(object):
 
         response = None
         use_cache = not self.no_cache and self._cache_responses
+        # print(self.proxies)
         if use_cache:
             logger.debug("getting cached response for %s" %(url))
             self.cursor.execute(
@@ -213,10 +214,12 @@ class StreamSession(object):
     @proxies.setter
     def proxies(self, value):
         # Override proxy environment variables if proxies are defined on session
-        if value is not None:
+        if value is None:
+            self.session.proxies = {}
+        else:
             self.session.trust_env = (len(value) == 0)
-        self._state.proxies = value
-        self.session.proxies.update(value)
+            self._state.proxies = value
+            self.session.proxies.update(value)
 
 
     @contextmanager
@@ -432,7 +435,6 @@ class MLBStreamSession(BAMStreamSessionMixin, AuthenticatedStreamSession):
         self._state.access_token = access_token
         self._state.access_token_expiry = access_token_expiry
 
-
     def login(self):
 
         if self.logged_in:
@@ -466,6 +468,7 @@ class MLBStreamSession(BAMStreamSessionMixin, AuthenticatedStreamSession):
         )
 
         if not (self.ipid and self.fingerprint):
+            # print(res.content)
             raise StreamSessionException("Couldn't get ipid / fingerprint")
 
         logger.info("logged in: %s" %(self.ipid))
@@ -572,6 +575,8 @@ class MLBStreamSession(BAMStreamSessionMixin, AuthenticatedStreamSession):
         return self._state.access_token
 
     def refresh_access_token(self, clear_token=False):
+        if not self.logged_in:
+            self.login()
         logger.debug("refreshing access token")
         if clear_token:
             self.token = None
