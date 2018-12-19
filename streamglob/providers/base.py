@@ -32,13 +32,12 @@ class BaseProvider(abc.ABC):
 
     def __init__(self, *args, **kwargs):
         # self.session = self.SESSION_CLASS(*args, **kwargs)
-        self.session = self.SESSION_CLASS.new(*args, **kwargs)
-        self.filters = AttrDict({n: f() for n, f in self.FILTERS.items() })
+        self._session = self.SESSION_CLASS.new(*args, **kwargs)
+        self.filters = AttrDict({n: f(provider=self) for n, f in self.FILTERS.items() })
 
-    # @property
-    # @abc.abstractmethod
-    # def filters(self):
-    #     pass
+    @property
+    def session(self):
+        return self._session
 
     @abc.abstractmethod
     def login(self):

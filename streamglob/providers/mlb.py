@@ -109,6 +109,12 @@ class MLBListingFilter(ListingFilter):
     def values(self):
         return ["foo", "bar", "baz"]
 
+class MLBResolutionFilter(ListingFilter):
+    
+    @property
+    def values(self):
+        return self.provider.RESOLUTIONS
+
 class BasePopUp(urwid.WidgetWrap):
 
     signals = ["close_popup"]
@@ -128,7 +134,7 @@ class MLBWatchDialog(BasePopUp):
         self.resolution = resolution
         self.from_beginning = from_beginning
 
-        self.game_data = state.session.schedule(
+        self.game_data = self.session.schedule(
             game_id=self.game_id,
         )["dates"][0]["games"][0]
         # raise Exception(self.game_data)
@@ -141,9 +147,9 @@ class MLBWatchDialog(BasePopUp):
         feed_map = sorted([
             ("%s (%s)" %(e["mediaFeedType"].title(),
                          e["callLetters"]), e["mediaId"].lower())
-            for e in state.session.get_media(self.game_id)
+            for e in self.session.get_media(self.game_id)
         ], key=lambda v: v[0])
-        home_feed = next(state.session.get_media(
+        home_feed = next(self.session.get_media(
             self.game_id,
             preferred_stream = "home"
         ))
@@ -195,7 +201,7 @@ class MLBWatchDialog(BasePopUp):
 
     def update_inning_dropdown(self, media_id):
         # raise Exception(media_id)
-        self.timestamps = state.session.media_timestamps(
+        self.timestamps = self.session.media_timestamps(
             self.game_id, media_id
         )
         del self.timestamps["S"]
@@ -265,9 +271,19 @@ class MLBProvider(SimpleProviderViewMixin,
         "line": {}
     }
 
+    RESOLUTIONS = AttrDict([
+        ("720p", "720p_alt"),
+        ("720p@30", "720p"),
+        ("540p", "540p"),
+        ("504p", "504p"),
+        ("360p", "360p"),
+        ("288p", "288p"),
+        ("224p", "224p")
+    ])    
+
     FILTERS = AttrDict([
         ("date", DateFilter),
-        ("foo", MLBListingFilter)
+        ("resolution", MLBResolutionFilter)
     ])
 
     def login(self):
@@ -411,7 +427,7 @@ class MLBProvider(SimpleProviderViewMixin,
 
         if isinstance(game_specifier, int):
             game_id = game_specifier
-            schedule = state.session.schedule(
+            schedule = self.session.schedule(
                 game_id = game_id
             )
 
@@ -430,7 +446,7 @@ class MLBProvider(SimpleProviderViewMixin,
 
             game_date = dateutil.parser.parse(game_date)
             game_number = int(game_number)
-            teams =  state.session.teams(season=game_date.year)
+            teams =  self.session.teams(season=game_date.year)
             team_id = teams.get(team)
 
             if not team:
@@ -439,7 +455,7 @@ class MLBProvider(SimpleProviderViewMixin,
                 )
                 raise argparse.ArgumentTypeError(msg)
 
-            schedule = state.session.schedule(
+            schedule = self.session.schedule(
                 start = game_date,
                 end = game_date,
                 # sport_id = sport["id"],
@@ -472,7 +488,7 @@ class MLBProvider(SimpleProviderViewMixin,
             )
 
         try:
-            media = next(state.session.get_media(
+            media = next(self.session.get_media(
                 game_id,
                 media_id = media_id,
                 # title=media_title,
@@ -496,16 +512,16 @@ class MLBProvider(SimpleProviderViewMixin,
         if len(profiles):
             # override proxies for team, if defined
             if len(config.settings.profiles[profiles].proxies):
-                old_proxies = state.session.proxies
-                state.session.proxies = config.settings.profiles[profiles].proxies
-                state.session.refresh_access_token(clear_token=True)
-                state.session.proxies = old_proxies
+                old_proxies = self.session.proxies
+                self.session.proxies = config.settings.profiles[profiles].proxies
+                self.session.refresh_access_token(clear_token=True)
+                self.session.proxies = old_proxies
 
         if "playbacks" in media:
             playback = media["playbacks"][0]
             media_url = playback["location"]
         else:
-            stream = state.session.get_stream(media)
+            stream = self.session.get_stream(media)
 
             try:
                 # media_url = stream["stream"]["complete"]

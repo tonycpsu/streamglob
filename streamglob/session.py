@@ -405,16 +405,6 @@ class MLBStreamSession(BAMStreamSessionMixin, AuthenticatedStreamSession):
         "core/Airings?variables={{%22partnerProgramIds%22%3A[%22{game_id}%22]}}"
     )
 
-    RESOLUTIONS = AttrDict([
-        ("720p", "720p_alt"),
-        ("720p@30", "720p"),
-        ("540p", "540p"),
-        ("504p", "504p"),
-        ("360p", "360p"),
-        ("288p", "288p"),
-        ("224p", "224p")
-    ])
-
     def __init__(
             self,
             username, password,

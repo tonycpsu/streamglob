@@ -11,7 +11,8 @@ class Filter(abc.ABC):
 
     signals = ["change"]
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, provider, *args, **kwargs):
+        self.provider = provider
         self.widget = self.WIDGET_CLASS(
             *self.widget_args, **self.widget_kwargs
         )
