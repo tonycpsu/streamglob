@@ -24,22 +24,16 @@ from orderedattrdict.yamlutils import AttrDictYAMLLoader
 import pytz
 from datetime import datetime, timedelta
 import dateutil.parser
+from pony.orm import *
 
 from . import config
+from . import model
 from .state import *
-# from .state import memo
 from .exceptions import *
 
 USER_AGENT = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10.12; rv:56.0) "
               "Gecko/20100101 Firefox/56.0.4")
 
-# Default cache duration to 60 seconds
-CACHE_DURATION_SHORT = 60 # 60 seconds
-CACHE_DURATION_MEDIUM = 60*60*24 # 1 day
-CACHE_DURATION_LONG = 60*60*24*30  # 30 days
-CACHE_DURATION_DEFAULT = CACHE_DURATION_SHORT
-
-CACHE_FILE=os.path.join(config.CONFIG_DIR, "cache.sqlite")
 
 class Media(AttrDict):
     pass
@@ -68,7 +62,6 @@ class StreamSession(object):
     def __init__(
             self,
             proxies=None,
-            no_cache=False,
             *args, **kwargs
     ):
 
@@ -81,14 +74,7 @@ class StreamSession(object):
         self._state = AttrDict([
             ("proxies", proxies)
         ])
-        self.no_cache = no_cache
         self._cache_responses = False
-        if not os.path.exists(CACHE_FILE):
-            self.cache_setup(CACHE_FILE)
-        self.conn = sqlite3.connect(CACHE_FILE,
-                                    detect_types = sqlite3.PARSE_DECLTYPES)
-        self.cursor = self.conn.cursor()
-        self.cache_purge()
         # if not self.logged_in:
         # self.login()
         # logger.debug("already logged in")
@@ -163,6 +149,7 @@ class StreamSession(object):
             return functools.partial(self.request, session_method)
         # raise AttributeError(attr)
 
+    @db_session
     def request(self, method, url, *args, **kwargs):
 
         response = None
@@ -170,36 +157,32 @@ class StreamSession(object):
         # print(self.proxies)
         if use_cache:
             logger.debug("getting cached response for %s" %(url))
-            self.cursor.execute(
-                "SELECT response, last_seen "
-                "FROM response_cache "
-                "WHERE url = ?",
-                (url,)
-            )
-            try:
-                (pickled_response, last_seen) = self.cursor.fetchone()
-                td = datetime.now() - last_seen
+
+            e = model.CacheEntry.get(url=url)
+
+            if e:
+                # (pickled_response, last_seen) = self.cursor.fetchone()
+
+                td = datetime.now() - e.last_seen
                 if td.seconds >= self._cache_responses:
                     logger.debug("cache expired for %s" %(url))
                 else:
-                    response = pickle.loads(pickled_response)
+                    response = pickle.loads(e.response)
                     logger.debug("using cached response for %s" %(url))
-            except TypeError:
+            else:
                 logger.debug("no cached response for %s" %(url))
 
         if not response:
             response = method(url, *args, **kwargs)
             logger.trace(dump.dump_all(response).decode("utf-8"))
-        if use_cache:
-            pickled_response = pickle.dumps(response)
-            sql="""INSERT OR REPLACE
-            INTO response_cache (url, response, last_seen)
-            VALUES (?, ?, ?)"""
-            self.cursor.execute(
-                sql,
-                (url, pickled_response, datetime.now())
-            )
-            self.conn.commit()
+
+            if use_cache:
+                pickled_response = pickle.dumps(response)
+                e = model.CacheEntry(
+                    url = url,
+                    response = pickled_response,
+                    last_seen = datetime.now()
+                )
 
         return response
 
@@ -223,7 +206,7 @@ class StreamSession(object):
 
 
     @contextmanager
-    def cache_responses(self, duration=CACHE_DURATION_DEFAULT):
+    def cache_responses(self, duration=model.CACHE_DURATION_DEFAULT):
         self._cache_responses = duration
         try:
             yield
@@ -231,34 +214,14 @@ class StreamSession(object):
             self._cache_responses = False
 
     def cache_responses_short(self):
-        return self.cache_responses(CACHE_DURATION_SHORT)
+        return self.cache_responses(model.CACHE_DURATION_SHORT)
 
     def cache_responses_medium(self):
-        return self.cache_responses(CACHE_DURATION_MEDIUM)
+        return self.cache_responses(model.CACHE_DURATION_MEDIUM)
 
     def cache_responses_long(self):
-        return self.cache_responses(CACHE_DURATION_LONG)
+        return self.cache_responses(model.CACHE_DURATION_LONG)
 
-    def cache_setup(self, dbfile):
-
-        conn = sqlite3.connect(dbfile)
-        c = conn.cursor()
-        c.execute('''
-        CREATE TABLE response_cache
-        (url TEXT,
-        response TEXT,
-        last_seen TIMESTAMP DEFAULT (datetime('now','localtime')),
-        PRIMARY KEY (url))''');
-        conn.commit()
-        c.close()
-
-    def cache_purge(self, days=CACHE_DURATION_LONG):
-
-        self.cursor.execute(
-            "DELETE "
-            "FROM response_cache "
-            "WHERE last_seen < datetime('now', '-%d days')" %(days)
-        )
 
 class AuthenticatedStreamSession(StreamSession):
 

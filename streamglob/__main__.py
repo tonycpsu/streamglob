@@ -27,6 +27,7 @@ from orderedattrdict.yamlutils import AttrDictYAMLLoader
 from .state import *
 from .state import memo
 from . import config
+from . import model
 from . import play
 from . import widgets
 from . import utils
@@ -348,6 +349,8 @@ def main():
     setup_logging(options.verbose - options.quiet,
                   handlers=[fh, ulh],
                   quiet_stdout=True)
+
+    model.init()
 
     try:
         (provider, game_date) = options.game.split("/")

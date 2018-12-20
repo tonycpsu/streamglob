@@ -39,6 +39,7 @@ setup(name=name,
           "urwid",
           "urwid_utils>=0.1.2",
           "panwid>=0.2.5",
+          "pony",
           "stevedore"
       ],
       test_suite="test",
