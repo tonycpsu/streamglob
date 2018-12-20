@@ -176,13 +176,13 @@ class StreamSession(object):
             response = method(url, *args, **kwargs)
             logger.trace(dump.dump_all(response).decode("utf-8"))
 
-            if use_cache:
-                pickled_response = pickle.dumps(response)
-                e = model.CacheEntry(
-                    url = url,
-                    response = pickled_response,
-                    last_seen = datetime.now()
-                )
+        if use_cache and not e:
+            pickled_response = pickle.dumps(response)
+            e = model.CacheEntry(
+                url = url,
+                response = pickled_response,
+                last_seen = datetime.now()
+            )
 
         return response
 
