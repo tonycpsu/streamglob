@@ -362,7 +362,7 @@ class MLBProvider(SimpleProviderViewMixin,
 
         game_id = selection.get("game_id")
         url = self.get_url(game_id)
-        self.play_stream(url)
+        self.play_stream(url, resolution=self.filters.resolution.value)
 
     # def watch(self, game_id,
     #           resolution=None, feed=None,

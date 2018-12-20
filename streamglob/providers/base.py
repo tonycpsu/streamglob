@@ -56,6 +56,7 @@ class BaseProvider(abc.ABC):
         pass
 
 
+    # FIXME: move to state module?
     def play_stream(self, url,
                     resolution=None,
                     offset=None,
