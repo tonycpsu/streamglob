@@ -178,7 +178,7 @@ class SimpleProviderViewMixin(object):
         urwid.connect_signal(self.table, "select", self.on_select)
 
         self.pile  = urwid.Pile([
-            (3, self.toolbar),
+            (1, self.toolbar),
             ("weight", 1, self.table)
         ])
         self.pile.focus_position = 0

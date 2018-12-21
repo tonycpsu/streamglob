@@ -8,17 +8,25 @@ class FilterToolbar(urwid.WidgetWrap):
     def __init__(self, filters):
 
         self.filters = filters
-        self.columns = urwid.Columns([
-            ('weight', 1, f.widget)
-            for f in self.filters.values()
-        ])
-        # self.columns.focus_position = 0
+        # self.columns = urwid.Columns([
+        #     # ('weight', 1, f.widget)
+        #     ("pack", f.widget)
+        #     for f in self.filters.values()
+        # ])
+        self.columns = urwid.Columns([])
+        for n, f in self.filters.items():
+            self.columns.contents += [
+                (urwid.Text(f"{n.title()}: "), self.columns.options("pack")),
+                (f.widget, self.columns.options(*f.widget_sizing(f.widget))),
+            ]
+        self.columns.focus_position = 1
 
         for n, f in self.filters.items():
             urwid.connect_signal(
                 f.widget, "change",
                 lambda s, w, v: self._emit("filter_change", n, v)
             )
+
         self.filler = urwid.Filler(self.columns)
         super(FilterToolbar, self).__init__(self.filler)
 

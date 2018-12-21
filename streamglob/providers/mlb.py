@@ -110,7 +110,7 @@ class MLBListingFilter(ListingFilter):
         return ["foo", "bar", "baz"]
 
 class MLBResolutionFilter(ListingFilter):
-    
+
     @property
     def values(self):
         return self.provider.RESOLUTIONS
@@ -279,7 +279,7 @@ class MLBProvider(SimpleProviderViewMixin,
         ("360p", "360p"),
         ("288p", "288p"),
         ("224p", "224p")
-    ])    
+    ])
 
     FILTERS = AttrDict([
         ("date", DateFilter),

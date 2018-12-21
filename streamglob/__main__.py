@@ -246,7 +246,6 @@ class MainToolbar(urwid.WidgetWrap):
         )
 
         self.columns = urwid.Columns([
-            (4, urwid.Padding(urwid.Text(""))),
             # ('weight', 1, urwid.Padding(urwid.Edit("foo"))),
             ('weight', 1, self.provider_dropdown),
         ])
@@ -275,9 +274,10 @@ class MainView(BaseView):
 
         self.pile  = urwid.Pile([
             (1, self.toolbar),
+            (1, urwid.Filler(urwid.Divider("-"))),
             ('weight', 1, self.provider_view_placeholder),
         ])
-        self.pile.focus_position = 1
+        self.pile.focus_position = 2
         super(MainView, self).__init__(self.pile)
         self.set_provider(self.provider)
 

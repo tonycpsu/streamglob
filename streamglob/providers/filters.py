@@ -41,24 +41,44 @@ class TextFilter(Filter):
 
     WIDGET_CLASS = urwid.Edit
 
+
+class DateDisplay(urwid.WidgetWrap):
+
+    def __init__(self, initial_date, date_format=None, selectable=False):
+        self.initial_date = initial_date
+        self.date_format = date_format or "%Y-%m-%d"
+        if selectable:
+            self.widget = urwid.SelectableIcon("", 0)
+        else:
+            self.widget = urwid.Text("")
+        super().__init__(self.widget)
+        self.date = self.initial_date
+
+    @property
+    def date(self):
+        return self._date
+
+    @date.setter
+    def date(self, value):
+        self._date = value
+        self.widget.set_text(self._date.strftime(self.date_format))
+
 class DateFilterWidget(urwid.WidgetWrap):
 
     signals = ["change"]
 
-    def __init__(self, initial_date=None):
+    def __init__(self, initial_date=None, date_format=None):
 
-        self.date_picker = DatePicker(
-            initial_date=initial_date,
-            space_between = 0,
-            columns=(DatePicker.PICKER.YEAR, DatePicker.PICKER.MONTH, DatePicker.PICKER.DAY),
-            return_unused_navigation_input = True,
-            day_format = (DatePicker.DAY_FORMAT.DAY_OF_MONTH, DatePicker.DAY_FORMAT.WEEKDAY),
-            # topBar_endCovered_prop=("ᐃ", "dp_barActive_focus", "dp_barActive_offFocus"),
-            # topBar_endExposed_prop=("───", "dp_barInactive_focus", "dp_barInactive_offFocus"),
-            # bottomBar_endCovered_prop=("ᐁ", "dp_barActive_focus", "dp_barActive_offFocus"),
-            # bottomBar_endExposed_prop=("───", "dp_barInactive_focus", "dp_barInactive_offFocus"),
-            highlight_prop=("dp_highlight_focus", "dp_highlight_offFocus")
-        )
+        self.initial_date = initial_date
+        # self.date_picker = DatePicker(
+        #     initial_date=initial_date,
+        #     space_between = 0,
+        #     columns=(DatePicker.PICKER.YEAR, DatePicker.PICKER.MONTH, DatePicker.PICKER.DAY),
+        #     return_unused_navigation_input = True,
+        #     day_format = (DatePicker.DAY_FORMAT.DAY_OF_MONTH, DatePicker.DAY_FORMAT.WEEKDAY),
+        #     highlight_prop=("dp_highlight_focus", "dp_highlight_offFocus")
+        # )
+        self.date_picker = DateDisplay(self.initial_date, selectable=True)
         self.button = urwid.Button("OK", on_press=lambda w: self.date_changed())
         self.columns = urwid.Columns([
             # (6, urwid.Padding(urwid.Text(""))),
@@ -73,15 +93,15 @@ class DateFilterWidget(urwid.WidgetWrap):
 
     @property
     def date(self):
-        return self.date_picker.get_date()
+        return self.date_picker.date
 
     def cycle_day(self, n=1):
         d = self.date + timedelta(days=n)
-        self.date_picker.set_date(d)
+        self.date_picker.date = d
 
     def cycle_month(self, n=1):
         d = self.date + relativedelta(months=n)
-        self.date_picker.set_date(d)
+        self.date_picker.date = d
 
     def date_changed(self):
         self._emit("change", self, self.date)
@@ -121,6 +141,11 @@ class DateFilter(Filter):
         # return {"begindate": datetime.now().date()}
         return {"initial_date": datetime.now().date()}
 
+
+    @property
+    def widget_sizing(self):
+        return lambda w: ("weight", 1)
+
     # def make_widget(self):
     #     w = super(DateFilter, self).make_widget()
     #     w.on_date_change = lambda d: self.set_date(d)
@@ -130,14 +155,31 @@ class DateFilter(Filter):
         return self.widget.date
         # return dateutil.parser.parse(self.widget.get_text()[0])
 
+# class BoxedDropdown(urwid.WidgetWrap):
+
+#     signals = ["change"]
+
+#     def __init__(self, *args, **kwargs):
+#         self.dropdown = panwid.Dropdown(*args, **kwargs)
+#         self.box = urwid.BoxAdapter(self.dropdown, 3)
+#         super().__init__(self.box)
+
+#     @property
+#     def width(self):
+#         return self.dropdown.width
 
 class ListingFilter(Filter, abc.ABC):
 
+    # WIDGET_CLASS = BoxedDropdown
     WIDGET_CLASS = panwid.Dropdown
 
     @property
     def widget_args(self):
         return [self.values]
+
+    @property
+    def widget_sizing(self):
+        return lambda w: ("weight", 1)
 
     @property
     def value(self):
