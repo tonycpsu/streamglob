@@ -180,8 +180,6 @@ class BaseProvider(abc.ABC):
 
 
 
-
-
 class SimpleProviderViewMixin(object):
 
     def make_view(self):
@@ -193,6 +191,7 @@ class SimpleProviderViewMixin(object):
         )
         urwid.connect_signal(self.toolbar, "filter_change", self.on_filter_change)
         urwid.connect_signal(self.table, "select", self.on_select)
+        urwid.connect_signal(self.table, "cycle_filter", self.cycle_filter)
 
         self.pile  = urwid.Pile([
             (1, self.toolbar),
@@ -207,7 +206,9 @@ class SimpleProviderViewMixin(object):
     def on_select(self, widget, selection):
         self.play(selection)
 
+    def cycle_filter(self, widget, n, step):
+        self.toolbar.cycle_filter(n, step)
+
     def update(self):
 
         self.table.reset()
-        # self.table.requery()

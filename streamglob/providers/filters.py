@@ -36,6 +36,11 @@ class Filter(abc.ABC):
     def widget_kwargs(self):
         return dict()
 
+    def cycle(self, step=1):
+        # pass
+        raise Exception
+
+
 
 class TextFilter(Filter):
 
@@ -62,6 +67,7 @@ class DateDisplay(urwid.WidgetWrap):
     def date(self, value):
         self._date = value
         self.widget.set_text(self._date.strftime(self.date_format))
+
 
 class DateFilterWidget(urwid.WidgetWrap):
 
@@ -98,10 +104,12 @@ class DateFilterWidget(urwid.WidgetWrap):
     def cycle_day(self, n=1):
         d = self.date + timedelta(days=n)
         self.date_picker.date = d
+        self.date_changed()
 
     def cycle_month(self, n=1):
         d = self.date + relativedelta(months=n)
         self.date_picker.date = d
+        self.date_changed()
 
     def date_changed(self):
         self._emit("change", self, self.date)
@@ -125,11 +133,9 @@ class DateFilterWidget(urwid.WidgetWrap):
             return super(DateFilterWidget, self).keypress(size, key)
             # return key
 
+
 class DateFilter(Filter):
 
-    # FIXME: use calendar
-    # WIDGET_CLASS = urwid.Edit
-    # WIDGET_CLASS = panwid.CalendarWidget
     WIDGET_CLASS = DateFilterWidget
 
     # def __init__(self):
@@ -137,8 +143,6 @@ class DateFilter(Filter):
 
     @property
     def widget_kwargs(self):
-        # return {"edit_text": "2018-01-01"}
-        # return {"begindate": datetime.now().date()}
         return {"initial_date": datetime.now().date()}
 
 
@@ -146,27 +150,13 @@ class DateFilter(Filter):
     def widget_sizing(self):
         return lambda w: ("weight", 1)
 
-    # def make_widget(self):
-    #     w = super(DateFilter, self).make_widget()
-    #     w.on_date_change = lambda d: self.set_date(d)
-
     @property
     def value(self):
         return self.widget.date
-        # return dateutil.parser.parse(self.widget.get_text()[0])
 
-# class BoxedDropdown(urwid.WidgetWrap):
+    def cycle(self, step=1):
+        self.widget.cycle_day(step)
 
-#     signals = ["change"]
-
-#     def __init__(self, *args, **kwargs):
-#         self.dropdown = panwid.Dropdown(*args, **kwargs)
-#         self.box = urwid.BoxAdapter(self.dropdown, 3)
-#         super().__init__(self.box)
-
-#     @property
-#     def width(self):
-#         return self.dropdown.width
 
 class ListingFilter(Filter, abc.ABC):
 
@@ -184,6 +174,9 @@ class ListingFilter(Filter, abc.ABC):
     @property
     def value(self):
         return self.widget.selected_value
+
+    def cycle(self, step=1):
+        self.widget.cycle(step)
 
     def populate(self, values):
         self.values = values

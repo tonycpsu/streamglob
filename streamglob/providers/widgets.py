@@ -10,11 +10,6 @@ class FilterToolbar(urwid.WidgetWrap):
     def __init__(self, filters):
 
         self.filters = filters
-        # self.columns = urwid.Columns([
-        #     # ('weight', 1, f.widget)
-        #     ("pack", f.widget)
-        #     for f in self.filters.values()
-        # ])
         self.columns = urwid.Columns([])
         for n, f in self.filters.items():
             self.columns.contents += [
@@ -33,6 +28,11 @@ class FilterToolbar(urwid.WidgetWrap):
         self.filler = urwid.Filler(self.columns)
         super(FilterToolbar, self).__init__(self.filler)
 
+    def cycle_filter(self, index, step=1):
+        if index > len(self.filters)+1:
+            return
+        list(self.filters.values())[index].cycle(step)
+
     def keypress(self, size, key):
         return super(FilterToolbar, self).keypress(size, key)
 
@@ -40,12 +40,25 @@ class FilterToolbar(urwid.WidgetWrap):
 
 class ProviderDataTable(panwid.DataTable):
 
-    # columns = [panwid.DataTableColumn("item")]
+
+    signals = ["cycle_filter"]
 
     def __init__(self, listings_method, columns, *args, **kwargs):
+
         self.listings_method = listings_method
         self.columns = columns
         super(ProviderDataTable,  self).__init__(*args, **kwargs)
 
     def query(self, *args, **kwargs):
+
         return self.listings_method()
+
+    def keypress(self, size, key):
+
+        key = super().keypress(size, key)
+        if key in ["left", "right"]:
+            self._emit(f"cycle_filter", 0, -1 if key == "left" else 1)
+        elif key in ["[", "]"]:
+            self._emit(f"cycle_filter", 1, -1 if key == "[" else 1)
+        else:
+            return key
