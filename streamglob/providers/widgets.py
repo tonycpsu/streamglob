@@ -21,7 +21,8 @@ class FilterToolbar(urwid.WidgetWrap):
                 (urwid.Text(f"{n.title()}: "), self.columns.options("pack")),
                 (f.widget, self.columns.options(*f.widget_sizing(f.widget))),
             ]
-        self.columns.focus_position = 1
+        if len(self.columns.contents):
+            self.columns.focus_position = 1
 
         for n, f in self.filters.items():
             urwid.connect_signal(

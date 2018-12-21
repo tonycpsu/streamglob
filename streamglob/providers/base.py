@@ -44,8 +44,8 @@ def get_output_filename(game, station, resolution, offset=None):
 class BaseProvider(abc.ABC):
 
     SESSION_CLASS = StreamSession
-    # FILTERS = AttrDict()
-    ATTRIBUTES = ["title"]
+    FILTERS = AttrDict()
+    ATTRIBUTES = AttrDict(title={"width": ("weight", 1)})
 
     def __init__(self, *args, **kwargs):
         # self.session = self.SESSION_CLASS(*args, **kwargs)

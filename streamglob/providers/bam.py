@@ -39,14 +39,13 @@ class BAMProviderMixin(object):
     """
     sport_id = 1 # FIXME
 
-    ATTRIBUTES = {
-        "attrs": {"width": 6},
-        "start": {"width": 6, "format_fn": format_start_time},
-        "away": {"width": 16},
-        "home": {"width": 16},
-        "line": {}
-    }
-
+    ATTRIBUTES = AttrDict(
+        attrs = {"width": 6},
+        start = {"width": 6, "format_fn": format_start_time},
+        away = {"width": 16},
+        home = {"width": 16},
+        line = {}
+    )
 
     # @memo(region="short")
     def schedule(
@@ -140,7 +139,7 @@ class BAMProviderMixin(object):
                 else:
                     self.line_score = None
 
-                yield(dict(
+                yield(AttrDict(
                     game_id = game_pk,
                     game_type = game_type,
                     away = away_team,

@@ -19,7 +19,7 @@ setup(name=name,
           "Intended Audience :: End Users/Desktop"
       ],
       license = "GPLv2",
-      packages=find_packages(),
+      packages=find_packages(),# + ["streamglob.providers.contrib.foo"],
       data_files=[
           ('share/doc/%s' % name, ["docs/config.yaml.sample"]),
       ],
@@ -52,5 +52,6 @@ setup(name=name,
               "mlb = streamglob.providers.mlb:MLBProvider",
               "nhl = streamglob.providers.nhl:NHLProvider",
           ]
-      }
+      },
+      zip_safe=False
      )
