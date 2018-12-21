@@ -198,7 +198,7 @@ class SimpleProviderViewMixin(object):
             (1, self.toolbar),
             ("weight", 1, self.table)
         ])
-        self.pile.focus_position = 0
+        self.pile.focus_position = 1
         return self.pile
 
     def on_filter_change(self, source, widget, value):
