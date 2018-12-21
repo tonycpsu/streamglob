@@ -204,3 +204,9 @@ def with_filters(*filters):
         return inner(cls, filters)
 
     return outer
+
+class ResolutionFilter(ListingFilter):
+
+    @property
+    def values(self):
+        return self.provider.RESOLUTIONS

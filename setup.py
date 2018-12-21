@@ -49,7 +49,8 @@ setup(name=name,
               "sgplay=streamglob.play:main"
           ],
           "streamglob.providers": [
-              "mlb = streamglob.providers.mlb:MLBProvider"
+              "mlb = streamglob.providers.mlb:MLBProvider",
+              "nhl = streamglob.providers.nhl:NHLProvider",
           ]
       }
      )

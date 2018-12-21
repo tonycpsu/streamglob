@@ -76,7 +76,7 @@ class StreamSession(object):
         ])
         self._cache_responses = False
         # if not self.logged_in:
-        # self.login()
+        # self.save()
         # logger.debug("already logged in")
             # return\
 
@@ -107,7 +107,7 @@ class StreamSession(object):
     def new(cls, *args, **kwargs):
         try:
             return cls.load(*args, **kwargs)
-        except FileNotFoundError:
+        except (FileNotFoundError, TypeError):
             logger.debug(f"creating new session: {args}, {kwargs}")
             return cls(*args, **kwargs)
 
@@ -130,7 +130,7 @@ class StreamSession(object):
     def load(cls, *args, **kwargs):
         state = yaml.load(open(cls._SESSION_FILE()), Loader=AttrDictYAMLLoader)
         logger.trace(f"load: {cls.__name__}, {state}")
-        return cls(**state)
+        return cls(**dict(kwargs, **state))
 
     def save(self):
         logger.trace(f"load: {self.__class__.__name__}, {self._state}")
@@ -252,7 +252,6 @@ class BAMStreamSessionMixin(object):
     """
     sport_id = 1 # FIXME
 
-    # @memo(region="short")
     def schedule(
             self,
             # sport_id=None,
@@ -791,6 +790,7 @@ class NHLStreamSession(BAMStreamSessionMixin, AuthenticatedStreamSession):
             headers=headers
         )
         self.save()
+        print(res.status_code)
         return (res.status_code == 200)
 
 
@@ -846,6 +846,8 @@ class NHLStreamSession(BAMStreamSessionMixin, AuthenticatedStreamSession):
 
         url = "https://mf.svc.nhl.com/ws/media/mf/v2.4/stream"
 
+        self.login()
+
         event_id = media["eventId"]
         if not self.session_key:
             logger.info("getting session key")
@@ -856,7 +858,7 @@ class NHLStreamSession(BAMStreamSessionMixin, AuthenticatedStreamSession):
                 "format": "json",
                 "platform": "WEB_MEDIAPLAYER",
                 "subject": "NHLTV",
-                "_": "1538708097285"
+                "_": int(datetime.now().timestamp())*1000
             }
 
             res = self.get(

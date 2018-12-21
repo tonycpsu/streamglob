@@ -16,12 +16,29 @@ class MediaItem(AttrDict):
         return f"<{self.__class__.__name__}: {self.title}{ ' (' + s if s else ''})>"
 
 
-class MediaAttributes(AttrDict):
+# FIXME: move
+def get_output_filename(game, station, resolution, offset=None):
 
-    def __repr__(self):
-        state = "!" if self.state == "MEDIA_ON" else "."
-        free = "_" if self.free else "$"
-        return f"{state}{free}"
+    try:
+        start_time = dateutil.parser.parse(
+            game["gameDate"]
+        ).astimezone(pytz.timezone("US/Eastern"))
+
+        game_date = start_time.date().strftime("%Y%m%d")
+        game_time = start_time.time().strftime("%H%M")
+        if offset:
+            game_time = "%s_%s" %(game_time, offset)
+        return "mlb.%s.%s@%s.%s.%s.ts" \
+               % (game_date,
+                  game["teams"]["away"]["team"]["fileCode"],
+                  game["teams"]["home"]["team"]["fileCode"],
+                  game_time,
+                  station.lower()
+                  )
+    except KeyError:
+        return "mlb.%d.%s.ts" % (game["gamePk"], resolution)
+
+
 
 
 class BaseProvider(abc.ABC):
@@ -39,9 +56,9 @@ class BaseProvider(abc.ABC):
     def session(self):
         return self._session
 
-    @abc.abstractmethod
-    def login(self):
-        pass
+    # @abc.abstractmethod
+    # def login(self):
+    #     pass
 
     @abc.abstractmethod
     def listings(self, filters=None):

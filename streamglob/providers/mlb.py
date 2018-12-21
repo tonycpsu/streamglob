@@ -9,18 +9,10 @@ from panwid.datatable import *
 from ..session import *
 
 from .base import *
+from .bam import *
 from .filters import *
-from . import bam
 from ..exceptions import *
 from ..state import *
-
-def parse_int(n):
-    try:
-        return int(n)
-    except ValueError:
-        return n
-    except TypeError:
-        return None
 
 class MLBLineScoreDataTable(DataTable):
 
@@ -96,24 +88,6 @@ class MLBLineScoreDataTable(DataTable):
             data.append(line)
         return cls(columns, data=data)
 
-
-def format_start_time(d):
-    s = datetime.strftime(d, "%I:%M%p").lower()[:-1]
-    if s[0] == "0":
-        s = s[1:]
-    return s
-
-class MLBListingFilter(ListingFilter):
-
-    @property
-    def values(self):
-        return ["foo", "bar", "baz"]
-
-class MLBResolutionFilter(ListingFilter):
-
-    @property
-    def values(self):
-        return self.provider.RESOLUTIONS
 
 class BasePopUp(urwid.WidgetWrap):
 
@@ -250,7 +224,7 @@ class MLBWatchDialog(BasePopUp):
 
 
 class MLBProvider(SimpleProviderViewMixin,
-                  bam.BAMProviderMixin,
+                  BAMProviderMixin,
                   BaseProvider):
 
     SCHEDULE_TEMPLATE = (
@@ -261,15 +235,9 @@ class MLBProvider(SimpleProviderViewMixin,
         "&hydrate=linescore,team,game(content(summary,media(epg)),tickets)"
     )
 
-    SESSION_CLASS = MLBStreamSession
+    DATA_TABLE_CLASS = MLBLineScoreDataTable
 
-    ATTRIBUTES = {
-        "attrs": {"width": 6},
-        "start": {"width": 6, "format_fn": format_start_time},
-        "away": {"width": 16},
-        "home": {"width": 16},
-        "line": {}
-    }
+    SESSION_CLASS = MLBStreamSession
 
     RESOLUTIONS = AttrDict([
         ("720p", "720p_alt"),
@@ -283,252 +251,8 @@ class MLBProvider(SimpleProviderViewMixin,
 
     FILTERS = AttrDict([
         ("date", DateFilter),
-        ("resolution", MLBResolutionFilter)
+        ("resolution", ResolutionFilter)
     ])
 
-    def login(self):
-        print(self.session)
-
-    def listings(self):
-        # return [ MediaItem(line=t) for t in ["a", "b" ,"c" ] ]
-
-        # logger.info(f"listings: {self.filters.date.value}")
-        j = self.schedule(
-        #     # sport_id=self.sport_id,
-            start = self.filters.date.value,
-            end = self.filters.date.value,
-            # game_type = "R"
-        )
-        # logger.info(j)
-
-        for d in j["dates"]:
-            games = sorted(d["games"], key= lambda g: g["gameDate"])
-            for g in games:
-                logger.info(g)
-                game_pk = g["gamePk"]
-                game_type = g["gameType"]
-                status = g["status"]["statusCode"]
-                away_team = g["teams"]["away"]["team"]["teamName"]
-                home_team = g["teams"]["home"]["team"]["teamName"]
-                away_abbrev = g["teams"]["away"]["team"]["abbreviation"]
-                home_abbrev = g["teams"]["home"]["team"]["abbreviation"]
-                start_time = dateutil.parser.parse(g["gameDate"])
-                attrs = MediaAttributes()
-                try:
-                    item = free_game = g["content"]["media"]["epg"][0]["items"][0]
-                    attrs.state = item["mediaState"]
-                    attrs.free = item["freeGame"]
-                except:
-                    attrs.state = None
-                    attrs.free = None
-
-                if config.settings.profile.time_zone:
-                    start_time = start_time.astimezone(
-                        pytz.timezone(config.settings.profile.time_zone)
-                    )
-
-                hide_spoiler_teams = config.settings.profile.get("hide_spoiler_teams", [])
-                if isinstance(hide_spoiler_teams, bool):
-                    hide_spoilers = hide_spoiler_teams
-                else:
-                    hide_spoilers = set([away_abbrev, home_abbrev]).intersection(
-                        set(hide_spoiler_teams))
-                if "linescore" in g:
-                    line_score_cls = MLBLineScoreDataTable #globals().get(f"{self.provider.upper()}LineScoreDataTable")
-                    self.line_score_table = line_score_cls.from_json(
-                            g["linescore"],
-                            g["teams"]["away"]["team"]["abbreviation"],
-                            g["teams"]["home"]["team"]["abbreviation"],
-                            hide_spoilers
-                    )
-                    self.line_score = urwid.BoxAdapter(
-                        self.line_score_table,
-                        3
-                    )
-                else:
-                    self.line_score = None
-
-                yield(dict(
-                    game_id = game_pk,
-                    game_type = game_type,
-                    away = away_team,
-                    home = home_team,
-                    start = start_time,
-                    line = self.line_score,
-                    attrs = attrs
-                ))
-
-    def play(self, selection):
-
-        game_id = selection.get("game_id")
-        url = self.get_url(game_id)
-        self.play_stream(url, resolution=self.filters.resolution.value)
-
-    # def watch(self, game_id,
-    #           resolution=None, feed=None,
-    #           offset=None, preferred_stream=None):
-
-    #     try:
-    #         state.proc = self.play_stream(
-    #             game_id,
-    #             resolution,
-    #             call_letters = feed,
-    #             preferred_stream = preferred_stream,
-    #             offset = offset
-    #         )
-    #     except SGException as e:
-    #         logger.warning(e)
-
-
-    # FIXME: move
-    def get_output_filename(self, game, station, resolution, offset=None):
-
-        try:
-            start_time = dateutil.parser.parse(
-                game["gameDate"]
-            ).astimezone(pytz.timezone("US/Eastern"))
-
-            game_date = start_time.date().strftime("%Y%m%d")
-            game_time = start_time.time().strftime("%H%M")
-            if offset:
-                game_time = "%s_%s" %(game_time, offset)
-            return "mlb.%s.%s@%s.%s.%s.ts" \
-                   % (game_date,
-                      game["teams"]["away"]["team"]["fileCode"],
-                      game["teams"]["home"]["team"]["fileCode"],
-                      game_time,
-                      station.lower()
-                      )
-        except KeyError:
-            return "mlb.%d.%s.ts" % (game["gamePk"], resolution)
-
-
-
-    def get_url(self, game_specifier, resolution=None,
-                offset=None,
-                media_id = None,
-                preferred_stream=None,
-                call_letters=None,
-                output=None,
-                verbose=0):
-
-        live = False
-        team = None
-        game_number = 1
-        game_date = None
-        # sport_code = "mlb" # default sport is MLB
-
-        # media_title = "MLBTV"
-        media_id = None
-        allow_stdout=False
-
-        if resolution is None:
-            resolution = "best"
-
-        if isinstance(game_specifier, int):
-            game_id = game_specifier
-            schedule = self.session.schedule(
-                game_id = game_id
-            )
-
-        else:
-            try:
-                (game_date, team, game_number) = game_specifier.split(".")
-            except ValueError:
-                try:
-                    (game_date, team) = game_specifier.split(".")
-                except ValueError:
-                    game_date = datetime.now().date()
-                    team = game_specifier
-
-            if "-" in team:
-                (sport_code, team) = team.split("-")
-
-            game_date = dateutil.parser.parse(game_date)
-            game_number = int(game_number)
-            teams =  self.session.teams(season=game_date.year)
-            team_id = teams.get(team)
-
-            if not team:
-                msg = "'%s' not a valid team code, must be one of:\n%s" %(
-                    game_specifier, " ".join(teams)
-                )
-                raise argparse.ArgumentTypeError(msg)
-
-            schedule = self.session.schedule(
-                start = game_date,
-                end = game_date,
-                # sport_id = sport["id"],
-                team_id = team_id
-            )
-            # raise Exception(schedule)
-
-
-        try:
-            date = schedule["dates"][-1]
-            game = date["games"][game_number-1]
-            game_id = game["gamePk"]
-        except IndexError:
-            raise SGException("No game %d found for %s on %s" %(
-                game_number, team, game_date)
-            )
-
-        logger.info("playing game %d at %s" %(
-            game_id, resolution)
-        )
-
-        away_team_abbrev = game["teams"]["away"]["team"]["abbreviation"].lower()
-        home_team_abbrev = game["teams"]["home"]["team"]["abbreviation"].lower()
-
-        if not preferred_stream or call_letters:
-            preferred_stream = (
-                "away"
-                if team == away_team_abbrev
-                else "home"
-            )
-
-        try:
-            media = next(self.session.get_media(
-                game_id,
-                media_id = media_id,
-                # title=media_title,
-                preferred_stream=preferred_stream,
-                call_letters = call_letters
-            ))
-        except StopIteration:
-            raise SGException("no matching media for game %d" %(game_id))
-
-        # media_id = media["mediaId"] if "mediaId" in media else media["guid"]
-
-        media_state = media["mediaState"]
-
-        # Get any team-specific profile overrides, and apply settings for them
-        profiles = tuple([ list(d.values())[0]
-                     for d in config.settings.profile_map.get("team", {})
-                     if list(d.keys())[0] in [
-                             away_team_abbrev, home_team_abbrev
-                     ] ])
-
-        if len(profiles):
-            # override proxies for team, if defined
-            if len(config.settings.profiles[profiles].proxies):
-                old_proxies = self.session.proxies
-                self.session.proxies = config.settings.profiles[profiles].proxies
-                self.session.refresh_access_token(clear_token=True)
-                self.session.proxies = old_proxies
-
-        if "playbacks" in media:
-            playback = media["playbacks"][0]
-            media_url = playback["location"]
-        else:
-            stream = self.session.get_stream(media)
-
-            try:
-                # media_url = stream["stream"]["complete"]
-                media_url = stream.url
-            except (TypeError, AttributeError):
-                raise SGException("no stream URL for game %d" %(game_id))
-
-        return media_url
 
 # register_provider(MLBProvider)

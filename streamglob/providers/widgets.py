@@ -1,6 +1,8 @@
 import urwid
 import panwid
 
+
+
 class FilterToolbar(urwid.WidgetWrap):
 
     signals = ["filter_change"]
