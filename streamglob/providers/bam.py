@@ -1,6 +1,8 @@
 import logging
 logger = logging.getLogger(__name__)
 
+import abc
+
 import urwid
 from orderedattrdict import AttrDict
 from datetime import datetime
@@ -32,7 +34,7 @@ def format_start_time(d):
     return s
 
 
-class BAMProviderMixin(object):
+class BAMProviderMixin(abc.ABC):
     """
     StreamSession subclass for BAMTech Media stream providers, which currently
     includes MLB.tv and NHL.tv
@@ -189,12 +191,13 @@ class BAMProviderMixin(object):
                     or (item.get("mediaId", "").lower() == media_id)
                 ):
                     logger.debug("found preferred stream")
-                    yield Media(item)
+                    yield AttrDict(item)
             else:
                 if len(epg["items"]):
                     logger.debug("using non-preferred stream")
-                    yield Media(epg["items"][0])
+                    yieldAttrDict(epg["items"][0])
         # raise StopIteration
+
 
     def get_url(self, game_specifier, resolution=None,
                 offset=None,
@@ -219,7 +222,7 @@ class BAMProviderMixin(object):
 
         if isinstance(game_specifier, int):
             game_id = game_specifier
-            schedule = self.session.schedule(
+            schedule = self.schedule(
                 game_id = game_id
             )
 
@@ -238,7 +241,7 @@ class BAMProviderMixin(object):
 
             game_date = dateutil.parser.parse(game_date)
             game_number = int(game_number)
-            teams =  self.session.teams(season=game_date.year)
+            teams =  self.teams(season=game_date.year)
             team_id = teams.get(team)
 
             if not team:
@@ -247,7 +250,7 @@ class BAMProviderMixin(object):
                 )
                 raise argparse.ArgumentTypeError(msg)
 
-            schedule = self.session.schedule(
+            schedule = self.schedule(
                 start = game_date,
                 end = game_date,
                 # sport_id = sport["id"],
@@ -280,7 +283,7 @@ class BAMProviderMixin(object):
             )
 
         try:
-            media = next(self.session.get_media(
+            media = next(self.get_media(
                 game_id,
                 media_id = media_id,
                 # title=media_title,
@@ -322,6 +325,15 @@ class BAMProviderMixin(object):
                 raise SGException("no stream URL for game %d" %(game_id))
 
         return media_url
+
+        @abc.abstractmethod
+        def teams(self, season=None):
+            pass
+
+        @abc.abstractmethod
+        def get_stream(self, media):
+            pass
+
 
     def play(self, selection):
 

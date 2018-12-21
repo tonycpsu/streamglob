@@ -14,6 +14,187 @@ from .filters import *
 from ..exceptions import *
 from ..state import *
 
+
+class NHLStreamSession(AuthenticatedStreamSession):
+
+    AUTH = b"web_nhl-v1.0.0:2d1d846ea3b194a18ef40ac9fbce97e3"
+
+    SCHEDULE_TEMPLATE = (
+        "https://statsapi.web.nhl.com/api/v1/schedule"
+        "?sportId={sport_id}&startDate={start}&endDate={end}"
+        "&gameType={game_type}&gamePk={game_id}"
+        "&teamId={team_id}"
+        "&hydrate=linescore,team,game(content(summary,media(epg)),tickets)"
+    )
+
+    RESOLUTIONS = AttrDict([
+        ("720p", "720p"),
+        ("540p", "540p"),
+        ("504p", "504p"),
+        ("360p", "360p"),
+        ("288p", "288p"),
+        ("216p", "216p")
+    ])
+
+    def __init__(
+            self,
+            username, password,
+            session_key=None,
+            *args, **kwargs
+    ):
+        super(NHLStreamSession, self).__init__(
+            username, password,
+            *args, **kwargs
+        )
+        self.session_key = session_key
+
+
+    def login(self):
+
+        if self.logged_in:
+            logger.info("already logged in")
+            return
+
+        auth = base64.b64encode(self.AUTH).decode("utf-8")
+
+        token_url = "https://user.svc.nhl.com/oauth/token?grant_type=client_credentials"
+
+        headers = {
+            "Authorization": f"Basic {auth}",
+            # "Referer": "https://www.nhl.com/login/freeGame?forwardUrl=https%3A%2F%2Fwww.nhl.com%2Ftv%2F2018020013%2F221-2000552%2F61332703",
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Origin": "https://www.nhl.com"
+        }
+
+        res = self.session.post(token_url, headers=headers)
+        self.token = json.loads(res.text)["access_token"]
+
+        login_url="https://gateway.web.nhl.com/ws/subscription/flow/nhlPurchase.login"
+
+        auth = base64.b64encode(b"web_nhl-v1.0.0:2d1d846ea3b194a18ef40ac9fbce97e3")
+
+        params = {
+            "nhlCredentials":  {
+                "email": self.username,
+                "password": self.password
+            }
+        }
+
+        headers = {
+            "Authorization": self.token,
+            "Origin": "https://www.nhl.com",
+            # "Referer": "https://www.nhl.com/login/freeGame?forwardUrl=https%3A%2F%2Fwww.nhl.com%2Ftv%2F2018020013%2F221-2000552%2F61332703",
+        }
+
+        res = self.session.post(
+            login_url,
+            json=params,
+            headers=headers
+        )
+        self.save()
+        print(res.status_code)
+        return (res.status_code == 200)
+
+
+    @property
+    def logged_in(self):
+
+        logged_in_url = "https://account.nhl.com/ui/AccountProfile"
+        content = self.get(logged_in_url).text
+        # FIXME: this is gross
+        if '"NHL Account - Profile"' in content:
+            return True
+        return False
+
+    @property
+    def session_key(self):
+        return self._state.session_key
+
+    @session_key.setter
+    def session_key(self, value):
+        self._state.session_key = value
+
+    @property
+    def token(self):
+        return self._state.token
+
+    @token.setter
+    def token(self, value):
+        self._state.token = value
+
+
+    def get_stream(self, media):
+
+        url = "https://mf.svc.nhl.com/ws/media/mf/v2.4/stream"
+
+        self.login()
+
+        event_id = media["eventId"]
+        if not self.session_key:
+            logger.info("getting session key")
+
+
+            params = {
+                "eventId": event_id,
+                "format": "json",
+                "platform": "WEB_MEDIAPLAYER",
+                "subject": "NHLTV",
+                "_": int(datetime.now().timestamp())*1000
+            }
+
+            res = self.get(
+                url,
+                params=params
+            )
+            j = res.json()
+            logger.trace(json.dumps(j, sort_keys=True,
+                             indent=4, separators=(',', ': ')))
+
+            self.session_key = j["session_key"]
+            self.save()
+
+        params = {
+            "contentId": media["mediaPlaybackId"],
+            "playbackScenario": "HTTP_CLOUD_WIRED_WEB",
+            "sessionKey": self.session_key,
+            "auth": "response",
+            "platform": "WEB_MEDIAPLAYER",
+            "_": "1538708097285"
+        }
+        res = self.get(
+            url,
+            params=params
+        )
+        j = res.json()
+        logger.trace(json.dumps(j, sort_keys=True,
+                                   indent=4, separators=(',', ': ')))
+
+        try:
+            media_auth = next(x["attributeValue"]
+                              for x in j["session_info"]["sessionAttributes"]
+                              if x["attributeName"] == "mediaAuth_v2")
+        except KeyError:
+            raise StreamSessionException(f"No stream found for event {event_id}")
+
+        self.cookies.set_cookie(
+            Cookie(0, 'mediaAuth_v2', media_auth,
+                   '80', '80', '.nhl.com',
+                   None, None, '/', True, False, 4102444800, None, None, None, {}),
+        )
+
+        stream = AttrDict(
+            (j["user_verified_event"][0]
+             ["user_verified_content"][0]
+             ["user_verified_media_item"][0]
+            )
+        )
+
+        return stream
+
+
+
 class NHLLineScoreDataTable(DataTable):
 
     @classmethod
@@ -89,17 +270,7 @@ class NHLProvider(SimpleProviderViewMixin,
                   BAMProviderMixin,
                   BaseProvider):
 
-    DATA_TABLE_CLASS = NHLLineScoreDataTable
-
     SESSION_CLASS = NHLStreamSession
-
-    SCHEDULE_TEMPLATE = (
-        "https://statsapi.web.nhl.com/api/v1/schedule"
-        "?sportId={sport_id}&startDate={start}&endDate={end}"
-        "&gameType={game_type}&gamePk={game_id}"
-        "&teamId={team_id}"
-        "&hydrate=linescore,team,game(content(summary,media(epg)),tickets)"
-    )
 
     RESOLUTIONS = AttrDict([
         ("720p", "720p"),
@@ -114,3 +285,32 @@ class NHLProvider(SimpleProviderViewMixin,
         ("date", DateFilter),
         ("resolution", ResolutionFilter)
     ])
+
+    SCHEDULE_TEMPLATE = (
+        "https://statsapi.web.nhl.com/api/v1/schedule"
+        "?sportId={sport_id}&startDate={start}&endDate={end}"
+        "&gameType={game_type}&gamePk={game_id}"
+        "&teamId={team_id}"
+        "&hydrate=linescore,team,game(content(summary,media(epg)),tickets)"
+    )
+
+    DATA_TABLE_CLASS = NHLLineScoreDataTable
+
+    def teams(self, season=None):
+
+        teams_url = (
+            "https://statsapi.web.nhl.com/api/v1/teams"
+            "?{season}".format(
+                season=season if season else ""
+            )
+        )
+
+        # raise Exception(state.session.get(teams_url).json())
+        with state.session.cache_responses_long():
+            teams = AttrDict(
+                (team["abbreviation"].lower(), team["id"])
+                for team in sorted(state.session.get(teams_url).json()["teams"],
+                                   key=lambda t: t["abbreviation"])
+            )
+
+        return teams
