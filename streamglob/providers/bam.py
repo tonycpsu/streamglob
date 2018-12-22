@@ -242,6 +242,8 @@ class BAMProviderDataTable(ProviderDataTable):
             self._emit(f"cycle_filter", 0,("w", -1 if key == "meta left" else 1))
         if key in ["ctrl left", "ctrl right"]:
             self._emit(f"cycle_filter", 0, ("m", -1 if key == "ctrl left" else 1))
+        elif key == "meta enter":
+            self.provider.play(self.selection.data)
         else:
             return super().keypress(size, key)
 
@@ -616,7 +618,7 @@ class BAMProviderMixin(abc.ABC):
         args = [url]
         # if not "resolution" in kwargs:
         kwargs["resolution"] = self.filters.resolution.value
-        offset = kwargs.pop("offset")
+        offset = kwargs.pop("offset", None)
         if offset:
             if (selection.attrs.state == "MEDIA_ON"): # live stream
                 logger.debug("live stream")

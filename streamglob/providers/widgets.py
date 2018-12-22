@@ -52,18 +52,22 @@ class FilterToolbar(urwid.WidgetWrap):
 
 class ProviderDataTable(panwid.DataTable):
 
-
     signals = ["cycle_filter"]
 
-    def __init__(self, listings_method, columns, *args, **kwargs):
+    # def __init__(self, listings_method, columns, *args, **kwargs):
+    def __init__(self, provider, *args, **kwargs):
 
-        self.listings_method = listings_method
-        self.columns = columns
+        # self.listings_method = listings_method
+        # self.columns = columns
+        self.provider = provider
+        self.columns = [ panwid.DataTableColumn(k, **v if v else {})
+                         for k, v in self.provider.ATTRIBUTES.items() ]
+
         super(ProviderDataTable,  self).__init__(*args, **kwargs)
 
     def query(self, *args, **kwargs):
 
-        return self.listings_method()
+        return self.provider.listings()
 
     def keypress(self, size, key):
 
