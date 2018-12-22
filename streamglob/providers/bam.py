@@ -185,6 +185,7 @@ class WatchDialog(BasePopUp):
             ]))
         ])
         super(WatchDialog, self).__init__(pile)
+        pile.contents[1][0].focus_position = 2
 
     def update_offset_dropdown(self, media_id):
 
