@@ -266,8 +266,8 @@ class NHLLineScoreDataTable(DataTable):
         return cls(columns, data=data)
 
 
-class NHLProvider(SimpleProviderViewMixin,
-                  BAMProviderMixin,
+class NHLProvider(BAMProviderMixin,
+                  # SimpleProviderViewMixin,
                   BaseProvider):
 
     SESSION_CLASS = NHLStreamSession
@@ -281,20 +281,29 @@ class NHLProvider(SimpleProviderViewMixin,
         ("216p", "216p")
     ])
 
-    FILTERS = AttrDict([
-        ("date", DateFilter),
-        ("resolution", ResolutionFilter)
-    ])
-
     SCHEDULE_TEMPLATE = (
         "https://statsapi.web.nhl.com/api/v1/schedule"
         "?sportId={sport_id}&startDate={start}&endDate={end}"
         "&gameType={game_type}&gamePk={game_id}"
         "&teamId={team_id}"
-        "&hydrate=linescore,team,game(content(summary,media(epg)),tickets)"
+        "&expand=schedule.game.content.media.milestones"
+        "&expand=schedule.game.content.media.epg"
+        # "&expand=schedule.venue"
+        "&expand=schedule.status"
+        "&expand=schedule.teams"
+        "&expand=schedule.linescore"
+        "&expand=schedule.broadcasts.all"
+        # "&expand=schedule.ticket"
+        "&expand=schedule.radioBroadcasts"
+        # "&expand=schedule.game.seriesSummary"
+        # "&expand=seriesSummary.series"
+        # "&hydrate=linescore,team,game(content(summary,media(epg)),tickets)"
+        # "&expand=schedule.game.content.media.milestones"
     )
 
     DATA_TABLE_CLASS = NHLLineScoreDataTable
+
+    MEDIA_TITLE = "NHLTV"
 
     def teams(self, season=None):
 
@@ -314,3 +323,73 @@ class NHLProvider(SimpleProviderViewMixin,
             )
 
         return teams
+
+    # def media_timestamps(self, game_id, media_id):
+    #     raise NotImplementedError
+
+
+    def media_timestamps(self, game_id, media_id):
+        j =  self.schedule(game_id=game_id)
+        milestones = j["dates"][0]["games"][0]["content"]["media"]["milestones"]
+
+        # try:
+        #     airing = next(a for a in self.session.airings(game_id)
+        #                   if a["mediaId"] == media_id)
+        # except StopIteration:
+        #     raise StreamSessionException("No airing for media %s" %(media_id))
+
+        start_timestamps = []
+        # try:
+        #     start_time = next(
+        #             t["startDatetime"] for t in
+        #             next(m for m in airing["milestones"]
+        #              if m["milestoneType"] == "BROADCAST_START"
+        #             )["milestoneTime"]
+        #         if t["type"] == "absolute"
+        #         )
+
+        # except StopIteration:
+        #     # Some streams don't have a "BROADCAST_START" milestone.  We need
+        #     # something, so we use the scheduled game start time, which is
+        #     # probably wrong.
+        #     start_time = airing["startDate"]
+
+        start_time = next(
+            m["timeAbsolute"]
+            for m in milestones["items"]
+            if m["type"] == "BROADCAST_START"
+        )
+        start_timestamps.append(
+            ("S", start_time)
+        )
+
+        # try:
+        #     start_offset = next(
+        #         t["start"] for t in
+        #         next(m for m in airing["milestones"]
+        #              if m["milestoneType"] == "BROADCAST_START"
+        #         )["milestoneTime"]
+        #         if t["type"] == "offset"
+        #     )
+        # except StopIteration:
+        #     # Same as above.  Missing BROADCAST_START milestone means we
+        #     # probably don't get accurate offsets for inning milestones.
+        #     start_offset = 0
+
+        start_offset = next(
+            m["timeOffset"]
+            for m in milestones["items"]
+            if m["type"] == "BROADCAST_START"
+        )
+        start_timestamps.append(
+            ("SO", start_offset)
+        )
+
+        timestamps = AttrDict(start_timestamps)
+        timestamps.update(AttrDict([
+            (m["period"], int(m["timeOffset"]))
+            for m in milestones["items"]
+            if m["type"] == "PERIOD_START"
+        ]))
+        # raise Exception(timestamps)
+        return timestamps

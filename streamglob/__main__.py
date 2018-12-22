@@ -58,19 +58,6 @@ class UrwidLoggingHandler(logging.Handler):
             os.write(self.pipe, (msg[:512]+"\n").encode("utf-8"))
 
 
-class ResolutionDropdown(Dropdown):
-
-    label = "Resolution"
-
-    def __init__(self, resolutions, default=None):
-        self.resolutions = resolutions
-        super(ResolutionDropdown, self).__init__(resolutions, default=default)
-
-    @property
-    def items(self):
-        return self.resolutions
-
-
 class ProviderToolbar(urwid.WidgetWrap):
 
     signals = ["provider_change"]
@@ -214,21 +201,6 @@ class ScheduleView(BaseView):
             return key
 
 
-    def watch(self, game_id,
-              resolution=None, feed=None,
-              offset=None, preferred_stream=None):
-
-        try:
-            state.proc = play.play_stream(
-                game_id,
-                resolution,
-                call_letters = feed,
-                preferred_stream = preferred_stream,
-                offset = offset
-            )
-        except play.SGException as e:
-            logger.warning(e)
-
 
 class MainToolbar(urwid.WidgetWrap):
 
@@ -290,7 +262,7 @@ class MainView(BaseView):
 
         cfg = config.settings.profile.providers.get(provider, {})
         state.set_provider(provider, **cfg)
-        self.provider_view_placeholder.original_widget = state.provider.make_view()
+        self.provider_view_placeholder.original_widget = state.provider.view
 
         # self.provider_view = ScheduleView(provider)
         # self.provider_view_placeholder.original_widget = self.provider_view

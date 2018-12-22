@@ -261,76 +261,6 @@ class MLBStreamSession(AuthenticatedStreamSession):
         return airings
 
 
-    def media_timestamps(self, game_id, media_id):
-
-        try:
-            airing = next(a for a in self.airings(game_id)
-                          if a["mediaId"] == media_id)
-        except StopIteration:
-            raise StreamSessionException("No airing for media %s" %(media_id))
-
-        start_timestamps = []
-        try:
-            start_time = next(
-                    t["startDatetime"] for t in
-                    next(m for m in airing["milestones"]
-                     if m["milestoneType"] == "BROADCAST_START"
-                    )["milestoneTime"]
-                if t["type"] == "absolute"
-                )
-
-        except StopIteration:
-            # Some streams don't have a "BROADCAST_START" milestone.  We need
-            # something, so we use the scheduled game start time, which is
-            # probably wrong.
-            start_time = airing["startDate"]
-
-        start_timestamps.append(
-            ("S", start_time)
-        )
-
-        try:
-            start_offset = next(
-                t["start"] for t in
-                next(m for m in airing["milestones"]
-                     if m["milestoneType"] == "BROADCAST_START"
-                )["milestoneTime"]
-                if t["type"] == "offset"
-            )
-        except StopIteration:
-            # Same as above.  Missing BROADCAST_START milestone means we
-            # probably don't get accurate offsets for inning milestones.
-            start_offset = 0
-
-        start_timestamps.append(
-            ("SO", start_offset)
-        )
-
-        timestamps = AttrDict(start_timestamps)
-        timestamps.update(AttrDict([
-            (
-            "%s%s" %(
-                "T"
-                if next(
-                        k for k in m["keywords"]
-                        if k["type"] == "top"
-                )["value"] == "true"
-                else "B",
-                int(
-                    next(
-                        k for k in m["keywords"] if k["type"] == "inning"
-                    )["value"]
-                )),
-            next(t["start"]
-                      for t in m["milestoneTime"]
-                      if t["type"] == "offset"
-                 )
-            )
-                 for m in airing["milestones"]
-                 if m["milestoneType"] == "INNING_START"
-        ]))
-        return timestamps
-
     def get_stream(self, media):
 
         media_id = media.get("mediaId", media.get("guid"))
@@ -432,142 +362,9 @@ class MLBLineScoreDataTable(DataTable):
         return cls(columns, data=data)
 
 
-class BasePopUp(urwid.WidgetWrap):
-
-    signals = ["close_popup"]
-
-    def selectable(self):
-        return True
 
 
-class MLBWatchDialog(BasePopUp):
-
-    signals = ["watch"]
-
-    def __init__(self, game_id,
-                 resolution=None, from_beginning=None):
-
-        self.game_id = game_id
-        self.resolution = resolution
-        self.from_beginning = from_beginning
-
-        self.game_data = self.session.schedule(
-            game_id=self.game_id,
-        )["dates"][0]["games"][0]
-        # raise Exception(self.game_data)
-
-        self.title = urwid.Text("%s@%s" %(
-            self.game_data["teams"]["away"]["team"]["abbreviation"],
-            self.game_data["teams"]["home"]["team"]["abbreviation"],
-        ))
-
-        feed_map = sorted([
-            ("%s (%s)" %(e["mediaFeedType"].title(),
-                         e["callLetters"]), e["mediaId"].lower())
-            for e in self.session.get_media(self.game_id)
-        ], key=lambda v: v[0])
-        home_feed = next(self.session.get_media(
-            self.game_id,
-            preferred_stream = "home"
-        ))
-        self.live_stream = (home_feed.get("mediaState") == "MEDIA_ON")
-        self.feed_dropdown = Dropdown(
-            feed_map,
-            label="Feed",
-            default=home_feed["mediaId"]
-        )
-        urwid.connect_signal(
-            self.feed_dropdown,
-            "change",
-            lambda s, b, media_id: self.update_inning_dropdown(media_id)
-        )
-
-        self.resolution_dropdown = ResolutionDropdown(
-            default=resolution
-        )
-
-        self.inning_dropdown_placeholder = urwid.WidgetPlaceholder(urwid.Text(""))
-        self.update_inning_dropdown(self.feed_dropdown.selected_value)
-
-        self.ok_button = urwid.Button("OK")
-        urwid.connect_signal(self.ok_button, "click", self.watch)
-
-        self.cancel_button = urwid.Button("Cancel")
-        urwid.connect_signal(
-            self.cancel_button, "click",
-            lambda b: urwid.signals.emit_signal(self, "close_popup")
-        )
-
-        pile = urwid.Pile([
-            ("pack", self.title),
-            ("weight", 1, urwid.Pile([
-                ("weight", 1, urwid.Filler(
-                    urwid.Columns([
-                        ("weight", 1, self.feed_dropdown),
-                        ("weight", 1, self.resolution_dropdown),
-                    ]))),
-                ("weight", 1, urwid.Filler(self.inning_dropdown_placeholder)),
-                ("weight", 1, urwid.Filler(
-                    urwid.Columns([
-                    ("weight", 1, self.ok_button),
-                    ("weight", 1, self.cancel_button),
-                ])))
-            ]))
-        ])
-        super(MLBWatchDialog, self).__init__(pile)
-
-    def update_inning_dropdown(self, media_id):
-        # raise Exception(media_id)
-        self.timestamps = self.session.media_timestamps(
-            self.game_id, media_id
-        )
-        del self.timestamps["S"]
-        timestamp_map = AttrDict(
-            ( k if k[0] in "TB" else "Start", k ) for k in self.timestamps.keys()
-        )
-        timestamp_map["Live"] = False
-        self.inning_dropdown = Dropdown(
-            timestamp_map, label="Begin playback",
-            default = (
-                timestamp_map["Start"] if (
-                    not self.live_stream or self.from_beginning
-                ) else timestamp_map["Live"]
-            )
-        )
-        self.inning_dropdown_placeholder.original_widget = self.inning_dropdown
-
-
-    def watch(self, source):
-        urwid.signals.emit_signal(
-            self,
-            "watch",
-            self.game_id,
-            self.resolution_dropdown.selected_value,
-            self.feed_dropdown.selected_value,
-            self.inning_dropdown.selected_value
-        )
-        urwid.signals.emit_signal(self, "close_popup")
-
-    def keypress(self, size, key):
-
-        if key == "meta enter":
-            self.ok_button.keypress(size, "enter")
-        elif key in ["<", ">"]:
-            self.resolution_dropdown.cycle(1 if key == "<" else -1)
-        elif key in ["[", "]"]:
-            self.feed_dropdown.cycle(-1 if key == "[" else 1)
-        elif key in ["-", "="]:
-            self.inning_dropdown.cycle(-1 if key == "-" else 1)
-        else:
-            # return super(MLBWatchDialog, self).keypress(size, key)
-            key = super(MLBWatchDialog, self).keypress(size, key)
-        if key:
-            return
-        return key
-
-
-class MLBProvider(SimpleProviderViewMixin,
-                  BAMProviderMixin,
+class MLBProvider(BAMProviderMixin,
                   BaseProvider):
 
     SESSION_CLASS = MLBStreamSession
@@ -582,11 +379,6 @@ class MLBProvider(SimpleProviderViewMixin,
         ("224p", "224p")
     ])
 
-    FILTERS = AttrDict([
-        ("date", DateFilter),
-        ("resolution", ResolutionFilter)
-    ])
-
     SCHEDULE_TEMPLATE = (
         "http://statsapi.mlb.com/api/v1/schedule"
         "?sportId={sport_id}&startDate={start}&endDate={end}"
@@ -597,6 +389,7 @@ class MLBProvider(SimpleProviderViewMixin,
 
     DATA_TABLE_CLASS = MLBLineScoreDataTable
 
+    MEDIA_TITLE = "MLBTV"
 
     def teams(self, sport_code="mlb", season=None):
 
@@ -631,30 +424,102 @@ class MLBProvider(SimpleProviderViewMixin,
 
         return teams
 
-    def get_stream(self, media):
 
-        media_id = media.get("mediaId", media.get("guid"))
+    def media_timestamps(self, game_id, media_id):
 
-        headers={
-            "Authorization": self.session.access_token,
-            # "User-agent": USER_AGENT,
-            "Accept": "application/vnd.media-service+json; version=1",
-            "x-bamsdk-version": "3.0",
-            "x-bamsdk-platform": self.PLATFORM,
-            "origin": "https://www.mlb.com"
-        }
-        stream_url = self.STREAM_URL_TEMPLATE.format(media_id=media_id)
-        logger.info("getting stream %s" %(stream_url))
-        stream = self.get(
-            stream_url,
-            headers=headers
-        ).json()
-        logger.debug("stream response: %s" %(stream))
-        if "errors" in stream and len(stream["errors"]):
-            return None
-        stream = Stream(stream)
-        stream.url = stream["stream"]["complete"]
-        return stream
+        try:
+            airing = next(a for a in self.session.airings(game_id)
+                          if a["mediaId"] == media_id)
+        except StopIteration:
+            raise StreamSessionException("No airing for media %s" %(media_id))
+
+        start_timestamps = []
+        try:
+            start_time = next(
+                    t["startDatetime"] for t in
+                    next(m for m in airing["milestones"]
+                     if m["milestoneType"] == "BROADCAST_START"
+                    )["milestoneTime"]
+                if t["type"] == "absolute"
+                )
+
+        except StopIteration:
+            # Some streams don't have a "BROADCAST_START" milestone.  We need
+            # something, so we use the scheduled game start time, which is
+            # probably wrong.
+            start_time = airing["startDate"]
+
+        start_timestamps.append(
+            ("S", start_time)
+        )
+
+        try:
+            start_offset = next(
+                t["start"] for t in
+                next(m for m in airing["milestones"]
+                     if m["milestoneType"] == "BROADCAST_START"
+                )["milestoneTime"]
+                if t["type"] == "offset"
+            )
+        except StopIteration:
+            # Same as above.  Missing BROADCAST_START milestone means we
+            # probably don't get accurate offsets for inning milestones.
+            start_offset = 0
+
+        start_timestamps.append(
+            ("SO", start_offset)
+        )
+
+        timestamps = AttrDict(start_timestamps)
+        timestamps.update(AttrDict([
+            (
+            "%s%s" %(
+                "T"
+                if next(
+                        k for k in m["keywords"]
+                        if k["type"] == "top"
+                )["value"] == "true"
+                else "B",
+                int(
+                    next(
+                        k for k in m["keywords"] if k["type"] == "inning"
+                    )["value"]
+                )),
+            next(t["start"]
+                      for t in m["milestoneTime"]
+                      if t["type"] == "offset"
+                 )
+            )
+                 for m in airing["milestones"]
+                 if m["milestoneType"] == "INNING_START"
+        ]))
+        return timestamps
+
+
+    # def get_stream(self, media):
+
+    #     media_id = media.get("mediaId", media.get("guid"))
+
+    #     headers={
+    #         "Authorization": self.session.access_token,
+    #         # "User-agent": USER_AGENT,
+    #         "Accept": "application/vnd.media-service+json; version=1",
+    #         "x-bamsdk-version": "3.0",
+    #         "x-bamsdk-platform": self.PLATFORM,
+    #         "origin": "https://www.mlb.com"
+    #     }
+    #     stream_url = self.STREAM_URL_TEMPLATE.format(media_id=media_id)
+    #     logger.info("getting stream %s" %(stream_url))
+    #     stream = self.get(
+    #         stream_url,
+    #         headers=headers
+    #     ).json()
+    #     logger.debug("stream response: %s" %(stream))
+    #     if "errors" in stream and len(stream["errors"]):
+    #         return None
+    #     stream = Stream(stream)
+    #     stream.url = stream["stream"]["complete"]
+    #     return stream
 
 
 

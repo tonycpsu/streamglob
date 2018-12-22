@@ -106,8 +106,18 @@ class DateFilterWidget(urwid.WidgetWrap):
         self.date_picker.date = d
         self.date_changed()
 
+    def cycle_week(self, n=1):
+        d = self.date + timedelta(weeks=n)
+        self.date_picker.date = d
+        self.date_changed()
+
     def cycle_month(self, n=1):
         d = self.date + relativedelta(months=n)
+        self.date_picker.date = d
+        self.date_changed()
+
+    def cycle_year(self, n=1):
+        d = self.date + relativedelta(years=n)
         self.date_picker.date = d
         self.date_changed()
 
@@ -155,7 +165,19 @@ class DateFilter(Filter):
         return self.widget.date
 
     def cycle(self, step=1):
-        self.widget.cycle_day(step)
+        if isinstance(step, int):
+            self.widget.cycle_day(step)
+        elif isinstance(step, tuple):
+            (p, step) = step
+            if p == "w":
+                self.widget.cycle_week(step)
+            elif p == "m":
+                self.widget.cycle_month(step)
+            elif p == "y":
+                self.widget.cycle_year(step)
+            else:
+                raise Exception("invalid time period: %s" %(p))
+
 
 
 class ListingFilter(Filter, abc.ABC):

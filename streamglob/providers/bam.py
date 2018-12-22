@@ -4,12 +4,17 @@ logger = logging.getLogger(__name__)
 import abc
 
 import urwid
+import panwid
 from orderedattrdict import AttrDict
-from datetime import datetime
+from datetime import datetime, timedelta
 import dateutil.parser
 import pytz
 
 from .. import config
+from .base import *
+from .filters import *
+from ..player import *
+from .widgets import *
 
 def parse_int(n):
     try:
@@ -33,6 +38,217 @@ def format_start_time(d):
         s = s[1:]
     return s
 
+class BasePopUp(urwid.WidgetWrap):
+
+    signals = ["close_popup"]
+
+    def selectable(self):
+        return True
+
+
+
+
+class OffsetDropdown(urwid.WidgetWrap):
+
+
+    def __init__(self, timestamps, live=False, default=None):
+
+        del timestamps["S"]
+        timestamp_map = AttrDict(
+
+            ( "Start" if k == "SO" else k, v ) for k, v in timestamps.items()
+        )
+        if live:
+            timestamp_map["Live"] = False
+
+        self.dropdown = panwid.Dropdown(
+            timestamp_map, label="Begin playback",
+            default = timestamp_map[default]
+        )
+        super().__init__(self.dropdown)
+
+    @property
+    def selected_value(self):
+        return self.dropdown.selected_value
+
+
+
+
+class WatchDialog(BasePopUp):
+
+    signals = ["play"]
+
+    def __init__(self,
+                 provider,
+                 selection,
+                 media_title=None,
+                 default_resolution=None,
+                 watch_live=None):
+
+        self.provider = provider
+        self.game_id = selection["game_id"]
+        self.media_title = media_title
+        self.default_resolution = default_resolution
+        self.watch_live = watch_live
+
+        # self.game_data = self.session.schedule(
+        #     game_id=self.game_id,
+        # )["dates"][0]["games"][0]
+        # raise Exception(self.game_data)
+        self.title = urwid.Text("%s@%s" %(
+            selection["away"],
+            selection["home"]
+            # self.game_data["teams"]["away"]["team"]["abbreviation"],
+            # self.game_data["teams"]["home"]["team"]["abbreviation"],
+        ))
+
+        # feed_map = sorted([
+        #     ("%s (%s)" %(e["mediaFeedType"].title(),
+        #                  e["callLetters"]), e["mediaId"].lower())
+        #     for e in self.get_media(self.game_id)
+        # ], key=lambda v: v[0])
+        # home_feed = next(self.get_media(
+        #     self.game_id,
+        #     preferred_stream = "home"
+        # ))
+
+        media = list(self.provider.get_media(self.game_id, title=self.media_title))
+        # raise Exception(media)
+        feed_map = sorted([
+            ("%s (%s)" %(e["mediaFeedType"].title(),
+                         e["callLetters"]), e["mediaId"].lower())
+            for e in media
+        ], key=lambda v: v[0])
+
+        try:
+            home_feed = next(
+                e for e in media
+                if e["mediaFeedType"].lower() == "home"
+            )
+        except StopIteration:
+            home_feed = media[0]
+
+        self.live_stream = (home_feed.get("mediaState") == "MEDIA_ON")
+        self.feed_dropdown = panwid.Dropdown(
+            feed_map,
+            label="Feed",
+            default=home_feed["mediaId"]
+        )
+        urwid.connect_signal(
+            self.feed_dropdown,
+            "change",
+            lambda s, b, media_id: self.update_offset_dropdown(media_id)
+        )
+
+        # self.resolution_dropdown = ResolutionDropdown(
+        #     default=resolution
+        # )
+
+        self.resolution_dropdown = panwid.Dropdown(
+            self.provider.RESOLUTIONS, default=self.default_resolution
+        )
+
+        self.offset_dropdown_placeholder = urwid.WidgetPlaceholder(urwid.Text(""))
+        self.update_offset_dropdown(self.feed_dropdown.selected_value)
+
+        def ok(s):
+            self.provider.play(
+                selection,
+                offset=self.offset_dropdown.selected_value,
+                resolution=self.resolution_dropdown.selected_value
+            )
+            self._emit("close_popup")
+
+        def cancel(s):
+            self._emit("close_popup")
+
+        self.ok_button = urwid.Button("OK")
+        self.cancel_button = urwid.Button("Cancel")
+
+        urwid.connect_signal(self.ok_button, "click", ok)
+        urwid.connect_signal(self.cancel_button, "click", cancel)
+
+        pile = urwid.Pile([
+            ("pack", self.title),
+            ("weight", 1, urwid.Pile([
+                ("weight", 1, urwid.Filler(
+                    urwid.Columns([
+                        ("weight", 1, self.feed_dropdown),
+                        ("weight", 1, self.resolution_dropdown),
+                    ]))),
+                ("weight", 1, urwid.Filler(self.offset_dropdown_placeholder)),
+                ("weight", 1, urwid.Filler(
+                    urwid.Columns([
+                    ("weight", 1, self.ok_button),
+                    ("weight", 1, self.cancel_button),
+                ])))
+            ]))
+        ])
+        super(WatchDialog, self).__init__(pile)
+
+    def update_offset_dropdown(self, media_id):
+
+        self.offset_dropdown = OffsetDropdown(
+            self.provider.media_timestamps(self.game_id, media_id),
+            live = self.live_stream,
+            default = "Live" if self.watch_live and self.live_stream else "Start"
+        )
+        self.offset_dropdown_placeholder.original_widget = self.offset_dropdown
+
+
+    # def watch(self, source):
+    #     urwid.signals.emit_signal(
+    #         self,
+    #         "play",
+    #         self.game_id,
+    #         self.resolution_dropdown.selected_value,
+    #         self.feed_dropdown.selected_value,
+    #         self.offset_dropdown.selected_value
+    #     )
+    #     urwid.signals.emit_signal(self, "close_popup")
+
+    def keypress(self, size, key):
+
+        if key == "meta enter":
+            self.ok_button.keypress(size, "enter")
+        elif key in ["<", ">"]:
+            self.resolution_dropdown.cycle(1 if key == "<" else -1)
+        elif key in ["[", "]"]:
+            self.feed_dropdown.cycle(-1 if key == "[" else 1)
+        elif key in ["-", "="]:
+            self.offset_dropdown.cycle(-1 if key == "-" else 1)
+        else:
+            # return super(WatchDialog, self).keypress(size, key)
+            key = super(WatchDialog, self).keypress(size, key)
+        if key:
+            return
+        return key
+
+class LiveStreamFilter(ListingFilter):
+
+    @property
+    def values(self):
+        return AttrDict([
+            ("Live", True),
+            ("From Start", False),
+        ])
+
+
+class BAMProviderDataTable(ProviderDataTable):
+
+    def keypress(self, size, key):
+        if key in ["meta left", "meta right"]:
+            self._emit(f"cycle_filter", 0,("w", -1 if key == "meta left" else 1))
+        if key in ["ctrl left", "ctrl right"]:
+            self._emit(f"cycle_filter", 0, ("m", -1 if key == "ctrl left" else 1))
+        else:
+            return super().keypress(size, key)
+
+
+
+class BAMProviderView(SimpleProviderView):
+
+    PROVIDER_DATA_TABLE_CLASS = BAMProviderDataTable
 
 class BAMProviderMixin(abc.ABC):
     """
@@ -41,6 +257,12 @@ class BAMProviderMixin(abc.ABC):
     """
     sport_id = 1 # FIXME
 
+    FILTERS = AttrDict([
+        ("date", DateFilter),
+        ("resolution", ResolutionFilter),
+        ("live_stream", LiveStreamFilter),
+    ])
+
     ATTRIBUTES = AttrDict(
         attrs = {"width": 6},
         start = {"width": 6, "format_fn": format_start_time},
@@ -48,6 +270,10 @@ class BAMProviderMixin(abc.ABC):
         home = {"width": 16},
         line = {}
     )
+
+    VIEW_CLASS = BAMProviderView
+    PLAYER_CLASS = StreamlinkPlayer
+
 
     # @memo(region="short")
     def schedule(
@@ -179,8 +405,11 @@ class BAMProviderMixin(abc.ABC):
         logger.debug(f"geting media for game {game_id} ({media_id}, {title}, {call_letters})")
 
         epgs = self.get_epgs(game_id, title)
+        # raise Exception(epgs)
         for epg in epgs:
             for item in epg["items"]:
+                if "mediaId" not in item:
+                    item["mediaId"] = item.get("guid", "")
                 if (not preferred_stream
                     or (item.get("mediaFeedType", "").lower() == preferred_stream)
                 ) and (
@@ -195,11 +424,11 @@ class BAMProviderMixin(abc.ABC):
             else:
                 if len(epg["items"]):
                     logger.debug("using non-preferred stream")
-                    yieldAttrDict(epg["items"][0])
+                    yield AttrDict(epg["items"][0])
         # raise StopIteration
 
 
-    def get_url(self, game_specifier, resolution=None,
+    def get_url(self, game_specifier,
                 offset=None,
                 media_id = None,
                 preferred_stream=None,
@@ -216,9 +445,6 @@ class BAMProviderMixin(abc.ABC):
         # media_title = "MLBTV"
         media_id = None
         allow_stdout=False
-
-        if resolution is None:
-            resolution = "best"
 
         if isinstance(game_specifier, int):
             game_id = game_specifier
@@ -267,11 +493,6 @@ class BAMProviderMixin(abc.ABC):
             raise SGException("No game %d found for %s on %s" %(
                 game_number, team, game_date)
             )
-
-        logger.info("playing game %d at %s" %(
-            game_id, resolution)
-        )
-
         away_team_abbrev = game["teams"]["away"]["team"]["abbreviation"].lower()
         home_team_abbrev = game["teams"]["home"]["team"]["abbreviation"].lower()
 
@@ -326,17 +547,95 @@ class BAMProviderMixin(abc.ABC):
 
         return media_url
 
-        @abc.abstractmethod
-        def teams(self, season=None):
-            pass
+    @abc.abstractmethod
+    def teams(self, season=None):
+        pass
 
-        @abc.abstractmethod
-        def get_stream(self, media):
-            pass
+    # @abc.abstractmethod
+    # def get_stream(self, media):
+    #     pass
+
+    # FIXME: MLB-specific
+    def parse_offset(self, offset):
+
+        timestamps = self.media_timestamps(game_id, media_id)
+
+        if isinstance(offset, str):
+            if not offset in timestamps:
+                raise SGException("Couldn't find inning %s" %(offset))
+            offset = timestamps[offset] - timestamps["SO"]
+            logger.debug("inning offset: %s" %(offset))
+
+        if (media_state == "MEDIA_ON"): # live stream
+            logger.debug("live stream")
+            # calculate HLS offset, which is negative from end of stream
+            # for live streams
+            start_time = dateutil.parser.parse(timestamps["S"])
+            offset_delta = (
+                datetime.now(pytz.utc)
+                - start_time.astimezone(pytz.utc)
+                + (timedelta(seconds=-offset))
+            )
+        else:
+            logger.debug("recorded stream")
+            offset_delta = timedelta(seconds=offset)
+
+        offset_seconds = offset_delta.seconds
+        offset_timestamp = str(offset_delta)
+        return offset_timestamp
+        # logger.info("starting at time offset %s" %(offset))
 
 
-    def play(self, selection):
+    def on_select(self, widget, selection):
+        self.open_watch_dialog(selection)
+
+    def open_watch_dialog(self, selection):
+        media = list(self.get_media(selection["game_id"]))
+        dialog = WatchDialog(self,
+                             selection,
+                             media_title = self.MEDIA_TITLE,
+                             default_resolution = self.filters.resolution.value,
+                             watch_live = self.filters.live_stream.value
+        )
+        # urwid.connect_signal(
+        #     dialog,
+        #     "play",
+        #     lambda w: self.play(self.selection)
+        # )
+        self.view.open_popup(dialog, width=30, height=20)
+
+        # self.play(selection)
+
+
+    def play_args(self, selection, **kwargs):
 
         game_id = selection.get("game_id")
+
         url = self.get_url(game_id)
-        self.play_stream(url, resolution=self.filters.resolution.value)
+        args = [url]
+        # if not "resolution" in kwargs:
+        kwargs["resolution"] = self.filters.resolution.value
+        offset = kwargs.pop("offset")
+        if offset:
+            if (selection.attrs.state == "MEDIA_ON"): # live stream
+                logger.debug("live stream")
+                # calculate HLS offset, which is negative from end of stream
+                # for live streams
+                # start_time = dateutil.parser.parse(timestamps["S"])
+                start_time = dateutil.parser.parse(selection.start_time)
+                offset_delta = (
+                    datetime.now(pytz.utc)
+                    - start_time.astimezone(pytz.utc)
+                    + (timedelta(seconds=-offset))
+                )
+            else:
+                logger.debug("recorded stream")
+                offset_delta = timedelta(seconds=offset)
+
+            # offset_seconds = offset_delta.seconds
+            kwargs["offset"] = offset_delta.seconds
+
+        kwargs["headers"] = self.session.headers
+        kwargs["cookies"] = self.session.cookies
+
+        return (args, kwargs)

@@ -2,6 +2,18 @@ import urwid
 import panwid
 
 
+# class ResolutionDropdown(panwid.Dropdown):
+
+#     label = "Resolution"
+
+#     def __init__(self, resolutions, default=None):
+#         self.resolutions = resolutions
+#         super(ResolutionDropdown, self).__init__(resolutions, default=default)
+
+#     @property
+#     def items(self):
+#         return self.resolutions
+
 
 class FilterToolbar(urwid.WidgetWrap):
 
@@ -13,7 +25,7 @@ class FilterToolbar(urwid.WidgetWrap):
         self.columns = urwid.Columns([])
         for n, f in self.filters.items():
             self.columns.contents += [
-                (urwid.Text(f"{n.title()}: "), self.columns.options("pack")),
+                (urwid.Text(f"{n.replace('_', ' ').title()}: "), self.columns.options("pack")),
                 (f.widget, self.columns.options(*f.widget_sizing(f.widget))),
             ]
         if len(self.columns.contents):
