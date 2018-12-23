@@ -11,10 +11,21 @@ import dateutil.parser
 import pytz
 
 from .. import config
+from .. import model
 from .base import *
 from .filters import *
 from ..player import *
 from .widgets import *
+
+
+class BAMProviderData(model.ProviderData):
+
+    season_year = Required(int)
+    start = Required(datetime)
+    end = Required(datetime)
+
+    composite_key(model.ProviderData.classtype, season_year)
+
 
 def parse_int(n):
     try:
@@ -45,6 +56,11 @@ class BasePopUp(urwid.WidgetWrap):
     def selectable(self):
         return True
 
+class BAMDateFilter(DateFilter):
+
+    @property
+    def widget_kwargs(self):
+        return {"initial_date": self.provider.start_date}
 
 
 
@@ -261,7 +277,7 @@ class BAMProviderMixin(abc.ABC):
     sport_id = 1 # FIXME
 
     FILTERS = AttrDict([
-        ("date", DateFilter),
+        ("date", BAMDateFilter),
         ("resolution", ResolutionFilter),
         ("live_stream", LiveStreamFilter),
     ])
@@ -282,16 +298,19 @@ class BAMProviderMixin(abc.ABC):
     def schedule(
             self,
             # sport_id=None,
+            season=None, # season only works for NHL
             start=None,
             end=None,
             game_type=None,
             team_id=None,
             game_id=None,
+            brief=False
     ):
 
         logger.debug(
-            "getting schedule: %s, %s, %s, %s, %s, %s" %(
+            "getting schedule: %s, %s, %s, %s, %s, %s, %s" %(
                 self.sport_id,
+                season,
                 start,
                 end,
                 game_type,
@@ -299,8 +318,14 @@ class BAMProviderMixin(abc.ABC):
                 game_id
             )
         )
-        url = self.SCHEDULE_TEMPLATE.format(
+        if brief:
+            template = self.SCHEDULE_TEMPLATE_BRIEF
+        else:
+            template = self.SCHEDULE_TEMPLATE
+
+        url = template.format(
             sport_id = self.sport_id,
+            season = season if season else "",
             start = start.strftime("%Y-%m-%d") if start else "",
             end = end.strftime("%Y-%m-%d") if end else "",
             game_type = game_type if game_type else "",
@@ -554,39 +579,47 @@ class BAMProviderMixin(abc.ABC):
     def teams(self, season=None):
         pass
 
+    @property
+    @abc.abstractmethod
+    def start_date(self):
+        pass
+
+
     # @abc.abstractmethod
     # def get_stream(self, media):
     #     pass
 
     # FIXME: MLB-specific
-    def parse_offset(self, offset):
+    # def parse_offset(self, offset):
 
-        timestamps = self.media_timestamps(game_id, media_id)
+    #     timestamps = self.media_timestamps(game_id, media_id)
 
-        if isinstance(offset, str):
-            if not offset in timestamps:
-                raise SGException("Couldn't find inning %s" %(offset))
-            offset = timestamps[offset] - timestamps["SO"]
-            logger.debug("inning offset: %s" %(offset))
+    #     if isinstance(offset, str):
+    #         if not offset in timestamps:
+    #             raise SGException("Couldn't find inning %s" %(offset))
+    #         offset = timestamps[offset] - timestamps["SO"]
+    #         logger.debug("inning offset: %s" %(offset))
 
-        if (media_state == "MEDIA_ON"): # live stream
-            logger.debug("live stream")
-            # calculate HLS offset, which is negative from end of stream
-            # for live streams
-            start_time = dateutil.parser.parse(timestamps["S"])
-            offset_delta = (
-                datetime.now(pytz.utc)
-                - start_time.astimezone(pytz.utc)
-                + (timedelta(seconds=-offset))
-            )
-        else:
-            logger.debug("recorded stream")
-            offset_delta = timedelta(seconds=offset)
+    #     if (media_state == "MEDIA_ON"): # live stream
+    #         logger.debug("live stream")
+    #         # calculate HLS offset, which is negative from end of stream
+    #         # for live streams
+    #         start_time = dateutil.parser.parse(timestamps["S"])
+    #         offset_delta = (
+    #             datetime.now(pytz.utc)
+    #             - start_time.astimezone(pytz.utc)
+    #             + (timedelta(seconds=-offset))
+    #         )
+    #     else:
+    #         logger.debug("recorded stream")
+    #         offset_delta = timedelta(seconds=offset)
 
-        offset_seconds = offset_delta.seconds
-        offset_timestamp = str(offset_delta)
-        return offset_timestamp
-        # logger.info("starting at time offset %s" %(offset))
+    #     offset_seconds = offset_delta.seconds
+    #     offset_timestamp = str(offset_delta)
+    #     return offset_timestamp
+    #     # logger.info("starting at time offset %s" %(offset))
+
+
 
 
     def on_select(self, widget, selection):

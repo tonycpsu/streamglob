@@ -5,26 +5,22 @@ import urwid
 
 from orderedattrdict import AttrDict
 from panwid.datatable import *
+from pony.orm import *
 
 from ..session import *
 
 from .base import *
 from .bam import *
 from .filters import *
+
+from .. import model
 from ..exceptions import *
 from ..state import *
 
-
+class MLBBAMProviderData(BAMProviderData):
+    pass
 
 class MLBStreamSession(AuthenticatedStreamSession):
-
-    SCHEDULE_TEMPLATE = (
-        "http://statsapi.mlb.com/api/v1/schedule"
-        "?sportId={sport_id}&startDate={start}&endDate={end}"
-        "&gameType={game_type}&gamePk={game_id}"
-        "&teamId={team_id}"
-        "&hydrate=linescore,team,game(content(summary,media(epg)),tickets)"
-    )
 
     PLATFORM = "macintosh"
     BAM_SDK_VERSION = "3.0"
@@ -387,6 +383,13 @@ class MLBProvider(BAMProviderMixin,
         "&hydrate=linescore,team,game(content(summary,media(epg)),tickets)"
     )
 
+    SCHEDULE_TEMPLATE_BRIEF = (
+        "http://statsapi.mlb.com/api/v1/schedule"
+        "?sportId={sport_id}&startDate={start}&endDate={end}"
+        "&gameType={game_type}&gamePk={game_id}"
+        "&teamId={team_id}"
+    )
+
     DATA_TABLE_CLASS = MLBLineScoreDataTable
 
     MEDIA_TITLE = "MLBTV"
@@ -423,6 +426,39 @@ class MLBProvider(BAMProviderMixin,
             )
 
         return teams
+
+    @property
+    @db_session
+    def start_date(self):
+
+        now = datetime.now()
+        year = now.year
+        season_year = (datetime(2019, 2, 1) - relativedelta(months=2)).year
+
+        r = MLBBAMProviderData.get(season_year=season_year)
+        if r:
+            start = r.start
+            end = r.end
+        else:
+            schedule = self.schedule(
+                start=datetime(year, 1, 1),
+                end=datetime(year, 12, 31),
+                brief=True
+            )
+            start = dateutil.parser.parse(schedule["dates"][0]["date"])
+            end = dateutil.parser.parse(schedule["dates"][-1]["date"])
+            r = MLBBAMProviderData(
+                season_year=season_year,
+                start = start,
+                end = end
+            )
+
+        if now < start:
+            return start.date()
+        elif now > end:
+            return end.date()
+        else:
+            return now.date()
 
 
     def media_timestamps(self, game_id, media_id):

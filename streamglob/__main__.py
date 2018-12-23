@@ -322,6 +322,8 @@ def main():
                   handlers=[fh, ulh],
                   quiet_stdout=True)
 
+    providers.load()
+
     model.init()
 
     try:
@@ -337,7 +339,6 @@ def main():
 
     logger.debug(f"{PACKAGE_NAME} starting")
 
-    providers.load()
 
     entries = Dropdown.get_palette_entries()
     entries.update(ScrollingListBox.get_palette_entries())

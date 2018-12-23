@@ -31,6 +31,11 @@ class CacheEntry(db.Entity):
             lambda e: e.last_seen < datetime.now() - timedelta(seconds=age)
         ).delete()
 
+class ProviderData(db.Entity):
+    # Providers inherit from this to define their own fields
+    classtype = Discriminator(str)
+
+
 
 
 def init(*args, **kwargs):

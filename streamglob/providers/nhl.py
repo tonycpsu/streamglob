@@ -5,6 +5,7 @@ import urwid
 
 from orderedattrdict import AttrDict
 from panwid.datatable import *
+from pony.orm import *
 
 from ..session import *
 
@@ -14,6 +15,9 @@ from .filters import *
 from ..exceptions import *
 from ..state import *
 
+
+class NHLBAMProviderData(BAMProviderData):
+    pass
 
 class NHLStreamSession(AuthenticatedStreamSession):
 
@@ -326,6 +330,39 @@ class NHLProvider(BAMProviderMixin,
 
     # def media_timestamps(self, game_id, media_id):
     #     raise NotImplementedError
+
+
+    @property
+    @db_session
+    def start_date(self):
+
+        now = datetime.now()
+        year = datetime.now().year
+        season_year = (datetime(year, 10, 1) - relativedelta(months=8)).year
+
+        r = NHLBAMProviderData.get(season_year=season_year)
+        if r:
+            start = r.start
+            end = r.end
+        else:
+            season = f"{season_year}{season_year+1}"
+
+            url = f"https://statsapi.web.nhl.com/api/v1/seasons/{season}"
+            j = self.session.get(url).json()
+            start = dateutil.parser.parse(j["seasons"][0]["regularSeasonStartDate"])
+            end = dateutil.parser.parse(j["seasons"][0]["seasonEndDate"])
+            r = NHLBAMProviderData(
+                season_year=season_year,
+                start = start,
+                end = end
+            )
+
+        if now < start:
+            return start.date()
+        elif now > end:
+            return end.date()
+        else:
+            return now.date()
 
 
     def media_timestamps(self, game_id, media_id):
