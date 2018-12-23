@@ -14,17 +14,21 @@ from functools import wraps
 PROVIDERS = AttrDict()
 
 def get(provider, *args, **kwargs):
-    return PROVIDERS.get(provider)(*args, **kwargs)
+    # raise Exception(provider)
+    try:
+        return PROVIDERS.get(provider)(*args, **kwargs)
+    except TypeError:
+        raise Exception(provider, PROVIDERS)
 
 def load():
     global PROVIDERS
     mgr = extension.ExtensionManager(
         namespace='streamglob.providers',
-        # invoke_on_load=True,
         # invoke_args=(parsed_args.width,),
     )
 
     PROVIDERS = AttrDict((x.name, x.plugin) for x in mgr)
+    # raise Exception(PROVIDERS)
 
 
 # @with_filters(DateFilter, FixedListingFilter)

@@ -74,6 +74,44 @@ class SimpleProviderView(BaseView):
 
         self.table.reset()
 
+class ClassPropertyDescriptor(object):
+
+    def __init__(self, fget, fset=None):
+        self.fget = fget
+        self.fset = fset
+
+    def __get__(self, obj, klass=None):
+        if klass is None:
+            klass = type(obj)
+        return self.fget.__get__(obj, klass)()
+
+    def __set__(self, obj, value):
+        if not self.fset:
+            raise AttributeError("can't set attribute")
+        type_ = type(obj)
+        return self.fset.__get__(obj, type_)(value)
+
+    def setter(self, func):
+        if not isinstance(func, (classmethod, staticmethod)):
+            func = classmethod(func)
+        self.fset = func
+        return self
+
+def classproperty(func):
+    if not isinstance(func, (classmethod, staticmethod)):
+        func = classmethod(func)
+
+    return ClassPropertyDescriptor(func)
+
+class ClassPropertyMetaClass(type):
+    def __setattr__(self, key, value):
+        if key in self.__dict__:
+            obj = self.__dict__.get(key)
+        if obj and type(obj) is ClassPropertyDescriptor:
+            return obj.__set__(self, value)
+
+        return super(ClassPropertyMetaClass, self).__setattr__(key, value)
+
 
 class BaseProvider(abc.ABC):
 
@@ -90,19 +128,23 @@ class BaseProvider(abc.ABC):
         self.view = self.VIEW_CLASS(self)
         self.player = self.PLAYER_CLASS()
 
+    @classproperty
+    def NAME(cls):
+        return cls.__name__.replace("Provider", "")
+
     @property
     def session(self):
         return self._session
 
     def play_args(self, selection):
-        return ( [url], {} )
+        return ( [selection.url], {} )
 
     def play(self, selection, **kwargs):
         (args, kwargs) = self.play_args(selection, **kwargs)
         self.player.play(*args, **kwargs)
 
     def on_select(self, widget, selection):
-        self.provider.play(selection)
+        self.play(selection)
 
     # @abc.abstractmethod
     # def login(self):

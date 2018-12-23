@@ -394,6 +394,11 @@ class MLBProvider(BAMProviderMixin,
 
     MEDIA_TITLE = "MLBTV"
 
+
+    @classproperty
+    def NAME(cls):
+        return "MLB.tv"
+
     def teams(self, sport_code="mlb", season=None):
 
         if sport_code != "mlb":

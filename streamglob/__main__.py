@@ -58,149 +58,6 @@ class UrwidLoggingHandler(logging.Handler):
             os.write(self.pipe, (msg[:512]+"\n").encode("utf-8"))
 
 
-class ProviderToolbar(urwid.WidgetWrap):
-
-    signals = ["provider_change"]
-
-    def __init__(self):
-
-        self.league_dropdown = Dropdown(AttrDict([
-                ("MLB", 1),
-                ("AAA", 11),
-            ]) , label="League")
-
-        self.live_stream_dropdown = Dropdown([
-            "live",
-            "from start"
-        ], label="Live streams")
-
-        self.resolution_dropdown = ResolutionDropdown(
-            state.session.RESOLUTIONS,
-            default=options.resolution
-        )
-
-        # self.resolution_dropdown_placeholder.original_widget = self.resolution_dropdown
-
-        # self.resolution_dropdown_placeholder = urwid.WidgetPlaceholder(urwid.Text(""))
-        self.columns = urwid.Columns([
-            ('weight', 1, self.live_stream_dropdown),
-            ('weight', 1, self.resolution_dropdown),
-            # ("weight", 1, urwid.Padding(urwid.Text("")))
-        ])
-        self.filler = urwid.Filler(self.columns)
-        super(ProviderToolbar, self).__init__(self.filler)
-
-    @property
-    def provider(self):
-        return (self.provider_dropdown.selected_value)
-
-    @property
-    def sport_id(self):
-        return (self.league_dropdown.selected_value)
-
-    @property
-    def resolution(self):
-        return (self.resolution_dropdown.selected_value)
-
-    @property
-    def start_from_beginning(self):
-        return self.live_stream_dropdown.selected_label == "from start"
-
-
-    # def set_resolutions(self, resolutions):
-
-    #     self.resolution_dropdown = ResolutionDropdown(
-    #         resolutions,
-    #         default=options.resolution
-    #     )
-    #     self.resolution_dropdown_placeholder.original_widget = self.resolution_dropdown
-
-
-class DateBar(urwid.WidgetWrap):
-
-    def __init__(self, game_date):
-        self.text = urwid.Text(game_date.strftime("%A, %Y-%m-%d"))
-        self.fill = urwid.Filler(self.text)
-        super(DateBar, self).__init__(self.fill)
-
-    def set_date(self, game_date):
-        self.text.set_text(game_date.strftime("%A, %Y-%m-%d"))
-
-
-class ScheduleView(BaseView):
-
-    def __init__(self, provider, date=None):
-
-        if not date:
-            date = datetime.now().date()
-        self.game_date = date
-
-        self.toolbar = ProviderToolbar()
-        # urwid.connect_signal(
-        #     self.toolbar, "provider_change",
-        #     lambda w, p: self.set_provider(p)
-        # )
-
-        self.table_placeholder = urwid.WidgetPlaceholder(urwid.Text(""))
-
-        self.datebar = DateBar(self.game_date)
-        self.table = GamesDataTable(provider, self.game_date) # preseason
-        self.pile  = urwid.Pile([
-            (1, self.toolbar),
-            (1, self.datebar),
-            ("weight", 1, self.table)
-        ])
-        self.pile.focus_position = 2
-
-        super(ScheduleView, self).__init__(self.pile)
-        # self.set_provider(provider)
-
-
-    def open_watch_dialog(self, game_id):
-        dialog = WatchDialog(game_id,
-                             resolution = self.toolbar.resolution,
-                             from_beginning = self.toolbar.start_from_beginning
-        )
-        urwid.connect_signal(
-            dialog,
-            "watch",
-            self.watch
-        )
-        self.open_popup(dialog, width=30, height=20)
-
-    def keypress(self, size, key):
-
-        key = super(ScheduleView, self).keypress(size, key)
-        if key in ["left", "right"]:
-            self.game_date += timedelta(days= -1 if key == "left" else 1)
-            self.datebar.set_date(self.game_date)
-            self.table.set_game_date(self.game_date)
-        elif key in ["<", ">"]:
-            self.toolbar.resolution_dropdown.cycle(1 if key == "<" else -1)
-        elif key in ["-", "="]:
-            self.toolbar.live_stream_dropdown.cycle(1 if key == "-" else -1)
-        elif key == "t":
-            self.game_date = datetime.now().date()
-            self.datebar.set_date(self.game_date)
-            self.table.set_game_date(self.game_date)
-        elif key == "w": # watch home stream
-            self.watch(
-                self.table.selection.data.game_id,
-                preferred_stream="home",
-                resolution=self.toolbar.resolution,
-                offset = 0 if self.toolbar.start_from_beginning else None
-            )
-        elif key == "W": # watch away stream
-            self.watch(
-                self.table.selection.data.game_id,
-                preferred_stream="away",
-                resolution=self.toolbar.resolution,
-                offset = 0 if self.toolbar.start_from_beginning else None
-            )
-        else:
-            return key
-
-
 
 class MainToolbar(urwid.WidgetWrap):
 
@@ -208,8 +65,8 @@ class MainToolbar(urwid.WidgetWrap):
     def __init__(self, provider):
 
         self.provider_dropdown = Dropdown(AttrDict(
-            [ (p.upper(), p)
-              for p in providers.PROVIDERS]
+            [ (p.NAME, n)
+              for n, p in providers.PROVIDERS.items()]
         ) , label="Provider", default=provider, margin=1)
 
         urwid.connect_signal(
@@ -226,8 +83,7 @@ class MainToolbar(urwid.WidgetWrap):
 
     @property
     def provider(self):
-        return (self.provider_dropdown.selected_value)
-
+        return (self.provider_dropdown.selected_label)
 
 
 
@@ -255,7 +111,7 @@ class MainView(BaseView):
 
     def set_provider(self, provider):
 
-        logger.warning("set provider")
+        logger.warning(f"set provider: {provider}")
         self.provider = provider
         # state.session = session.new(provider)
         # self.toolbar.set_resolutions(state.session.RESOLUTIONS)
