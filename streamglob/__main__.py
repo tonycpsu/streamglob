@@ -28,7 +28,6 @@ from .state import *
 from .state import memo
 from . import config
 from . import model
-from . import play
 from . import widgets
 from . import utils
 from . import session
