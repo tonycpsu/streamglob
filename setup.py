@@ -51,6 +51,7 @@ setup(name=name,
           "streamglob.providers": [
               "mlb = streamglob.providers.mlb:MLBProvider",
               "nhl = streamglob.providers.nhl:NHLProvider",
+              "youtube = streamglob.providers.youtube:YouTubeProvider",
           ]
       },
       zip_safe=False

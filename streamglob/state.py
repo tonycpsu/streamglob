@@ -2,6 +2,7 @@ from memoize import *
 from orderedattrdict import AttrDict
 
 from . import providers
+from . import config
 
 class State(AttrDict):
 
@@ -13,7 +14,12 @@ class State(AttrDict):
     def provider(self):
         return self._provider
 
+    @property
+    def provider_config(self):
+        return self._provider_config
+
     def set_provider(self, p, **kwargs):
+        self._provider_config = config.settings.profile.providers.get(p)
         self._provider = providers.get(p, **kwargs)
 
 
