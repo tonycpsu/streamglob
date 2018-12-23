@@ -5,6 +5,7 @@ from stevedore import extension
 from orderedattrdict import AttrDict
 
 from .. import session
+from .. import config
 from functools import wraps
 
 # from . import base
@@ -12,6 +13,7 @@ from functools import wraps
 # from .mlb import *
 
 PROVIDERS = AttrDict()
+DEFAULT_PROVIDER=None
 
 def get(provider, *args, **kwargs):
     # raise Exception(provider)
@@ -22,6 +24,7 @@ def get(provider, *args, **kwargs):
 
 def load():
     global PROVIDERS
+    global DEFAULT_PROVIDER
     mgr = extension.ExtensionManager(
         namespace='streamglob.providers',
         # invoke_args=(parsed_args.width,),
@@ -29,7 +32,12 @@ def load():
 
     PROVIDERS = AttrDict((x.name, x.plugin) for x in mgr)
     # raise Exception(PROVIDERS)
-
+    if len(config.settings.profile.providers):
+        # first listed in config
+        DEFAULT_PROVIDER = list(config.settings.profile.providers.keys())[0]
+    else:
+        # first loaded
+        DEFAULT_PROVIDER = list(PROVIDERS.keys())[0]
 
 # @with_filters(DateFilter, FixedListingFilter)
 # class TestProvider(base.SimpleProviderViewMixin, base.BaseProvider):

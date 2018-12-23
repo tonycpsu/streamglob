@@ -62,12 +62,12 @@ class UrwidLoggingHandler(logging.Handler):
 class MainToolbar(urwid.WidgetWrap):
 
     signals = ["provider_change"]
-    def __init__(self, provider):
+    def __init__(self, default_provider):
 
         self.provider_dropdown = Dropdown(AttrDict(
             [ (p.NAME, n)
               for n, p in providers.PROVIDERS.items()]
-        ) , label="Provider", default=provider, margin=1)
+        ) , label="Provider", default=default_provider, margin=1)
 
         urwid.connect_signal(
             self.provider_dropdown, "change",
@@ -89,9 +89,9 @@ class MainToolbar(urwid.WidgetWrap):
 
 class MainView(BaseView):
 
-    def __init__(self, provider):
+    def __init__(self, provider=None):
 
-        self.provider = provider
+        self.provider = provider or providers.DEFAULT_PROVIDER
         self.toolbar = MainToolbar(self.provider)
         urwid.connect_signal(
             self.toolbar, "provider_change",
