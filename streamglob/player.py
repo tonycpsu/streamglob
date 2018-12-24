@@ -4,150 +4,222 @@ logger = logging.getLogger(__name__)
 import os
 import abc
 from itertools import chain
+from functools import reduce
 import shlex
 import subprocess
 from datetime import timedelta
 
+
+from orderedattrdict import AttrDict
+import youtube_dl
+
 from . import config
 from .state import *
+from .utils import *
 from .exceptions import *
 
-class Player(abc.ABC):
+class Player(object):
 
-    @abc.abstractmethod
-    def play(self, url, *args, **kwargs):
+    SUBCLASSES = {}
+
+    PLAYER_INTEGRATED=False
+
+    def __init__(self, cfg, source=None):
+        self.cfg = cfg
+        self.extra_args_pre = []
+        self.extra_args_post = []
+        self.source = source
+        self.stdin = None
+        self.stdout = None
+        self.stderr = None
+        self.proc = None
+
+    @classmethod
+    def register_player_class(cls, cmd):
+        def decorator(subclass):
+            cls.SUBCLASSES[cmd] = subclass
+            return subclass
+        return decorator
+
+    @classmethod
+    def get(cls, cfg, *args, **kwargs):
+        if isinstance(cfg, str):
+            cfg = AttrDict(name=cfg, command=cfg)
+        # cmd = os.path.split(cfg.command)[-1]
+        if cfg.name in cls.SUBCLASSES:
+            return cls.SUBCLASSES[cfg.name](cfg, *args, **kwargs)
+        raise Exception
+        return cls(cfg, *args, **kwargs)
+
+
+    @property
+    def executable(self):
+        return self.cfg.command
+
+    @property
+    def args(self):
+        return self.cfg.get("args", "").split()
+
+    @property
+    def source(self):
+        return self._source
+
+    @source.setter
+    def source(self, value):
+        self._source = value
+        if isinstance(self.source, Player):
+            if self.source.PLAYER_INTEGRATED:
+                self.source.integrate_player(self)
+            else:
+                self.pipe_from_source()
+                self.source.pipe_to_dst()
+
+    def pipe_from_source(self):
+        self.extra_args_pre += ["-"]
+
+    def pipe_to_dst(self):
+        self.extra_args_post += ["-"]
+
+    def integrate_player(self, dst):
+        raise NotImplementedError
+
+    @property
+    def command(self):
+        return [self.executable] + self.args
+
+    @property
+    def source_is_player(self):
+        return isinstance(self.source, Player)
+    @property
+    def source_integrated(self):
+        return self.source_is_player and self.source.PLAYER_INTEGRATED
+
+    def process_kwargs(self, kwargs):
         pass
-
-class BasicPlayer(abc.ABC):
-
-    def play(self, url, *args, **kwargs):
-
-
-        cmd = config.settings.profile.player.split(" ") + [url]
-        logger.debug("Running cmd: %s" % " ".join(cmd))
-        try:
-            state.proc = subprocess.Popen(
-                cmd,
-                stdout=open(os.devnull, 'w'),
-                stderr=open(os.devnull, 'w'),
-            )
-        except SGException as e:
-            logger.warning(e)
+        # if kwargs:
+        #     self.extra_args_pre += list(
+        #         reduce(lambda x, y: x + y,
+        #                [(f"--{k}", v) for k, v in kwargs.items()]
+        #         )
+        #     )
 
 
+    def play(self, source=None, **kwargs):
+
+        if source:
+            self.source = source
+        logger.info(f"{self.__class__.__name__} playing {self.source}")
+
+        self.process_kwargs(kwargs)
+
+        cmd = self.command + self.extra_args_pre
+        if self.source_is_player:
+            self.source.stdout = subprocess.PIPE
+            self.proc = self.source.play(**kwargs)
+            self.stdin = self.proc.stdout
+        elif isinstance(self.source, list):
+            cmd += self.source
+        else:
+            cmd += [self.source]
+        cmd += self.extra_args_post
+
+        logger.trace(f"{self.__class__.__name__} running {cmd}")
+
+        # raise Exception(f"play: {' '.join(cmd)},"
+        #       f"({(self.stdin, self.stdout, self.stderr)})")
+
+        if not self.source_integrated:
+            try:
+                self.proc = subprocess.Popen(
+                    cmd,
+                    stdin = self.stdin,
+                    stdout = self.stdout or open(os.devnull, 'w'),
+                    stderr = self.stderr or open(os.devnull, 'w'),
+                    # stderr = self.stderr or open(os.devnull, 'w'),
+                )
+            except SGException as e:
+                logger.warning(e)
+        return self.proc
+
+
+@Player.register_player_class("youtube-dl")
+class YoutubeDLPlayer(Player):
+
+    @property
+    def executable(self):
+        return "youtube-dl"
+
+    def pipe_to_dst(self):
+        self.extra_args_post += ["-o", "-"]
+
+
+@Player.register_player_class("streamlink")
 class StreamlinkPlayer(Player):
 
-    def play(self, url,
-             resolution=None,
-             offset=None,
-             output=None,
-             headers=None,
-             cookies=None,
-             verbose=0):
+    PLAYER_INTEGRATED=True
 
-        allow_stdout=False
-        offset_timestamp = None
-        offset_seconds = None
+    def integrate_player(self, dst):
+        self.extra_args_pre += ["--player"] + [" ".join(dst.command)]
 
-        if resolution is None:
-            resolution = "best"
+    def process_kwargs(self, kwargs):
 
+        resolution = kwargs.pop("resolution", None)
+        if resolution:
+            self.extra_args_post.insert(0, resolution)
 
+        offset = kwargs.pop("offset", None)
 
         if (offset is not False and offset is not None):
-
-            # # timestamps = self.session.media_timestamps(game_id, media_id)
-
-            # # if isinstance(offset, str):
-            # #     if not offset in timestamps:
-            # #         raise SGException("Couldn't find inning %s" %(offset))
-            # #     offset = timestamps[offset] - timestamps["SO"]
-            # #     logger.debug("inning offset: %s" %(offset))
-
-            # if (media_state == "MEDIA_ON"): # live stream
-            #     logger.debug("live stream")
-            #     # calculate HLS offset, which is negative from end of stream
-            #     # for live streams
-            #     start_time = dateutil.parser.parse(timestamps["S"])
-            #     offset_delta = (
-            #         datetime.now(pytz.utc)
-            #         - start_time.astimezone(pytz.utc)
-            #         + (timedelta(seconds=-offset))
-            #     )
-            # else:
-            #     logger.debug("recorded stream")
-            #     offset_delta = timedelta(seconds=offset)
             offset_delta = timedelta(seconds=offset)
-            # offset_seconds = offset_delta.seconds
             offset_timestamp = str(offset_delta)
             logger.info("starting at time offset %s" %(offset))
+            self.extra_args_pre += ["--hls-start-offset", offset_timestamp]
 
-        header_args = []
-        cookie_args = []
-
+        headers = kwargs.pop("headers", None)
         if headers:
-            header_args = list(
+            self.extra_args_pre += list(
                 chain.from_iterable([
                     ("--http-header", f"{k}={v}")
                 for k, v in headers.items()
             ]))
 
+        cookies = kwargs.pop("cookies", None)
         if cookies:
-            cookie_args = list(
+            self.extra_args_pre += list(
                 chain.from_iterable([
                     ("--http-cookie", f"{c.name}={c.value}")
                 for c in cookies
             ]))
+        # super().process_kwargs(kwargs)
 
-        cmd = [
-            "streamlink",
-            # "-l", "debug",
-            "--player", config.settings.profile.player,
-        ] + cookie_args + header_args + [
-            url,
-            resolution,
-        ]
 
-        if config.settings.profile.streamlink_args:
-            cmd += shlex.split(config.settings.profile.streamlink_args)
+@Player.register_player_class("mpv")
+class MPVPlayer(Player):
+    pass
 
-        if offset_timestamp:
-            cmd += ["--hls-start-offset", offset_timestamp]
+@Player.register_player_class("vlc")
+class VLCPlayer(Player):
+    pass
 
-        if verbose > 1:
 
-            allow_stdout=True
-            cmd += ["-l", "debug"]
+def main():
 
-            if verbose > 2:
-                if not output:
-                    cmd += ["-v"]
-                cmd += ["--ffmpeg-verbose"]
+    from tonyc_utils import logging
 
-        if output is not None:
-            if output == True or os.path.isdir(output):
-                outfile = get_output_filename(
-                    game,
-                    media["callLetters"],
-                    resolution,
-                    offset=str(offset_seconds)
-                )
-                if os.path.isdir(output):
-                    outfile = os.path.join(output, outfile)
-            else:
-                outfile = output
+    logging.setup_logging(2)
+    config.settings.load()
 
-            cmd += ["-o", outfile]
+    # y = Player.get(config.settings.profile.helpers.youtube_dl,
+    #              "https://www.youtube.com/watch?v=5aVU_0a8-A4")
+    # v = Player.get(config.settings.profile.players.vlc, y)
+    # proc = v.play()
+    # proc.wait()
 
-        logger.info("playing url %s at %s (offset %s)" %(
-            url, resolution, offset)
-        )
+    s = Player.get(config.settings.profile.helpers.streamlink,
+                 ["https://www.youtube.com/watch?v=5aVU_0a8-A4", "720p"])
+    m = Player.get(config.settings.profile.players.mpv, s)
+    proc = m.play()
+    proc.wait()
 
-        logger.debug("Running cmd: %s" % " ".join(cmd))
-        try:
-            state.proc = subprocess.Popen(
-                cmd,
-                stdout=None if allow_stdout else open(os.devnull, 'w')
-            )
-        except SGException as e:
-            logger.warning(e)
+if __name__ == "__main__":
+    main()

@@ -6,6 +6,17 @@ from . import config
 
 class State(AttrDict):
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*kwargs, **kwargs)
+
+    @property
+    def proc(self):
+        return self._proc
+
+    @proc.setter
+    def proc(self, value):
+        self._proc = value
+
     @property
     def session(self):
         return self._provider.session

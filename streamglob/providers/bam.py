@@ -291,8 +291,7 @@ class BAMProviderMixin(abc.ABC):
     )
 
     VIEW_CLASS = BAMProviderView
-    PLAYER_CLASS = StreamlinkPlayer
-
+    HELPER = "streamlink"
 
     # @memo(region="short")
     def schedule(

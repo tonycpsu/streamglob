@@ -7,7 +7,7 @@ from .widgets import *
 from panwid.dialog import BaseView
 from ..session import *
 from ..state import *
-from ..player import *
+from ..player import Player
 
 class MediaItem(AttrDict):
 
@@ -117,7 +117,7 @@ class BaseProvider(abc.ABC):
 
     SESSION_CLASS = StreamSession
     VIEW_CLASS = SimpleProviderView
-    PLAYER_CLASS = BasicPlayer
+    HELPER = None
     FILTERS = AttrDict()
     ATTRIBUTES = AttrDict(title={"width": ("weight", 1)})
 
@@ -126,7 +126,18 @@ class BaseProvider(abc.ABC):
         self._session = self.SESSION_CLASS.new(*args, **kwargs)
         self.filters = AttrDict({n: f(provider=self) for n, f in self.FILTERS.items() })
         self.view = self.VIEW_CLASS(self)
-        self.player = self.PLAYER_CLASS()
+        # self.player = self.PLAYER_CLASS.get(config.settings.profile.player)
+        self.player = Player.get(
+            list(config.settings.profile.players.keys())[0]
+        )
+
+            # raise Exception(self.player)
+        # self.player = Player.get(
+        #     self.HELPER
+        #     or list(config.settings.profile.players.keys())[0]
+        # )
+        # raise Exception(self.player)
+
 
     @classproperty
     def NAME(cls):
@@ -140,8 +151,14 @@ class BaseProvider(abc.ABC):
         return ( [selection.url], {} )
 
     def play(self, selection, **kwargs):
-        (args, kwargs) = self.play_args(selection, **kwargs)
-        self.player.play(*args, **kwargs)
+        (source, kwargs) = self.play_args(selection, **kwargs)
+        if self.HELPER:
+            helper = Player.get(self.HELPER)#, *args, **kwargs)
+            helper.source = source
+            self.player.source = helper
+        else:
+            self.player.source = source
+        self.player.play(**kwargs)
 
     def on_select(self, widget, selection):
         self.play(selection)

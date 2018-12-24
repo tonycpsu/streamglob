@@ -29,7 +29,6 @@ class YouTubeProvider(BaseProvider):
         # duration = {"width": 10}
     )
 
-
     @classproperty
     def NAME(cls):
         return "YouTube"
