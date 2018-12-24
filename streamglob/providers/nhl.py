@@ -423,7 +423,7 @@ class NHLProvider(BAMProviderMixin,
             if m["type"] == "BROADCAST_START"
         )
         start_timestamps.append(
-            ("SO", start_offset)
+            ("SO", int(start_offset))
         )
 
         timestamps = AttrDict(start_timestamps)
