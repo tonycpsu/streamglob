@@ -243,6 +243,7 @@ class BAMProviderView(SimpleProviderView):
 
     PROVIDER_DATA_TABLE_CLASS = BAMProviderDataTable
 
+@with_view(BAMProviderView)
 class BAMProviderMixin(abc.ABC):
     """
     StreamSession subclass for BAMTech Media stream providers, which currently
@@ -264,7 +265,6 @@ class BAMProviderMixin(abc.ABC):
         line = {}
     )
 
-    VIEW_CLASS = BAMProviderView
     HELPER = "streamlink"
 
     # @memo(region="short")

@@ -1,7 +1,6 @@
 import urwid
 import panwid
 
-
 # class ResolutionDropdown(panwid.Dropdown):
 
 #     label = "Resolution"
@@ -61,7 +60,6 @@ class ProviderDataTable(panwid.DataTable):
 
     signals = ["cycle_filter"]
 
-    limit = 25
 
     def __init__(self, provider, *args, **kwargs):
 
@@ -70,6 +68,11 @@ class ProviderDataTable(panwid.DataTable):
                          for k, v in self.provider.ATTRIBUTES.items() ]
 
         super(ProviderDataTable,  self).__init__(*args, **kwargs)
+
+    @property
+    def limit(self):
+        return self.provider.limit
+
 
     def query(self, *args, **kwargs):
 

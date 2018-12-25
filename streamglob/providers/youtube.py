@@ -21,7 +21,6 @@ class YouTubeProviderDataTable(ProviderDataTable):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.limit = state.provider_config.get("limit")
 
 
 class YouTubeProviderView(SimpleProviderView):
@@ -29,6 +28,7 @@ class YouTubeProviderView(SimpleProviderView):
     PROVIDER_DATA_TABLE_CLASS = YouTubeProviderDataTable
 
 
+@with_view(YouTubeProviderView)
 class YouTubeProvider(BaseProvider):
 
     FILTERS = AttrDict([
@@ -41,8 +41,6 @@ class YouTubeProvider(BaseProvider):
         # description = {"width": 30},
         # duration = {"width": 10}
     )
-
-    VIEW_CLASS = YouTubeProviderView
 
     DATA_TABLE_CLASS = YouTubeProviderDataTable
 
