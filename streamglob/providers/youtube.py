@@ -6,21 +6,34 @@ from .. import config
 
 from .filters import *
 
-import subprocess
-
 import youtube_dl
 
-class YoutubeChannelsFilter(ListingFilter):
+class YouTubeChannelsFilter(ListingFilter):
 
     @property
     def values(self):
-        return list(state.provider_config.channels.items())
+        channels = [("Search", "search")]
+        channels += list(state.provider_config.channels.items())
+        return channels
+
+
+class YouTubeProviderDataTable(ProviderDataTable):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.limit = state.provider_config.get("limit")
+
+
+class YouTubeProviderView(SimpleProviderView):
+
+    PROVIDER_DATA_TABLE_CLASS = YouTubeProviderDataTable
 
 
 class YouTubeProvider(BaseProvider):
 
     FILTERS = AttrDict([
-        ("channel", YoutubeChannelsFilter),
+        ("channel", YouTubeChannelsFilter),
+        ("search", TextFilter)
     ])
 
     ATTRIBUTES = AttrDict(
@@ -29,49 +42,34 @@ class YouTubeProvider(BaseProvider):
         # duration = {"width": 10}
     )
 
-    @classproperty
-    def NAME(cls):
-        return "YouTube"
+    VIEW_CLASS = YouTubeProviderView
 
-    def listings(self):
+    DATA_TABLE_CLASS = YouTubeProviderDataTable
 
-        url = self.filters.channel.value
-        # # raise Exception(url)
-        # try:
-        #     proc = subprocess.Popen(
-        #         ["youtube-dl",
-        #          "-j",
-        #          "--flat-playlist",
-        #          "--playlist-end", "10",
-        #          url
-        #         ],
-        #         stdout=subprocess.PIPE,
-        #         # stderr=subprocess.PIPE,
-        #         stderr=open(os.devnull, 'w')
-        #     )
-        # except SGException as e:
-        #     logger.warning(e)
+    def listings(self, offset=None, limit=None, *args, **kwargs):
 
-        # (out, err) = proc.communicate()
-        # raise Exception(err)
-        # for line in out.decode("utf-8").split("\n"):
-        #     yield AttrDict(title=line)
+        if self.filters.channel.value == "search":
+            if len(self.filters.search.value):
+                query = f"ytsearch{offset+self.view.table.limit}:{self.filters.search.value}"
+            else:
+                return AttrDict()
+        else:
+            query = self.filters.channel.value
 
-        ydl_opts = {
-            # "ignoreerrors": True,
+        ytdl_opts = {
+            "ignoreerrors": True,
             'quiet': True,
             'extract_flat': "in_playlist",
-            # "get-description": True,
-            # "get-duration": True,
-            # "dump-json": True,
-            "playlistend": state.provider_config.get("limit", 100)
+            "playlistend": self.view.table.limit
         }
 
-        #        url = "https://www.youtube.com/channel/" + self.filters.channel.value
-        # url = "https://www.youtube.com/user/ContraPoints"
+        if offset:
 
-        with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-            playlist_dict = ydl.extract_info(url, download=False)
+            ytdl_opts["playliststart"] = offset+1
+            ytdl_opts["playlistend"] = offset + self.view.table.limit
+
+        with youtube_dl.YoutubeDL(ytdl_opts) as ydl:
+            playlist_dict = ydl.extract_info(query, download=False)
             for video in playlist_dict['entries']:
                 yield AttrDict(
                     title = video["title"],

@@ -64,7 +64,7 @@ class SimpleProviderView(BaseView):
         self.pile.focus_position = 1
         super().__init__(self.pile)
 
-    def on_filter_change(self, source, widget, value):
+    def on_filter_change(self, index, *args):
         self.update()
 
     def cycle_filter(self, widget, n, step):

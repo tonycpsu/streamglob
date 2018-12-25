@@ -32,10 +32,17 @@ class FilterToolbar(urwid.WidgetWrap):
             self.columns.focus_position = 1
 
         for n, f in self.filters.items():
-            urwid.connect_signal(
-                f.widget, "change",
-                lambda s, w, v: self._emit("filter_change", n, v)
-            )
+            if f.auto_refresh:
+                urwid.connect_signal(
+                    f.widget, "change",
+                    lambda s, *args: self._emit("filter_change", n, *args)
+                )
+            else:
+                if "select" in f.widget.signals:
+                    urwid.connect_signal(
+                        f.widget, "select",
+                        lambda s, *args: self._emit("filter_change", n, *args)
+                    )
 
         self.filler = urwid.Filler(self.columns)
         super(FilterToolbar, self).__init__(self.filler)
@@ -54,11 +61,10 @@ class ProviderDataTable(panwid.DataTable):
 
     signals = ["cycle_filter"]
 
-    # def __init__(self, listings_method, columns, *args, **kwargs):
+    limit = 25
+
     def __init__(self, provider, *args, **kwargs):
 
-        # self.listings_method = listings_method
-        # self.columns = columns
         self.provider = provider
         self.columns = [ panwid.DataTableColumn(k, **v if v else {})
                          for k, v in self.provider.ATTRIBUTES.items() ]
@@ -67,7 +73,7 @@ class ProviderDataTable(panwid.DataTable):
 
     def query(self, *args, **kwargs):
 
-        return self.provider.listings()
+        return self.provider.listings(*args, **kwargs)
 
     def keypress(self, size, key):
 

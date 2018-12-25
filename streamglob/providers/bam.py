@@ -107,26 +107,10 @@ class WatchDialog(BasePopUp):
         self.default_resolution = default_resolution
         self.watch_live = watch_live
 
-        # self.game_data = self.session.schedule(
-        #     game_id=self.game_id,
-        # )["dates"][0]["games"][0]
-        # raise Exception(self.game_data)
         self.title = urwid.Text("%s@%s" %(
             selection["away"],
             selection["home"]
-            # self.game_data["teams"]["away"]["team"]["abbreviation"],
-            # self.game_data["teams"]["home"]["team"]["abbreviation"],
         ))
-
-        # feed_map = sorted([
-        #     ("%s (%s)" %(e["mediaFeedType"].title(),
-        #                  e["callLetters"]), e["mediaId"].lower())
-        #     for e in self.get_media(self.game_id)
-        # ], key=lambda v: v[0])
-        # home_feed = next(self.get_media(
-        #     self.game_id,
-        #     preferred_stream = "home"
-        # ))
 
         media = list(self.provider.get_media(self.game_id, title=self.media_title))
         # raise Exception(media)
@@ -203,6 +187,7 @@ class WatchDialog(BasePopUp):
         super(WatchDialog, self).__init__(pile)
         pile.contents[1][0].focus_position = 2
 
+
     def update_offset_dropdown(self, media_id):
 
         self.offset_dropdown = OffsetDropdown(
@@ -212,17 +197,6 @@ class WatchDialog(BasePopUp):
         )
         self.offset_dropdown_placeholder.original_widget = self.offset_dropdown
 
-
-    # def watch(self, source):
-    #     urwid.signals.emit_signal(
-    #         self,
-    #         "play",
-    #         self.game_id,
-    #         self.resolution_dropdown.selected_value,
-    #         self.feed_dropdown.selected_value,
-    #         self.offset_dropdown.selected_value
-    #     )
-    #     urwid.signals.emit_signal(self, "close_popup")
 
     def keypress(self, size, key):
 
@@ -335,10 +309,8 @@ class BAMProviderMixin(abc.ABC):
         return self.session.get(url).json()
 
 
-    def listings(self):
-        # return [ MediaItem(line=t) for t in ["a", "b" ,"c" ] ]
+    def listings(self, offset=None, limit=None, *args, **kwargs):
 
-        # logger.info(f"listings: {self.filters.date.value}")
         j = self.schedule(
         #     # sport_id=self.sport_id,
             start = self.filters.date.value,
@@ -380,7 +352,6 @@ class BAMProviderMixin(abc.ABC):
                     hide_spoilers = set([away_abbrev, home_abbrev]).intersection(
                         set(hide_spoiler_teams))
                 if "linescore" in g:
-                    # line_score_cls = MLBLineScoreDataTable #globals().get(f"{self.provider.upper()}LineScoreDataTable")
                     self.line_score_table = self.DATA_TABLE_CLASS.from_json(
                             g["linescore"],
                             g["teams"]["away"]["team"]["abbreviation"],
@@ -583,44 +554,6 @@ class BAMProviderMixin(abc.ABC):
     def start_date(self):
         pass
 
-
-    # @abc.abstractmethod
-    # def get_stream(self, media):
-    #     pass
-
-    # FIXME: MLB-specific
-    # def parse_offset(self, offset):
-
-    #     timestamps = self.media_timestamps(game_id, media_id)
-
-    #     if isinstance(offset, str):
-    #         if not offset in timestamps:
-    #             raise SGException("Couldn't find inning %s" %(offset))
-    #         offset = timestamps[offset] - timestamps["SO"]
-    #         logger.debug("inning offset: %s" %(offset))
-
-    #     if (media_state == "MEDIA_ON"): # live stream
-    #         logger.debug("live stream")
-    #         # calculate HLS offset, which is negative from end of stream
-    #         # for live streams
-    #         start_time = dateutil.parser.parse(timestamps["S"])
-    #         offset_delta = (
-    #             datetime.now(pytz.utc)
-    #             - start_time.astimezone(pytz.utc)
-    #             + (timedelta(seconds=-offset))
-    #         )
-    #     else:
-    #         logger.debug("recorded stream")
-    #         offset_delta = timedelta(seconds=offset)
-
-    #     offset_seconds = offset_delta.seconds
-    #     offset_timestamp = str(offset_delta)
-    #     return offset_timestamp
-    #     # logger.info("starting at time offset %s" %(offset))
-
-
-
-
     def on_select(self, widget, selection):
         self.open_watch_dialog(selection)
 
@@ -632,11 +565,6 @@ class BAMProviderMixin(abc.ABC):
                              default_resolution = self.filters.resolution.value,
                              watch_live = self.filters.live_stream.value
         )
-        # urwid.connect_signal(
-        #     dialog,
-        #     "play",
-        #     lambda w: self.play(self.selection)
-        # )
         self.view.open_popup(dialog, width=30, height=20)
 
         # self.play(selection)

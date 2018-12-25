@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 import abc
 
 import urwid
@@ -8,22 +11,26 @@ import dateutil.parser
 from dateutil.relativedelta import relativedelta
 
 class Filter(abc.ABC):
-
-    signals = ["change"]
-
     def __init__(self, provider, *args, **kwargs):
         self.provider = provider
         self.widget = self.WIDGET_CLASS(
             *self.widget_args, **self.widget_kwargs
         )
-        urwid.connect_signal(
-            self.widget, "change",
-            self.on_change
-        )
 
-    def on_change(self, source, widget, value):
-        # raise Exception(source, widget, value)
-        urwid.signals.emit_signal(self, "change", value)
+        # if self.auto_refresh:
+        #     urwid.connect_signal(
+        #         self.widget, "change",
+        #         self.on_change
+        #     )
+        # else:
+        #     urwid.connect_signal(
+        #         self.widget, "select",
+        #         self.on_change
+        #     )
+
+    def on_change(self, source, *args):
+        logger.info(f"{source} {args}")
+        urwid.signals.emit_signal(self, "filter_change", *args)
 
     def make_widget(self):
         return self.widget
@@ -36,15 +43,37 @@ class Filter(abc.ABC):
     def widget_kwargs(self):
         return dict()
 
+    @property
+    def auto_refresh(self):
+        return False
+
+    @property
+    def widget_sizing(self):
+        return lambda w: ("weight", 1)
+
     def cycle(self, step=1):
         # pass
         raise Exception
 
+class TextFilterWidget(urwid.Edit):
+
+    signals = ["change", "select"]
+
+    def keypress(self, size, key):
+        if key == "enter":
+            self._emit("select", self, self.get_edit_text()[0])
+        else:
+            return super().keypress(size, key)
 
 
 class TextFilter(Filter):
 
-    WIDGET_CLASS = urwid.Edit
+    WIDGET_CLASS = TextFilterWidget
+
+    @property
+    def value(self):
+        return self.widget.get_text()[0]
+
 
 
 class DateDisplay(urwid.WidgetWrap):
@@ -155,10 +184,9 @@ class DateFilter(Filter):
     def widget_kwargs(self):
         return {"initial_date": datetime.now().date()}
 
-
     @property
-    def widget_sizing(self):
-        return lambda w: ("weight", 1)
+    def auto_refresh(self):
+        return True
 
     @property
     def value(self):
@@ -190,10 +218,6 @@ class ListingFilter(Filter, abc.ABC):
         return [self.values]
 
     @property
-    def widget_sizing(self):
-        return lambda w: ("weight", 1)
-
-    @property
     def value(self):
         return self.widget.selected_value
 
@@ -202,6 +226,10 @@ class ListingFilter(Filter, abc.ABC):
 
     def populate(self, values):
         self.values = values
+
+    @property
+    def auto_refresh(self):
+        return True
 
     @property
     @abc.abstractmethod
