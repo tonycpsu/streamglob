@@ -52,6 +52,7 @@ setup(name=name,
               "mlb = streamglob.providers.mlb:MLBProvider",
               "nhl = streamglob.providers.nhl:NHLProvider",
               "youtube = streamglob.providers.youtube:YouTubeProvider",
+              "instagram = streamglob.providers.instagram:InstagramProvider",
           ]
       },
       zip_safe=False

@@ -17,17 +17,6 @@ class Filter(abc.ABC):
             *self.widget_args, **self.widget_kwargs
         )
 
-        # if self.auto_refresh:
-        #     urwid.connect_signal(
-        #         self.widget, "change",
-        #         self.on_change
-        #     )
-        # else:
-        #     urwid.connect_signal(
-        #         self.widget, "select",
-        #         self.on_change
-        #     )
-
     def on_change(self, source, *args):
         logger.info(f"{source} {args}")
         urwid.signals.emit_signal(self, "filter_change", *args)
@@ -52,8 +41,8 @@ class Filter(abc.ABC):
         return lambda w: ("weight", 1)
 
     def cycle(self, step=1):
-        # pass
         raise Exception
+
 
 class TextFilterWidget(urwid.Edit):
 

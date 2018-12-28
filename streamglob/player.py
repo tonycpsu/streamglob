@@ -18,9 +18,11 @@ from .state import *
 from .utils import *
 from .exceptions import *
 
-class Player(object):
+class Player(abc.ABC):
 
     SUBCLASSES = {}
+
+    MEDIA_TYPES = []
 
     PLAYER_INTEGRATED=False
 
@@ -96,13 +98,6 @@ class Player(object):
 
     def process_kwargs(self, kwargs):
         pass
-        # if kwargs:
-        #     self.extra_args_pre += list(
-        #         reduce(lambda x, y: x + y,
-        #                [(f"--{k}", v) for k, v in kwargs.items()]
-        #         )
-        #     )
-
 
     def play(self, source=None, **kwargs):
 
