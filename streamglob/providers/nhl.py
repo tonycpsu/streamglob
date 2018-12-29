@@ -65,7 +65,6 @@ class NHLStreamSession(AuthenticatedStreamSession):
 
         headers = {
             "Authorization": f"Basic {auth}",
-            # "Referer": "https://www.nhl.com/login/freeGame?forwardUrl=https%3A%2F%2Fwww.nhl.com%2Ftv%2F2018020013%2F221-2000552%2F61332703",
             "Accept": "application/json, text/javascript, */*; q=0.01",
             "Accept-Language": "en-US,en;q=0.5",
             "Accept-Encoding": "gzip, deflate, br",
@@ -89,7 +88,6 @@ class NHLStreamSession(AuthenticatedStreamSession):
         headers = {
             "Authorization": self.token,
             "Origin": "https://www.nhl.com",
-            # "Referer": "https://www.nhl.com/login/freeGame?forwardUrl=https%3A%2F%2Fwww.nhl.com%2Ftv%2F2018020013%2F221-2000552%2F61332703",
         }
 
         res = self.session.post(
@@ -98,7 +96,6 @@ class NHLStreamSession(AuthenticatedStreamSession):
             headers=headers
         )
         self.save()
-        print(res.status_code)
         return (res.status_code == 200)
 
 
@@ -322,7 +319,6 @@ class NHLProvider(BAMProviderMixin,
             )
         )
 
-        # raise Exception(state.session.get(teams_url).json())
         with state.session.cache_responses_long():
             teams = AttrDict(
                 (team["abbreviation"].lower(), team["id"])
@@ -331,9 +327,6 @@ class NHLProvider(BAMProviderMixin,
             )
 
         return teams
-
-    # def media_timestamps(self, game_id, media_id):
-    #     raise NotImplementedError
 
 
     @property
@@ -373,27 +366,7 @@ class NHLProvider(BAMProviderMixin,
         j =  self.schedule(game_id=game_id)
         milestones = j["dates"][0]["games"][0]["content"]["media"]["milestones"]
 
-        # try:
-        #     airing = next(a for a in self.session.airings(game_id)
-        #                   if a["mediaId"] == media_id)
-        # except StopIteration:
-        #     raise StreamSessionException("No airing for media %s" %(media_id))
-
         start_timestamps = []
-        # try:
-        #     start_time = next(
-        #             t["startDatetime"] for t in
-        #             next(m for m in airing["milestones"]
-        #              if m["milestoneType"] == "BROADCAST_START"
-        #             )["milestoneTime"]
-        #         if t["type"] == "absolute"
-        #         )
-
-        # except StopIteration:
-        #     # Some streams don't have a "BROADCAST_START" milestone.  We need
-        #     # something, so we use the scheduled game start time, which is
-        #     # probably wrong.
-        #     start_time = airing["startDate"]
 
         start_time = next(
             m["timeAbsolute"]
@@ -403,19 +376,6 @@ class NHLProvider(BAMProviderMixin,
         start_timestamps.append(
             ("S", start_time)
         )
-
-        # try:
-        #     start_offset = next(
-        #         t["start"] for t in
-        #         next(m for m in airing["milestones"]
-        #              if m["milestoneType"] == "BROADCAST_START"
-        #         )["milestoneTime"]
-        #         if t["type"] == "offset"
-        #     )
-        # except StopIteration:
-        #     # Same as above.  Missing BROADCAST_START milestone means we
-        #     # probably don't get accurate offsets for inning milestones.
-        #     start_offset = 0
 
         start_offset = next(
             m["timeOffset"]
