@@ -5,9 +5,11 @@ streamglob
 
 `streamglob` facilitates live and time-shifted viewing of streaming video.
 
-The current focus of this project is to provide a pleasant console-based user
-experience for browsing and watching live and archived video feeds of sporting
-events -- specifically, MLB.tv and NHL.tv streams.
+The current focus of this project is to provide a consistent console-based user
+experience for browsing and watching live and on-demand content from various
+providers.  The project was originally released under the name `mlbstreamer`
+with support for watching MLB.tv streams, but has expanded to include modules
+for watching video from NHL.tv, YouTube, Instagram, and RSS feeds, among others.
 
 The `streamglob` package consists of the following programs:
 
@@ -16,10 +18,9 @@ you to browse schedules and open game streams
 
 * `sgplay` - a simple command-line program for watching a single game
 
-Registered accounts are required in order to stream any content using these
-programs.  With a free account, you will be able to watch whatever free games
-these providers offer.  To watch subscriber-only streams, you will of course
-have to purchase a subscription.
+Registered accounts are required in order to stream content from some of these
+providers, and some providers require a paid subscription to access some or all
+content.
 
 Installation
 ------------
