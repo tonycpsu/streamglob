@@ -40,8 +40,11 @@ setup(name=name,
           "urwid_utils>=0.1.2",
           "panwid>=0.2.5",
           "pony",
-          "stevedore"
+          "stevedore",
+          "feedparser",
+          "instagram_private_api"
       ],
+      dependency_links=['https://github.com/ping/instagram_private_api/tarball/master#egg=instagram_private_api-1.5.7'],
       test_suite="test",
       entry_points = {
           "console_scripts": [
@@ -51,6 +54,7 @@ setup(name=name,
           "streamglob.providers": [
               "mlb = streamglob.providers.mlb:MLBProvider",
               "nhl = streamglob.providers.nhl:NHLProvider",
+              "rss = streamglob.providers.rss:RSSProvider",
               "youtube = streamglob.providers.youtube:YouTubeProvider",
               "instagram = streamglob.providers.instagram:InstagramProvider",
           ]
