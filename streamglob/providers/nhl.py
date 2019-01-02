@@ -273,6 +273,8 @@ class NHLProvider(BAMProviderMixin,
 
     SESSION_CLASS = NHLStreamSession
 
+    MEDIA_TYPES = {"video"}
+
     RESOLUTIONS = AttrDict([
         ("720p", "720p"),
         ("540p", "540p"),
@@ -335,7 +337,7 @@ class NHLProvider(BAMProviderMixin,
 
         now = datetime.now()
         year = datetime.now().year
-        season_year = (datetime(year, 10, 1) - relativedelta(months=8)).year
+        season_year = (now - relativedelta(months=8)).year
 
         r = NHLBAMProviderData.get(season_year=season_year)
         if r:
@@ -388,7 +390,7 @@ class NHLProvider(BAMProviderMixin,
 
         timestamps = AttrDict(start_timestamps)
         timestamps.update(AttrDict([
-            (m["period"], int(m["timeOffset"]))
+            (m["period"] if int(m["period"]) <= 3 else "O", int(m["timeOffset"]))
             for m in milestones["items"]
             if m["type"] == "PERIOD_START"
         ]))

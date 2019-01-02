@@ -8,7 +8,7 @@ from functools import reduce
 import shlex
 import subprocess
 from datetime import timedelta
-
+import distutils.spawn
 
 from orderedattrdict import AttrDict
 import youtube_dl
@@ -22,45 +22,109 @@ class Player(abc.ABC):
 
     SUBCLASSES = {}
 
-    MEDIA_TYPES = []
+    MEDIA_TYPES = set()
 
     PLAYER_INTEGRATED=False
 
-    def __init__(self, cfg, source=None):
-        self.cfg = cfg
+    def __init__(self, name, path=None, args=None, exclude_types=None):
+        self.name = name
+        self.path = path or self.name
+        if isinstance(args, str):
+            self.args = args.split()
+        else:
+            self.args = args
+        self.exclude_types = exclude_types or set()
+
         self.extra_args_pre = []
         self.extra_args_post = []
-        self.source = source
+
+        self.source = None
         self.stdin = None
         self.stdout = None
         self.stderr = None
         self.proc = None
 
     @classmethod
-    def register_player_class(cls, cmd):
+    def register_player_class(cls, cmd, media_types=None):
         def decorator(subclass):
             cls.SUBCLASSES[cmd] = subclass
+            cls.SUBCLASSES[cmd].MEDIA_TYPES = media_types or set()
             return subclass
         return decorator
 
     @classmethod
-    def get(cls, cfg, *args, **kwargs):
-        if isinstance(cfg, str):
-            cfg = AttrDict(name=cfg, command=cfg)
-        # cmd = os.path.split(cfg.command)[-1]
-        if cfg.name in cls.SUBCLASSES:
-            return cls.SUBCLASSES[cfg.name](cfg, *args, **kwargs)
-        raise Exception
-        return cls(cfg, *args, **kwargs)
+    def get(cls, spec=None, *args, **kwargs):
+        if isinstance(spec, str):
+            # get the player by name
+            try:
+                return cls.PLAYERS[spec]
+            except KeyError:
+                raise SGException(f"Player {spec} not found")
+
+        elif isinstance(spec, set):
+            try:
+                return next(
+                    p for p in cls.PLAYERS.values()
+                    if spec.intersection(
+                        p.MEDIA_TYPES - set(getattr(p, "exclude_types", []))
+                    ) == spec
+                )
+            except StopIteration:
+                raise SGException(
+                    f"Player for media types {spec} not found"
+                )
+        else:
+            raise Exception
+        raise SGException(f"Player for {spec} not found")
 
 
-    @property
-    def executable(self):
-        return self.cfg.command
+    @classmethod
+    def from_config(cls, cfg):
+        klass = cls.SUBCLASSES.get(cfg.name, cls)
+        # return klass(cfg.name, cfg.command, cfg.get("args", []))
+        # return klass(*kargs, **kwargs)
+        return klass(**cfg)
 
-    @property
-    def args(self):
-        return self.cfg.get("args", "").split()
+    @classmethod
+    def load(cls):
+        cls.PLAYERS = AttrDict()
+
+        # Add configured players
+        for name, cfg in config.settings.profile.players.items():
+            path = cfg.get(
+                "command",
+                distutils.spawn.find_executable(name)
+            )
+            if not path:
+                logger.warn(f"path for player {name} not found")
+                continue
+            cls.PLAYERS[name] = Player.from_config(cfg)
+
+        # Try to find any players not configured
+        for name, klass in cls.SUBCLASSES.items():
+            if name in cls.PLAYERS:
+                continue
+            path = distutils.spawn.find_executable(name)
+            if path:
+                cls.PLAYERS[name] = klass(name, path, [])
+
+
+    # @property
+    # def path(self):
+    #     return self.cfg.command
+
+    # @property
+    # def args(self):
+    #     return self.cfg.get("args", "").split()
+
+
+    # @property
+    # def path(self):
+    #     return self.cfg.command
+
+    # @property
+    # def args(self):
+    #     return self.cfg.get("args", "").split()
 
     @property
     def source(self):
@@ -87,11 +151,12 @@ class Player(abc.ABC):
 
     @property
     def command(self):
-        return [self.executable] + self.args
+        return [self.path] + self.args
 
     @property
     def source_is_player(self):
         return isinstance(self.source, Player)
+
     @property
     def source_integrated(self):
         return self.source_is_player and self.source.PLAYER_INTEGRATED
@@ -140,9 +205,9 @@ class Player(abc.ABC):
 @Player.register_player_class("youtube-dl")
 class YoutubeDLPlayer(Player):
 
-    @property
-    def executable(self):
-        return "youtube-dl"
+    # @property
+    # def path(self):
+    #     return "youtube-dl"
 
     def pipe_to_dst(self):
         self.extra_args_post += ["-o", "-"]
@@ -188,14 +253,17 @@ class StreamlinkPlayer(Player):
         # super().process_kwargs(kwargs)
 
 
-@Player.register_player_class("mpv")
+@Player.register_player_class("mpv", media_types={"image", "video"})
 class MPVPlayer(Player):
     pass
 
-@Player.register_player_class("vlc")
+@Player.register_player_class("vlc", media_types={"image", "video"})
 class VLCPlayer(Player):
     pass
 
+@Player.register_player_class("feh", media_types={"image"})
+class FEHPlayer(Player):
+    pass
 
 def main():
 
@@ -204,16 +272,22 @@ def main():
     logging.setup_logging(2)
     config.settings.load()
 
+    Player.load()
+    raise Exception(Player.get({"image"}))
+
+    # raise Exception(MPVPlayer.MEDIA_TYPES)
+    # raise Exception(Player.get({"image"]))
+
     # y = Player.get(config.settings.profile.helpers.youtube_dl,
     #              "https://www.youtube.com/watch?v=5aVU_0a8-A4")
     # v = Player.get(config.settings.profile.players.vlc, y)
     # proc = v.play()
     # proc.wait()
 
-    s = Player.get(config.settings.profile.helpers.streamlink,
-                 ["https://www.youtube.com/watch?v=5aVU_0a8-A4", "720p"])
-    m = Player.get(config.settings.profile.players.mpv, s)
-    proc = m.play()
+    s = Player.get("streamlink")
+    m = Player.get("mpv")
+    m.source = s
+    proc = m.play(["https://www.youtube.com/watch?v=5aVU_0a8-A4", "720p"])
     proc.wait()
 
 if __name__ == "__main__":

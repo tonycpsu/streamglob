@@ -32,6 +32,7 @@ from . import widgets
 from . import utils
 from . import session
 from . import providers
+from . import player
 from .exceptions import *
 
 PACKAGE_NAME=__name__.split('.')[0]
@@ -63,9 +64,22 @@ class MainToolbar(urwid.WidgetWrap):
     signals = ["provider_change"]
     def __init__(self, default_provider):
 
+        def providers_sort_key(p):
+            k, v = p
+            providers = list(config.settings.profile.providers.keys())
+            if k in providers:
+                return (0, str(v.NAME))
+            else:
+                return (1, str(v.NAME))
+
         self.provider_dropdown = Dropdown(AttrDict(
-            [ (p.NAME, n)
-              for n, p in providers.PROVIDERS.items()]
+            [(p.NAME
+               if n in list(config.settings.profile.providers.keys())
+               else f"* {p.NAME}", n)
+              for n, p in sorted(
+                      providers.PROVIDERS.items(),
+                      key = providers_sort_key
+              )]
         ) , label="Provider", default=default_provider, margin=1)
 
         urwid.connect_signal(
@@ -141,6 +155,7 @@ def main():
     options, args = init_parser.parse_known_args()
 
     config.settings.load()
+    player.Player.load()
 
     if options.profile:
         config.settings.set_profile(options.profile)

@@ -42,6 +42,8 @@ class YouTubeProvider(BaseProvider):
         # duration = {"width": 10}
     )
 
+    MEDIA_TYPES = {"video"}
+
     DATA_TABLE_CLASS = YouTubeProviderDataTable
 
     def listings(self, offset=None, limit=None, *args, **kwargs):

@@ -365,6 +365,8 @@ class MLBProvider(BAMProviderMixin,
 
     SESSION_CLASS = MLBStreamSession
 
+    MEDIA_TYPES = {"video"}
+
     RESOLUTIONS = AttrDict([
         ("720p", "720p_alt"),
         ("720p@30", "720p"),
@@ -393,7 +395,6 @@ class MLBProvider(BAMProviderMixin,
     DATA_TABLE_CLASS = MLBLineScoreDataTable
 
     MEDIA_TITLE = "MLBTV"
-
 
     @classproperty
     def NAME(cls):
@@ -438,7 +439,7 @@ class MLBProvider(BAMProviderMixin,
 
         now = datetime.now()
         year = now.year
-        season_year = (datetime(2019, 2, 1) - relativedelta(months=2)).year
+        season_year = (now - relativedelta(months=2)).year
 
         r = MLBBAMProviderData.get(season_year=season_year)
         if r:

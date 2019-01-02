@@ -41,10 +41,11 @@ class InstagramProvider(BaseProvider):
         id = {"hide": True}
     )
 
+    MEDIA_TYPES = {"image", "video"}
+
     # VIEW_CLASS = InstagramProviderView
 
     DATA_TABLE_CLASS = InstagramProviderDataTable
-
 
     def __init__(self, *args, **kwargs):
         self.web_api = Client(auto_patch=True, drop_incompat_keys=False)
@@ -76,13 +77,15 @@ class InstagramProvider(BaseProvider):
             )
             for post in feed:
                 try:
-                    cursor = post["node"]["edge_media_to_comment"]["page_info"]["end_cursor"]
+                    cursor = (
+                        post["node"]["edge_media_to_comment"]
+                        ["page_info"]["end_cursor"]
+                    )
                     if cursor:
                         self.end_cursor = cursor
                 except KeyError:
                     pass
 
-                logger.info(post["node"]["edge_media_to_comment"]["page_info"]["end_cursor"])
                 post_id = post["node"]["id"]
 
                 if (not hasattr(self, "view")
@@ -90,13 +93,35 @@ class InstagramProvider(BaseProvider):
                         columns="id", as_list=True))
                     ):
                     count += 1
+                    media_type = post["node"]["type"]
+                    if media_type == "video":
+                        url = post["node"]["link"]
+                    elif media_type == "image":
+                        if "carousel_media" in post["node"]:
+                            url = [ m["images"]["standard_resolution"]["url"]
+                                    for m in post["node"]["carousel_media"] ]
+                        else:
+                            url = post["node"]["images"]["standard_resolution"]["url"]
+                    else:
+                        logger.warn(f"no content for post {post_id}")
+                        continue
                     yield AttrDict(
                         id = post_id,
-                        time = datetime.fromtimestamp(int(post["node"]["created_time"])),
+                        time = datetime.fromtimestamp(
+                            int(post["node"]["created_time"])
+                        ),
                         title = post["node"]["caption"]["text"].replace("\n", ""),
-                        type = post["node"]["type"],
-                        url = post["node"]["link"],
+                        type = media_type,
+                        url = url,
                         # end_cursor = post["node"]["edge_media_to_comment"]["page_info"]["end_cursor"]
                     )
                     if count >= self.limit:
                         break
+
+    def play_args(self, selection, **kwargs):
+        url = selection.url
+        if not isinstance(url, list):
+            url = [url]
+        args = url
+        kwargs["media_type"] = selection.type
+        return (args, kwargs)

@@ -118,26 +118,25 @@ class BaseProvider(abc.ABC):
 
     SESSION_CLASS = StreamSession
     # VIEW_CLASS = SimpleProviderView
-    HELPER = None
     FILTERS = AttrDict()
     ATTRIBUTES = AttrDict(title={"width": ("weight", 1)})
+    MEDIA_TYPES = None
+    HELPER = None
 
     def __init__(self, *args, **kwargs):
         self._session = self.SESSION_CLASS.new(*args, **kwargs)
         self.filters = AttrDict({n: f(provider=self) for n, f in self.FILTERS.items() })
         self.view = self.make_view()
-        self.player = Player.get(
-            list(config.settings.profile.players.keys())[0]
-        )
+        # self.player = Player.get(
+        #     self.MEDIA_TYPES
+        # )
 
-
-    @property
     @abc.abstractmethod
     def make_view(self):
         pass
-        # return self.VIEW_CLASS(self)
 
     @classproperty
+    @abc.abstractmethod
     def NAME(cls):
         return cls.__name__.replace("Provider", "")
 
@@ -146,17 +145,27 @@ class BaseProvider(abc.ABC):
         return self._session
 
     def play_args(self, selection):
-        return ( [selection.url], {} )
+        url = selection.url
+        if not isinstance(url, list):
+            url = [url]
+        return ( url, {} )
 
     def play(self, selection, **kwargs):
+
         (source, kwargs) = self.play_args(selection, **kwargs)
+        media_type = kwargs.pop("media_type", None)
+        if media_type:
+            player = Player.get(set([media_type]))
+        else:
+            player = Player.get(self.MEDIA_TYPES)
+
         if self.HELPER:
             helper = Player.get(self.HELPER)#, *args, **kwargs)
             helper.source = source
-            self.player.source = helper
+            player.source = helper
         else:
-            self.player.source = source
-        self.player.play(**kwargs)
+            player.source = source
+        player.play(**kwargs)
 
     def on_select(self, widget, selection):
         self.play(selection)
@@ -171,5 +180,7 @@ class BaseProvider(abc.ABC):
 
     @property
     def limit(self):
+        if not state.provider_config:
+            return None
         return (state.provider_config.get("limit") or
                 config.settings.profile.tables.get("limit"))
