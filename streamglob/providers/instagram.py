@@ -15,18 +15,18 @@ class InstagramFeedsFilter(ListingFilter):
         return [ (i, i) for i in state.provider_config.feeds ]
 
 
-class InstagramProviderDataTable(ProviderDataTable):
+# class InstagramProviderDataTable(ProviderDataTable):
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-
-class InstagramProviderView(SimpleProviderView):
-
-    PROVIDER_DATA_TABLE_CLASS = InstagramProviderDataTable
+#     def __init__(self, *args, **kwargs):
+#         super().__init__(*args, **kwargs)
 
 
-@with_view(InstagramProviderView)
+# class InstagramProviderView(SimpleProviderView):
+
+#     PROVIDER_DATA_TABLE_CLASS = InstagramProviderDataTable
+
+
+@with_view(SimpleProviderView)
 class InstagramProvider(BaseProvider):
 
     FILTERS = AttrDict([
@@ -45,7 +45,7 @@ class InstagramProvider(BaseProvider):
 
     # VIEW_CLASS = InstagramProviderView
 
-    DATA_TABLE_CLASS = InstagramProviderDataTable
+    # DATA_TABLE_CLASS = InstagramProviderDataTable
 
     def __init__(self, *args, **kwargs):
         self.web_api = Client(auto_patch=True, drop_incompat_keys=False)
