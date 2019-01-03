@@ -216,6 +216,8 @@ def run_gui(provider):
 def run_cli(provider, spec):
 
     p = providers.get(provider)
+    if spec.isdigit():
+        spec = int(spec)
     selection = p.parse_specifier(spec)
     p.play(selection)
     while True:

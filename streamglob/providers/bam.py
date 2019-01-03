@@ -440,7 +440,7 @@ class BAMProviderMixin(abc.ABC):
         # raise StopIteration
 
 
-    def get_url(self, game_specifier,
+    def get_url(self, game_id,
                 offset=None,
                 media_id = None,
                 preferred_stream=None,
@@ -450,61 +450,19 @@ class BAMProviderMixin(abc.ABC):
 
         live = False
         team = None
-        game_number = 1
-        game_date = None
         # sport_code = "mlb" # default sport is MLB
 
         # media_title = "MLBTV"
         media_id = None
         allow_stdout=False
 
-        if isinstance(game_specifier, int):
-            game_id = game_specifier
-            schedule = self.schedule(
-                game_id = game_id
-            )
+        schedule = self.schedule(
+            game_id = game_id
+        )
 
-        else:
-            try:
-                (game_date, team, game_number) = game_specifier.split(".")
-            except ValueError:
-                try:
-                    (game_date, team) = game_specifier.split(".")
-                except ValueError:
-                    game_date = datetime.now().date()
-                    team = game_specifier
+        date = schedule["dates"][-1]
+        game = date["games"][-1]
 
-            if "-" in team:
-                (sport_code, team) = team.split("-")
-
-            game_date = dateutil.parser.parse(game_date)
-            game_number = int(game_number)
-            teams =  self.teams(season=game_date.year)
-            team_id = teams.get(team)
-
-            if not team:
-                msg = "'%s' not a valid team code, must be one of:\n%s" %(
-                    game_specifier, " ".join(teams)
-                )
-                raise argparse.ArgumentTypeError(msg)
-
-            schedule = self.schedule(
-                start = game_date,
-                end = game_date,
-                # sport_id = sport["id"],
-                team_id = team_id
-            )
-            # raise Exception(schedule)
-
-
-        try:
-            date = schedule["dates"][-1]
-            game = date["games"][game_number-1]
-            game_id = game["gamePk"]
-        except IndexError:
-            raise SGException("No game %d found for %s on %s" %(
-                game_number, team, game_date)
-            )
         away_team_abbrev = game["teams"]["away"]["team"]["abbreviation"].lower()
         home_team_abbrev = game["teams"]["home"]["team"]["abbreviation"].lower()
 
@@ -570,7 +528,55 @@ class BAMProviderMixin(abc.ABC):
 
 
     def parse_specifier(self, spec):
-        return AttrDict(game_id=int(spec))
+
+        game_number = 1
+        game_date = None
+
+        if isinstance(spec, int):
+            game_id = spec
+
+        else:
+            try:
+                (game_date, team, game_number) = spec.split(".")
+            except ValueError:
+                try:
+                    (game_date, team) = spec.split(".")
+                except ValueError:
+                    game_date = datetime.now().date()
+                    team = spec
+
+            if "-" in team:
+                (sport_code, team) = team.split("-")
+
+            game_date = dateutil.parser.parse(game_date)
+            game_number = int(game_number)
+            teams =  self.teams(season=game_date.year)
+            team_id = teams.get(team)
+
+            if not team:
+                msg = "'%s' not a valid team code, must be one of:\n%s" %(
+                    spec, " ".join(teams)
+                )
+                raise argparse.ArgumentTypeError(msg)
+
+            schedule = self.schedule(
+                start = game_date,
+                end = game_date,
+                # sport_id = sport["id"],
+                team_id = team_id
+            )
+            # raise Exception(schedule)
+
+            try:
+                date = schedule["dates"][-1]
+                game = date["games"][game_number-1]
+                game_id = game["gamePk"]
+            except IndexError:
+                raise SGException("No game %d found for %s on %s" %(
+                    game_number, team, game_date)
+                )
+
+        return AttrDict(game_id=game_id)
 
     def on_select(self, widget, selection):
         self.open_watch_dialog(selection)

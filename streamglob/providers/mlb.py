@@ -414,8 +414,8 @@ class MLBProvider(BAMProviderMixin,
         sports_url = (
             "http://statsapi.mlb.com/api/v1/sports"
         )
-        with state.session.cache_responses_long():
-            sports = state.session.get(sports_url).json()
+        with self.session.cache_responses_long():
+            sports = self.session.get(sports_url).json()
 
         sport = next(s for s in sports["sports"] if s["code"] == sport_code)
 
@@ -429,10 +429,11 @@ class MLBProvider(BAMProviderMixin,
         )
 
         # raise Exception(state.session.get(teams_url).json())
-        with state.session.cache_responses_long():
+
+        with self.session.cache_responses_long():
             teams = AttrDict(
                 (team["abbreviation"].lower(), team["id"])
-                for team in sorted(state.session.get(teams_url).json()["teams"],
+                for team in sorted(self.session.get(teams_url).json()["teams"],
                                    key=lambda t: t["fileCode"])
             )
 

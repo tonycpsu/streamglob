@@ -321,11 +321,12 @@ class NHLProvider(BAMProviderMixin,
             )
         )
 
-        with state.session.cache_responses_long():
+        # FIXME
+        with self.session.cache_responses_long():
             teams = AttrDict(
                 (team["abbreviation"].lower(), team["id"])
-                for team in sorted(state.session.get(teams_url).json()["teams"],
-                                   key=lambda t: t["abbreviation"])
+                for team in sorted(self.session.get(teams_url).json()["teams"],
+                               key=lambda t: t["abbreviation"])
             )
 
         return teams
