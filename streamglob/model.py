@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from pony.orm import *
 
 from . import config
+from . import providers
 
 DB_FILE=os.path.join(config.CONFIG_DIR, "streamglob.sqlite")
 
@@ -30,6 +31,37 @@ class CacheEntry(db.Entity):
         cls.select(
             lambda e: e.last_seen < datetime.now() - timedelta(seconds=age)
         ).delete()
+
+
+class Feed(db.Entity):
+
+    DEFAULT_UPDATE_INTERVAL = 3600
+    DEFAULT_ITEM_LIMIT = 100
+
+    feed_id = PrimaryKey(int, auto=True)
+    name = Optional(str, index=True)
+    provider_name = Required(str, index=True)
+    updated = Optional(datetime)
+    update_interval = Required(int, default=DEFAULT_UPDATE_INTERVAL)
+    items = Set(lambda: Item)
+
+    @property
+    def provider(self):
+        return providers.get(self.provider_name)
+
+
+class Item(db.Entity):
+
+    item_id = PrimaryKey(int, auto=True)
+    feed = Required(lambda: Feed)
+    guid = Required(str, index=True)
+    subject = Required(str)
+    content = Required(Json)
+    created = Required(datetime, default=datetime.now())
+    seen = Optional(datetime)
+    downloaded = Optional(datetime)
+    # was_downloaded = Required(bool, default=False)
+
 
 class ProviderData(db.Entity):
     # Providers inherit from this to define their own fields

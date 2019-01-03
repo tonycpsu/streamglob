@@ -9,6 +9,7 @@ from .filters import *
 from ..session import *
 from ..state import *
 from ..player import Player
+from .. import model
 
 class MediaItem(AttrDict):
 
@@ -121,6 +122,7 @@ class BaseProvider(abc.ABC):
     """
 
     SESSION_CLASS = StreamSession
+    ITEM_CLASS = model.Item
     # VIEW_CLASS = SimpleProviderView
     FILTERS = AttrDict()
     ATTRIBUTES = AttrDict(title={"width": ("weight", 1)})
@@ -274,3 +276,56 @@ class FeedProvider(BaseProvider):
     @property
     def selected_feed(self):
         return self.filters.feed.value
+
+class CachedFeedProvider(FeedProvider):
+
+    UPDATE_INTERVAL = 300
+    MAX_ITEMS = 100
+
+    # def __init__(self, *args, **kwargs):
+    #     super().__init__(*args, **kwargs)
+    #     self.last_update = None
+
+
+    # @abc.abstractmethod
+    # def update_feed(self):
+    #     pass
+
+    def listings(self, offset=None, limit=None, *args, **kwargs):
+
+        count = 0
+
+        with db_session:
+            f = self.FEED_CLASS.get(
+                provider_name = self.IDENTIFIER,
+                name = self.selected_feed
+            )
+
+            if not f:
+                f = self.FEED_CLASS(
+                    provider_name = self.IDENTIFIER,
+                    name = self.selected_feed
+                )
+
+            if (f.updated is None
+                or
+                datetime.now() - f.updated
+                > timedelta(seconds=f.update_interval)
+            ):
+                # self.update_feed(self.selected_feed, self.MAX_ITEMS)
+                # f.updated = datetime.now()
+                f.update()
+
+
+            for r in select(
+                i for i in self.ITEM_CLASS
+                if i.feed == f
+            )[offset:offset+limit]:
+                # commit()
+                yield AttrDict(
+                    id = r.guid,
+                    time = r.created,
+                    title = r.subject,
+                    type = r.media_type,
+                    url = r.content
+                )

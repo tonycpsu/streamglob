@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 import abc
 import re
 
@@ -23,11 +26,15 @@ def get(provider, *args, **kwargs):
     except TypeError:
         raise Exception(provider, PROVIDERS)
 
+def log_plugin_exception(manager, entrypoint, exception):
+    logger.error('Failed to load %s: %s' % (entrypoint, exception))
+
 def load():
     global PROVIDERS
     global DEFAULT_PROVIDER
     mgr = extension.ExtensionManager(
         namespace='streamglob.providers',
+        on_load_failure_callback=log_plugin_exception,
     )
     PROVIDERS = AttrDict(
         (x.name, x.plugin())
