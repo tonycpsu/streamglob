@@ -21,7 +21,7 @@ from instagram_web_api import Client, ClientCompatPatch, ClientError
 
 
 @with_view(SimpleProviderView)
-class InstagramProvider(FeedProvider):
+class InstagramProvider(PaginatedProviderMixin, FeedProvider):
 
     ATTRIBUTES = AttrDict(
         time = {"width": 19},

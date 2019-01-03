@@ -33,7 +33,9 @@ class FakeProviderMixin(abc.ABC):
     pass
 
 @with_view(YouTubeProviderView)
-class YouTubeProvider(FakeProviderMixin, FeedProvider):
+class YouTubeProvider(PaginatedProviderMixin,
+                      FakeProviderMixin,
+                      FeedProvider):
 
     FILTERS = AttrDict([
         ("feed", YouTubeChannelsFilter),

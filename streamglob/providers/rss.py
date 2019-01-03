@@ -27,10 +27,6 @@ class RSSProvider(FeedProvider):
 
     MEDIA_TYPES = {"video"}
 
-    @property
-    def limit(self):
-        return None
-
     def listings(self, offset=None, limit=None, *args, **kwargs):
 
         for item in feedparser.parse(self.selected_feed).entries:

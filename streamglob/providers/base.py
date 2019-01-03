@@ -221,6 +221,13 @@ class BaseProvider(abc.ABC):
 
     @property
     def limit(self):
+        return None
+
+
+class PaginatedProviderMixin(object):
+
+    @property
+    def limit(self):
         return (self.config.get("limit") or
                 config.settings.profile.tables.get("limit"))
 
