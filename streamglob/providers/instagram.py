@@ -8,12 +8,6 @@ from .filters import *
 
 from instagram_web_api import Client, ClientCompatPatch, ClientError
 
-class InstagramFeedsFilter(ListingFilter):
-
-    @property
-    def values(self):
-        return [ (i, i) for i in state.provider_config.feeds ]
-
 
 # class InstagramProviderDataTable(ProviderDataTable):
 
@@ -27,12 +21,7 @@ class InstagramFeedsFilter(ListingFilter):
 
 
 @with_view(SimpleProviderView)
-class InstagramProvider(BaseProvider):
-
-    FILTERS = AttrDict([
-        ("feed", InstagramFeedsFilter),
-        # ("search", TextFilter)
-    ])
+class InstagramProvider(FeedProvider):
 
     ATTRIBUTES = AttrDict(
         time = {"width": 19},
@@ -55,16 +44,22 @@ class InstagramProvider(BaseProvider):
 
     def listings(self, offset=None, limit=None, *args, **kwargs):
 
-        feed_name = self.filters.feed.value
+        feed_name = self.selected_feed
         if feed_name.startswith("@"):
             feed_name = feed_name[1:]
 
         try:
             user_id = self.web_api.user_info2(feed_name)["id"]
         except:
+            print("fail")
+            import time
+            time.sleep(5)
             raise SGException(f"user id for {feed_name} not found")
 
-        logger.info(self.end_cursor)
+        if not offset:
+            self.end_cursor = None
+
+        # logger.info(self.end_cursor)
         count = 0
         while(count < self.limit):
             # instagram API will sometimes give duplicates using end_cursor
@@ -88,7 +83,7 @@ class InstagramProvider(BaseProvider):
 
                 post_id = post["node"]["id"]
 
-                if (not hasattr(self, "view")
+                if (self._view is None
                     or (post_id not in self.view.table.df.get(
                         columns="id", as_list=True))
                     ):

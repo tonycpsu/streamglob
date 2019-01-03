@@ -18,6 +18,8 @@ from .state import *
 from .utils import *
 from .exceptions import *
 
+PLAYERS = AttrDict()
+
 class Player(abc.ABC):
 
     SUBCLASSES = {}
@@ -54,17 +56,20 @@ class Player(abc.ABC):
 
     @classmethod
     def get(cls, spec=None, *args, **kwargs):
+
+        global PLAYERS
+
         if isinstance(spec, str):
             # get the player by name
             try:
-                return cls.PLAYERS[spec]
+                return PLAYERS[spec]
             except KeyError:
                 raise SGException(f"Player {spec} not found")
 
         elif isinstance(spec, set):
             try:
                 return next(
-                    p for p in cls.PLAYERS.values()
+                    p for p in PLAYERS.values()
                     if spec.intersection(
                         p.MEDIA_TYPES - set(getattr(p, "exclude_types", []))
                     ) == spec
@@ -87,7 +92,10 @@ class Player(abc.ABC):
 
     @classmethod
     def load(cls):
-        cls.PLAYERS = AttrDict()
+
+        global PLAYERS
+
+        PLAYERS = AttrDict()
 
         # Add configured players
         for name, cfg in config.settings.profile.players.items():
@@ -98,15 +106,15 @@ class Player(abc.ABC):
             if not path:
                 logger.warn(f"path for player {name} not found")
                 continue
-            cls.PLAYERS[name] = Player.from_config(cfg)
+            PLAYERS[name] = Player.from_config(cfg)
 
         # Try to find any players not configured
         for name, klass in cls.SUBCLASSES.items():
-            if name in cls.PLAYERS:
+            if name in PLAYERS:
                 continue
             path = distutils.spawn.find_executable(name)
             if path:
-                cls.PLAYERS[name] = klass(name, path, [])
+                PLAYERS[name] = klass(name, path, [])
 
 
     # @property

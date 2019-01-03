@@ -10,19 +10,15 @@ import feedparser
 from datetime import datetime
 from time import mktime
 
-class RSSFeedsFilter(ListingFilter):
+# class RSSFeedsFilter(ListingFilter):
 
-    @property
-    def values(self):
-        return state.provider_config.feeds
+#     @property
+#     def values(self):
+#         return state.provider_config.feeds
 
 
 @with_view(SimpleProviderView)
-class RSSProvider(BaseProvider):
-
-    FILTERS = AttrDict([
-        ("feed", RSSFeedsFilter),
-    ])
+class RSSProvider(FeedProvider):
 
     ATTRIBUTES = AttrDict(
         time = {"width": 19},
@@ -37,8 +33,7 @@ class RSSProvider(BaseProvider):
 
     def listings(self, offset=None, limit=None, *args, **kwargs):
 
-        feed_url = self.filters.feed.value
-        for item in feedparser.parse(feed_url).entries:
+        for item in feedparser.parse(self.selected_feed).entries:
             yield AttrDict(
                 time =  datetime.fromtimestamp(
                     mktime(item.published_parsed)

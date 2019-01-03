@@ -55,7 +55,7 @@ class UrwidLoggingHandler(logging.Handler):
         msg = self.format(rec)
         (ignore, ready, ignore) = select.select([], [self.pipe], [])
         if self.pipe in ready:
-            os.write(self.pipe, (msg[:512]+"\n").encode("utf-8"))
+            os.write(self.pipe, (msg+"\n").encode("utf-8"))
 
 
 
@@ -64,18 +64,21 @@ class MainToolbar(urwid.WidgetWrap):
     signals = ["provider_change"]
     def __init__(self, default_provider):
 
+        def format_provider(n, p):
+            return p.NAME if p.config_is_valid else f"* {p.NAME}"
+
         def providers_sort_key(p):
             k, v = p
-            providers = list(config.settings.profile.providers.keys())
-            if k in providers:
+            # providers = list(config.settings.profile.providers.keys())
+            # if k in providers:
+            # raise Exception(v)
+            if v.config_is_valid:
                 return (0, str(v.NAME))
             else:
                 return (1, str(v.NAME))
 
         self.provider_dropdown = Dropdown(AttrDict(
-            [(p.NAME
-               if n in list(config.settings.profile.providers.keys())
-               else f"* {p.NAME}", n)
+            [(format_provider(n, p), n)
               for n, p in sorted(
                       providers.PROVIDERS.items(),
                       key = providers_sort_key
@@ -193,7 +196,6 @@ def main():
                   quiet_stdout=True)
 
     providers.load()
-
     model.init()
 
     try:

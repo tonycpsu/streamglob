@@ -5,6 +5,7 @@ from itertools import chain
 
 from .widgets import *
 from panwid.dialog import BaseView
+from .filters import *
 from ..session import *
 from ..state import *
 from ..player import Player
@@ -115,6 +116,9 @@ def with_view(view):
 
 @with_view(SimpleProviderView)
 class BaseProvider(abc.ABC):
+    """
+    Abstract base class from which providers should inherit from
+    """
 
     SESSION_CLASS = StreamSession
     # VIEW_CLASS = SimpleProviderView
@@ -125,11 +129,19 @@ class BaseProvider(abc.ABC):
 
     def __init__(self, *args, **kwargs):
         self._session = self.SESSION_CLASS.new(*args, **kwargs)
-        self.filters = AttrDict({n: f(provider=self) for n, f in self.FILTERS.items() })
-        self.view = self.make_view()
+        self._view = None
         # self.player = Player.get(
         #     self.MEDIA_TYPES
         # )
+
+    @property
+    def view(self):
+        if not self._view:
+            self.filters = AttrDict({n: f(provider=self)
+                                     for n, f in self.FILTERS.items() })
+            self._view = self.make_view()
+
+        return self._view
 
     @abc.abstractmethod
     def make_view(self):
@@ -137,8 +149,41 @@ class BaseProvider(abc.ABC):
 
     @classproperty
     @abc.abstractmethod
+    def IDENTIFIER(cls):
+        return next(
+            c.__module__ for c in cls.__mro__
+            if __package__ in c.__module__).split(".")[-1]
+        # return cls.NAME.lower()
+
+    @classproperty
+    @abc.abstractmethod
     def NAME(cls):
         return cls.__name__.replace("Provider", "")
+
+    @abc.abstractmethod
+    def listings(self, filters=None):
+        pass
+
+    @property
+    def config(self):
+        # raise Exception(self.__module__ + "." + self.__class__.__qualname__)
+        # raise Exception(self.__class__.__init_subclass__)
+        # module = self.__class__.__module__.lower()
+        # raise Exception(module)
+        return config.settings.profile.providers.get(self.IDENTIFIER)
+
+    # @classmethod
+    # def should_load(cls):
+    #     module = cls.__module__.lower()
+    #     cfg = config.settings.profile.providers.get(module)
+    #     raise Exception(cls)
+    #     return cls.config_is_valid(cfg)
+
+    @property
+    def config_is_valid(self):
+        return all([ self.config.get(x, None) is not None
+                     for x in getattr(self, "REQUIRED_CONFIG", [])
+        ])
 
     @property
     def session(self):
@@ -174,13 +219,33 @@ class BaseProvider(abc.ABC):
     # def login(self):
     #     pass
 
-    @abc.abstractmethod
-    def listings(self, filters=None):
-        pass
-
     @property
     def limit(self):
-        if not state.provider_config:
-            return None
-        return (state.provider_config.get("limit") or
+        return (self.config.get("limit") or
                 config.settings.profile.tables.get("limit"))
+
+class FeedsFilter(ListingFilter):
+
+    @property
+    def values(self):
+        cfg = self.provider.config.feeds
+        if isinstance(cfg, dict):
+            return cfg
+        elif isinstance(cfg, list):
+            return [ (i, i) for i in cfg ]
+
+
+class FeedProvider(BaseProvider):
+    """
+    A provider that offers multiple feeds to select from
+    """
+
+    FILTERS = AttrDict([
+        ("feed", FeedsFilter)
+    ])
+
+    REQUIRED_CONFIG = ["feeds"]
+
+    @property
+    def selected_feed(self):
+        return self.filters.feed.value

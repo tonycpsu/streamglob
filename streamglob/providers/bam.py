@@ -9,7 +9,10 @@ from orderedattrdict import AttrDict
 from datetime import datetime, timedelta
 import dateutil.parser
 import pytz
+import distutils.spawn
 
+
+from .. import player
 from .. import config
 from .. import model
 from .base import *
@@ -266,6 +269,16 @@ class BAMProviderMixin(abc.ABC):
     )
 
     HELPER = "streamlink"
+
+    REQUIRED_CONFIG = ["username", "password"]
+
+    @property
+    def config_is_valid(self):
+        return (
+            super().config_is_valid
+            and
+            self.HELPER in list(player.PLAYERS.keys())
+        )
 
     # @memo(region="short")
     def schedule(

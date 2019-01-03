@@ -18,7 +18,8 @@ DEFAULT_PROVIDER=None
 def get(provider, *args, **kwargs):
     # raise Exception(provider)
     try:
-        return PROVIDERS.get(provider)(*args, **kwargs)
+        # return PROVIDERS.get(provider)(*args, **kwargs)
+        return PROVIDERS.get(provider)
     except TypeError:
         raise Exception(provider, PROVIDERS)
 
@@ -27,10 +28,11 @@ def load():
     global DEFAULT_PROVIDER
     mgr = extension.ExtensionManager(
         namespace='streamglob.providers',
-        # invoke_args=(parsed_args.width,),
     )
-
-    PROVIDERS = AttrDict((x.name, x.plugin) for x in mgr)
+    PROVIDERS = AttrDict(
+        (x.name, x.plugin())
+        for x in mgr
+    )
     # raise Exception(PROVIDERS)
     if len(config.settings.profile.providers):
         # first listed in config

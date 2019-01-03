@@ -400,6 +400,11 @@ class MLBProvider(BAMProviderMixin,
     def NAME(cls):
         return "MLB.tv"
 
+    # @classmethod
+    # def config_is_valid(cls, cfg):
+    #     return all(c
+
+
     def teams(self, sport_code="mlb", season=None):
 
         if sport_code != "mlb":

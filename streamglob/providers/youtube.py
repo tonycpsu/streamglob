@@ -8,13 +8,14 @@ from .filters import *
 
 import youtube_dl
 
-class YouTubeChannelsFilter(ListingFilter):
+class YouTubeChannelsFilter(FeedsFilter):
 
     @property
     def values(self):
-        channels = [("Search", "search")]
-        channels += list(state.provider_config.channels.items())
-        return channels
+        # channels = [("Search", "search")]
+        # channels += list(state.provider_config.feeds.items())
+        # return channels
+        return AttrDict([("Search", "search")] + list(super().values.items()))
 
 
 class YouTubeProviderDataTable(ProviderDataTable):
@@ -28,11 +29,14 @@ class YouTubeProviderView(SimpleProviderView):
     PROVIDER_DATA_TABLE_CLASS = YouTubeProviderDataTable
 
 
+class FakeProviderMixin(abc.ABC):
+    pass
+
 @with_view(YouTubeProviderView)
-class YouTubeProvider(BaseProvider):
+class YouTubeProvider(FakeProviderMixin, FeedProvider):
 
     FILTERS = AttrDict([
-        ("channel", YouTubeChannelsFilter),
+        ("feed", YouTubeChannelsFilter),
         ("search", TextFilter)
     ])
 
@@ -48,13 +52,13 @@ class YouTubeProvider(BaseProvider):
 
     def listings(self, offset=None, limit=None, *args, **kwargs):
 
-        if self.filters.channel.value == "search":
+        if self.filters.feed.value == "search":
             if len(self.filters.search.value):
                 query = f"ytsearch{offset+self.view.table.limit}:{self.filters.search.value}"
             else:
                 return AttrDict()
         else:
-            query = self.filters.channel.value
+            query = self.filters.feed.value
 
         ytdl_opts = {
             "ignoreerrors": True,

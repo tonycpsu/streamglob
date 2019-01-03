@@ -1,6 +1,8 @@
 import urwid
 import panwid
 
+from ..exceptions import *
+
 # class ResolutionDropdown(panwid.Dropdown):
 
 #     label = "Resolution"
@@ -76,7 +78,11 @@ class ProviderDataTable(panwid.DataTable):
 
     def query(self, *args, **kwargs):
 
-        return self.provider.listings(*args, **kwargs)
+        try:
+            return self.provider.listings(*args, **kwargs)
+        except SGExecption as e:
+            logger.exception(e)
+            return []
 
     def keypress(self, size, key):
 
