@@ -271,9 +271,11 @@ def main():
     spec = None
 
     try:
+        # provider/spec
         (provider, spec) = options.spec.split("/")
         run_cli(provider, spec)
-    except ValueError:
+    except (AttributeError, ValueError):
+        # provider
         provider = options.spec
         run_gui(provider)
 
