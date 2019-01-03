@@ -66,6 +66,16 @@ class Item(db.Entity):
     def mark_seen(self):
         self.seen = datetime.now()
 
+    @property
+    def url(self):
+        return self.content
+
+    def to_dict(self, *args, **kwargs):
+        d = super().to_dict(*args, **kwargs)
+        d.update(url=d["content"])
+        return d
+
+
 class ProviderData(db.Entity):
     # Providers inherit from this to define their own fields
     classtype = Discriminator(str)

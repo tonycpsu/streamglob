@@ -85,7 +85,7 @@ class ProviderDataTable(panwid.DataTable):
 
         try:
             return self.provider.listings(*args, **kwargs)
-        except SGExecption as e:
+        except SGException as e:
             logger.exception(e)
             return []
 
@@ -114,7 +114,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     def on_update_focus(self, source, position):
         # logger.info(f"focus: {position}")
         item = self.provider.feed.ITEM_CLASS.get(
-            guid=self[position].data.get("id")
+            guid=self[position].data.get("guid")
         )
         item.mark_seen()
 

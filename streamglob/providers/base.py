@@ -336,11 +336,12 @@ class CachedFeedProvider(FeedProvider):
                 i for i in self.ITEM_CLASS
                 if i.feed == f
             )[offset:offset+limit]:
+                yield(AttrDict(r.to_dict()))
                 # commit()
-                yield AttrDict(
-                    id = r.guid,
-                    time = r.created,
-                    title = r.subject,
-                    type = r.media_type,
-                    url = r.content
-                )
+                # yield AttrDict(
+                #     id = r.guid,
+                #     time = r.created,
+                #     title = r.subject,
+                #     type = r.media_type,
+                #     url = r.content
+                # )

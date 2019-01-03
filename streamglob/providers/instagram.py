@@ -20,10 +20,10 @@ class InstagramFeed(model.Feed):
 
     @db_session
     def update(self, limit = None):
+
         if not limit:
             limit = self.DEFAULT_ITEM_LIMIT
 
-        logger.info("update_feed")
         self.end_cursor = None
 
         if self.name.startswith("@"):
@@ -105,10 +105,10 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
     FEED_CLASS = InstagramFeed
 
     ATTRIBUTES = AttrDict(
-        time = {"width": 19},
-        type = {"width": 6},
-        title = {"width": ("weight", 1)},
-        id = {"hide": True}
+        created = {"width": 19},
+        media_type = {"width": 6, "label": "type"},
+        subject = {"label": "title", "width": ("weight", 1)},
+        # guid = {"hide": True}
     )
 
     MEDIA_TYPES = {"image", "video"}
@@ -125,5 +125,5 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
         if not isinstance(url, list):
             url = [url]
         args = url
-        kwargs["media_type"] = selection.type
+        kwargs["media_type"] = selection.media_type
         return (args, kwargs)
