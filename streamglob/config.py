@@ -29,7 +29,6 @@ KNOWN_PLAYERS = ["mpv", "vlc"]
 
 settings = None
 
-
 class NotEmptyValidator(Validator):
 
     def validate(self, document):
@@ -73,10 +72,13 @@ class ProfileTree(Tree):
 
     DEFAULT_PROFILE_NAME = "default"
 
-    def __init__(self, profile=DEFAULT_PROFILE_NAME, *args, **kwargs):
+    def __init__(self, profile=DEFAULT_PROFILE_NAME, merge_default = False,
+                 *args, **kwargs):
         super(ProfileTree, self).__init__(*args, **kwargs)
-        self.__exclude_keys__ |= {"_profile_name", "_default_profile_name", "profile"}
+        self._merge_default = merge_default
         self._default_profile_name = profile
+        self.__exclude_keys__ |= {"_profile_name", "_default_profile_name",
+                                  "_merge_default", "profile"}
         self.set_profile(self._default_profile_name)
 
     @property
@@ -89,7 +91,18 @@ class ProfileTree(Tree):
     def __getattr__(self, name):
         if not name.startswith("_"):
             p = self.profile
-            return p.get(name) if name in p else self[self._default_profile_name].get(name)
+            val = p.get(name)
+            if name in p:
+                if (self._merge_default
+                    and self._profile_name != self._default_profile_name):
+                    default_profile = self[self._default_profile_name]
+                    if isinstance(val, list):
+                        val += default_profile.get(name, [])
+                    elif isinstance(val, dict):
+                        val = default_profile.get(name, {})
+                        val.update(**self.get(name, {}))
+                return val
+
         raise AttributeError
 
     def __setattr__(self, name, value):
@@ -105,7 +118,7 @@ class ProfileTree(Tree):
     def __getitem__(self, name):
         if isinstance(name, tuple):
             return functools.reduce(
-                lambda a, b: AttrDict(a, **{ k: v for k, v in b.items() if k not in a}),
+                lambda a, b: Tree(a, **{ k: v for k, v in b.items() if k not in a}),
                 [ self[p] for p in reversed(name) ]
             )
 
@@ -116,12 +129,13 @@ class Config(Tree):
 
     DEFAULT_PROFILE = "default"
 
-    def __init__(self, config_file, *args, **kwargs):
+    def __init__(self, config_file, merge_default = False, *args, **kwargs):
         super(Config, self).__init__(*args, **kwargs)
         self.__exclude_keys__ |= {"_config_file", "set_profile", "_profile_tree"}
         self._config_file = config_file
         self.load()
-        self._profile_tree = ProfileTree(**self.profiles)
+        self._profile_tree = ProfileTree(**self.profiles,
+                                         merge_default=merge_default)
 
 
     def init_config(self):
@@ -266,15 +280,19 @@ settings = Config(CONFIG_FILE)
 
 __all__ = [
     "CONFIG_DIR",
-    "config",
     "settings"
 ]
 
 def main():
-    settings.set_profile("default")
-    print(settings.profile.default_resolution)
+    settings = Config(
+        os.path.expanduser("~/.config/streamglob/config.yaml"),
+        merge_default=True
+    )
+    # print(settings)
+    print(list(settings.profile.providers.keys()))
     settings.set_profile("540p")
-    print(settings.profile.default_resolution)
+    print(list(settings.profile.providers.keys()))
+    raise Exception
     print(settings.profile.get("env"))
     print(settings.profiles["default"])
     print(settings.profiles[("default")].get("env"))
