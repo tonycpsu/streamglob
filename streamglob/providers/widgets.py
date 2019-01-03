@@ -1,7 +1,12 @@
+import logging
+logger = logging.getLogger(__name__)
+
 import urwid
 import panwid
+from pony.orm import *
 
 from ..exceptions import *
+from .. import model
 
 # class ResolutionDropdown(panwid.Dropdown):
 
@@ -95,3 +100,34 @@ class ProviderDataTable(panwid.DataTable):
             self._emit(f"cycle_filter", 2, -1 if key == "{" else 1)
         else:
             return key
+
+class CachedFeedProviderDataTable(ProviderDataTable):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        urwid.connect_signal(
+            self, "focus",
+            self.on_update_focus
+        )
+
+    @db_session
+    def on_update_focus(self, source, position):
+        # logger.info(f"focus: {position}")
+        item = self.provider.feed.ITEM_CLASS.get(
+            guid=self[position].data.get("id")
+        )
+        item.mark_seen()
+
+    # @property
+    # def focus_position(self):
+    #     print(f"get focus_position")
+    #     return super(CachedFeedProviderDataTable, self).focus_position
+    #     # val = ProviderDataTable.focus_position
+    #     # raise Exception(dir(val))
+
+    # @ProviderDataTable.focus_position.setter
+    # def focus_position(self, value):
+    #     print(f"focus_position: {value}")
+    #     ProviderDataTable.focus_position.fset(self, value)
+    #     # super(CachedFeedProviderDataTable, self).focus_position = value
+    #     # .focus_position = value

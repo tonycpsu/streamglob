@@ -62,6 +62,9 @@ class Item(db.Entity):
     downloaded = Optional(datetime)
     # was_downloaded = Required(bool, default=False)
 
+    @db_session
+    def mark_seen(self):
+        self.seen = datetime.now()
 
 class ProviderData(db.Entity):
     # Providers inherit from this to define their own fields

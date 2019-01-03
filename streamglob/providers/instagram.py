@@ -59,8 +59,12 @@ class InstagramFeed(model.Feed):
                     pass
 
                 post_id = post["node"]["id"]
-                subject = post["node"]["caption"]["text"].replace("\n", "")
                 if post_id not in select(i.guid for i in self.items.select())[:]:
+                    try:
+                        subject = post["node"]["caption"]["text"].replace("\n", "")
+                    except TypeError:
+                        subject = "(no caption)"
+
                     count += 1
                     media_type = post["node"]["type"]
                     if media_type == "video":
@@ -90,8 +94,12 @@ class InstagramFeed(model.Feed):
             self.updated = datetime.now()
 
 
+class InstagramProviderView(SimpleProviderView):
 
-@with_view(SimpleProviderView)
+    PROVIDER_DATA_TABLE_CLASS = CachedFeedProviderDataTable
+
+
+@with_view(InstagramProviderView)
 class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
 
     FEED_CLASS = InstagramFeed
@@ -105,9 +113,7 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
 
     MEDIA_TYPES = {"image", "video"}
 
-    # VIEW_CLASS = InstagramProviderView
-
-    # DATA_TABLE_CLASS = InstagramProviderDataTable
+    VIEW_CLASS = InstagramProviderView
 
     def __init__(self, *args, **kwargs):
         self.web_api = Client(auto_patch=True, drop_incompat_keys=False)

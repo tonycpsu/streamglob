@@ -282,14 +282,29 @@ class CachedFeedProvider(FeedProvider):
     UPDATE_INTERVAL = 300
     MAX_ITEMS = 100
 
-    # def __init__(self, *args, **kwargs):
-    #     super().__init__(*args, **kwargs)
-    #     self.last_update = None
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._feed = None
 
 
     # @abc.abstractmethod
     # def update_feed(self):
     #     pass
+
+    @property
+    def feed(self):
+        if not self._feed:
+            self._feed = self.FEED_CLASS.get(
+                provider_name = self.IDENTIFIER,
+                name = self.selected_feed
+            )
+            if not self._feed:
+                self._feed = self.FEED_CLASS(
+                    provider_name = self.IDENTIFIER,
+                    name = self.selected_feed
+                )
+        return self._feed
+
 
     def listings(self, offset=None, limit=None, *args, **kwargs):
 
