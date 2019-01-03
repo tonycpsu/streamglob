@@ -191,12 +191,8 @@ class Player(abc.ABC):
             cmd += [self.source]
         cmd += self.extra_args_post
 
-        logger.trace(f"{self.__class__.__name__} running {cmd}")
-
-        # raise Exception(f"play: {' '.join(cmd)},"
-        #       f"({(self.stdin, self.stdout, self.stderr)})")
-
         if not self.source_integrated:
+            logger.trace(f"{self.__class__.__name__} running {cmd}")
             try:
                 self.proc = subprocess.Popen(
                     cmd,

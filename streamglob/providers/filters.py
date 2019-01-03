@@ -11,11 +11,37 @@ import dateutil.parser
 from dateutil.relativedelta import relativedelta
 
 class Filter(abc.ABC):
+
     def __init__(self, provider, *args, **kwargs):
         self.provider = provider
-        self.widget = self.WIDGET_CLASS(
-            *self.widget_args, **self.widget_kwargs
-        )
+
+    @property
+    @abc.abstractmethod
+    def value(self):
+        pass
+
+class DummyFilter(Filter):
+
+    def __init__(self, provider, value):
+        super().__init__(provider)
+        self._value = value
+
+    @property
+    def value(self):
+        return self._value
+
+class WidgetFilter(Filter):
+    def __init__(self, provider, *args, **kwargs):
+        super().__init__(provider)
+        self._widget = None
+
+    @property
+    def widget(self):
+        if not self._widget:
+            self._widget = self.WIDGET_CLASS(
+                *self.widget_args, **self.widget_kwargs
+            )
+        return self._widget
 
     def on_change(self, source, *args):
         logger.info(f"{source} {args}")
@@ -55,7 +81,7 @@ class TextFilterWidget(urwid.Edit):
             return super().keypress(size, key)
 
 
-class TextFilter(Filter):
+class TextFilter(WidgetFilter):
 
     WIDGET_CLASS = TextFilterWidget
 
@@ -162,7 +188,7 @@ class DateFilterWidget(urwid.WidgetWrap):
             # return key
 
 
-class DateFilter(Filter):
+class DateFilter(WidgetFilter):
 
     WIDGET_CLASS = DateFilterWidget
 
@@ -197,7 +223,7 @@ class DateFilter(Filter):
 
 
 
-class ListingFilter(Filter, abc.ABC):
+class ListingFilter(WidgetFilter, abc.ABC):
 
     # WIDGET_CLASS = BoxedDropdown
     WIDGET_CLASS = panwid.Dropdown

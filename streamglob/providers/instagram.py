@@ -83,7 +83,7 @@ class InstagramProvider(PaginatedProviderMixin, FeedProvider):
 
                 post_id = post["node"]["id"]
 
-                if (self._view is None
+                if (not self.gui
                     or (post_id not in self.view.table.df.get(
                         columns="id", as_list=True))
                     ):

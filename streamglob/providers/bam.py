@@ -265,7 +265,8 @@ class BAMProviderMixin(abc.ABC):
         start = {"width": 6, "format_fn": format_start_time},
         away = {"width": 16},
         home = {"width": 16},
-        line = {}
+        line = {},
+        game_id = {}
     )
 
     HELPER = "streamlink"
@@ -567,6 +568,10 @@ class BAMProviderMixin(abc.ABC):
     def start_date(self):
         pass
 
+
+    def parse_specifier(self, spec):
+        return AttrDict(game_id=int(spec))
+
     def on_select(self, widget, selection):
         self.open_watch_dialog(selection)
 
@@ -589,7 +594,6 @@ class BAMProviderMixin(abc.ABC):
 
         url = self.get_url(game_id)
         args = [url]
-        # if not "resolution" in kwargs:
         kwargs["resolution"] = self.filters.resolution.value
         offset = kwargs.pop("offset", None)
         if offset:

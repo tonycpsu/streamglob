@@ -130,14 +130,27 @@ class BaseProvider(abc.ABC):
     def __init__(self, *args, **kwargs):
         self._session = self.SESSION_CLASS.new(*args, **kwargs)
         self._view = None
+        self._filters = AttrDict([
+            (k, DummyFilter(self, v))
+            for k, v in list(state.options.items()) + [("resolution", "best")]
+        ])
+        # self._filters.resolution = DummyFilter("best")
         # self.player = Player.get(
         #     self.MEDIA_TYPES
         # )
 
     @property
+    def gui(self):
+        return self._view is not None
+
+    @property
+    def filters(self):
+        return self._filters
+
+    @property
     def view(self):
         if not self._view:
-            self.filters = AttrDict({n: f(provider=self)
+            self._filters = AttrDict({n: f(provider=self)
                                      for n, f in self.FILTERS.items() })
             self._view = self.make_view()
 
@@ -159,6 +172,9 @@ class BaseProvider(abc.ABC):
     @abc.abstractmethod
     def NAME(cls):
         return cls.__name__.replace("Provider", "")
+
+    def parse_specifier(self, spec):
+        raise NotImplementedError
 
     @abc.abstractmethod
     def listings(self, filters=None):
@@ -210,7 +226,9 @@ class BaseProvider(abc.ABC):
             player.source = helper
         else:
             player.source = source
-        player.play(**kwargs)
+
+        state.spawn_play_process(player, **kwargs)
+        # player.play(**kwargs)
 
     def on_select(self, widget, selection):
         self.play(selection)
