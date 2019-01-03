@@ -91,5 +91,7 @@ class ProviderDataTable(panwid.DataTable):
             self._emit(f"cycle_filter", 0, -1 if key == "left" else 1)
         elif key in ["[", "]"]:
             self._emit(f"cycle_filter", 1, -1 if key == "[" else 1)
+        elif key in ["{", "}"]:
+            self._emit(f"cycle_filter", 2, -1 if key == "{" else 1)
         else:
             return key
