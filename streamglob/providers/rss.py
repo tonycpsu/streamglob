@@ -28,7 +28,6 @@ class RSSFeed(model.Feed):
 
     # url = Required(str)
 
-    @db_session
     def update(self, limit = None):
 
         if not limit:

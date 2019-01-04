@@ -123,7 +123,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     def keypress(self, size, key):
 
         if key == "ctrl r":
-            self.provider.feed.update()
+            self.provider.update()
             self.reset()
         else:
             return super().keypress(size, key)

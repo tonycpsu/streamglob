@@ -38,6 +38,10 @@ class Feed(db.Entity):
     DEFAULT_UPDATE_INTERVAL = 3600
     DEFAULT_ITEM_LIMIT = 100
 
+    DEFAULT_MIN_ITEMS=10
+    DEFAULT_MAX_ITEMS=500
+    DEFAULT_MAX_AGE=90
+
     feed_id = PrimaryKey(int, auto=True)
     name = Optional(str, index=True)
     provider_name = Required(str, index=True)
@@ -48,6 +52,38 @@ class Feed(db.Entity):
     @property
     def provider(self):
         return providers.get(self.provider_name)
+
+    @classmethod
+    @db_session
+    def purge_all(cls,
+                  min_items = DEFAULT_MIN_ITEMS,
+                  max_items = DEFAULT_MAX_ITEMS,
+                  max_age = DEFAULT_MAX_AGE):
+        for f in cls.select():
+            f.purge(min_items = min_items,
+                    max_items = max_items,
+                    max_age = max_age)
+
+    @db_session
+    def purge(self,
+              min_items = DEFAULT_MIN_ITEMS,
+              max_items = DEFAULT_MAX_ITEMS,
+              max_age = DEFAULT_MAX_AGE):
+        """
+        Delete items older than "max_age" days, keeping no fewer than
+        "min_items" and no more than "max_items"
+        """
+        for n, i in enumerate(
+                self.items.select().order_by(
+                    lambda i: desc(i.created)
+                )[min_items:]
+        ):
+            if (min_items + n >= max_items
+                or
+                i.age >= timedelta(days=max_age)):
+                i.delete()
+        commit()
+
 
 
 class Item(db.Entity):
@@ -65,6 +101,10 @@ class Item(db.Entity):
     @db_session
     def mark_seen(self):
         self.seen = datetime.now()
+
+    @property
+    def age(self):
+        return datetime.now() - self.created
 
     @property
     def url(self):
@@ -92,6 +132,7 @@ def init(*args, **kwargs):
 def main():
 
     init()
+    Feed.purge()
 
 if __name__ == "__main__":
     main()

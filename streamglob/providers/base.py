@@ -295,8 +295,8 @@ class CachedFeedProvider(FeedProvider):
     # def update_feed(self):
     #     pass
 
+    # @db_session
     @property
-    @db_session
     def feed(self):
         # if not self._feed:
         feed = self.FEED_CLASS.get(
@@ -309,6 +309,19 @@ class CachedFeedProvider(FeedProvider):
                 name = self.selected_feed
             )
         return feed
+
+    @db_session
+    def update(self):
+        # feed = self.FEED_CLASS.get(
+        #     provider_name = self.IDENTIFIER,
+        #     name = self.selected_feed
+        # )
+        # if not feed:
+        #     feed = self.FEED_CLASS(
+        #         provider_name = self.IDENTIFIER,
+        #         name = self.selected_feed
+        #     )
+        self.feed.update()
 
     def listings(self, offset=None, limit=None, *args, **kwargs):
 

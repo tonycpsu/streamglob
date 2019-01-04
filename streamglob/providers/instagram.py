@@ -18,7 +18,6 @@ class InstagramFeed(model.Feed):
 
     ITEM_CLASS = InstagramItem
 
-    @db_session
     def update(self, limit = None):
 
         if not limit:

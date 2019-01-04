@@ -268,6 +268,12 @@ def main():
     providers.load()
     model.init()
 
+    model.Feed.purge_all(
+        min_items = config.settings.profile.cache.min_items,
+        max_items = config.settings.profile.cache.max_items,
+        max_age = config.settings.profile.cache.max_age
+    )
+
     spec = None
 
     try:

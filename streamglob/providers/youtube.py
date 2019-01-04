@@ -46,7 +46,6 @@ class YouTubeFeed(model.Feed):
 
     ITEM_CLASS = YouTubeItem
 
-    @db_session
     def update(self, limit = None):
 
         if not limit:
