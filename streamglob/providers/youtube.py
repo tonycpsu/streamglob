@@ -106,10 +106,9 @@ class YouTubeProvider(PaginatedProviderMixin,
 
     MEDIA_TYPES = {"video"}
 
-    DATA_TABLE_CLASS = YouTubeProviderDataTable
+    # DATA_TABLE_CLASS = YouTubeProviderDataTable
 
     def listings(self, offset=None, limit=None, *args, **kwargs):
-
         if self.filters.feed.value == "search":
             if len(self.filters.search.value):
                 query = f"ytsearch{offset+self.view.table.limit}:{self.filters.search.value}"

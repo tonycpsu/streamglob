@@ -233,6 +233,10 @@ class ListingFilter(WidgetFilter, abc.ABC):
         return [self.values]
 
     @property
+    def label(self):
+        return self.widget.selected_label
+
+    @property
     def value(self):
         return self.widget.selected_value
 

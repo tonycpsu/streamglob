@@ -274,6 +274,10 @@ class FeedProvider(BaseProvider):
     REQUIRED_CONFIG = ["feeds"]
 
     @property
+    def selected_feed_label(self):
+        return self.filters.feed.label
+
+    @property
     def selected_feed(self):
         return self.filters.feed.value
 
@@ -282,9 +286,9 @@ class CachedFeedProvider(FeedProvider):
     UPDATE_INTERVAL = 300
     MAX_ITEMS = 100
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._feed = None
+    # def __init__(self, *args, **kwargs):
+    #     super().__init__(*args, **kwargs)
+    #     self._feed = None
 
 
     # @abc.abstractmethod
@@ -292,23 +296,28 @@ class CachedFeedProvider(FeedProvider):
     #     pass
 
     @property
+    @db_session
     def feed(self):
-        if not self._feed:
-            self._feed = self.FEED_CLASS.get(
+        # if not self._feed:
+        feed = self.FEED_CLASS.get(
+            provider_name = self.IDENTIFIER,
+            name = self.selected_feed
+        )
+        if not feed:
+            feed = self.FEED_CLASS(
                 provider_name = self.IDENTIFIER,
                 name = self.selected_feed
             )
-            if not self._feed:
-                self._feed = self.FEED_CLASS(
-                    provider_name = self.IDENTIFIER,
-                    name = self.selected_feed
-                )
-        return self._feed
-
+        return feed
 
     def listings(self, offset=None, limit=None, *args, **kwargs):
 
         count = 0
+
+        if not offset:
+            offset = 0
+        if not limit:
+            limit = self.limit
 
         with db_session:
             f = self.FEED_CLASS.get(
@@ -330,8 +339,11 @@ class CachedFeedProvider(FeedProvider):
                 # self.update_feed(self.selected_feed, self.MAX_ITEMS)
                 # f.updated = datetime.now()
                 f.update()
+                f.updated = datetime.now()
 
 
+
+            # raise Exception(self.limit)
             for r in select(
                 i for i in self.ITEM_CLASS
                 if i.feed == f

@@ -80,7 +80,6 @@ class ProviderDataTable(panwid.DataTable):
     def limit(self):
         return self.provider.limit
 
-
     def query(self, *args, **kwargs):
 
         try:
@@ -92,7 +91,9 @@ class ProviderDataTable(panwid.DataTable):
     def keypress(self, size, key):
 
         key = super().keypress(size, key)
-        if key in ["left", "right"]:
+        if key == "ctrl r":
+            self.reset()
+        elif key in ["left", "right"]:
             self._emit(f"cycle_filter", 0, -1 if key == "left" else 1)
         elif key in ["[", "]"]:
             self._emit(f"cycle_filter", 1, -1 if key == "[" else 1)
@@ -117,6 +118,16 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             guid=self[position].data.get("guid")
         )
         item.mark_seen()
+
+
+    def keypress(self, size, key):
+
+        if key == "ctrl r":
+            self.provider.feed.update()
+            self.reset()
+        else:
+            return super().keypress(size, key)
+        return key
 
     # @property
     # def focus_position(self):

@@ -36,13 +36,17 @@ class InstagramFeed(model.Feed):
         except:
             raise SGException(f"user id for {user_name} not found")
 
+
         # logger.info(self.end_cursor)
+        last_count = 0
         count = 0
+
         while(count < limit):
             # instagram API will sometimes give duplicates using end_cursor
             # for pagination, so instead of specifying how many posts to get,
             # we just get 25 at a time and break the loop after we've gotten
-            # the desired number of posts
+            # the desired number of posts, or after a batch entirely comprised
+            # of duplicates
             feed = self.provider.web_api.user_feed(
                 user_id, count=25,
                 end_cursor = self.end_cursor
@@ -60,6 +64,7 @@ class InstagramFeed(model.Feed):
 
                 post_id = post["node"]["id"]
                 if post_id not in select(i.guid for i in self.items.select())[:]:
+
                     try:
                         subject = post["node"]["caption"]["text"].replace("\n", "")
                     except TypeError:
@@ -91,7 +96,10 @@ class InstagramFeed(model.Feed):
                             media_type = media_type,
                             content = url
                     )
-            self.updated = datetime.now()
+            if count == last_count:
+                logger.info(f"breaking after {count}")
+                return
+            last_count = count
 
 
 class InstagramProviderView(SimpleProviderView):
@@ -107,7 +115,7 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
     ATTRIBUTES = AttrDict(
         created = {"width": 19},
         media_type = {"width": 6, "label": "type"},
-        subject = {"label": "title", "width": ("weight", 1)},
+        subject = {"label": "caption", "width": ("weight", 1)},
         # guid = {"hide": True}
     )
 
