@@ -134,7 +134,8 @@ class BaseProvider(abc.ABC):
         self._view = None
         self._filters = AttrDict([
             (k, DummyFilter(self, v))
-            for k, v in list(state.options.items()) + [("resolution", "best")]
+            # for k, v in list(state.options.items()) + [("resolution", "best")]
+            for k, v in list(state.options.items()) + list(kwargs.items())
         ])
         # self._filters.resolution = DummyFilter("best")
         # self.player = Player.get(
@@ -175,8 +176,22 @@ class BaseProvider(abc.ABC):
     def NAME(cls):
         return cls.__name__.replace("Provider", "")
 
-    def parse_specifier(self, spec):
-        raise NotImplementedError
+    @property
+    def FILTERS_BROWSE(self):
+        return AttrDict()
+
+    @property
+    def FILTERS_OPTIONS(self):
+        return AttrDict()
+
+    @property
+    def FILTERS(self):
+        d = getattr(self, "FILTERS_BROWSE", AttrDict())
+        d.update(getattr(self, "FILTERS_OPTIONS", {}))
+        return d
+
+    def parse_identifier(self, identifier):
+        return
 
     @abc.abstractmethod
     def listings(self, filters=None):
@@ -207,15 +222,44 @@ class BaseProvider(abc.ABC):
     def session(self):
         return self._session
 
-    def play_args(self, selection):
+    def parse_spec(self, spec):
+        options = {}
+        try:
+            (identifier, options) = spec.split(":")
+            options = self.parse_options(options)
+        except ValueError:
+            identifier = spec
+
+        selection = self.parse_identifier(identifier)
+        # raise Exception(options)
+        return (selection, options)
+
+    def parse_options(self, options):
+        return AttrDict([
+            (list(self.FILTERS_OPTIONS.keys())[n], v)
+            for n, v in enumerate(
+                    [o for o in options.split(",") if "=" not in o]
+            )], **dict(o.split("=") for o in options.split(",") if "=" in o)
+    )
+
+    def get_source(self, selection):
         url = selection.url
         if not isinstance(url, list):
             url = [url]
-        return ( url, {} )
+        return url
+
+    def play_args(self, selection, **kwargs):
+        source = self.get_source(selection)
+        kwargs = {k: v
+                  for k, v in list(kwargs.items())
+                  + [ (f, self.filters[f].value)
+                      for f in self.filters
+                      if f not in kwargs]}
+        return ( source, kwargs)
 
     def play(self, selection, **kwargs):
 
-        (source, kwargs) = self.play_args(selection, **kwargs)
+        source, kwargs = self.play_args(selection, **kwargs)
         media_type = kwargs.pop("media_type", None)
         if media_type:
             player = Player.get(set([media_type]))

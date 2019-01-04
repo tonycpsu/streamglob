@@ -106,7 +106,7 @@ class MainToolbar(urwid.WidgetWrap):
 
 class MainView(BaseView):
 
-    def __init__(self, provider=None):
+    def __init__(self, provider=None, opts=None):
 
         self.provider = provider or providers.DEFAULT_PROVIDER
         self.toolbar = MainToolbar(self.provider)
@@ -125,6 +125,12 @@ class MainView(BaseView):
         self.pile.focus_position = 2
         super(MainView, self).__init__(self.pile)
         self.set_provider(self.provider)
+        if opts:
+            for k, v in state.provider.parse_options(opts).items():
+                try:
+                    state.provider.filters[k].value = v
+                except SGInvalidFilterValue as e:
+                    logger.exception(e)
 
     def set_provider(self, provider):
 
@@ -146,7 +152,7 @@ class MainView(BaseView):
         # urwid.connect_signal(self.table, "select",
         #                      lambda source, selection: self.open_watch_dialog(selection["game_id"]))
 
-def run_gui(provider):
+def run_gui(provider, opts):
 
     log_file = os.path.join(config.CONFIG_DIR, f"{PACKAGE_NAME}.log")
 
@@ -185,7 +191,7 @@ def run_gui(provider):
     screen = urwid.raw_display.Screen()
     screen.set_terminal_properties(256)
 
-    view = MainView(provider)
+    view = MainView(provider, opts)
 
     log_console = widgets.ConsoleWindow()
     # log_box = urwid.BoxAdapter(urwid.LineBox(log_console), 10)
@@ -213,13 +219,13 @@ def run_gui(provider):
 
     state.loop.run()
 
-def run_cli(provider, spec):
+def run_cli(provider, spec, **kwargs):
 
     p = providers.get(provider)
     if spec.isdigit():
         spec = int(spec)
-    selection = p.parse_specifier(spec)
-    p.play(selection)
+    selection, options = p.parse_spec(spec)
+    p.play(selection, **options)
     while True:
         state.procs = [p for p in state.procs if p.poll() is None]
         if not len(state.procs):
@@ -245,8 +251,6 @@ def main():
         config.settings.set_profile(options.profile)
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-r", "--resolution", help="stream resolution",
-                        default=config.settings.profile.default_resolution)
     group = parser.add_mutually_exclusive_group()
     group.add_argument("-v", "--verbose", action="count", default=0,
                         help="verbose logging")
@@ -281,9 +285,13 @@ def main():
         (provider, spec) = options.spec.split("/")
         run_cli(provider, spec)
     except (AttributeError, ValueError):
-        # provider
-        provider = options.spec
-        run_gui(provider)
+        # provider@options
+        try:
+            (provider, opts) = options.spec.split(":")
+        except ValueError:
+            provider = options.spec
+            opts = None
+        run_gui(provider, opts)
 
 
 

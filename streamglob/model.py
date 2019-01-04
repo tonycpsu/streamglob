@@ -22,7 +22,7 @@ class CacheEntry(db.Entity):
 
     url = Required(str, unique=True)
     response = Required(bytes)
-    last_seen = Required(datetime, default=datetime.now())
+    last_seen = Required(datetime, default=datetime.now)
 
     @classmethod
     @db_session
@@ -93,7 +93,7 @@ class Item(db.Entity):
     guid = Required(str, index=True)
     subject = Required(str)
     content = Required(Json)
-    created = Required(datetime, default=datetime.now())
+    created = Required(datetime, default=datetime.now)
     seen = Optional(datetime)
     downloaded = Optional(datetime)
     # was_downloaded = Required(bool, default=False)

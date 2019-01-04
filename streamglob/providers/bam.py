@@ -223,8 +223,8 @@ class LiveStreamFilter(ListingFilter):
     @property
     def values(self):
         return AttrDict([
-            ("Live", True),
-            ("From Start", False),
+            ("Live", "live"),
+            ("From Start", "start"),
         ])
 
 
@@ -254,8 +254,11 @@ class BAMProviderMixin(abc.ABC):
     """
     sport_id = 1 # FIXME
 
-    FILTERS = AttrDict([
-        ("date", BAMDateFilter),
+    FILTERS_BROWSE = AttrDict([
+        ("date", BAMDateFilter)
+    ])
+
+    FILTERS_OPTIONS = AttrDict([
         ("resolution", ResolutionFilter),
         ("live_stream", LiveStreamFilter),
     ])
@@ -527,23 +530,23 @@ class BAMProviderMixin(abc.ABC):
         pass
 
 
-    def parse_specifier(self, spec):
+    def parse_identifier(self, identifier):
 
         game_number = 1
         game_date = None
 
-        if isinstance(spec, int):
-            game_id = spec
+        if isinstance(identifier, int):
+            game_id = identifier
 
         else:
             try:
-                (game_date, team, game_number) = spec.split(".")
+                (game_date, team, game_number) = identifier.split(".")
             except ValueError:
                 try:
-                    (game_date, team) = spec.split(".")
+                    (game_date, team) = identifier.split(".")
                 except ValueError:
                     game_date = datetime.now().date()
-                    team = spec
+                    team = identifier
 
             if "-" in team:
                 (sport_code, team) = team.split("-")
@@ -555,7 +558,7 @@ class BAMProviderMixin(abc.ABC):
 
             if not team:
                 msg = "'%s' not a valid team code, must be one of:\n%s" %(
-                    spec, " ".join(teams)
+                    identifier, " ".join(teams)
                 )
                 raise argparse.ArgumentTypeError(msg)
 
@@ -576,7 +579,7 @@ class BAMProviderMixin(abc.ABC):
                     game_number, team, game_date)
                 )
 
-        return AttrDict(game_id=game_id)
+        return AttrDict(game_id=game_id, options=options)
 
     def on_select(self, widget, selection):
         self.open_watch_dialog(selection)
@@ -587,20 +590,21 @@ class BAMProviderMixin(abc.ABC):
                              selection,
                              media_title = self.MEDIA_TITLE,
                              default_resolution = self.filters.resolution.value,
-                             watch_live = self.filters.live_stream.value
+                             watch_live = self.filters.live_stream.value == "live"
         )
         self.view.open_popup(dialog, width=30, height=20)
 
         # self.play(selection)
 
+    def get_source(self, selection):
+        game_id = selection.get("game_id")
+        return [self.get_url(game_id)]
 
     def play_args(self, selection, **kwargs):
 
-        game_id = selection.get("game_id")
+        source, kwargs = super().play_args(selection, **kwargs)
 
-        url = self.get_url(game_id)
-        args = [url]
-        kwargs["resolution"] = self.filters.resolution.value
+        # kwargs["resolution"] = self.filters.resolution.value
         offset = kwargs.pop("offset", None)
         if offset:
             if (selection.attrs.state == "MEDIA_ON"): # live stream
@@ -624,4 +628,4 @@ class BAMProviderMixin(abc.ABC):
         kwargs["headers"] = self.session.headers
         kwargs["cookies"] = self.session.cookies
 
-        return (args, kwargs)
+        return (source, kwargs)

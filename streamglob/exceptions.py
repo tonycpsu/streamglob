@@ -6,3 +6,6 @@ class SGPlayInvalidArgumentError(SGException):
 
 class StreamSessionException(SGException):
     pass
+
+class SGInvalidFilterValue(SGException):
+    pass

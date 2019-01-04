@@ -128,9 +128,7 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
         super().__init__(*args, **kwargs)
 
     def play_args(self, selection, **kwargs):
-        url = selection.url
-        if not isinstance(url, list):
-            url = [url]
-        args = url
+
+        source, kwargs = super().play_args(selection, **kwargs)
         kwargs["media_type"] = selection.media_type
-        return (args, kwargs)
+        return (source, kwargs)

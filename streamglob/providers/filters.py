@@ -10,6 +10,8 @@ from datetime import datetime, timedelta
 import dateutil.parser
 from dateutil.relativedelta import relativedelta
 
+from ..exceptions import *
+
 class Filter(abc.ABC):
 
     def __init__(self, provider, *args, **kwargs):
@@ -239,6 +241,13 @@ class ListingFilter(WidgetFilter, abc.ABC):
     @property
     def value(self):
         return self.widget.selected_value
+
+    @value.setter
+    def value(self, value):
+        try:
+            self.widget.select_value(value)
+        except StopIteration:
+            raise SGInvalidFilterValue(f"Filter value {value} not valid")
 
     def cycle(self, step=1):
         self.widget.cycle(step)
