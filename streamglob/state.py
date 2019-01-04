@@ -24,24 +24,6 @@ class State(AttrDict):
         self.procs.append(player.play(**kwargs))
         # raise Exception(self.procs)
 
-    @property
-    def session(self):
-        return self._provider.session
-
-    @property
-    def provider(self):
-        return self._provider
-
-    @property
-    def provider_config(self):
-        # return self._provider_config
-        return self.provider.config
-
-    def set_provider(self, p):
-        # self._provider_config = config.settings.profile.providers.get(p)
-        self._provider = providers.get(p)
-
-
 
 state = State()
 store = {}

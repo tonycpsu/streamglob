@@ -2,6 +2,7 @@ import abc
 
 from orderedattrdict import AttrDict
 from itertools import chain
+import re
 
 from .widgets import *
 from panwid.dialog import BaseView
@@ -132,15 +133,8 @@ class BaseProvider(abc.ABC):
     def __init__(self, *args, **kwargs):
         self._session = self.SESSION_CLASS.new(*args, **kwargs)
         self._view = None
-        self._filters = AttrDict([
-            (k, DummyFilter(self, v))
-            # for k, v in list(state.options.items()) + [("resolution", "best")]
-            for k, v in list(state.options.items()) + list(kwargs.items())
-        ])
-        # self._filters.resolution = DummyFilter("best")
-        # self.player = Player.get(
-        #     self.MEDIA_TYPES
-        # )
+        self._filters = AttrDict({n: f(provider=self)
+                                  for n, f in self.FILTERS.items() })
 
     @property
     def gui(self):
@@ -153,10 +147,7 @@ class BaseProvider(abc.ABC):
     @property
     def view(self):
         if not self._view:
-            self._filters = AttrDict({n: f(provider=self)
-                                     for n, f in self.FILTERS.items() })
             self._view = self.make_view()
-
         return self._view
 
     @abc.abstractmethod
@@ -169,7 +160,6 @@ class BaseProvider(abc.ABC):
         return next(
             c.__module__ for c in cls.__mro__
             if __package__ in c.__module__).split(".")[-1]
-        # return cls.NAME.lower()
 
     @classproperty
     @abc.abstractmethod
@@ -199,18 +189,7 @@ class BaseProvider(abc.ABC):
 
     @property
     def config(self):
-        # raise Exception(self.__module__ + "." + self.__class__.__qualname__)
-        # raise Exception(self.__class__.__init_subclass__)
-        # module = self.__class__.__module__.lower()
-        # raise Exception(module)
         return config.settings.profile.providers.get(self.IDENTIFIER)
-
-    # @classmethod
-    # def should_load(cls):
-    #     module = cls.__module__.lower()
-    #     cfg = config.settings.profile.providers.get(module)
-    #     raise Exception(cls)
-    #     return cls.config_is_valid(cfg)
 
     @property
     def config_is_valid(self):
@@ -222,19 +201,9 @@ class BaseProvider(abc.ABC):
     def session(self):
         return self._session
 
-    def parse_spec(self, spec):
-        options = {}
-        try:
-            (identifier, options) = spec.split(":")
-            options = self.parse_options(options)
-        except ValueError:
-            identifier = spec
-
-        selection = self.parse_identifier(identifier)
-        # raise Exception(options)
-        return (selection, options)
-
     def parse_options(self, options):
+        if not options:
+            return AttrDict()
         return AttrDict([
             (list(self.FILTERS_OPTIONS.keys())[n], v)
             for n, v in enumerate(
@@ -279,10 +248,6 @@ class BaseProvider(abc.ABC):
     def on_select(self, widget, selection):
         self.play(selection)
 
-    # @abc.abstractmethod
-    # def login(self):
-    #     pass
-
     @property
     def limit(self):
         return None
@@ -325,21 +290,17 @@ class FeedProvider(BaseProvider):
     def selected_feed(self):
         return self.filters.feed.value
 
+    def parse_identifier(self, identifier):
+        if identifier:
+            # print(self.view) # FIXME
+            self.filters.feed.label = identifier
+        raise SGIncompleteIdentifier
+
 class CachedFeedProvider(FeedProvider):
 
     UPDATE_INTERVAL = 300
     MAX_ITEMS = 100
 
-    # def __init__(self, *args, **kwargs):
-    #     super().__init__(*args, **kwargs)
-    #     self._feed = None
-
-
-    # @abc.abstractmethod
-    # def update_feed(self):
-    #     pass
-
-    # @db_session
     @property
     def feed(self):
         # if not self._feed:
@@ -356,15 +317,6 @@ class CachedFeedProvider(FeedProvider):
 
     @db_session
     def update(self):
-        # feed = self.FEED_CLASS.get(
-        #     provider_name = self.IDENTIFIER,
-        #     name = self.selected_feed
-        # )
-        # if not feed:
-        #     feed = self.FEED_CLASS(
-        #         provider_name = self.IDENTIFIER,
-        #         name = self.selected_feed
-        #     )
         self.feed.update()
 
     def listings(self, offset=None, limit=None, *args, **kwargs):

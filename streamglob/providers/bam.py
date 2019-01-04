@@ -547,6 +547,8 @@ class BAMProviderMixin(abc.ABC):
                 except ValueError:
                     game_date = datetime.now().date()
                     team = identifier
+            except AttributeError:
+                raise SGIncompleteIdentifier
 
             if "-" in team:
                 (sport_code, team) = team.split("-")

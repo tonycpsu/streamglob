@@ -67,7 +67,6 @@ class ProviderDataTable(panwid.DataTable):
 
     signals = ["cycle_filter"]
 
-
     def __init__(self, provider, *args, **kwargs):
 
         self.provider = provider

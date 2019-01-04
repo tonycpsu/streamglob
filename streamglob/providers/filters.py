@@ -22,15 +22,6 @@ class Filter(abc.ABC):
     def value(self):
         pass
 
-class DummyFilter(Filter):
-
-    def __init__(self, provider, value):
-        super().__init__(provider)
-        self._value = value
-
-    @property
-    def value(self):
-        return self._value
 
 class WidgetFilter(Filter):
     def __init__(self, provider, *args, **kwargs):
@@ -238,6 +229,10 @@ class ListingFilter(WidgetFilter, abc.ABC):
     def label(self):
         return self.widget.selected_label
 
+    @label.setter
+    def label(self, value):
+        self.widget.select_label(value)
+
     @property
     def value(self):
         return self.widget.selected_value
@@ -247,7 +242,10 @@ class ListingFilter(WidgetFilter, abc.ABC):
         try:
             self.widget.select_value(value)
         except StopIteration:
-            raise SGInvalidFilterValue(f"Filter value {value} not valid")
+            try:
+                self.widget.select_label(value)
+            except:
+                raise SGInvalidFilterValue(f"Filter value {value} not valid")
 
     def cycle(self, step=1):
         self.widget.cycle(step)

@@ -14,10 +14,6 @@ from pony.orm import *
 
 # class RSSFeedsFilter(ListingFilter):
 
-#     @property
-#     def values(self):
-#         return state.provider_config.feeds
-
 
 class RSSItem(model.Item):
     pass

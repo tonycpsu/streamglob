@@ -7,6 +7,7 @@ import argparse
 import subprocess
 import select
 import time
+import re
 
 import urwid
 import urwid.raw_display
@@ -106,10 +107,10 @@ class MainToolbar(urwid.WidgetWrap):
 
 class MainView(BaseView):
 
-    def __init__(self, provider=None, opts=None):
+    def __init__(self, provider):
 
-        self.provider = provider or providers.DEFAULT_PROVIDER
-        self.toolbar = MainToolbar(self.provider)
+        self.provider = provider# or providers.DEFAULT_PROVIDER
+        self.toolbar = MainToolbar(self.provider.IDENTIFIER)
         urwid.connect_signal(
             self.toolbar, "provider_change",
             lambda w, p: self.set_provider(p)
@@ -125,34 +126,15 @@ class MainView(BaseView):
         self.pile.focus_position = 2
         super(MainView, self).__init__(self.pile)
         self.set_provider(self.provider)
-        if opts:
-            for k, v in state.provider.parse_options(opts).items():
-                try:
-                    state.provider.filters[k].value = v
-                except SGInvalidFilterValue as e:
-                    logger.exception(e)
 
     def set_provider(self, provider):
 
         logger.warning(f"set provider: {provider}")
         self.provider = provider
-        # state.session = session.new(provider)
-        # self.toolbar.set_resolutions(state.session.RESOLUTIONS)
 
-        # cfg = config.settings.profile.providers.get(provider, {})
-        # state.set_provider(provider, **cfg)
-        state.set_provider(provider)
-        self.provider_view_placeholder.original_widget = state.provider.view
+        self.provider_view_placeholder.original_widget = self.provider.view
 
-        # self.provider_view = ScheduleView(provider)
-        # self.provider_view_placeholder.original_widget = self.provider_view
-
-        # self.table = GamesDataTable(self.provider, self.game_date) # preseason
-        # self.table_placeholder.original_widget = self.table
-        # urwid.connect_signal(self.table, "select",
-        #                      lambda source, selection: self.open_watch_dialog(selection["game_id"]))
-
-def run_gui(provider, opts):
+def run_gui(provider, **kwargs):
 
     log_file = os.path.join(config.CONFIG_DIR, f"{PACKAGE_NAME}.log")
 
@@ -191,7 +173,7 @@ def run_gui(provider, opts):
     screen = urwid.raw_display.Screen()
     screen.set_terminal_properties(256)
 
-    view = MainView(provider, opts)
+    view = MainView(provider)
 
     log_console = widgets.ConsoleWindow()
     # log_box = urwid.BoxAdapter(urwid.LineBox(log_console), 10)
@@ -219,19 +201,15 @@ def run_gui(provider, opts):
 
     state.loop.run()
 
-def run_cli(provider, spec, **kwargs):
+def run_cli(provider, selection, **kwargs):
 
-    p = providers.get(provider)
-    if spec.isdigit():
-        spec = int(spec)
-    selection, options = p.parse_spec(spec)
-    p.play(selection, **options)
+    # provider.play(selection)
+    provider.play(selection, **kwargs)
     while True:
         state.procs = [p for p in state.procs if p.poll() is None]
         if not len(state.procs):
             break
         time.sleep(0.25)
-
 
 def main():
 
@@ -256,7 +234,7 @@ def main():
                         help="verbose logging")
     group.add_argument("-q", "--quiet", action="count", default=0,
                         help="quiet logging")
-    parser.add_argument("spec", metavar="specifier",
+    parser.add_argument("spec", metavar="SPECIFIER",
                         help="media specifier", nargs="?")
     options, args = parser.parse_known_args()
 
@@ -280,19 +258,12 @@ def main():
 
     spec = None
 
-    try:
-        # provider/spec
-        (provider, spec) = options.spec.split("/")
-        run_cli(provider, spec)
-    except (AttributeError, ValueError):
-        # provider@options
-        try:
-            (provider, opts) = options.spec.split(":")
-        except ValueError:
-            provider = options.spec
-            opts = None
-        run_gui(provider, opts)
+    provider, selection, opts = providers.parse_spec(options.spec)
 
+    if selection:
+        run_cli(provider, selection, **opts)
+    else:
+        run_gui(provider, **opts)
 
 
 if __name__ == "__main__":

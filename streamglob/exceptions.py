@@ -9,3 +9,9 @@ class StreamSessionException(SGException):
 
 class SGInvalidFilterValue(SGException):
     pass
+
+class SGIncompleteIdentifier(SGException):
+    pass
+
+class SGIncompleteSpecifier(SGException):
+    pass
