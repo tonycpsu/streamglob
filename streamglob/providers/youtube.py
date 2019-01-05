@@ -25,7 +25,11 @@ def youtube_dl_query(query, offset=None, limit=None):
         playlist_dict = ydl.extract_info(query, download=False)
         for item in playlist_dict['entries']:
             # print(item)
-            yield item
+            yield AttrDict(
+                guid = item["id"],
+                subject = item["title"],
+                url = f"https://youtu.be/{item['url']}"
+            )
 
 
 class YouTubeChannelsFilter(FeedsFilter):
@@ -54,15 +58,21 @@ class YouTubeFeed(model.Feed):
         logger.info(f"YoutubeFeed: {self.name}")
         for item in youtube_dl_query(self.name, limit=limit):
             # logger.info(item)
-            i = self.items.select(lambda i: i.guid == item["id"]).first()
+            i = self.items.select(lambda i: i.guid == item["guid"]).first()
 
             if not i:
                 i = self.ITEM_CLASS(
-                    feed = self,
-                    guid = item["id"],
-                    subject = item["title"],
-                    content = f"https://youtu.be/{item['url']}"
-            )
+                    feed=self,
+                    content = item["url"],
+                    **item
+                )
+
+                # i = self.ITEM_CLASS(
+                #     feed = self,
+                #     guid = item["id"],
+                #     subject = item["title"],
+                #     content = f"https://youtu.be/{item['url']}"
+                # )
             self.updated = datetime.now()
 
         # if not limit:

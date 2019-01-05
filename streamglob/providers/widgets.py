@@ -32,13 +32,13 @@ class FilterToolbar(urwid.WidgetWrap):
         self.filters = filters
         self.columns = urwid.Columns([])
         for n, f in self.filters.items():
-            self.columns.contents += [
-                (urwid.Text(f"{n.replace('_', ' ').title()}: "), self.columns.options("pack")),
-                (f.placeholder, self.columns.options(*f.widget_sizing(f.widget))),
-            ]
             # self.columns.contents += [
+            #     (urwid.Text(f"{n.replace('_', ' ').title()}: "), self.columns.options("pack")),
             #     (f.placeholder, self.columns.options(*f.widget_sizing(f.widget))),
             # ]
+            self.columns.contents += [
+                (f.placeholder, self.columns.options(*f.widget_sizing(f.widget))),
+            ]
         if len(self.columns.contents):
             self.columns.focus_position = 1
 
@@ -121,7 +121,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         )
 
     def row_attr_fn(self, row):
-        if not row.read:
+        if not row.get("read"):
             return "unread"
         return None
 
@@ -132,14 +132,12 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             self.ignore_blur = False
             return
         self.mark_item_read(position)
-        # item = self.item_at_position(position)
-        # item.mark_read()
-        # self.selection.clear_attr("unread")
-        # self.set_value(position, "read", item.read)
 
     @db_session
     def mark_item_read(self, position):
         item = self.item_at_position(position)
+        if not item:
+            return
         item.mark_read()
         self.selection.clear_attr("unread")
         self.set_value(position, "read", item.read)
@@ -147,6 +145,8 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     @db_session
     def mark_item_unread(self, position):
         item = self.item_at_position(position)
+        if not item:
+            return
         item.mark_unread()
         self.selection.set_attr("unread")
         self.set_value(position, "read", item.read)

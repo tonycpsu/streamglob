@@ -24,8 +24,10 @@ class Filter(abc.ABC):
 
 
 class WidgetFilter(Filter):
-    def __init__(self, provider, hidden=False, *args, **kwargs):
+
+    def __init__(self, provider, label=None,  hidden=False, *args, **kwargs):
         super().__init__(provider)
+        self._label = label
         self.hidden = hidden
         self._placeholder = None
         self._widget = None
@@ -45,7 +47,21 @@ class WidgetFilter(Filter):
             self._widget = self.WIDGET_CLASS(
                 *self.widget_args, **self.widget_kwargs
             )
-            self._placeholder = urwid.WidgetPlaceholder(self._widget)
+
+            self.inner_widget = self._widget
+
+            if self._label:
+                self._text = urwid.Text(f"{self._label.replace('_', ' ').title()}: ")
+                self._columns = urwid.Columns([
+                    ("pack", self._text),
+                ])
+                self._columns.contents += [
+                    (self._widget, self._columns.options(*self.widget_sizing(self._widget))),
+                ]
+                self._columns.selectable = lambda: True
+                self._columns.focus_position = 1
+                self.inner_widget = self._columns
+            self._placeholder = urwid.WidgetPlaceholder(self.inner_widget)
             if self.hidden:
                 self.hide()
         return self._placeholder
@@ -54,7 +70,7 @@ class WidgetFilter(Filter):
         urwid.signals.emit_signal(self, "filter_change", *args)
 
     def show(self):
-        self.placeholder.original_widget = self._widget
+        self.placeholder.original_widget = self.inner_widget
 
     def hide(self):
         self.placeholder.original_widget = urwid.Text("")

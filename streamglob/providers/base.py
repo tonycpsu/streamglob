@@ -136,7 +136,7 @@ class BaseProvider(abc.ABC):
     def __init__(self, *args, **kwargs):
         self._session = self.SESSION_CLASS.new(*args, **kwargs)
         self._view = None
-        self._filters = AttrDict({n: f(provider=self)
+        self._filters = AttrDict({n: f(provider=self, label=n)
                                   for n, f in self.FILTERS.items() })
 
     @property
@@ -272,6 +272,11 @@ class FeedsFilter(ListingFilter):
             return cfg
         elif isinstance(cfg, list):
             return [ (i, i) for i in cfg ]
+
+    @property
+    def widget_sizing(self):
+        return lambda w: ("given", 30)
+
 
 class ItemStatusFilter(ListingFilter):
 
