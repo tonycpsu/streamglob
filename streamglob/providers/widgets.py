@@ -8,6 +8,7 @@ import panwid
 from pony.orm import *
 
 from ..exceptions import *
+from ..state import *
 from .. import model
 
 # class ResolutionDropdown(panwid.Dropdown):
@@ -30,7 +31,7 @@ class FilterToolbar(urwid.WidgetWrap):
     def __init__(self, filters):
 
         self.filters = filters
-        self.columns = urwid.Columns([])
+        self.columns = urwid.Columns([], dividechars=1)
         for n, f in self.filters.items():
             # self.columns.contents += [
             #     (urwid.Text(f"{n.replace('_', ' ').title()}: "), self.columns.options("pack")),
@@ -61,7 +62,7 @@ class FilterToolbar(urwid.WidgetWrap):
         super(FilterToolbar, self).__init__(self.filler)
 
     def cycle_filter(self, index, step=1):
-        if index > len(self.filters)+1:
+        if index >= len(self.filters):
             return
         list(self.filters.values())[index].cycle(step)
 
@@ -109,74 +110,3 @@ class ProviderDataTable(panwid.DataTable):
             logger.info(self.selection.data.read)
         else:
             return key
-
-class CachedFeedProviderDataTable(ProviderDataTable):
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.ignore_blur = False
-        urwid.connect_signal(
-            self, "blur",
-            self.on_blur
-        )
-
-    def row_attr_fn(self, row):
-        if not row.get("read"):
-            return "unread"
-        return None
-
-
-    @db_session
-    def on_blur(self, source, position):
-        if self.ignore_blur:
-            self.ignore_blur = False
-            return
-        self.mark_item_read(position)
-
-    @db_session
-    def mark_item_read(self, position):
-        item = self.item_at_position(position)
-        if not item:
-            return
-        item.mark_read()
-        self.selection.clear_attr("unread")
-        self.set_value(position, "read", item.read)
-
-    @db_session
-    def mark_item_unread(self, position):
-        item = self.item_at_position(position)
-        if not item:
-            return
-        item.mark_unread()
-        self.selection.set_attr("unread")
-        self.set_value(position, "read", item.read)
-
-    @db_session
-    def toggle_item_read(self, position):
-        logger.info(self.get_value(position, "read"))
-        if self.get_value(position, "read") is not None:
-            self.mark_item_unread(position)
-        else:
-            self.mark_item_read(position)
-
-    @db_session
-    def item_at_position(self, position):
-        return self.provider.feed.ITEM_CLASS.get(
-            guid=self[position].data.get("guid")
-        )
-
-    def keypress(self, size, key):
-
-        if key == "meta r":
-            self.provider.update()
-            self.reset()
-        elif key == "A":
-            with db_session:
-                self.provider.feed.mark_all_read()
-            self.reset()
-        elif key == "u":
-            self.toggle_item_read(self.focus_position)
-            self.ignore_blur = True
-        else:
-            return super().keypress(size, key)
-        return key

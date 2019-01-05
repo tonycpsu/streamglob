@@ -8,6 +8,7 @@ import subprocess
 import select
 import time
 import re
+import asyncio
 
 import urwid
 import urwid.raw_display
@@ -36,6 +37,8 @@ from . import session
 from . import providers
 from . import player
 from .exceptions import *
+
+urwid.AsyncioEventLoop._idle_emulation_delay = 1/20
 
 PACKAGE_NAME=__name__.split('.')[0]
 
@@ -178,10 +181,13 @@ def run_gui(provider, **kwargs):
         else:
             return False
 
+    state.asyncio_loop = asyncio.get_event_loop()
+
     state.loop = urwid.MainLoop(
         pile,
         palette,
         screen=screen,
+        event_loop=urwid.AsyncioEventLoop(loop=state.asyncio_loop),
         unhandled_input=global_input,
         pop_ups=True
     )

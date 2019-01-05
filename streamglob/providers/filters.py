@@ -34,21 +34,20 @@ class WidgetFilter(Filter):
 
     @property
     def widget(self):
-        # if not self._widget:
-        #     self._widget = self.WIDGET_CLASS(
-        #         *self.widget_args, **self.widget_kwargs
-        #     )
-        #     self._placeholder = urwid.WidgetPlaceholder(self._widget)
+        if not self._widget:
+            self._widget = self.WIDGET_CLASS(
+                *self.widget_args, **self.widget_kwargs
+            )
         return self._widget
 
     @property
     def placeholder(self):
         if not self._placeholder:
-            self._widget = self.WIDGET_CLASS(
-                *self.widget_args, **self.widget_kwargs
-            )
+            # self.widget = self.WIDGET_CLASS(
+            #     *self.widget_args, **self.widget_kwargs
+            # )
 
-            self.inner_widget = self._widget
+            self.innerwidget = self.widget
 
             if self._label:
                 self._text = urwid.Text(f"{self._label.replace('_', ' ').title()}: ")
@@ -56,18 +55,18 @@ class WidgetFilter(Filter):
                     ("pack", self._text),
                 ])
                 self._columns.contents += [
-                    (self._widget, self._columns.options(*self.widget_sizing(self._widget))),
+                    (self.widget, self._columns.options(*self.widget_sizing(self.widget))),
                 ]
                 self._columns.selectable = lambda: True
                 self._columns.focus_position = 1
-                self.inner_widget = self._columns
-            self._placeholder = urwid.WidgetPlaceholder(self.inner_widget)
+                self.innerwidget = self._columns
+            self._placeholder = urwid.WidgetPlaceholder(self.innerwidget)
             if self.hidden:
                 self.hide()
         return self._placeholder
 
-    def on_change(self, source, *args):
-        urwid.signals.emit_signal(self, "filter_change", *args)
+    # def on_change(self, source, *args):
+    #     urwid.signals.emit_signal(self, "filter_change", *args)
 
     def show(self):
         self.placeholder.original_widget = self.inner_widget
@@ -101,7 +100,7 @@ class TextFilterWidget(urwid.Edit):
 
     def keypress(self, size, key):
         if key == "enter":
-            self._emit("select", self, self.get_edit_text()[0])
+            self._emit("select", self.get_edit_text()[0])
         else:
             return super().keypress(size, key)
 
@@ -281,9 +280,6 @@ class ListingFilter(WidgetFilter, abc.ABC):
 
     def cycle(self, step=1):
         self.widget.cycle(step)
-
-    def populate(self, values):
-        self.values = values
 
     @property
     def auto_refresh(self):

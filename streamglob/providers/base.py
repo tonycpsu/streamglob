@@ -65,7 +65,7 @@ class SimpleProviderView(BaseView):
     def filter_change(self, f, name, *args):
         func = getattr(self, f"on_{name}_change", None)
         if func:
-            func(*args)
+            func(self, *args)
         self.update()
 
     def cycle_filter(self, widget, n, step):
@@ -260,141 +260,11 @@ class PaginatedProviderMixin(object):
 
     @property
     def limit(self):
+        if getattr(self, "_limit", None) is not None:
+            return self._limit
         return (self.config.get("limit") or
                 config.settings.profile.tables.get("limit"))
 
-class FeedsFilter(ListingFilter):
-
-    @property
-    def values(self):
-        cfg = self.provider.config.feeds
-        if isinstance(cfg, dict):
-            return cfg
-        elif isinstance(cfg, list):
-            return [ (i, i) for i in cfg ]
-
-    @property
-    def widget_sizing(self):
-        return lambda w: ("given", 30)
-
-
-class ItemStatusFilter(ListingFilter):
-
-    values = AttrDict([
-        (s, s.lower().replace(" ", "_"))
-        for s in ["All", "Unread", "Not Downloaded"]
-    ])
-
-class FeedProvider(BaseProvider):
-    """
-    A provider that offers multiple feeds to select from
-    """
-
-    FILTERS = AttrDict([
-        ("feed", FeedsFilter),
-        ("status", ItemStatusFilter)
-    ])
-
-    REQUIRED_CONFIG = ["feeds"]
-
-    @property
-    def selected_feed_label(self):
-        return self.filters.feed.label
-
-    @property
-    def selected_feed(self):
-        return self.filters.feed.value
-
-    def parse_identifier(self, identifier):
-        if identifier:
-            # print(self.view) # FIXME
-            self.filters.feed.label = identifier
-        raise SGIncompleteIdentifier
-
-
-class CachedFeedProvider(FeedProvider):
-
-    UPDATE_INTERVAL = 300
-    MAX_ITEMS = 100
-
-    @property
-    def feed(self):
-        # if not self._feed:
-        feed = self.FEED_CLASS.get(
-            provider_name = self.IDENTIFIER,
-            name = self.selected_feed
-        )
-        if not feed:
-            feed = self.FEED_CLASS(
-                provider_name = self.IDENTIFIER,
-                name = self.selected_feed
-            )
-        return feed
-
-    @db_session
-    def update(self):
-        self.feed.update()
-
-    def listings(self, offset=None, limit=None, *args, **kwargs):
-
-        # def status_filter(item):
-        #     if self.filters.status.value == "all":
-        #         return True
-        #     elif self.filters.status.value == "unread":
-        #         return item.read is None
-        #     elif self.filters.status.value == "not_downloaded":
-        #         return item.downloaded is None
-        #     else:
-        #         raise Exception
-
-        status_filter = {
-            "all": lambda: True,
-            "unread": lambda i: i.read is None,
-            "not_downloaded": lambda i: i.downloaded is None
-        }
-
-        count = 0
-
-        if not offset:
-            offset = 0
-        if not limit:
-            limit = self.limit
-
-        with db_session:
-            f = self.FEED_CLASS.get(
-                provider_name = self.IDENTIFIER,
-                name = self.selected_feed
-            )
-
-            if not f:
-                f = self.FEED_CLASS(
-                    provider_name = self.IDENTIFIER,
-                    name = self.selected_feed
-                )
-
-            if (f.updated is None
-                or
-                datetime.now() - f.updated
-                > timedelta(seconds=f.update_interval)
-            ):
-                # self.update_feed(self.selected_feed, self.MAX_ITEMS)
-                # f.updated = datetime.now()
-                f.update()
-                f.updated = datetime.now()
-
-            # for r in select(
-            #     i for i in self.ITEM_CLASS
-            #     if i.feed == f
-
-            for item in self.ITEM_CLASS.select(
-                    lambda i: i.feed == f
-            ).filter(status_filter[self.filters.status.value])[offset:offset+limit]:
-                yield(AttrDict(item.to_dict()))
-                # commit()
-                # yield AttrDict(
-                #     id = r.guid,
-                #     time = r.created,
-                #     title = r.subject,
-                #     type = r.media_type,
-                #     url = r.content
-                # )
+    @limit.setter
+    def limit(self, value):
+        self._limit = value

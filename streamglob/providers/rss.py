@@ -1,4 +1,4 @@
-from streamglob.providers.base import *
+from .feed import *
 
 from ..exceptions import *
 from ..state import *
