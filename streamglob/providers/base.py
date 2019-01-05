@@ -270,6 +270,12 @@ class FeedsFilter(ListingFilter):
         elif isinstance(cfg, list):
             return [ (i, i) for i in cfg ]
 
+class ItemStatusFilter(ListingFilter):
+
+    values = AttrDict([
+        (s, s.lower().replace(" ", "_"))
+        for s in ["All", "Unread", "Not Downloaded"]
+    ])
 
 class FeedProvider(BaseProvider):
     """
@@ -277,7 +283,8 @@ class FeedProvider(BaseProvider):
     """
 
     FILTERS = AttrDict([
-        ("feed", FeedsFilter)
+        ("feed", FeedsFilter),
+        ("status", ItemStatusFilter)
     ])
 
     REQUIRED_CONFIG = ["feeds"]
@@ -295,6 +302,7 @@ class FeedProvider(BaseProvider):
             # print(self.view) # FIXME
             self.filters.feed.label = identifier
         raise SGIncompleteIdentifier
+
 
 class CachedFeedProvider(FeedProvider):
 
@@ -320,6 +328,22 @@ class CachedFeedProvider(FeedProvider):
         self.feed.update()
 
     def listings(self, offset=None, limit=None, *args, **kwargs):
+
+        # def status_filter(item):
+        #     if self.filters.status.value == "all":
+        #         return True
+        #     elif self.filters.status.value == "unread":
+        #         return item.read is None
+        #     elif self.filters.status.value == "not_downloaded":
+        #         return item.downloaded is None
+        #     else:
+        #         raise Exception
+
+        status_filter = {
+            "all": lambda: True,
+            "unread": lambda i: i.read is None,
+            "not_downloaded": lambda i: i.downloaded is None
+        }
 
         count = 0
 
@@ -350,12 +374,14 @@ class CachedFeedProvider(FeedProvider):
                 f.update()
                 f.updated = datetime.now()
 
-            # raise Exception(self.limit)
-            for r in select(
-                i for i in self.ITEM_CLASS
-                if i.feed == f
-            )[offset:offset+limit]:
-                yield(AttrDict(r.to_dict()))
+            # for r in select(
+            #     i for i in self.ITEM_CLASS
+            #     if i.feed == f
+
+            for item in self.ITEM_CLASS.select(
+                    lambda i: i.feed == f
+            ).filter(status_filter[self.filters.status.value])[offset:offset+limit]:
+                yield(AttrDict(item.to_dict()))
                 # commit()
                 # yield AttrDict(
                 #     id = r.guid,

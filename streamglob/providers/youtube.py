@@ -87,7 +87,8 @@ class YouTubeProvider(PaginatedProviderMixin,
 
     FILTERS = AttrDict([
         ("feed", YouTubeChannelsFilter),
-        ("search", TextFilter)
+        ("search", TextFilter),
+        ("status", ItemStatusFilter)
     ])
 
     ATTRIBUTES = AttrDict(
