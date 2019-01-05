@@ -53,6 +53,11 @@ class Feed(db.Entity):
     def provider(self):
         return providers.get(self.provider_name)
 
+    @db_session
+    def mark_all_read(self):
+        for i in self.items.select():
+            i.read = datetime.now()
+
     @classmethod
     @db_session
     def purge_all(cls,
@@ -94,13 +99,18 @@ class Item(db.Entity):
     subject = Required(str)
     content = Required(Json)
     created = Required(datetime, default=datetime.now)
-    seen = Optional(datetime)
+    read = Optional(datetime)
+    watched = Optional(datetime)
     downloaded = Optional(datetime)
     # was_downloaded = Required(bool, default=False)
 
     @db_session
-    def mark_seen(self):
-        self.seen = datetime.now()
+    def mark_read(self):
+        self.read = datetime.now()
+
+    @db_session
+    def mark_unread(self):
+        self.read = None
 
     @property
     def age(self):

@@ -98,6 +98,8 @@ class ProviderDataTable(panwid.DataTable):
             self._emit(f"cycle_filter", 1, -1 if key == "[" else 1)
         elif key in ["{", "}"]:
             self._emit(f"cycle_filter", 2, -1 if key == "{" else 1)
+        elif key == "?":
+            logger.info(self.selection.data.read)
         else:
             return key
 
@@ -105,39 +107,69 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.ignore_blur = False
         urwid.connect_signal(
-            self, "focus",
-            self.on_update_focus
+            self, "blur",
+            self.on_blur
         )
+
+    def row_attr_fn(self, row):
+        if not row.read:
+            return "unread"
+        return None
+
 
     @db_session
-    def on_update_focus(self, source, position):
-        # logger.info(f"focus: {position}")
-        item = self.provider.feed.ITEM_CLASS.get(
+    def on_blur(self, source, position):
+        if self.ignore_blur:
+            self.ignore_blur = False
+            return
+        self.mark_item_read(position)
+        # item = self.item_at_position(position)
+        # item.mark_read()
+        # self.selection.clear_attr("unread")
+        # self.set_value(position, "read", item.read)
+
+    @db_session
+    def mark_item_read(self, position):
+        item = self.item_at_position(position)
+        item.mark_read()
+        self.selection.clear_attr("unread")
+        self.set_value(position, "read", item.read)
+
+    @db_session
+    def mark_item_unread(self, position):
+        item = self.item_at_position(position)
+        item.mark_unread()
+        self.selection.set_attr("unread")
+        self.set_value(position, "read", item.read)
+
+    @db_session
+    def toggle_item_read(self, position):
+        logger.info(self.get_value(position, "read"))
+        if self.get_value(position, "read") is not None:
+            self.mark_item_unread(position)
+        else:
+            self.mark_item_read(position)
+
+    @db_session
+    def item_at_position(self, position):
+        return self.provider.feed.ITEM_CLASS.get(
             guid=self[position].data.get("guid")
         )
-        item.mark_seen()
-
 
     def keypress(self, size, key):
 
-        if key == "ctrl r":
+        if key == "meta r":
             self.provider.update()
             self.reset()
+        elif key == "A":
+            with db_session:
+                self.provider.feed.mark_all_read()
+            self.reset()
+        elif key == "u":
+            self.toggle_item_read(self.focus_position)
+            self.ignore_blur = True
         else:
             return super().keypress(size, key)
         return key
-
-    # @property
-    # def focus_position(self):
-    #     print(f"get focus_position")
-    #     return super(CachedFeedProviderDataTable, self).focus_position
-    #     # val = ProviderDataTable.focus_position
-    #     # raise Exception(dir(val))
-
-    # @ProviderDataTable.focus_position.setter
-    # def focus_position(self, value):
-    #     print(f"focus_position: {value}")
-    #     ProviderDataTable.focus_position.fset(self, value)
-    #     # super(CachedFeedProviderDataTable, self).focus_position = value
-    #     # .focus_position = value

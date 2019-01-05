@@ -70,23 +70,19 @@ class YouTubeFeed(model.Feed):
 
 
 
-class YouTubeProviderDataTable(ProviderDataTable):
+# class YouTubeProviderDataTable(ProviderDataTable):
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+#     def __init__(self, *args, **kwargs):
+#         super().__init__(*args, **kwargs)
 
 
 class YouTubeProviderView(SimpleProviderView):
 
-    PROVIDER_DATA_TABLE_CLASS = YouTubeProviderDataTable
+    PROVIDER_DATA_TABLE_CLASS = CachedFeedProviderDataTable
 
-
-class FakeProviderMixin(abc.ABC):
-    pass
 
 @with_view(YouTubeProviderView)
 class YouTubeProvider(PaginatedProviderMixin,
-                      FakeProviderMixin,
                       CachedFeedProvider):
 
     FILTERS = AttrDict([

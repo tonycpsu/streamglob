@@ -350,8 +350,6 @@ class CachedFeedProvider(FeedProvider):
                 f.update()
                 f.updated = datetime.now()
 
-
-
             # raise Exception(self.limit)
             for r in select(
                 i for i in self.ITEM_CLASS

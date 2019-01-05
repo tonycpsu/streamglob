@@ -125,13 +125,12 @@ class MainView(BaseView):
         ])
         self.pile.focus_position = 2
         super(MainView, self).__init__(self.pile)
-        self.set_provider(self.provider)
+        self.set_provider(self.provider.IDENTIFIER)
 
     def set_provider(self, provider):
 
         logger.warning(f"set provider: {provider}")
-        self.provider = provider
-
+        self.provider = providers.get(provider)
         self.provider_view_placeholder.original_widget = self.provider.view
 
 def run_gui(provider, **kwargs):
@@ -143,21 +142,9 @@ def run_gui(provider, **kwargs):
                   handlers=[logging.FileHandler(log_file), ulh],
                   quiet_stdout=True)
 
-    entries = Dropdown.get_palette_entries()
-    entries.update(ScrollingListBox.get_palette_entries())
-    entries.update(DataTable.get_palette_entries())
-
+    entries = {}
     for (n, f, b) in  [
-            ("reveal_focus",             "black",            "light green"),
-           ("dp_barActive_focus",       "light gray",       "black"),
-           ("dp_barActive_offFocus",    "black",            "black"),
-           ("dp_barInactive_focus",     "dark gray",        "black"),
-           ("dp_barInactive_offFocus",  "black",            "black"),
-           ("dp_highlight_focus",       "black",            "yellow"),
-           ("dp_highlight_offFocus",    "white",            "black"),
-           ("text_highlight",           "yellow",           "black"),
-           ("text_bold",                "white",             "black"),
-           ("text_esc",                 "light red",   "black")
+            ("unread", "white", "black"),
     ]:
         entries[n] = PaletteEntry(
             name=n,
@@ -168,6 +155,9 @@ def run_gui(provider, **kwargs):
             background_high=b
         )
 
+    entries.update(DataTable.get_palette_entries(user_entries=entries))
+    entries.update(Dropdown.get_palette_entries())
+    entries.update(ScrollingListBox.get_palette_entries())
     # raise Exception(entries)
     palette = Palette("default", **entries)
     screen = urwid.raw_display.Screen()
@@ -257,7 +247,6 @@ def main():
     )
 
     spec = None
-
     provider, selection, opts = providers.parse_spec(options.spec)
 
     if selection:
