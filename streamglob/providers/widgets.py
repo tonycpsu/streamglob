@@ -1,6 +1,8 @@
 import logging
 logger = logging.getLogger(__name__)
 
+import functools
+
 import urwid
 import panwid
 from pony.orm import *
@@ -32,22 +34,27 @@ class FilterToolbar(urwid.WidgetWrap):
         for n, f in self.filters.items():
             self.columns.contents += [
                 (urwid.Text(f"{n.replace('_', ' ').title()}: "), self.columns.options("pack")),
-                (f.widget, self.columns.options(*f.widget_sizing(f.widget))),
+                (f.placeholder, self.columns.options(*f.widget_sizing(f.widget))),
             ]
+            # self.columns.contents += [
+            #     (f.placeholder, self.columns.options(*f.widget_sizing(f.widget))),
+            # ]
         if len(self.columns.contents):
             self.columns.focus_position = 1
 
+        # for i, (n, f) in enumerate(self.filters.items()):
         for n, f in self.filters.items():
             if f.auto_refresh:
                 urwid.connect_signal(
                     f.widget, "change",
-                    lambda s, *args: self._emit("filter_change", n, *args)
+                    # lambda s, *args: self._emit("filter_change", i, n, *args)
+                    functools.partial(self._emit, "filter_change", n, f)
                 )
             else:
                 if "select" in f.widget.signals:
                     urwid.connect_signal(
                         f.widget, "select",
-                        lambda s, *args: self._emit("filter_change", n, *args)
+                        functools.partial(self._emit, "filter_change", n, f)
                     )
 
         self.filler = urwid.Filler(self.columns)

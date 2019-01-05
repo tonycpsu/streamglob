@@ -51,7 +51,7 @@ class SimpleProviderView(BaseView):
         self.provider = provider
         self.toolbar = FilterToolbar(self.provider.filters)
         self.table = self.PROVIDER_DATA_TABLE_CLASS(self.provider)
-        urwid.connect_signal(self.toolbar, "filter_change", self.on_filter_change)
+        urwid.connect_signal(self.toolbar, "filter_change", self.filter_change)
         urwid.connect_signal(self.table, "select", self.provider.on_select)
         urwid.connect_signal(self.table, "cycle_filter", self.cycle_filter)
 
@@ -62,7 +62,10 @@ class SimpleProviderView(BaseView):
         self.pile.focus_position = 1
         super().__init__(self.pile)
 
-    def on_filter_change(self, index, *args):
+    def filter_change(self, f, name, *args):
+        func = getattr(self, f"on_{name}_change", None)
+        if func:
+            func(*args)
         self.update()
 
     def cycle_filter(self, widget, n, step):

@@ -80,6 +80,13 @@ class YouTubeProviderView(SimpleProviderView):
 
     PROVIDER_DATA_TABLE_CLASS = CachedFeedProviderDataTable
 
+    def on_feed_change(self, fobj, source, dd, val):
+        if val == "search":
+            self.provider.filters.search.show()
+        else:
+            self.provider.filters.search.hide()
+
+
 
 @with_view(YouTubeProviderView)
 class YouTubeProvider(PaginatedProviderMixin,

@@ -24,24 +24,40 @@ class Filter(abc.ABC):
 
 
 class WidgetFilter(Filter):
-    def __init__(self, provider, *args, **kwargs):
+    def __init__(self, provider, hidden=False, *args, **kwargs):
         super().__init__(provider)
+        self.hidden = hidden
+        self._placeholder = None
         self._widget = None
 
     @property
     def widget(self):
-        if not self._widget:
+        # if not self._widget:
+        #     self._widget = self.WIDGET_CLASS(
+        #         *self.widget_args, **self.widget_kwargs
+        #     )
+        #     self._placeholder = urwid.WidgetPlaceholder(self._widget)
+        return self._widget
+
+    @property
+    def placeholder(self):
+        if not self._placeholder:
             self._widget = self.WIDGET_CLASS(
                 *self.widget_args, **self.widget_kwargs
             )
-        return self._widget
+            self._placeholder = urwid.WidgetPlaceholder(self._widget)
+            if self.hidden:
+                self.hide()
+        return self._placeholder
 
     def on_change(self, source, *args):
-        logger.info(f"{source} {args}")
         urwid.signals.emit_signal(self, "filter_change", *args)
 
-    def make_widget(self):
-        return self.widget
+    def show(self):
+        self.placeholder.original_widget = self._widget
+
+    def hide(self):
+        self.placeholder.original_widget = urwid.Text("")
 
     @property
     def widget_args(self):
