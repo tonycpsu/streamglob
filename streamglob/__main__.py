@@ -102,17 +102,21 @@ class MainToolbar(urwid.WidgetWrap):
         self.filler = urwid.Filler(self.columns)
         super(MainToolbar, self).__init__(self.filler)
 
+    def cycle_provider(self, step=1):
+
+        self.provider_dropdown.cycle(step)
+
+
     @property
     def provider(self):
         return (self.provider_dropdown.selected_label)
-
 
 
 class MainView(BaseView):
 
     def __init__(self, provider):
 
-        self.provider = provider# or providers.DEFAULT_PROVIDER
+        self.provider = provider
         self.toolbar = MainToolbar(self.provider.IDENTIFIER)
         urwid.connect_signal(
             self.toolbar, "provider_change",
@@ -132,9 +136,17 @@ class MainView(BaseView):
 
     def set_provider(self, provider):
 
-        logger.warning(f"set provider: {provider}")
         self.provider = providers.get(provider)
         self.provider_view_placeholder.original_widget = self.provider.view
+
+    def keypress(self, size, key):
+
+        if key in ["meta up", "meta down"]:
+            self.toolbar.cycle_provider(-1 if key == "meta up" else 1)
+
+        else:
+            return super().keypress(size, key)
+
 
 def run_gui(provider, **kwargs):
 
