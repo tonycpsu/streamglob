@@ -233,8 +233,10 @@ class BAMProviderDataTable(ProviderDataTable):
     def keypress(self, size, key):
         if key in ["meta left", "meta right"]:
             self._emit(f"cycle_filter", 0,("w", -1 if key == "meta left" else 1))
-        if key in ["ctrl left", "ctrl right"]:
+        elif key in ["ctrl left", "ctrl right"]:
             self._emit(f"cycle_filter", 0, ("m", -1 if key == "ctrl left" else 1))
+        elif key == "t":
+            self.provider.filters.date.value = datetime.today()
         elif key == "meta enter":
             self.provider.play(self.selection.data)
         else:

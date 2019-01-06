@@ -169,6 +169,14 @@ class DateFilterWidget(urwid.WidgetWrap):
     def date(self):
         return self.date_picker.date
 
+    @date.setter
+    def date(self, value):
+        self.date_picker.date = value
+        self.date_changed()
+
+    def reset(self):
+        self.date = self.initial_date
+
     def cycle_day(self, n=1):
         d = self.date + timedelta(days=n)
         self.date_picker.date = d
@@ -227,9 +235,16 @@ class DateFilter(WidgetFilter):
     def auto_refresh(self):
         return True
 
+    def reset(self):
+        self.widget.reset()
+
     @property
     def value(self):
         return self.widget.date
+
+    @value.setter
+    def value(self, value):
+        self.widget.date = value
 
     def cycle(self, step=1):
         if isinstance(step, int):
