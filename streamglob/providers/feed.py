@@ -113,7 +113,9 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                     if not r.data.read
                 )
             except StopIteration:
+                self.focus_position = len(self)-1
                 self.load_more()
+                self.focus_position += 1
                 return
             pos = self.index_to_position(idx)
             self.focus_position = pos
