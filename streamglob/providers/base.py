@@ -115,6 +115,8 @@ class ClassPropertyMetaClass(type):
 def with_view(view):
     def inner(cls):
         def make_view(self):
+            if not self.config_is_valid:
+                return self.invalid_config_view
             return view(self)
         return type(cls.__name__, (cls,), {'make_view': make_view})
     return inner
@@ -192,13 +194,24 @@ class BaseProvider(abc.ABC):
 
     @property
     def config(self):
-        return config.settings.profile.providers.get(self.IDENTIFIER)
+        return config.settings.profile.providers.get(
+            self.IDENTIFIER, AttrDict()
+        )
 
     @property
     def config_is_valid(self):
         return all([ self.config.get(x, None) is not None
                      for x in getattr(self, "REQUIRED_CONFIG", [])
         ])
+
+    @property
+    def invalid_config_view(self):
+        return urwid.Filler(urwid.Pile(
+            [("pack", urwid.Text(
+            f"The {self.NAME} provider requires additional configuration.\n"
+            "Please ensure that the following settings are valid:\n")),
+             ("pack", urwid.Text("    " + ", ".join(self.REQUIRED_CONFIG)))
+            ]), valign="top")
 
     @property
     def session(self):
