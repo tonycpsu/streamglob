@@ -141,10 +141,11 @@ class YouTubeFeed(model.Feed):
             # logger.info(item)
             i = self.items.select(lambda i: i.guid == item["guid"]).first()
 
+            url = item.pop("url")
             if not i:
                 i = self.ITEM_CLASS(
                     feed=self,
-                    content = item["url"],
+                    content = url,
                     **item
                 )
 
