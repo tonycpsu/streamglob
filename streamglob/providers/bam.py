@@ -276,7 +276,11 @@ class BAMProviderMixin(abc.ABC):
 
     HELPER = "streamlink"
 
-    REQUIRED_CONFIG = ["username", "password"]
+    REQUIRED_CONFIG = {"credentials": ["username", "password"]}
+
+    @property
+    def session_params(self):
+        return self.config.credentials
 
     @property
     def config_is_valid(self):

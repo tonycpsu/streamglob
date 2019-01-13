@@ -92,10 +92,10 @@ class StreamSession(object):
     @classmethod
     def new(cls, *args, **kwargs):
         try:
-            return cls.load(*args, **kwargs)
+            return cls.load(**kwargs)
         except (FileNotFoundError, TypeError):
             logger.debug(f"creating new session: {args}, {kwargs}")
-            return cls(*args, **kwargs)
+            return cls(**kwargs)
 
     @property
     def cookies(self):
@@ -113,7 +113,7 @@ class StreamSession(object):
             os.remove(cls.SESSION_FILE)
 
     @classmethod
-    def load(cls, *args, **kwargs):
+    def load(cls, **kwargs):
         state = yaml.load(open(cls._SESSION_FILE()), Loader=AttrDictYAMLLoader)
         logger.trace(f"load: {cls.__name__}, {state}")
         return cls(**dict(kwargs, **state))

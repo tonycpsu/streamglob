@@ -42,8 +42,25 @@ def get_output_filename(game, station, resolution, offset=None):
         return "mlb.%d.%s.ts" % (game["gamePk"], resolution)
 
 
+class BaseProviderView(BaseView):
 
-class SimpleProviderView(BaseView):
+    def update(self):
+        pass
+
+class InvalidConfigView(BaseProviderView):
+
+    def __init__(self, name, required_config):
+        super().__init__(
+            urwid.Filler(urwid.Pile(
+            [("pack", urwid.Text(
+                f"The {name} provider requires additional configuration.\n"
+                "Please ensure that the following settings are valid:\n")),
+             ("pack", urwid.Text("    " + ", ".join(required_config)))
+            ]), valign="top")
+        )
+
+
+class SimpleProviderView(BaseProviderView):
 
     PROVIDER_DATA_TABLE_CLASS = ProviderDataTable
 
@@ -116,7 +133,7 @@ def with_view(view):
     def inner(cls):
         def make_view(self):
             if not self.config_is_valid:
-                return self.invalid_config_view
+                return InvalidConfigView(self.NAME, self.REQUIRED_CONFIG)
             return view(self)
         return type(cls.__name__, (cls,), {'make_view': make_view})
     return inner
@@ -136,10 +153,17 @@ class BaseProvider(abc.ABC):
     HELPER = None
 
     def __init__(self, *args, **kwargs):
-        self._session = self.SESSION_CLASS.new(*args, **kwargs)
         self._view = None
+        self._session = None
         self._filters = AttrDict({n: f(provider=self, label=n)
                                   for n, f in self.FILTERS.items() })
+
+    @property
+    def session(self):
+        if self._session is None:
+            session_params = self.session_params
+            self._session = self.SESSION_CLASS.new(**session_params)
+        return self._session
 
     @property
     def gui(self):
@@ -201,22 +225,25 @@ class BaseProvider(abc.ABC):
 
     @property
     def config_is_valid(self):
-        return all([ self.config.get(x, None) is not None
-                     for x in getattr(self, "REQUIRED_CONFIG", [])
-        ])
+        def check_config(required, cfg):
+            if isinstance(required, dict):
+                for k, v in required.items():
+                    if not k in cfg:
+                        return False
+                    if not check_config(required[k], cfg[k]):
+                        return False
+            else:
+                for k in required:
+                    if not k in cfg:
+                        return False
+            return True
 
-    @property
-    def invalid_config_view(self):
-        return urwid.Filler(urwid.Pile(
-            [("pack", urwid.Text(
-            f"The {self.NAME} provider requires additional configuration.\n"
-            "Please ensure that the following settings are valid:\n")),
-             ("pack", urwid.Text("    " + ", ".join(self.REQUIRED_CONFIG)))
-            ]), valign="top")
-
-    @property
-    def session(self):
-        return self._session
+        # return all([ self.config.get(x, None) is not None
+                     # for x in getattr(self, "REQUIRED_CONFIG", [])
+        return check_config(
+            getattr(self, "REQUIRED_CONFIG", []),
+            self.config
+        )
 
     def parse_options(self, options):
         if not options:
