@@ -13,6 +13,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     HOVER_DELAY = 0.25
 
     with_scrollbar=True
+    sort_by = ("created", True)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -201,7 +202,6 @@ class CachedFeedProvider(FeedProvider):
     UPDATE_INTERVAL = 300
     MAX_ITEMS = 100
 
-
     @property
     def feed(self):
         # if not self._feed:
@@ -255,7 +255,13 @@ class CachedFeedProvider(FeedProvider):
                 f.update()
                 f.updated = datetime.now()
 
+            (sort_field, sort_desc) = self.view.table.sort_by
+            if sort_desc:
+                sort_fn = lambda i: desc(getattr(i, sort_field))
+            else:
+                sort_fn = lambda i: getattr(i, sort_field)
+
             for item in self.ITEM_CLASS.select(
                     lambda i: i.feed == f
-            ).filter(status_filter[self.filters.status.value])[offset:offset+limit]:
+            ).order_by(sort_fn).filter(status_filter[self.filters.status.value])[offset:offset+limit]:
                 yield(FeedItem(item.to_dict()))

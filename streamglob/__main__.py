@@ -151,6 +151,7 @@ class MainView(BaseView):
 def run_gui(provider, **kwargs):
 
     log_file = os.path.join(config.CONFIG_DIR, f"{PACKAGE_NAME}.log")
+    state.asyncio_loop = asyncio.get_event_loop()
 
     ulh = UrwidLoggingHandler()
     setup_logging(options.verbose - options.quiet,
@@ -192,8 +193,6 @@ def run_gui(provider, **kwargs):
             raise urwid.ExitMainLoop()
         else:
             return False
-
-    state.asyncio_loop = asyncio.get_event_loop()
 
     state.loop = urwid.MainLoop(
         pile,

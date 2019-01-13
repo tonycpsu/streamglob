@@ -73,6 +73,8 @@ class FilterToolbar(urwid.WidgetWrap):
 
 class ProviderDataTable(panwid.DataTable):
 
+    no_load_on_init = True
+
     signals = ["cycle_filter"]
 
     def __init__(self, provider, *args, **kwargs):

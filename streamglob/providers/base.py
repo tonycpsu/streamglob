@@ -153,6 +153,7 @@ class BaseProvider(abc.ABC):
     def view(self):
         if not self._view:
             self._view = self.make_view()
+            self._view.update()
         return self._view
 
     @abc.abstractmethod
