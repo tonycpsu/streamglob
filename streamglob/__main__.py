@@ -130,9 +130,13 @@ class MainView(BaseView):
             (1, urwid.Filler(urwid.Divider("-"))),
             ('weight', 1, self.provider_view_placeholder),
         ])
-        self.pile.focus_position = 2
         super(MainView, self).__init__(self.pile)
         self.set_provider(self.provider.IDENTIFIER)
+        if self.provider.config_is_valid:
+            self.pile.focus_position = 2
+        else:
+            self.pile.focus_position = 0
+
 
     def set_provider(self, provider):
 
