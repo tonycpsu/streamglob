@@ -616,7 +616,7 @@ class BAMProviderMixin(abc.ABC):
                 # calculate HLS offset, which is negative from end of stream
                 # for live streams
                 # start_time = dateutil.parser.parse(timestamps["S"])
-                start_time = dateutil.parser.parse(selection.start_time)
+                start_time = dateutil.parser.parse(selection.start)
                 offset_delta = (
                     datetime.now(pytz.utc)
                     - start_time.astimezone(pytz.utc)
