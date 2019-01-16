@@ -5,7 +5,6 @@ import abc
 
 import urwid
 import panwid
-from additional_urwid_widgets.widgets.date_picker import DatePicker
 from datetime import datetime, timedelta
 import dateutil.parser
 from dateutil.relativedelta import relativedelta

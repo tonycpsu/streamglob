@@ -10,6 +10,8 @@ class FeedItem(AttrDict):
 
 class CachedFeedProviderDataTable(ProviderDataTable):
 
+    signals = ["focus"]
+
     HOVER_DELAY = 0.25
 
     with_scrollbar=True

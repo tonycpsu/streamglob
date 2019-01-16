@@ -149,7 +149,7 @@ class YouTubeFeed(model.Feed):
                     **item
                 )
 
-            self.updated = datetime.now()
+            # self.updated = datetime.now()
 
 
 

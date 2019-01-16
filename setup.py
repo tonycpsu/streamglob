@@ -42,6 +42,7 @@ setup(name=name,
           "pony",
           "stevedore",
           "feedparser",
+          "youtube_dl",
           "instagram_private_api"
       ],
       dependency_links=['https://github.com/ping/instagram_private_api/tarball/master#egg=instagram_private_api-1.5.7'],

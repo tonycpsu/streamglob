@@ -49,7 +49,7 @@ class RSSFeed(model.Feed):
                     ),
                     content = item.link
             )
-        self.updated = datetime.now()
+        # self.updated = datetime.now()
 
 class RSSProviderView(SimpleProviderView):
 
