@@ -99,7 +99,8 @@ class TextFilterWidget(urwid.Edit):
 
     def keypress(self, size, key):
         if key == "enter":
-            self._emit("select", self.get_edit_text()[0])
+            if len(self.get_edit_text()):
+                self._emit("select", self.get_edit_text()[0])
         else:
             return super().keypress(size, key)
 
@@ -303,6 +304,9 @@ class ListingFilter(WidgetFilter, abc.ABC):
     @abc.abstractmethod
     def values(self):
         pass
+
+    def __getitem__(self, key):
+        return self.widget.items[key]
 
 
 def with_filters(*filters):

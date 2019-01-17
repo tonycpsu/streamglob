@@ -8,6 +8,11 @@ from .filters import *
 class FeedItem(AttrDict):
     pass
 
+class URLFeed(model.Feed):
+
+    url = Required(str)
+
+
 class CachedFeedProviderDataTable(ProviderDataTable):
 
     signals = ["focus"]
@@ -22,6 +27,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         self.ignore_blur = False
         self.mark_read_task = None
         self.update_count = True
+        self.items_query = None
         urwid.connect_signal(
             self, "focus",
             self.on_focus
@@ -30,7 +36,10 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     def query_result_count(self):
         if self.update_count:
             with db_session:
-                self._row_count = len(self.provider.feed.items)
+                if not self.provider.items_query:
+                    raise Exception
+                # self._row_count = len(self.provider.feed.items)
+                self._row_count = self.provider.items_query.count()
                 self.update_count = False
         return self._row_count
 
@@ -95,12 +104,13 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     @db_session
     def item_at_position(self, position):
-        return self.provider.feed.ITEM_CLASS.get(
+        return self.provider.ITEM_CLASS.get(
             guid=self[position].data.get("guid")
         )
 
     def reset(self, *args, **kwargs):
         self.update_count = True
+        self.provider.update_query()
         super().reset(*args, **kwargs)
 
     def keypress(self, size, key):
@@ -152,9 +162,13 @@ class FeedsFilter(ListingFilter):
     def values(self):
         cfg = self.provider.config.feeds
         if isinstance(cfg, dict):
-            return cfg
+            return AttrDict([
+                ("All", None)
+            ], **cfg)
         elif isinstance(cfg, list):
-            return [ (i, i) for i in cfg ]
+            return AttrDict([
+                ("All", None)
+            ], **AttrDict([ (i, i) for i in cfg ]))
 
     # @property
     # def widget_sizing(self):
@@ -204,31 +218,89 @@ class CachedFeedProvider(FeedProvider):
     UPDATE_INTERVAL = 300
     MAX_ITEMS = 100
 
+    SUBJECT_LABEL = "title"
+
+    @property
+    def ATTRIBUTES(self):
+        return AttrDict(
+            feed = {"width": 32, "format_fn": lambda f: f.name if hasattr(f, "name") else "none"},
+            created = {"width": 19},
+            subject = {"width": ("weight", 1), "label": self.SUBJECT_LABEL},
+        )
+
     @property
     def feed(self):
-        # if not self._feed:
-        feed = self.FEED_CLASS.get(
-            provider_name = self.IDENTIFIER,
-            name = self.selected_feed
-        )
-        if not feed:
-            feed = self.FEED_CLASS(
+
+        if not self.selected_feed:
+            return None
+        with db_session:
+            feed = self.FEED_CLASS.get(
                 provider_name = self.IDENTIFIER,
-                name = self.selected_feed
+                name = self.selected_feed_label
             )
+            if not feed:
+                feed = self.FEED_CLASS(
+                    provider_name = self.IDENTIFIER,
+                    name = self.selected_feed_label,
+                    **self.feed_attrs(self.selected_feed_label)
+                )
+                commit()
         return feed
+
+    def feed_attrs(self, feed_name):
+        return {}
+
+    @db_session
+    def update_feeds(self):
+        if not self.feed:
+            feeds = self.FEED_CLASS.select()
+        else:
+            feeds = [self.feed]
+
+        for f in feeds:
+            if (f.updated is None
+                or
+                datetime.now() - f.updated
+                > timedelta(seconds=f.update_interval)
+            ):
+                f.update()
+                f.updated = datetime.now()
 
     @db_session
     def update(self):
-        self.feed.update()
+        if self.feed:
+            self.feed.update()
+        else:
+            self.update_feeds()
 
-    def listings(self, offset=None, limit=None, *args, **kwargs):
-
+    @db_session
+    def update_query(self):
         status_filter = {
             "all": lambda: True,
             "unread": lambda i: i.read is None,
             "not_downloaded": lambda i: i.downloaded is None
         }
+
+        (sort_field, sort_desc) = self.view.table.sort_by
+        if sort_desc:
+            sort_fn = lambda i: desc(getattr(i, sort_field))
+        else:
+            sort_fn = lambda i: getattr(i, sort_field)
+
+        self.items_query = (
+            self.ITEM_CLASS.select()
+            .order_by(sort_fn)
+            .filter(status_filter[self.filters.status.value])
+                # [offset:offset+limit]
+        )
+
+        if self.feed:
+            self.items_query = self.items_query.filter(
+                lambda i: i.feed == self.feed
+            )
+
+
+    def listings(self, offset=None, limit=None, *args, **kwargs):
 
         count = 0
 
@@ -238,32 +310,9 @@ class CachedFeedProvider(FeedProvider):
             limit = self.limit
 
         with db_session:
-            f = self.FEED_CLASS.get(
-                provider_name = self.IDENTIFIER,
-                name = self.selected_feed
-            )
+            self.update_feeds()
 
-            if not f:
-                f = self.FEED_CLASS(
-                    provider_name = self.IDENTIFIER,
-                    name = self.selected_feed
-                )
-
-            if (f.updated is None
-                or
-                datetime.now() - f.updated
-                > timedelta(seconds=f.update_interval)
-            ):
-                f.update()
-                f.updated = datetime.now()
-
-            (sort_field, sort_desc) = self.view.table.sort_by
-            if sort_desc:
-                sort_fn = lambda i: desc(getattr(i, sort_field))
-            else:
-                sort_fn = lambda i: getattr(i, sort_field)
-
-            for item in self.ITEM_CLASS.select(
-                    lambda i: i.feed == f
-            ).order_by(sort_fn).filter(status_filter[self.filters.status.value])[offset:offset+limit]:
-                yield(FeedItem(item.to_dict()))
+            for item in self.items_query[offset:offset+limit]:
+                d = AttrDict(item.to_dict(related_objects=True))
+                d.feed = AttrDict(d.feed.to_dict())
+                yield(FeedItem(d))

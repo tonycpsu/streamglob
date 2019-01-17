@@ -111,12 +111,9 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
 
     FEED_CLASS = InstagramFeed
 
-    ATTRIBUTES = AttrDict(
-        created = {"width": 19},
-        media_type = {"width": 6, "label": "type"},
-        subject = {"label": "caption", "width": ("weight", 1)},
-        # guid = {"hide": True}
-    )
+    ITEM_CLASS = InstagramItem
+
+    SUBJECT_LABEL = "caption"
 
     MEDIA_TYPES = {"image", "video"}
 

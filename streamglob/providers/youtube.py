@@ -58,9 +58,10 @@ class YouTubeChannelsDropdown(urwid.WidgetWrap):
         super().__init__(self.columns)
         urwid.connect_signal(self.dropdown, "change", self.on_channel_change)
         urwid.connect_signal(self.search_edit, "select", self.on_edit_select)
+        self.hide_search()
 
     def __getattr__(self, attr):
-        if attr in ["cycle", "select_label", "select_value"]:
+        if attr in ["cycle", "select_label", "select_value", "selected_label", "items"]:
             return getattr(self.dropdown, attr)
         raise AttributeError
 
@@ -106,7 +107,7 @@ class YouTubeChannelsFilter(FeedsFilter):
         # channels = [("Search", "search")]
         # channels += list(state.provider_config.feeds.items())
         # return channels
-        return AttrDict([("Search", "search")] + list(super().values.items()))
+        return AttrDict(list(super().values.items()) + [("Search", "search")])
         return list(super().values.items())
 
     @property
@@ -122,12 +123,11 @@ class YouTubeChannelsFilter(FeedsFilter):
         return self.widget.channel
 
 
-
 class YouTubeItem(model.Item):
-
     pass
 
-class YouTubeFeed(model.Feed):
+
+class YouTubeFeed(URLFeed):
 
     ITEM_CLASS = YouTubeItem
 
@@ -137,7 +137,7 @@ class YouTubeFeed(model.Feed):
             limit = self.DEFAULT_ITEM_LIMIT
 
         logger.info(f"YoutubeFeed: {self.name}")
-        for item in youtube_dl_query(self.name, limit=limit):
+        for item in youtube_dl_query(self.url, limit=limit):
             # logger.info(item)
             i = self.items.select(lambda i: i.guid == item["guid"]).first()
 
@@ -168,18 +168,20 @@ class YouTubeProvider(PaginatedProviderMixin,
         ("status", ItemStatusFilter)
     ])
 
-    ATTRIBUTES = AttrDict(
-        created = {"width": 19},
-        subject = {"label": "title", "width": ("weight", 1)},
-        # description = {"width": 30},
-        # duration = {"width": 10}
-    )
+    ITEM_CLASS = YouTubeItem
 
     FEED_CLASS = YouTubeFeed
 
     MEDIA_TYPES = {"video"}
 
     # DATA_TABLE_CLASS = YouTubeProviderDataTable
+
+    @property
+    def selected_feed(self):
+
+        if self.filters.feed.channel in [None, "search"]:
+            return None
+        return self.filters.feed.value
 
     def listings(self, offset=None, limit=None, *args, **kwargs):
         # if self.filters.feed.value == "search":
@@ -194,3 +196,7 @@ class YouTubeProvider(PaginatedProviderMixin,
             return super().listings(
                 offset=offset, limit=limit, *args, **kwargs
             )
+
+    def feed_attrs(self, feed_name):
+
+        return dict(url=self.filters.feed[feed_name])

@@ -18,18 +18,17 @@ from pony.orm import *
 class RSSItem(model.Item):
     pass
 
-class RSSFeed(model.Feed):
+
+class RSSFeed(URLFeed):
 
     ITEM_CLASS = RSSItem
-
-    # url = Required(str)
 
     def update(self, limit = None):
 
         if not limit:
             limit = self.DEFAULT_ITEM_LIMIT
 
-        for item in feedparser.parse(self.name).entries:
+        for item in feedparser.parse(self.url).entries:
             # yield AttrDict(
             #     time =  datetime.fromtimestamp(
             #         mktime(item.published_parsed)
@@ -59,23 +58,17 @@ class RSSProviderView(SimpleProviderView):
 @with_view(RSSProviderView)
 class RSSProvider(PaginatedProviderMixin, CachedFeedProvider):
 
-    ATTRIBUTES = AttrDict(
-        created = {"width": 19},
-        subject = {"width": ("weight", 1)},
-    )
+    # ATTRIBUTES = AttrDict(
+    #     CachedFeedProvider.ATTRIBUTES,
+    #     **AttrDict(
+    #         title = {"width": ("weight", 1)},
+    #     )
+    # )
 
     MEDIA_TYPES = {"video"}
 
     FEED_CLASS = RSSFeed
 
+    def feed_attrs(self, feed_name):
 
-    # def listings(self, offset=None, limit=None, *args, **kwargs):
-
-    #     for item in feedparser.parse(self.selected_feed).entries:
-    #         yield AttrDict(
-    #             created =  datetime.fromtimestamp(
-    #                 mktime(item.published_parsed)
-    #             ),
-    #             subject = item.title,
-    #             content = item.link
-    #         )
+        return dict(url=self.filters.feed[feed_name])
