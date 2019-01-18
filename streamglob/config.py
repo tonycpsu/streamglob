@@ -3,9 +3,9 @@ import os
 import errno
 import pytz
 try:
-    from collections.abc import MutableMapping
+    from collections.abc import Mapping, MutableMapping
 except ImportError:
-    from collections import MutableMapping
+    from collections import Mapping, MutableMapping
 import yaml
 import functools
 from orderedattrdict import Tree
@@ -74,7 +74,7 @@ def dict_merge(dct, merge_dct):
     dct = dct.copy()
     for k, v in merge_dct.items():
         if (k in dct and isinstance(dct[k], dict)
-                and isinstance(merge_dct[k], MutableMapping)):
+                and isinstance(merge_dct[k], Mapping)):
             dct[k] = dict_merge(dct[k], merge_dct[k])
         else:
             dct[k] = merge_dct[k]
