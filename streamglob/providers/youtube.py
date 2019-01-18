@@ -25,7 +25,7 @@ class YoutubeSession(session.StreamSession):
             'quiet': True,
             'extract_flat': "in_playlist",
             "playlistend": limit,
-            'proxy': self.proxies.get("https"),
+            'proxy': self.proxies.get("https", None) if self.proxies else None,
             'logger': logger
         }
 
