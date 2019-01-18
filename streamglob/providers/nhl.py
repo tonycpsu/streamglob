@@ -7,7 +7,7 @@ from orderedattrdict import AttrDict
 from panwid.datatable import *
 from pony.orm import *
 
-from ..session import *
+from .. import session
 
 from .base import *
 from .bam import *
@@ -19,7 +19,7 @@ from ..state import *
 class NHLBAMProviderData(BAMProviderData):
     pass
 
-class NHLStreamSession(AuthenticatedStreamSession):
+class NHLStreamSession(session.AuthenticatedStreamSession):
 
     AUTH = b"web_nhl-v1.0.0:2d1d846ea3b194a18ef40ac9fbce97e3"
 
@@ -46,7 +46,7 @@ class NHLStreamSession(AuthenticatedStreamSession):
             session_key=None,
             *args, **kwargs
     ):
-        super(NHLStreamSession, self).__init__(
+        super(sessionNHLStreamSession, self).__init__(
             username, password,
             *args, **kwargs
         )

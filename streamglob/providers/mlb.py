@@ -7,7 +7,7 @@ from orderedattrdict import AttrDict
 from panwid.datatable import *
 from pony.orm import *
 
-from ..session import *
+from .. import session
 
 from .base import *
 from .bam import *
@@ -20,7 +20,7 @@ from ..state import *
 class MLBBAMProviderData(BAMProviderData):
     pass
 
-class MLBStreamSession(AuthenticatedStreamSession):
+class MLBStreamSession(session.AuthenticatedStreamSession):
 
     PLATFORM = "macintosh"
     BAM_SDK_VERSION = "3.0"
