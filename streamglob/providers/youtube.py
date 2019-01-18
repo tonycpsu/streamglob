@@ -23,6 +23,7 @@ class YoutubeSession(session.StreamSession):
         ytdl_opts = {
             "ignoreerrors": True,
             'quiet': True,
+            'no_color': True,
             'extract_flat': "in_playlist",
             "playlistend": limit,
             'proxy': self.proxies.get("https", None) if self.proxies else None,
