@@ -251,7 +251,7 @@ class BAMProviderView(SimpleProviderView):
 @with_view(BAMProviderView)
 class BAMProviderMixin(abc.ABC):
     """
-    StreamSession subclass for BAMTech Media stream providers, which currently
+    Mixin class for use by BAMTech Media stream providers, which currently
     includes MLB.tv and NHL.tv
     """
     sport_id = 1 # FIXME
