@@ -180,7 +180,7 @@ class NHLStreamSession(session.AuthenticatedStreamSession):
                               for x in j["session_info"]["sessionAttributes"]
                               if x["attributeName"] == "mediaAuth_v2")
         except KeyError:
-            raise StreamSessionException(f"No stream found for event {event_id}")
+            raise SGStreamSessionException(f"No stream found for event {event_id}")
 
         self.cookies.set_cookie(
             Cookie(0, 'mediaAuth_v2', media_auth,

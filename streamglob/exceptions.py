@@ -4,7 +4,7 @@ class SGException(Exception):
 class SGPlayInvalidArgumentError(SGException):
     pass
 
-class StreamSessionException(SGException):
+class SGStreamSessionException(SGException):
     pass
 
 class SGInvalidFilterValue(SGException):

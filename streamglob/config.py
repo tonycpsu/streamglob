@@ -168,7 +168,7 @@ class Config(Tree):
         in the "docs" directory of the distribution.
         """)
 
-        from .session import StreamSession, StreamSessionException
+        from .session import StreamSession, SGStreamSessionException
 
         def mkdir_p(path):
             try:
@@ -203,7 +203,7 @@ class Config(Tree):
                                self.profile.password)
                 s.login()
                 break
-            except StreamSessionException:
+            except SGStreamSessionException:
                 print("Couldn't login to MLB, please check your credentials.")
                 continue
 

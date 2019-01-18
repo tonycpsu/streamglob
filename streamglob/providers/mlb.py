@@ -78,10 +78,6 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
         initial_url = ("https://secure.mlb.com/enterworkflow.do"
                        "?flowId=registration.wizard&c_id=mlb")
 
-        # res = self.get(initial_url)
-        # if not res.status_code == 200:
-        #     raise StreamSessionException(res.content)
-
         data = {
             "uri": "/account/login_register.jsp",
             "registrationAction": "identify",
@@ -101,7 +97,7 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
 
         if not (self.ipid and self.fingerprint):
             # print(res.content)
-            raise StreamSessionException("Couldn't get ipid / fingerprint")
+            raise SGStreamSessionException("Couldn't get ipid / fingerprint")
 
         logger.info("logged in: %s" %(self.ipid))
         self.save()
@@ -479,7 +475,7 @@ class MLBProvider(BAMProviderMixin,
             airing = next(a for a in self.session.airings(game_id)
                           if a["mediaId"] == media_id)
         except StopIteration:
-            raise StreamSessionException("No airing for media %s" %(media_id))
+            raise SGStreamSessionException("No airing for media %s" %(media_id))
 
         start_timestamps = []
         try:
