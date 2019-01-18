@@ -1,9 +1,13 @@
+import logging
+logger = logging.getLogger(__name__)
+
 from .feed import *
 
 from ..exceptions import *
 from ..state import *
 from .. import config
 from .. import model
+from .. import session
 
 from .filters import *
 
@@ -12,27 +16,39 @@ import youtube_dl
 class SearchResult(AttrDict):
     pass
 
-def youtube_dl_query(query, offset=None, limit=None):
+class YoutubeSession(session.StreamSession):
 
-    ytdl_opts = {
-        "ignoreerrors": True,
-        'quiet': True,
-        'extract_flat': "in_playlist",
-        "playlistend": limit
-    }
+    def __init__(self, *args, **kwargs):
+        super().__init__(
+            *args, **kwargs
+        )
 
-    if offset:
-        ytdl_opts["playliststart"] = offset+1
-        ytdl_opts["playlistend"] = offset + limit
+    def youtube_dl_query(self, query, offset=None, limit=None):
 
-    with youtube_dl.YoutubeDL(ytdl_opts) as ydl:
-        playlist_dict = ydl.extract_info(query, download=False)
-        for item in playlist_dict['entries']:
-            yield SearchResult(
-                guid = item["id"],
-                subject = item["title"],
-                url = f"https://youtu.be/{item['url']}"
-            )
+        ytdl_opts = {
+            "ignoreerrors": True,
+            'quiet': True,
+            'extract_flat': "in_playlist",
+            "playlistend": limit,
+            'proxy': self.proxies.get("https"),
+            'logger': logger
+        }
+
+        if offset:
+            ytdl_opts["playliststart"] = offset+1
+            ytdl_opts["playlistend"] = offset + limit
+
+        with youtube_dl.YoutubeDL(ytdl_opts) as ydl:
+            playlist_dict = ydl.extract_info(query, download=False)
+            if not playlist_dict:
+                logger.warn("youtube_dl returned no data")
+                return
+            for item in playlist_dict['entries']:
+                yield SearchResult(
+                    guid = item["id"],
+                    subject = item["title"],
+                    url = f"https://youtu.be/{item['url']}"
+                )
 
 class YouTubeChannelsDropdown(urwid.WidgetWrap):
 
@@ -137,7 +153,7 @@ class YouTubeFeed(model.MediaFeed):
         if not limit:
             limit = self.DEFAULT_ITEM_LIMIT
 
-        for item in youtube_dl_query(self.locator, limit=limit):
+        for item in self.session.youtube_dl_query(self.locator, limit=limit):
             i = self.items.select(lambda i: i.guid == item["guid"]).first()
 
             url = item.pop("url")
@@ -160,7 +176,7 @@ class YouTubeProvider(PaginatedProviderMixin,
 
     MEDIA_TYPES = {"video"}
 
-    # DATA_TABLE_CLASS = YouTubeProviderDataTable
+    SESSION_CLASS = YoutubeSession
 
     @property
     def selected_feed(self):
@@ -174,7 +190,10 @@ class YouTubeProvider(PaginatedProviderMixin,
         if self.filters.feed.channel == "search":
             if len(self.filters.feed.search):
                 query = f"ytsearch{offset+self.view.table.limit}:{self.filters.feed.search}"
-                return [SearchResult(r) for r in youtube_dl_query(query, offset, limit) ]
+                return [
+                    SearchResult(r)
+                    for r in self.session.youtube_dl_query(query, offset, limit)
+                ]
             else:
                 return AttrDict()
         else:
