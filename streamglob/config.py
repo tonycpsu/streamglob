@@ -20,7 +20,7 @@ from prompt_toolkit.shortcuts import confirm
 from prompt_toolkit.shortcuts import prompt
 import getpass
 
-PACKAGE_NAME=__name__.split('.')[0]
+PACKAGE_NAME="streamglob"
 CONFIG_DIR=os.path.expanduser(f"~/.config/{PACKAGE_NAME}")
 CONFIG_FILE=os.path.join(CONFIG_DIR, "config.yaml")
 LOG_FILE=os.path.join(CONFIG_DIR, f"{PACKAGE_NAME}.log")
@@ -68,6 +68,18 @@ class RangeNumberValidator(Validator):
                 message="Value must be less than %s" %(self.maximum)
             )
 
+
+def dict_merge(dct, merge_dct):
+    # via https://gist.github.com/angstwad/bf22d1822c38a92ec0a9
+    dct = dct.copy()
+    for k, v in merge_dct.items():
+        if (k in dct and isinstance(dct[k], dict)
+                and isinstance(merge_dct[k], MutableMapping)):
+            dct[k] = dict_merge(dct[k], merge_dct[k])
+        else:
+            dct[k] = merge_dct[k]
+    return dct
+
 class ProfileTree(Tree):
 
     DEFAULT_PROFILE_NAME = "default"
@@ -83,27 +95,32 @@ class ProfileTree(Tree):
 
     @property
     def profile(self):
-        return self[self._profile_name]
+        p = self[self._profile_name]
+        if (self._merge_default
+            and self._profile_name != self._default_profile_name):
+            return dict_merge(self[self._default_profile_name], p)
+        else:
+            return p
+
 
     def set_profile(self, profile):
         self._profile_name = profile
 
-    def __getattr__(self, name):
-        if not name.startswith("_"):
-            p = self.profile
-            val = p.get(name)
-            if name in p:
-                if (self._merge_default
-                    and self._profile_name != self._default_profile_name):
-                    default_profile = self[self._default_profile_name]
-                    if isinstance(val, list):
-                        val += default_profile.get(name, [])
-                    elif isinstance(val, dict):
-                        val = default_profile.get(name, {})
-                        val.update(**self.get(name, {}))
-                return val
-
-        raise AttributeError
+    # def __getattr__(self, name):
+    #     if not name.startswith("_"):
+    #         p = self.profile
+    #         val = p.get(name)
+    #         if (self._merge_default
+    #             and self._profile_name != self._default_profile_name):
+    #             default_profile = self[self._default_profile_name]
+    #             if isinstance(val, list):
+    #                 val += default_profile.get(name, [])
+    #             elif isinstance(val, dict):
+    #                 val = default_profile.get(name, {})
+    #                 val.update(**self.get(name, {}))
+    #         return val
+    #     return super().__getattr_(self, name)
+    #     # raise AttributeError
 
     def __setattr__(self, name, value):
         if not name.startswith("_"):
@@ -112,13 +129,18 @@ class ProfileTree(Tree):
             object.__setattr__(self, name, value)
 
     def get(self, name, default=None):
-        p = self.profile
-        return p.get(name, default) if name in p else self[self._default_profile_name].get(name, default)
+        return self.profile.get(name, default)
+        # p = self.profile
+        # return (
+        #     p.get(name, default)
+        #     if name in p
+        #     else self[self._default_profile_name].get(name, default)
+        # )
 
     def __getitem__(self, name):
         if isinstance(name, tuple):
             return functools.reduce(
-                lambda a, b: Tree(a, **{ k: v for k, v in b.items() if k not in a}),
+                lambda a, b: ProfileTree(a, **{ k: v for k, v in b.items() if k not in a}),
                 [ self[p] for p in reversed(name) ]
             )
 
@@ -254,7 +276,7 @@ class Config(Tree):
 
     @property
     def profile(self):
-        return self._profile_tree
+        return self._profile_tree.profile
 
     @property
     def profiles(self):
@@ -264,9 +286,10 @@ class Config(Tree):
         self._profile_tree.set_profile(profile)
 
     def load(self):
-        if os.path.exists(self._config_file):
-            config = yaml.load(open(self._config_file), Loader=AttrDictYAMLLoader)
-            self.update(config.items())
+        if not os.path.exists(self._config_file):
+            raise Exception(f"config file {self._config_file} not found")
+        config = yaml.load(open(self._config_file), Loader=AttrDictYAMLLoader)
+        self.update(config.items())
 
     def save(self):
 
@@ -276,7 +299,11 @@ class Config(Tree):
             yaml.dump(d, outfile, default_flow_style=False, indent=4)
 
 
-settings = Config(CONFIG_FILE)
+def load(merge_default=False):
+    global settings
+    settings = Config(CONFIG_FILE, merge_default=merge_default)
+
+# settings = Config(CONFIG_FILE, merge_default=True)
 
 __all__ = [
     "CONFIG_DIR",
@@ -284,21 +311,21 @@ __all__ = [
 ]
 
 def main():
-    settings = Config(
+    test_settings = Config(
         os.path.expanduser("~/.config/streamglob/config.yaml"),
         merge_default=True
     )
-    # print(settings)
-    print(list(settings.profile.providers.keys()))
-    settings.set_profile("540p")
-    print(list(settings.profile.providers.keys()))
+    print(test_settings)
+    # print(list(test_settings.profile.providers.keys()))
+    test_settings.set_profile("proxy")
+    print(list(test_settings.profile.proxies.keys()))
     raise Exception
-    print(settings.profile.get("env"))
-    print(settings.profiles["default"])
-    print(settings.profiles[("default")].get("env"))
-    print(settings.profiles[("default", "540p")].get("env"))
-    print(settings.profiles[("default", "540p")].get("env"))
-    print(settings.profiles[("default", "540p", "proxy")].get("env"))
+    print(test_settings.profile.get("env"))
+    print(test_settings.profiles["default"])
+    print(test_settings.profiles[("default")].get("env"))
+    print(test_settings.profiles[("default", "540p")].get("env"))
+    print(test_settings.profiles[("default", "540p")].get("env"))
+    print(test_settings.profiles[("default", "540p", "proxy")].get("env"))
 
 if __name__ == "__main__":
     main()
