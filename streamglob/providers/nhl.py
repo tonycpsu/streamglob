@@ -153,7 +153,10 @@ class NHLStreamSession(AuthenticatedStreamSession):
             logger.trace(json.dumps(j, sort_keys=True,
                              indent=4, separators=(',', ': ')))
 
-            self.session_key = j["session_key"]
+            try:
+                self.session_key = j["session_key"]
+            except KeyError:
+                raise Exception(j)
             self.save()
 
         params = {

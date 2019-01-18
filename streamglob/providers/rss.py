@@ -12,8 +12,6 @@ from datetime import datetime
 from time import mktime
 from pony.orm import *
 
-# class RSSFeedsFilter(ListingFilter):
-
 
 class RSSItem(model.Item):
     pass
@@ -42,25 +40,8 @@ class RSSFeed(model.Feed):
                     content = item.link
             )
 
-# class RSSProviderView(SimpleProviderView):
-
-#     PROVIDER_DATA_TABLE_CLASS = CachedFeedProviderDataTable
-
-
-# @with_view(RSSProviderView)
 class RSSProvider(PaginatedProviderMixin, CachedFeedProvider):
-
-    # ATTRIBUTES = AttrDict(
-    #     CachedFeedProvider.ATTRIBUTES,
-    #     **AttrDict(
-    #         title = {"width": ("weight", 1)},
-    #     )
-    # )
 
     MEDIA_TYPES = {"video"}
 
     FEED_CLASS = RSSFeed
-
-    def feed_attrs(self, feed_name):
-
-        return dict(locator=self.filters.feed[feed_name])

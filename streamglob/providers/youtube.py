@@ -137,9 +137,7 @@ class YouTubeFeed(model.Feed):
         if not limit:
             limit = self.DEFAULT_ITEM_LIMIT
 
-        logger.info(f"YoutubeFeed: {self.name}")
         for item in youtube_dl_query(self.locator, limit=limit):
-            # logger.info(item)
             i = self.items.select(lambda i: i.guid == item["guid"]).first()
 
             url = item.pop("url")
@@ -150,16 +148,6 @@ class YouTubeFeed(model.Feed):
                     **item
                 )
 
-            # self.updated = datetime.now()
-
-
-
-# class YouTubeProviderView(SimpleProviderView):
-
-#     PROVIDER_DATA_TABLE_CLASS = CachedFeedProviderDataTable
-
-
-# @with_view(YouTubeProviderView)
 class YouTubeProvider(PaginatedProviderMixin,
                       CachedFeedProvider):
 
@@ -191,7 +179,6 @@ class YouTubeProvider(PaginatedProviderMixin,
             else:
                 return AttrDict()
         else:
-            logger.info("calling super listings")
             return super().listings(
                 offset=offset, limit=limit, *args, **kwargs
             )

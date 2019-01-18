@@ -269,7 +269,8 @@ class CachedFeedProvider(FeedProvider):
                 feed = self.FEED_CLASS(
                     provider_name = self.IDENTIFIER,
                     name = name,
-                    **self.feed_attrs(name)
+                    locator=self.filters.feed[name]
+                    # **self.feed_attrs(name)
                 )
                 commit()
 

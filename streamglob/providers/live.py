@@ -70,26 +70,3 @@ class LiveStreamProvider(PaginatedProviderMixin, CachedFeedProvider, abc.ABC):
         return [
             live_filters[self.filters.live.value]
         ]
-
-
-
-    # @abc.abstractmethod
-    # def check_stream(self, stream):
-    #     pass
-
-    # def listings(self, offset=None, limit=None, *args, **kwargs):
-
-    #     count = 0
-
-    #     if not offset:
-    #         offset = 0
-    #     if not limit:
-    #         limit = self.limit
-
-    #     with db_session:
-    #         self.update_feeds()
-
-    #         for item in self.items_query[offset:offset+limit]:
-    #             d = AttrDict(item.to_dict(related_objects=True))
-    #             d.feed = AttrDict(d.feed.to_dict())
-    #             yield(FeedItem(d))
