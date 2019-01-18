@@ -75,10 +75,6 @@ class MediaFeed(MediaChannel):
 
     items = Set(lambda: MediaItem)
 
-    @property
-    def provider(self):
-        return providers.get(self.provider_name)
-
     @db_session
     def mark_all_read(self):
         for i in self.items.select():
