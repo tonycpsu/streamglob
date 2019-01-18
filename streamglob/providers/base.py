@@ -160,7 +160,7 @@ class BaseProvider(abc.ABC):
 
     @property
     def session_params(self):
-        return {"proxies": config.settings.profile.proxies}
+        return {"proxies": config.settings.profile.get("proxies")}
 
     @property
     def session(self):
