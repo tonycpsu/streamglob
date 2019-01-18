@@ -55,6 +55,7 @@ setup(name=name,
           "streamglob.providers": [
               "mlb = streamglob.providers.mlb:MLBProvider",
               "nhl = streamglob.providers.nhl:NHLProvider",
+              "periscope = streamglob.providers.periscope:PeriscopeProvider",
               "rss = streamglob.providers.rss:RSSProvider",
               "youtube = streamglob.providers.youtube:YouTubeProvider",
               "instagram = streamglob.providers.instagram:InstagramProvider",

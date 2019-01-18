@@ -19,7 +19,7 @@ class RSSItem(model.Item):
     pass
 
 
-class RSSFeed(URLFeed):
+class RSSFeed(model.Feed):
 
     ITEM_CLASS = RSSItem
 
@@ -28,14 +28,7 @@ class RSSFeed(URLFeed):
         if not limit:
             limit = self.DEFAULT_ITEM_LIMIT
 
-        for item in feedparser.parse(self.url).entries:
-            # yield AttrDict(
-            #     time =  datetime.fromtimestamp(
-            #         mktime(item.published_parsed)
-            #     ),
-            #     title = item.title,
-            #     url = item.link
-            # )
+        for item in feedparser.parse(self.locator).entries:
             guid = item.get("guid", item.get("link"))
             i = self.items.select(lambda i: i.guid == guid).first()
             if not i:
@@ -48,14 +41,13 @@ class RSSFeed(URLFeed):
                     ),
                     content = item.link
             )
-        # self.updated = datetime.now()
 
-class RSSProviderView(SimpleProviderView):
+# class RSSProviderView(SimpleProviderView):
 
-    PROVIDER_DATA_TABLE_CLASS = CachedFeedProviderDataTable
+#     PROVIDER_DATA_TABLE_CLASS = CachedFeedProviderDataTable
 
 
-@with_view(RSSProviderView)
+# @with_view(RSSProviderView)
 class RSSProvider(PaginatedProviderMixin, CachedFeedProvider):
 
     # ATTRIBUTES = AttrDict(
@@ -71,4 +63,4 @@ class RSSProvider(PaginatedProviderMixin, CachedFeedProvider):
 
     def feed_attrs(self, feed_name):
 
-        return dict(url=self.filters.feed[feed_name])
+        return dict(locator=self.filters.feed[feed_name])

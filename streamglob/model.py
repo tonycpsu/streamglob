@@ -45,6 +45,7 @@ class Feed(db.Entity):
     feed_id = PrimaryKey(int, auto=True)
     name = Optional(str, index=True)
     provider_name = Required(str, index=True)
+    locator = Required(str)
     updated = Optional(datetime)
     update_interval = Required(int, default=DEFAULT_UPDATE_INTERVAL)
     items = Set(lambda: Item)

@@ -3,6 +3,7 @@ from .feed import *
 from ..exceptions import *
 from ..state import *
 from .. import config
+from .. import model
 
 from .filters import *
 
@@ -127,7 +128,7 @@ class YouTubeItem(model.Item):
     pass
 
 
-class YouTubeFeed(URLFeed):
+class YouTubeFeed(model.Feed):
 
     ITEM_CLASS = YouTubeItem
 
@@ -137,7 +138,7 @@ class YouTubeFeed(URLFeed):
             limit = self.DEFAULT_ITEM_LIMIT
 
         logger.info(f"YoutubeFeed: {self.name}")
-        for item in youtube_dl_query(self.url, limit=limit):
+        for item in youtube_dl_query(self.locator, limit=limit):
             # logger.info(item)
             i = self.items.select(lambda i: i.guid == item["guid"]).first()
 
@@ -153,12 +154,12 @@ class YouTubeFeed(URLFeed):
 
 
 
-class YouTubeProviderView(SimpleProviderView):
+# class YouTubeProviderView(SimpleProviderView):
 
-    PROVIDER_DATA_TABLE_CLASS = CachedFeedProviderDataTable
+#     PROVIDER_DATA_TABLE_CLASS = CachedFeedProviderDataTable
 
 
-@with_view(YouTubeProviderView)
+# @with_view(YouTubeProviderView)
 class YouTubeProvider(PaginatedProviderMixin,
                       CachedFeedProvider):
 
@@ -167,8 +168,6 @@ class YouTubeProvider(PaginatedProviderMixin,
         # ("search", TextFilter),
         ("status", ItemStatusFilter)
     ])
-
-    ITEM_CLASS = YouTubeItem
 
     FEED_CLASS = YouTubeFeed
 
@@ -198,5 +197,4 @@ class YouTubeProvider(PaginatedProviderMixin,
             )
 
     def feed_attrs(self, feed_name):
-
-        return dict(url=self.filters.feed[feed_name])
+        return dict(locator=self.filters.feed[feed_name])

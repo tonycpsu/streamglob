@@ -35,6 +35,9 @@ def parse_spec(spec):
 
     p = get(provider)
 
+    if not p:
+        raise Exception(f"provider {provider} not found")
+
     options = p.parse_options(options)
     for k, v in options.items():
         if k in p.filters:

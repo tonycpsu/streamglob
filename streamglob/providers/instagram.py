@@ -111,8 +111,6 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
 
     FEED_CLASS = InstagramFeed
 
-    ITEM_CLASS = InstagramItem
-
     SUBJECT_LABEL = "caption"
 
     MEDIA_TYPES = {"image", "video"}

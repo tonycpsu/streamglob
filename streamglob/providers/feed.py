@@ -1,5 +1,7 @@
 from orderedattrdict import AttrDict
 
+from .. import model
+
 from .base import *
 
 from .widgets import *
@@ -8,10 +10,9 @@ from .filters import *
 class FeedItem(AttrDict):
     pass
 
-class URLFeed(model.Feed):
+# class URLFeed(model.Feed):
 
-    url = Required(str)
-
+#     url = Required(str)
 
 class CachedFeedProviderDataTable(ProviderDataTable):
 
@@ -37,7 +38,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         if self.update_count:
             with db_session:
                 if not self.provider.items_query:
-                    raise Exception
+                    return 0
                 # self._row_count = len(self.provider.feed.items)
                 self._row_count = self.provider.items_query.count()
                 self.update_count = False
@@ -213,12 +214,23 @@ class FeedProvider(BaseProvider):
             self.filters.feed.label = identifier
         raise SGIncompleteIdentifier
 
+class CachedFeedProviderView(SimpleProviderView):
+
+    PROVIDER_DATA_TABLE_CLASS = CachedFeedProviderDataTable
+
+
+@with_view(CachedFeedProviderView)
 class CachedFeedProvider(FeedProvider):
 
     UPDATE_INTERVAL = 300
     MAX_ITEMS = 100
 
     SUBJECT_LABEL = "title"
+
+    @property
+    def ITEM_CLASS(self):
+        return self.FEED_CLASS.ITEM_CLASS
+
 
     @property
     def ATTRIBUTES(self):
@@ -238,14 +250,28 @@ class CachedFeedProvider(FeedProvider):
                 provider_name = self.IDENTIFIER,
                 name = self.selected_feed_label
             )
+        return feed
+
+    @property
+    def feeds(self):
+        if isinstance(self.config.feeds, dict):
+            return self.config.feeds
+        else:
+            return AttrDict([
+                (f, f) for f in self.config.feeds
+            ])
+
+    @db_session
+    def create_feeds(self):
+        for name, locator in self.feeds.items():
+            feed = self.FEED_CLASS.get(locator=locator)
             if not feed:
                 feed = self.FEED_CLASS(
                     provider_name = self.IDENTIFIER,
-                    name = self.selected_feed_label,
-                    **self.feed_attrs(self.selected_feed_label)
+                    name = name,
+                    **self.feed_attrs(name)
                 )
                 commit()
-        return feed
 
     def feed_attrs(self, feed_name):
         return {}
@@ -270,11 +296,17 @@ class CachedFeedProvider(FeedProvider):
 
     @db_session
     def update(self, force=False):
+        self.create_feeds()
         self.update_feeds(force=force)
+
+    @property
+    def feed_filters(self):
+        return None
 
     @db_session
     def update_query(self):
-        status_filter = {
+
+        status_filters =  {
             "all": lambda: True,
             "unread": lambda i: i.read is None,
             "not_downloaded": lambda i: i.downloaded is None
@@ -289,9 +321,13 @@ class CachedFeedProvider(FeedProvider):
         self.items_query = (
             self.ITEM_CLASS.select()
             .order_by(sort_fn)
-            .filter(status_filter[self.filters.status.value])
+            .filter(status_filters[self.filters.status.value])
                 # [offset:offset+limit]
         )
+
+        if self.feed_filters:
+            for f in self.feed_filters:
+                self.items_query = self.items_query.filter(f)
 
         if self.feed:
             self.items_query = self.items_query.filter(
