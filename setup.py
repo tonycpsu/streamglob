@@ -41,7 +41,7 @@ setup(name=name,
           "panwid>=0.2.5",
           "pony",
           "stevedore",
-          "feedparser",
+          "atoma",
           "youtube_dl",
           "instagram_private_api",
           "pyperi"

@@ -52,6 +52,14 @@ class MediaChannel(db.Entity):
     updated = Optional(datetime)
     update_interval = Required(int, default=DEFAULT_UPDATE_INTERVAL)
 
+    @property
+    def provider(self):
+        return providers.get(self.provider_name)
+
+    @property
+    def session(self):
+        return self.provider.session
+
 
 class MediaFeed(MediaChannel):
     """

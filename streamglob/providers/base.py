@@ -159,6 +159,10 @@ class BaseProvider(abc.ABC):
                                   for n, f in self.FILTERS.items() })
 
     @property
+    def session_params(self):
+        return {"proxies": config.settings.profile.proxies}
+
+    @property
     def session(self):
         if self._session is None:
             session_params = self.session_params
