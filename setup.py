@@ -43,9 +43,13 @@ setup(name=name,
           "stevedore",
           "feedparser",
           "youtube_dl",
-          "instagram_private_api"
+          "instagram_private_api",
+          "pyperi"
       ],
-      dependency_links=['https://github.com/ping/instagram_private_api/tarball/master#egg=instagram_private_api-1.5.7'],
+      dependency_links=[
+          "https://github.com/ping/instagram_private_api/tarball/master#egg=instagram_private_api-1.5.7",
+          "https://github.com/gavvvr/PyPeri/tarball/patch-1#egg=pyperi-0.2.0"
+      ],
       test_suite="test",
       entry_points = {
           "console_scripts": [
