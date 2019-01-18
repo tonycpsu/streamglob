@@ -116,7 +116,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     def keypress(self, size, key):
 
         if key == "meta r":
-            self.provider.update()
+            self.provider.update(force=True)
             self.reset()
         elif key == "n":
             try:
@@ -251,14 +251,16 @@ class CachedFeedProvider(FeedProvider):
         return {}
 
     @db_session
-    def update_feeds(self):
+    def update_feeds(self, force=False):
         if not self.feed:
             feeds = self.FEED_CLASS.select()
         else:
             feeds = [self.feed]
 
         for f in feeds:
-            if (f.updated is None
+            if (force
+                or
+                f.updated is None
                 or
                 datetime.now() - f.updated
                 > timedelta(seconds=f.update_interval)
@@ -267,11 +269,8 @@ class CachedFeedProvider(FeedProvider):
                 f.updated = datetime.now()
 
     @db_session
-    def update(self):
-        if self.feed:
-            self.feed.update()
-        else:
-            self.update_feeds()
+    def update(self, force=False):
+        self.update_feeds(force=force)
 
     @db_session
     def update_query(self):
