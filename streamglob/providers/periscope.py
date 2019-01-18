@@ -1,6 +1,13 @@
 from .feed import *
+from .. import session
 
-from pyperi import Peri
+import pyperi
+
+class PeriscopeSession(session.StreamSession):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.peri = pyperi.Peri(session=self)
 
 class PeriscopeItem(model.MediaItem):
 
@@ -15,19 +22,22 @@ class PeriscopeFeed(model.MediaFeed):
         if not limit:
             limit = self.DEFAULT_ITEM_LIMIT
 
-        for item in Peri().get_user_broadcast_history(
-                username=self.locator
-        ):
-            guid = item["id"]
-            i = self.items.select(lambda i: i.guid == guid).first()
-            if not i:
-                i = self.ITEM_CLASS(
-                    feed = self,
-                    guid = guid,
-                    subject = item["status"].strip() or "-",
-                    content = f"https://pscp.tv/w/{item['id']}",
-                    is_live = item.get("state") == "RUNNING"
-            )
+        try:
+            for item in self.session.peri.get_user_broadcast_history(
+                    username=self.locator
+            ):
+                guid = item["id"]
+                i = self.items.select(lambda i: i.guid == guid).first()
+                if not i:
+                    i = self.ITEM_CLASS(
+                        feed = self,
+                        guid = guid,
+                        subject = item["status"].strip() or "-",
+                        content = f"https://pscp.tv/w/{item['id']}",
+                        is_live = item.get("state") == "RUNNING"
+                )
+        except pyperi.pyperi.PyPeriConnectionError as e:
+            logger.warning(e)
 
 class PeriscopeLiveStreamFilter(ListingFilter):
 
@@ -47,6 +57,7 @@ class PeriscopeProvider(PaginatedProviderMixin, CachedFeedProvider):
 
     MEDIA_TYPES = {"video"}
 
+    SESSION_CLASS = PeriscopeSession
 
     @property
     def feed_filters(self):
