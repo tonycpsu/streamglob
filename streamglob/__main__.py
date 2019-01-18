@@ -233,11 +233,10 @@ def main():
     init_parser.add_argument("-p", "--profile", help="use alternate config profile")
     options, args = init_parser.parse_known_args()
 
-    config.settings.load()
-    player.Player.load()
-
+    config.load(merge_default=True)
     if options.profile:
         config.settings.set_profile(options.profile)
+    player.Player.load()
 
     parser = argparse.ArgumentParser()
     group = parser.add_mutually_exclusive_group()
@@ -247,7 +246,7 @@ def main():
                         help="quiet logging")
     parser.add_argument("spec", metavar="SPECIFIER",
                         help="media specifier", nargs="?")
-    options, args = parser.parse_known_args()
+    options, args = parser.parse_known_args(args)
 
     state.options = AttrDict(vars(options))
 
