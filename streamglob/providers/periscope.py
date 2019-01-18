@@ -1,41 +1,61 @@
-from .live import *
+from .feed import *
 
 from pyperi import Peri
 
-class PeriscopeItem(LiveStreamItem):
-    pass
+class PeriscopeItem(model.Item):
 
-class PeriscopeFeed(LiveStreamFeed):
+    is_live = Required(bool)
+
+class PeriscopeFeed(model.Feed):
 
     ITEM_CLASS = PeriscopeItem
 
+    def update(self, limit=None):
 
-class PeriscopeProvider(LiveStreamProvider):
+        if not limit:
+            limit = self.DEFAULT_ITEM_LIMIT
 
-    FEED_CLASS = PeriscopeFeed
-
-    MEDIA_TYPES = {"video"}
-
-    def __init__(self, *args, **kwargs):
-        self.peri = Peri()
-        super().__init__(*args, **kwargs)
-
-    def check_feed(self, feed):
-
-        for item in self.peri.get_user_broadcast_history(
-                username=feed
+        for item in Peri().get_user_broadcast_history(
+                username=self.locator
         ):
-            yield(
-                FeedItem(
-                    guid = item["id"],
+            guid = item["id"]
+            i = self.items.select(lambda i: i.guid == guid).first()
+            if not i:
+                i = self.ITEM_CLASS(
+                    feed = self,
+                    guid = guid,
                     subject = item["status"].strip() or "-",
                     content = f"https://pscp.tv/w/{item['id']}",
                     is_live = item.get("state") == "RUNNING"
-                )
             )
 
+class PeriscopeLiveStreamFilter(ListingFilter):
 
-    def feed_attrs(self, feed_name):
-        return dict(locator=self.filters.feed[feed_name])
+    values = AttrDict([
+        (s, s.lower())
+        for s in ["Any", "Live", "Archived"]
+    ])
 
-    # def check_stream(self, stream):
+class PeriscopeProvider(PaginatedProviderMixin, CachedFeedProvider):
+
+    FEED_CLASS = PeriscopeFeed
+
+    FILTERS = AttrDict(
+        CachedFeedProvider.FILTERS,
+        **dict(live = PeriscopeLiveStreamFilter)
+    )
+
+    MEDIA_TYPES = {"video"}
+
+
+    @property
+    def feed_filters(self):
+        live_filters =  {
+            "any": lambda: True,
+            "live": lambda i: i.is_live,
+            "archived": lambda i: not i.is_live,
+        }
+
+        return [
+            live_filters[self.filters.live.value]
+        ]

@@ -101,12 +101,12 @@ class InstagramFeed(model.Feed):
             last_count = count
 
 
-class InstagramProviderView(SimpleProviderView):
+# class InstagramProviderView(SimpleProviderView):
 
-    PROVIDER_DATA_TABLE_CLASS = CachedFeedProviderDataTable
+#     PROVIDER_DATA_TABLE_CLASS = CachedFeedProviderDataTable
 
 
-@with_view(InstagramProviderView)
+# @with_view(InstagramProviderView)
 class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
 
     FEED_CLASS = InstagramFeed
@@ -115,7 +115,7 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
 
     MEDIA_TYPES = {"image", "video"}
 
-    VIEW_CLASS = InstagramProviderView
+    # VIEW_CLASS = InstagramProviderView
 
     def __init__(self, *args, **kwargs):
         self.web_api = Client(auto_patch=True, drop_incompat_keys=False)
