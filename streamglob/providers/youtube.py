@@ -18,11 +18,6 @@ class SearchResult(AttrDict):
 
 class YoutubeSession(session.StreamSession):
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(
-            *args, **kwargs
-        )
-
     def youtube_dl_query(self, query, offset=None, limit=None):
 
         ytdl_opts = {
