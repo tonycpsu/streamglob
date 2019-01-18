@@ -10,11 +10,11 @@ from .filters import *
 from instagram_web_api import Client, ClientCompatPatch, ClientError
 from pony.orm import *
 
-class InstagramItem(model.Item):
+class InstagramItem(model.MediaItem):
 
     media_type = Required(str)
 
-class InstagramFeed(model.Feed):
+class InstagramFeed(model.MediaFeed):
 
     ITEM_CLASS = InstagramItem
 

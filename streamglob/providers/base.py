@@ -145,7 +145,7 @@ class BaseProvider(abc.ABC):
     """
 
     SESSION_CLASS = StreamSession
-    ITEM_CLASS = model.Item
+    ITEM_CLASS = model.MediaItem
     # VIEW_CLASS = SimpleProviderView
     FILTERS = AttrDict()
     ATTRIBUTES = AttrDict(title={"width": ("weight", 1)})

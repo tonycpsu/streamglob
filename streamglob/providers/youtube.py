@@ -124,11 +124,11 @@ class YouTubeChannelsFilter(FeedsFilter):
         return self.widget.channel
 
 
-class YouTubeItem(model.Item):
+class YouTubeItem(model.MediaItem):
     pass
 
 
-class YouTubeFeed(model.Feed):
+class YouTubeFeed(model.MediaFeed):
 
     ITEM_CLASS = YouTubeItem
 

@@ -32,23 +32,40 @@ class CacheEntry(db.Entity):
             lambda e: e.last_seen < datetime.now() - timedelta(seconds=age)
         ).delete()
 
+class MediaChannel(db.Entity):
+    """
+    A streaming video channel, identified by some unique string (locator).  This
+    may be a URL, username, or any other unique string, depending on the nature
+    of the provider.
 
-class Feed(db.Entity):
+    If the provider is able to distinguish between specific broadcasts, episodes,
+    videos, etc. in the channel with a unique identifer, the MediaFeed entity
+    defined below should be used instead.
+    """
 
     DEFAULT_UPDATE_INTERVAL = 3600
-    DEFAULT_ITEM_LIMIT = 100
 
-    DEFAULT_MIN_ITEMS=10
-    DEFAULT_MAX_ITEMS=500
-    DEFAULT_MAX_AGE=90
-
-    feed_id = PrimaryKey(int, auto=True)
+    channel_id = PrimaryKey(int, auto=True)
     name = Optional(str, index=True)
     provider_name = Required(str, index=True)
     locator = Required(str)
     updated = Optional(datetime)
     update_interval = Required(int, default=DEFAULT_UPDATE_INTERVAL)
-    items = Set(lambda: Item)
+
+
+class MediaFeed(MediaChannel):
+    """
+    A subclass of MediaChannel for providers that can distinguish between
+    individual broadcasts / episodes / events, perhaps with the abilit to watch
+    on demand.  Providers using MediaFeed
+    """
+
+    DEFAULT_ITEM_LIMIT = 100
+    DEFAULT_MIN_ITEMS=10
+    DEFAULT_MAX_ITEMS=500
+    DEFAULT_MAX_AGE=90
+
+    items = Set(lambda: MediaItem)
 
     @property
     def provider(self):
@@ -91,11 +108,14 @@ class Feed(db.Entity):
         commit()
 
 
-
-class Item(db.Entity):
+class MediaItem(db.Entity):
+    """
+    An individual media clip, broadcast, episode, etc. within a particular
+    MediaFeed.
+    """
 
     item_id = PrimaryKey(int, auto=True)
-    feed = Required(lambda: Feed)
+    feed = Required(lambda: MediaFeed)
     guid = Required(str, index=True)
     subject = Required(str)
     content = Required(Json)
@@ -143,7 +163,7 @@ def init(*args, **kwargs):
 def main():
 
     init()
-    Feed.purge()
+    MediaFeed.purge()
 
 if __name__ == "__main__":
     main()

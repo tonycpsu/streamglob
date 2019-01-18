@@ -2,11 +2,11 @@ from .feed import *
 
 from pyperi import Peri
 
-class PeriscopeItem(model.Item):
+class PeriscopeItem(model.MediaItem):
 
     is_live = Required(bool)
 
-class PeriscopeFeed(model.Feed):
+class PeriscopeFeed(model.MediaFeed):
 
     ITEM_CLASS = PeriscopeItem
 

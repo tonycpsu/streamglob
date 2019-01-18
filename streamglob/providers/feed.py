@@ -10,7 +10,7 @@ from .filters import *
 class FeedItem(AttrDict):
     pass
 
-# class URLFeed(model.Feed):
+# class URLFeed(model.MediaFeed):
 
 #     url = Required(str)
 

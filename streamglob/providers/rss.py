@@ -13,11 +13,11 @@ from time import mktime
 from pony.orm import *
 
 
-class RSSItem(model.Item):
+class RSSItem(model.MediaItem):
     pass
 
 
-class RSSFeed(model.Feed):
+class RSSFeed(model.MediaFeed):
 
     ITEM_CLASS = RSSItem
 
