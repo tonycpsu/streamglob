@@ -64,6 +64,8 @@ class StreamSession(object):
         self._state = AttrDict([
             ("proxies", proxies)
         ])
+        if proxies:
+            self.proxies = proxies
         self._cache_responses = False
 
     def login(self):
@@ -160,7 +162,7 @@ class StreamSession(object):
 
         if not response:
             response = method(url, *args, **kwargs)
-            logger.trace(dump.dump_all(response).decode("utf-8"))
+            # logger.trace(dump.dump_all(response).encode("utf-8"))
 
         if use_cache and not e:
             pickled_response = pickle.dumps(response)
@@ -172,13 +174,14 @@ class StreamSession(object):
 
         return response
 
-    @property
-    def proxies(self):
-        return self._state.proxies
 
     @property
     def headers(self):
         return []
+
+    @property
+    def proxies(self):
+        return self._state.proxies
 
     @proxies.setter
     def proxies(self, value):
@@ -189,7 +192,6 @@ class StreamSession(object):
             self.session.trust_env = (len(value) == 0)
             self._state.proxies = value
             self.session.proxies.update(value)
-
 
     @contextmanager
     def cache_responses(self, duration=model.CACHE_DURATION_DEFAULT):
