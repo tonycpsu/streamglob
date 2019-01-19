@@ -40,8 +40,6 @@ class FilterToolbar(urwid.WidgetWrap):
             self.columns.contents += [
                 (f.placeholder, self.columns.options(*f.widget_sizing(f.widget))),
             ]
-        if len(self.columns.contents):
-            self.columns.focus_position = 1
 
         # for i, (n, f) in enumerate(self.filters.items()):
         for n, f in self.filters.items():

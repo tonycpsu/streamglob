@@ -7,7 +7,7 @@ from .base import *
 from .widgets import *
 from .filters import *
 
-class FeedItem(AttrDict):
+class FeedItem(MediaItem):
     pass
 
 # class URLFeed(model.MediaFeed):

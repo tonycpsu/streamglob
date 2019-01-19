@@ -46,7 +46,7 @@ class NHLStreamSession(session.AuthenticatedStreamSession):
             session_key=None,
             *args, **kwargs
     ):
-        super(sessionNHLStreamSession, self).__init__(
+        super(NHLStreamSession, self).__init__(
             username, password,
             *args, **kwargs
         )
