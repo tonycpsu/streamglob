@@ -53,12 +53,13 @@ setup(name=name,
               "sgplay=streamglob.play:main"
           ],
           "streamglob.providers": [
+              "instagram = streamglob.providers.instagram:InstagramProvider",
               "mlb = streamglob.providers.mlb:MLBProvider",
               "nhl = streamglob.providers.nhl:NHLProvider",
               "periscope = streamglob.providers.periscope:PeriscopeProvider",
               "rss = streamglob.providers.rss:RSSProvider",
+              "twitch = streamglob.providers.twitch:TwitchProvider",
               "youtube = streamglob.providers.youtube:YouTubeProvider",
-              "instagram = streamglob.providers.instagram:InstagramProvider",
           ]
       },
       zip_safe=False

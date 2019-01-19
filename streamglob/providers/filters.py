@@ -8,6 +8,7 @@ import panwid
 from datetime import datetime, timedelta
 import dateutil.parser
 from dateutil.relativedelta import relativedelta
+from orderedattrdict import AttrDict
 
 from ..exceptions import *
 
@@ -307,6 +308,38 @@ class ListingFilter(WidgetFilter, abc.ABC):
 
     def __getitem__(self, key):
         return self.widget.items[key]
+
+
+class ConfigFilter(ListingFilter, abc.ABC):
+
+    @property
+    @abc.abstractmethod
+    def key(self):
+        pass
+
+    @property
+    def with_all(self):
+        return False
+
+    @property
+    def values(self):
+        cfg = getattr(self.provider.config, self.key)
+
+        if self.with_all:
+            items = [("All", None)]
+        else:
+            items = list()
+
+        if isinstance(cfg, dict):
+            return AttrDict(items, **cfg)
+        elif isinstance(cfg, list):
+            return AttrDict(items, **AttrDict([ (i, i) for i in cfg ]))
+
+    @property
+    def widget_sizing(self):
+        return lambda w: ("given", 40)
+
+
 
 
 def with_filters(*filters):

@@ -157,28 +157,10 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             return super().keypress(size, key)
         return key
 
-class FeedsFilter(ListingFilter):
+class FeedsFilter(ConfigFilter):
 
-    @property
-    def values(self):
-        cfg = self.provider.config.feeds
-        if isinstance(cfg, dict):
-            return AttrDict([
-                ("All", None)
-            ], **cfg)
-        elif isinstance(cfg, list):
-            return AttrDict([
-                ("All", None)
-            ], **AttrDict([ (i, i) for i in cfg ]))
-
-    # @property
-    # def widget_sizing(self):
-    #     return lambda w: ("weight", 1)
-
-    @property
-    def widget_sizing(self):
-        return lambda w: ("given", 40)
-
+    key = "feeds"
+    with_all = True
 
 
 class ItemStatusFilter(ListingFilter):
