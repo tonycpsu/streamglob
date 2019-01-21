@@ -49,7 +49,8 @@ class MediaChannel(db.Entity):
     name = Optional(str, index=True)
     provider_name = Required(str, index=True)
     locator = Required(str)
-    updated = Optional(datetime)
+    updated = Required(datetime, default=datetime.now)
+    last_seen = Optional(datetime)
     update_interval = Required(int, default=DEFAULT_UPDATE_INTERVAL)
 
     @property

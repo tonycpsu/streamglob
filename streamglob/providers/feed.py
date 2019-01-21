@@ -209,8 +209,10 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
 
     SUBJECT_LABEL = "title"
 
+    UPDATE_INTERVAL = 300
+
     TASKS = [
-        ("update", 15, [], {"force": True})
+        ("update", UPDATE_INTERVAL, [], {"force": True})
     ]
 
     @property

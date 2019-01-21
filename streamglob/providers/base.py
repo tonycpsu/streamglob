@@ -1,3 +1,5 @@
+import logging
+logger = logging.getLogger(__name__)
 import abc
 import asyncio
 
@@ -340,35 +342,6 @@ class PaginatedProviderMixin(object):
     def limit(self, value):
         self._limit = value
 
-class AutoUpdatingViewMixin(object):
-
-    UPDATE_INTERVAL = 60
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._refresh_alarm = None
-
-    def set_refresh_alarm(self):
-        def update(loop, user_data):
-            self.update()
-            self._refresh_alarm = None
-            self.set_refresh_alarm()
-
-        if not self._refresh_alarm:
-            self._refresh_alarm = state.loop.set_alarm_in(
-                self.UPDATE_INTERVAL, update
-            )
-
-    def on_activate(self):
-        self.update()
-        self.set_refresh_alarm()
-
-
-    def on_deactivate(self):
-        if self._refresh_alarm:
-            state.loop.remove_alarm(self._refresh_alarm)
-        self._refresh_alarm = None
-
 
 class BackgroundTasksMixin(object):
 
@@ -397,7 +370,7 @@ class BackgroundTasksMixin(object):
         self._tasks[fn.__name__] = state.asyncio_loop.create_task(run())
 
     def on_activate(self):
-        self.update()
+        # self.update()
         for task in self.TASKS:
             args = []
             kwargs = {}

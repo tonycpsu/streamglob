@@ -18,26 +18,31 @@ class TwitchSession(StreamSession):
         res = self.client.users.translate_usernames_to_ids([user_name])[0]
         return res.get("id")
 
-    def check_stream(self, username):
+    def check_channel(self, username):
 
         user_id = self.user_name_to_id(username)
-        stream = AttrDict(self.client.streams.get_stream_by_user(user_id) or {})
-        if stream:# and "channel" in stream:
+        channel = AttrDict(self.client.streams.get_stream_by_user(user_id) or {})
+        if channel:# and "channel" in channel:
             return MediaItem(
-                stream = username,
-                url = stream.channel.url,
-                description = stream.channel.description,
-                created = stream.created_at
+                channel = username,
+                url = channel.channel.url,
+                description = channel.channel.description,
+                created = channel.created_at
             )
         else:
             return None
+
+class TwitchChannel(model.MediaChannel):
+    pass
 
 
 class TwitchProvider(LiveStreamProvider):
 
     SESSION_CLASS = TwitchSession
 
+    CHANNEL_CLASS = TwitchChannel
+
     MEDIA_TYPES = {"video"}
 
-    def check_stream(self, locator):
-        return self.session.check_stream(locator)
+    def check_channel(self, locator):
+        return self.session.check_channel(locator)

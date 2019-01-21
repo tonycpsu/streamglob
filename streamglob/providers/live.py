@@ -3,9 +3,9 @@ from ..state import *
 from .base import *
 import abc
 
-class StreamsFilter(ConfigFilter):
+class ChannelsFilter(ConfigFilter):
 
-    key = "streams"
+    key = "channels"
     with_all = True
 
 
@@ -30,16 +30,18 @@ class LiveStreamProviderView(SimpleProviderView):
 class LiveStreamProvider(BackgroundTasksMixin, BaseProvider):
 
     FILTERS = AttrDict([
-        ("streams", StreamsFilter)
+        ("channel", ChannelsFilter)
     ])
 
+    UPDATE_INTERVAL = 300
+
     TASKS = [
-        ("update", 15)
+        ("update", UPDATE_INTERVAL)
     ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.live_streams = list()
+        self.live_channels = list()
         # self._update_alarm = None
 
     # def on_activate(self):
@@ -61,36 +63,61 @@ class LiveStreamProvider(BackgroundTasksMixin, BaseProvider):
     @property
     def ATTRIBUTES(self):
         return AttrDict(
-            stream = {"width": 32},
+            channel = {"width": 32},
             created = {"width": 19},
             description = {"width": ("weight", 1)},
         )
 
     @property
-    def streams(self):
-        if isinstance(self.config.streams, dict):
-            return self.config.streams
+    def channels(self):
+        if isinstance(self.config.channels, dict):
+            return self.config.channels
         else:
             return AttrDict([
-                (f, f) for f in self.config.streams
+                (f, f) for f in self.config.channels
             ])
+
+    @db_session
+    def create_channels(self):
+        for name, locator in self.channels.items():
+            feed = self.CHANNEL_CLASS.get(locator=locator)
+            if not feed:
+                feed = self.CHANNEL_CLASS(
+                    provider_name = self.IDENTIFIER,
+                    name = name,
+                    locator=self.filters.channel[name]
+                    # **self.feed_attrs(name)
+                )
+                commit()
 
     def listings(self, offset=None, limit=None, *args, **kwargs):
 
-        return self.live_streams
+        return self.live_channels
 
+
+    FOO = 0
     @db_session
     def update(self):
+        self.create_channels()
+        self.refresh()
 
-        if self.filters.streams.value:
-            streams = [self.filters.streams.value]
+    @db_session
+    def refresh(self):
+        if self.filters.channel.value:
+            channels = [self.filters.channel.value]
         else:
-            streams = self.streams
+            channels = self.channels
 
-        for locator in streams:
-            s = self.check_stream(locator)
-            if s and s.stream not in [l.stream for l in self.live_streams]:
-                self.live_streams.append(
+        self.live_channels = list()
+        for locator in channels:
+            channel = self.CHANNEL_CLASS.get(locator=locator)
+            if not channel:
+                raise Exception
+
+            s = self.check_channel(locator)
+            channel.updated = datetime.now()
+            if s and s.channel not in [l.channel for l in self.live_channels]:
+                self.live_channels.append(
                     MediaItem(
                         s
                     )
@@ -100,10 +127,10 @@ class LiveStreamProvider(BackgroundTasksMixin, BaseProvider):
 
 
     @abc.abstractmethod
-    def check_stream(self, stream):
+    def check_channel(self, channel):
         """
-        A method that's called for each defined stream locator to determine if
-        it's live or not.  If so, the stream data is returned, if not, the return
+        A method that's called for each defined channel locator to determine if
+        it's live or not.  If so, the channel data is returned, if not, the return
         value should be None.
         """
         pass
