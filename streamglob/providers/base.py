@@ -1,6 +1,7 @@
 import abc
+import asyncio
 
-from orderedattrdict import AttrDict
+from orderedattrdict import AttrDict, defaultdict
 from itertools import chain
 import re
 
@@ -80,16 +81,21 @@ class SimpleProviderView(BaseProviderView):
         super().__init__(self.pile)
 
     def filter_change(self, f, name, *args):
-        func = getattr(self, f"on_{name}_change", None)
+        logger.debug(f"filter_change: {name}, {args}")
+        func = getattr(self.provider, f"on_{name}_change", None)
         if func:
             func(self, *args)
-        self.update()
+        # self.table.refresh()
+        # self.table.reset()
 
     def cycle_filter(self, widget, n, step):
         self.toolbar.cycle_filter(n, step)
 
-    def update(self):
-        self.table.reset()
+    def refresh(self):
+        self.table.refresh()
+
+    # def update(self):
+    #     self.refresh()
 
 class ClassPropertyDescriptor(object):
 
@@ -155,6 +161,7 @@ class BaseProvider(abc.ABC):
     def __init__(self, *args, **kwargs):
         self._view = None
         self._session = None
+        self._active = False
         self._filters = AttrDict({n: f(provider=self, label=n)
                                   for n, f in self.FILTERS.items() })
 
@@ -183,6 +190,22 @@ class BaseProvider(abc.ABC):
             self._view = self.make_view()
             self._view.update()
         return self._view
+
+    def activate(self):
+        if not self._active:
+            self._active = True
+            self.on_activate()
+
+    def deactivate(self):
+        if self._active:
+            self.on_deactivate()
+            self._active = False
+
+    def on_activate(self):
+        pass
+
+    def on_deactivate(self):
+        pass
 
     @abc.abstractmethod
     def make_view(self):
@@ -300,6 +323,9 @@ class BaseProvider(abc.ABC):
     def limit(self):
         return None
 
+    def refresh(self):
+        self.view.refresh()
+
 
 class PaginatedProviderMixin(object):
 
@@ -313,3 +339,85 @@ class PaginatedProviderMixin(object):
     @limit.setter
     def limit(self, value):
         self._limit = value
+
+class AutoUpdatingViewMixin(object):
+
+    UPDATE_INTERVAL = 60
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._refresh_alarm = None
+
+    def set_refresh_alarm(self):
+        def update(loop, user_data):
+            self.update()
+            self._refresh_alarm = None
+            self.set_refresh_alarm()
+
+        if not self._refresh_alarm:
+            self._refresh_alarm = state.loop.set_alarm_in(
+                self.UPDATE_INTERVAL, update
+            )
+
+    def on_activate(self):
+        self.update()
+        self.set_refresh_alarm()
+
+
+    def on_deactivate(self):
+        if self._refresh_alarm:
+            state.loop.remove_alarm(self._refresh_alarm)
+        self._refresh_alarm = None
+
+
+class BackgroundTasksMixin(object):
+
+    DEFAULT_INTERVAL = 60
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._tasks = defaultdict(lambda: None)
+
+    def run_in_background(self, fn, interval=DEFAULT_INTERVAL,
+                          wait_for_first = False,
+                          *args, **kwargs):
+
+        logger.info(f"run_in_background {fn.__name__} {interval}c")
+        async def run():
+            while True:
+                logger.info(f"running {fn.__name__} {args} {kwargs}")
+                # self._tasks[fn.__name__] = None
+                # fn(*args, **kwargs)
+                await state.asyncio_loop.run_in_executor(
+                    None, lambda: fn(*args, **kwargs)
+                )
+                # state.loop.event_loop.enter_idle(lambda: fn(*args, **kwargs))
+                await asyncio.sleep(interval)
+
+        self._tasks[fn.__name__] = state.asyncio_loop.create_task(run())
+
+    def on_activate(self):
+        self.update()
+        for task in self.TASKS:
+            args = []
+            kwargs = {}
+            interval = self.DEFAULT_INTERVAL
+            if isinstance(task, tuple):
+                if len(task) == 4:
+                    (task, interval, args, kwargs) = task
+                elif len(task) == 3:
+                    (task, interval, args) = task
+                elif len(task) == 2:
+                    (task, interval) = task
+            fn = getattr(self, task)
+            self.run_in_background(fn, interval, *args, **kwargs)
+
+
+    def on_deactivate(self):
+        for name, task in self._tasks.items():
+            if task:
+                task.cancel()
+                self._tasks[name] = None
+        # if self._refresh_alarm:
+        #     state.loop.remove_alarm(self._tasks[fn.__name__])
+        # self._tasks[fn.__name__] = None

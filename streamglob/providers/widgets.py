@@ -99,7 +99,7 @@ class ProviderDataTable(panwid.DataTable):
 
         key = super().keypress(size, key)
         if key == "ctrl r":
-            self.reset()
+            self.provider.refresh()
         elif key in ["left", "right"]:
             self._emit(f"cycle_filter", 0, -1 if key == "left" else 1)
         elif key in ["[", "]"]:

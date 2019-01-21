@@ -36,7 +36,7 @@ class PeriscopeFeed(model.MediaFeed):
                         content = f"https://pscp.tv/w/{item['id']}",
                         is_live = item.get("state") == "RUNNING"
                 )
-        except pyperi.pyperi.PyPeriConnectionError as e:
+        except pyperi.PyPeriConnectionError as e:
             logger.warning(e)
 
 class PeriscopeLiveStreamFilter(ListingFilter):

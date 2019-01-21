@@ -123,7 +123,9 @@ class MainView(BaseView):
             lambda w, p: self.set_provider(p)
         )
 
-        self.provider_view_placeholder = urwid.WidgetPlaceholder(urwid.Text(""))
+        self.provider_view_placeholder = urwid.WidgetPlaceholder(
+            urwid.Filler(urwid.Text(""))
+        )
 
         self.pile  = urwid.Pile([
             (1, self.toolbar),
@@ -131,17 +133,20 @@ class MainView(BaseView):
             ('weight', 1, self.provider_view_placeholder),
         ])
         super(MainView, self).__init__(self.pile)
-        self.set_provider(self.provider.IDENTIFIER)
+
+    def set_provider(self, provider):
+
+        self.provider.deactivate()
+        self.provider = providers.get(provider)
+        self.provider_view_placeholder.original_widget = self.provider.view
         if self.provider.config_is_valid:
             self.pile.focus_position = 2
         else:
             self.pile.focus_position = 0
+        self.provider.activate()
 
-
-    def set_provider(self, provider):
-
-        self.provider = providers.get(provider)
-        self.provider_view_placeholder.original_widget = self.provider.view
+    def activate(self):
+        self.set_provider(self.provider.IDENTIFIER)
 
     def keypress(self, size, key):
 
@@ -210,6 +215,10 @@ def run_gui(provider, **kwargs):
     if options.verbose:
         logger.setLevel(logging.DEBUG)
 
+    def activate_view(loop, user_data):
+        view.activate()
+
+    state.loop.set_alarm_in(0, activate_view)
     state.loop.run()
 
 def run_cli(provider, selection, **kwargs):

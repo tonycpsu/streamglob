@@ -23,7 +23,7 @@ class InstagramSession(session.StreamSession):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             self.web_api = Client(
-                proxy=self.proxies.get("https"),
+                proxy=self.proxies.get("https") if self.proxies else None,
                 auto_patch=True, drop_incompat_keys=False
             )
         self.end_cursors = DefaultAttrDict(lambda: None)

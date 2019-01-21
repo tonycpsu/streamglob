@@ -1,3 +1,5 @@
+from ..state import *
+
 from .base import *
 import abc
 
@@ -6,11 +8,55 @@ class StreamsFilter(ConfigFilter):
     key = "streams"
     with_all = True
 
-class LiveStreamProvider(BaseProvider):
+
+class LiveStreamProviderDataTable(ProviderDataTable):
+
+    def keypress(self, size, key):
+
+        if key == "meta r":
+            self.provider.update()
+            self.reset()
+        else:
+            return super().keypress(size, key)
+        return key
+
+
+class LiveStreamProviderView(SimpleProviderView):
+
+    PROVIDER_DATA_TABLE_CLASS = LiveStreamProviderDataTable
+
+
+@with_view(LiveStreamProviderView)
+class LiveStreamProvider(BackgroundTasksMixin, BaseProvider):
 
     FILTERS = AttrDict([
         ("streams", StreamsFilter)
     ])
+
+    TASKS = [
+        ("update", 15)
+    ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.live_streams = list()
+        # self._update_alarm = None
+
+    # def on_activate(self):
+    #     self.update()
+
+    #     def update(loop, user_data): self.update()
+
+    #     if not self._update_alarm:
+    #         self._update_alarm = state.loop.set_alarm_in(
+    #             self.REFRESH_INTERVAL, update
+    #         )
+
+    # def on_deactivate(self):
+    #     if self._update_alarm:
+    #         state.loop.remove_alarm(self._update_alarm)
+    #     self._update_alarm = None
+
 
     @property
     def ATTRIBUTES(self):
@@ -31,25 +77,27 @@ class LiveStreamProvider(BaseProvider):
 
     def listings(self, offset=None, limit=None, *args, **kwargs):
 
-        count = 0
+        return self.live_streams
 
-        if not offset:
-            offset = 0
-        if not limit:
-            limit = self.limit
+    @db_session
+    def update(self):
 
         if self.filters.streams.value:
             streams = [self.filters.streams.value]
         else:
             streams = self.streams
 
-        for stream in filter(
-                lambda x: x is not None,
-                [ self.check_stream(x) for x in streams ]
-        ):
-            yield MediaItem(
-                stream
-            )
+        for locator in streams:
+            s = self.check_stream(locator)
+            if s and s.stream not in [l.stream for l in self.live_streams]:
+                self.live_streams.append(
+                    MediaItem(
+                        s
+                    )
+                )
+
+        self.view.table.refresh()
+
 
     @abc.abstractmethod
     def check_stream(self, stream):

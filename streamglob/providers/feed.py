@@ -22,6 +22,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     with_scrollbar=True
     sort_by = ("created", True)
+    index = "item_id"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -77,9 +78,9 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         if not item:
             return
         item.mark_read()
-        self.selection.clear_attr("unread")
+        self[position].clear_attr("unread")
         self.set_value(position, "read", item.read)
-        self.invalidate_rows([self[position].data.index])
+        self.invalidate_rows([self[position].data.item_id])
 
     @db_session
     def mark_item_unread(self, position):
@@ -89,9 +90,9 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         if not item:
             return
         item.mark_unread()
-        self.selection.set_attr("unread")
+        self[position].set_attr("unread")
         self.set_value(position, "read", item.read)
-        self.invalidate_rows([self[position].data.index])
+        self.invalidate_rows([self[position].data.item_id])
 
     @db_session
     def toggle_item_read(self, position):
@@ -109,10 +110,10 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             guid=self[position].data.get("guid")
         )
 
-    def reset(self, *args, **kwargs):
-        self.update_count = True
-        self.provider.update_query()
-        super().reset(*args, **kwargs)
+    # def reset(self, *args, **kwargs):
+    #     self.update_count = True
+    #     self.provider.update_query()
+    #     super().reset(*args, **kwargs)
 
     def keypress(self, size, key):
 
@@ -122,13 +123,13 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         elif key == "n":
             try:
                 idx = next(
-                    r.index
+                    r.data.item_id
                     for r in self[self.focus_position+1:]
                     if not r.data.read
                 )
             except StopIteration:
                 self.focus_position = len(self)-1
-                self.load_more()
+                self.load_more(self.focus_position)
                 self.focus_position += 1
                 return
             pos = self.index_to_position(idx)
@@ -137,7 +138,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         elif key == "p":
             try:
                 idx = next(
-                    r.index
+                    r.data.item_id
                     for r in self[self.focus_position-1::-1]
                     if not r.data.read
                 )
@@ -196,18 +197,21 @@ class FeedProvider(BaseProvider):
             self.filters.feed.label = identifier
         raise SGIncompleteIdentifier
 
+
 class CachedFeedProviderView(SimpleProviderView):
 
     PROVIDER_DATA_TABLE_CLASS = CachedFeedProviderDataTable
 
 
 @with_view(CachedFeedProviderView)
-class CachedFeedProvider(FeedProvider):
+class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
 
-    UPDATE_INTERVAL = 300
-    MAX_ITEMS = 100
 
     SUBJECT_LABEL = "title"
+
+    TASKS = [
+        ("update", 15, [], {"force": True})
+    ]
 
     @property
     def ITEM_CLASS(self):
@@ -217,6 +221,7 @@ class CachedFeedProvider(FeedProvider):
     @property
     def ATTRIBUTES(self):
         return AttrDict(
+            item_id = {"hide": True},
             feed = {"width": 32, "format_fn": lambda f: f.name if hasattr(f, "name") else "none"},
             created = {"width": 19},
             subject = {"width": ("weight", 1), "label": self.SUBJECT_LABEL},
@@ -277,14 +282,31 @@ class CachedFeedProvider(FeedProvider):
                 f.update()
                 f.updated = datetime.now()
 
-    @db_session
-    def update(self, force=False):
-        self.create_feeds()
-        self.update_feeds(force=force)
-
     @property
     def feed_filters(self):
         return None
+
+    def on_feed_change(self, *args):
+        self.refresh()
+        self.view.table.reset()
+
+    # @db_session
+    def update(self, force=False):
+        logger.info(f"update: {force}")
+        self.create_feeds()
+        self.update_feeds(force=force)
+        self.refresh()
+        # state.loop.draw_screen()
+
+    def refresh(self):
+        self.update_count = True
+        self.update_query()
+        self.view.table.refresh()
+
+    # def on_activate(self):
+    #     self.refresh()
+    #     self.update()
+
 
     @db_session
     def update_query(self):
@@ -316,7 +338,6 @@ class CachedFeedProvider(FeedProvider):
             self.items_query = self.items_query.filter(
                 lambda i: i.feed == self.feed
             )
-
 
     def listings(self, offset=None, limit=None, *args, **kwargs):
 
