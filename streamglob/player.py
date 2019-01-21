@@ -28,7 +28,7 @@ class Player(abc.ABC):
 
     PLAYER_INTEGRATED=False
 
-    def __init__(self, name, path=None, args=None, exclude_types=None):
+    def __init__(self, name, path=None, args=[], exclude_types=None):
         self.name = name
         self.path = path or self.name
         if isinstance(args, str):
@@ -62,18 +62,20 @@ class Player(abc.ABC):
         if isinstance(spec, str):
             # get the player by name
             try:
-                return PLAYERS[spec]
+                p = PLAYERS[spec]
+                return p.cls(p.name, p.path)
             except KeyError:
                 raise SGException(f"Player {spec} not found")
 
         elif isinstance(spec, set):
             try:
-                return next(
+                p = next(
                     p for p in PLAYERS.values()
                     if spec.intersection(
-                        p.MEDIA_TYPES - set(getattr(p, "exclude_types", []))
+                        p.cls.MEDIA_TYPES - set(getattr(p.cls, "exclude_types", []))
                     ) == spec
                 )
+                return p.cls(p.name, p.path)
             except StopIteration:
                 raise SGException(
                     f"Player for media types {spec} not found"
@@ -106,7 +108,15 @@ class Player(abc.ABC):
             if not path:
                 logger.warn(f"path for player {name} not found")
                 continue
-            PLAYERS[name] = Player.from_config(cfg)
+            # PLAYERS[name] = Player.from_config(cfg)
+            klass = cls.SUBCLASSES.get(cfg.name, cls)
+            PLAYERS[name] = AttrDict(
+                dict(
+                    cls=klass,
+                    name=name,
+                    path=path
+                )
+            )
 
         # Try to find any players not configured
         for name, klass in cls.SUBCLASSES.items():
@@ -114,7 +124,14 @@ class Player(abc.ABC):
                 continue
             path = distutils.spawn.find_executable(name)
             if path:
-                PLAYERS[name] = klass(name, path, [])
+                # PLAYERS[name] = klass(name, path, [])
+                PLAYERS[name] = AttrDict(
+                    dict(
+                        cls=klass,
+                        name=name,
+                        path=path
+                    )
+                )
 
 
     # @property
@@ -176,7 +193,7 @@ class Player(abc.ABC):
 
         if source:
             self.source = source
-        logger.info(f"{self.__class__.__name__} playing {self.source}")
+        # logger.info(f"{self.__class__.__name__} playing {self.source}")
 
         self.process_kwargs(kwargs)
 
@@ -190,9 +207,9 @@ class Player(abc.ABC):
         else:
             cmd += [self.source]
         cmd += self.extra_args_post
+        logger.debug(f"cmd: {cmd}")
 
         if not self.source_integrated:
-            logger.trace(f"{self.__class__.__name__} running {cmd}")
             try:
                 self.proc = subprocess.Popen(
                     cmd,

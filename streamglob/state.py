@@ -1,3 +1,5 @@
+import logging
+logger = logging.getLogger(__name__)
 from memoize import *
 from orderedattrdict import AttrDict
 
