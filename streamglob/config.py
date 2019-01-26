@@ -29,44 +29,50 @@ KNOWN_PLAYERS = ["mpv", "vlc"]
 
 settings = None
 
-class NotEmptyValidator(Validator):
+def from_yaml_for_type(dict_type, loader, node):
+    'Load mapping as AttrDict, preserving order'
+    # Based on yaml.constructor.SafeConstructor.construct_mapping()
+    d = dict_type()
+    yield d
+    if not isinstance(node, yaml.MappingNode):
+        raise ConstructorError(
+            None, None, 'expected a mapping node, but found %s' % node.id, node.start_mark)
+    loader.flatten_mapping(node)
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=False)
+        try:
+            hash(key)
+        except TypeError as exc:
+            raise ConstructorError(
+                'while constructing a mapping', node.start_mark,
+                'found unacceptable key (%s)' % exc, key_node.start_mark)
+        d[key] = loader.construct_object(value_node, deep=False)
 
-    def validate(self, document):
-        text = document.text
-        if not len(text):
-            raise ValidationError(message="Please supply a value")
+def yaml_loader(node_type):
 
-class RangeNumberValidator(Validator):
+    from_yaml = functools.partial(from_yaml_for_type, node_type)
 
-    def __init__(self, minimum=None, maximum=None):
-        self.minimum = minimum
-        self.maximum = maximum
+    cls_name = f"{node_type.__name__}YAMLLoader"
 
-    def validate(self, document):
+    def __init__(self, *args, **kwargs):
+        super(cls, self).__init__(*args, **kwargs)
+        self.add_constructor(u'tag:yaml.org,2002:map', from_yaml)
+        self.add_constructor(u'tag:yaml.org,2002:omap', from_yaml)
 
-        text = document.text
+    d = {"__init__": __init__}
 
-        if not text:
-            raise ValidationError(message="Please supply a value")
+    cls = type(cls_name, (yaml.Loader,), d)
+    return cls
 
-        if text.isdigit():
-            value = int(text)
-        else:
-            i = 0
+class ConfigTree(Tree):
 
-            raise ValidationError(
-                message='Please enter an integer.'
-            )
-
-        if self.minimum and value < self.minimum:
-            raise ValidationError(
-                message="Value must be greater than %s" %(self.minimum)
-            )
-
-        if self.maximum and value > self.maximum:
-            raise ValidationError(
-                message="Value must be less than %s" %(self.maximum)
-            )
+    def get_path(self, keys, default=None):
+        return functools.reduce(
+            lambda d, key: d.get(key, default)
+            if isinstance(d, dict) else default,
+            keys.split("."),
+            self
+        )
 
 
 def dict_merge(dct, merge_dct):
@@ -80,7 +86,7 @@ def dict_merge(dct, merge_dct):
             dct[k] = merge_dct[k]
     return dct
 
-class ProfileTree(Tree):
+class ProfileTree(ConfigTree):
 
     DEFAULT_PROFILE_NAME = "default"
 
@@ -106,21 +112,6 @@ class ProfileTree(Tree):
     def set_profile(self, profile):
         self._profile_name = profile
 
-    # def __getattr__(self, name):
-    #     if not name.startswith("_"):
-    #         p = self.profile
-    #         val = p.get(name)
-    #         if (self._merge_default
-    #             and self._profile_name != self._default_profile_name):
-    #             default_profile = self[self._default_profile_name]
-    #             if isinstance(val, list):
-    #                 val += default_profile.get(name, [])
-    #             elif isinstance(val, dict):
-    #                 val = default_profile.get(name, {})
-    #                 val.update(**self.get(name, {}))
-    #         return val
-    #     return super().__getattr_(self, name)
-    #     # raise AttributeError
 
     def __setattr__(self, name, value):
         if not name.startswith("_"):
@@ -128,8 +119,9 @@ class ProfileTree(Tree):
         else:
             object.__setattr__(self, name, value)
 
-    def get(self, name, default=None):
-        return self.profile.get(name, default)
+    # def get(self, name, default=None):
+        # return self.profile.get(name, default)
+
         # p = self.profile
         # return (
         #     p.get(name, default)
@@ -139,6 +131,8 @@ class ProfileTree(Tree):
 
     def __getitem__(self, name):
         if isinstance(name, tuple):
+            # ???
+            raise Exception
             return functools.reduce(
                 lambda a, b: ProfileTree(a, **{ k: v for k, v in b.items() if k not in a}),
                 [ self[p] for p in reversed(name) ]
@@ -147,7 +141,7 @@ class ProfileTree(Tree):
         else:
             return super(ProfileTree, self).__getitem__(name)
 
-class Config(Tree):
+class Config(ConfigTree):
 
     DEFAULT_PROFILE = "default"
 
@@ -160,119 +154,10 @@ class Config(Tree):
                                          merge_default=merge_default)
 
 
-    def init_config(self):
-
-        raise Exception("""
-        Sorry, this configurator needs to be updated  to reflect recent changes
-        to the config file.  Until this is fixed, use the sample config found
-        in the "docs" directory of the distribution.
-        """)
-
-        from .session import StreamSession, SGStreamSessionException
-
-        def mkdir_p(path):
-            try:
-                os.makedirs(path)
-            except OSError as exc:  # Python >2.5
-                if not (exc.errno == errno.EEXIST and os.path.isdir(path)):
-                    raise
-
-        def find_players():
-            for p in KNOWN_PLAYERS:
-                player = distutils.spawn.find_executable(p)
-                if player:
-                    yield player
-
-        StreamSession.destroy()
-        if os.path.exists(CONFIG_FILE):
-            os.remove(CONFIG_FILE)
-
-        time_zone = None
-        player = None
-        mkdir_p(CONFIG_DIR)
-
-        while True:
-            self.profile.username = prompt(
-                "MLB.com username: ",
-                validator=NotEmptyValidator())
-            self.profile.password =  prompt(
-                'Enter password: ',
-                is_password=True, validator=NotEmptyValidator())
-            try:
-                s = StreamSession(self.profile.username,
-                               self.profile.password)
-                s.login()
-                break
-            except SGStreamSessionException:
-                print("Couldn't login to MLB, please check your credentials.")
-                continue
-
-        tz_local = tzlocal.get_localzone().zone
-
-        # password = prompt("MLB.tv password (will be stored in clear text!): ")
-        found_players = list(find_players())
-        if not found_players:
-            print("no known media players found")
-        else:
-            print("found the following media players")
-            print("\n".join(
-                [ "\t%d: %s" %(n, p)
-                  for n, p in enumerate(
-                          ["My player is not listed"] + found_players
-                  )]))
-            choice = int(
-                prompt(
-                    "Select the number corresponding to your preferred player,\n"
-                    "or 0 if your player is not listed: ",
-                    validator=RangeNumberValidator(maximum=len(found_players))))
-            if choice:
-                player = found_players[choice-1]
-
-        while not player:
-            response = prompt("Please enter the path to your media player: ")
-            player = distutils.spawn.find_executable(response)
-            if not player:
-                print("Couldn't locate player '%s'" %(response))
-
-        player_args = prompt(
-            "If you need to pass additional arguments to your media "
-            "player, enter them here: ")
-        if player_args:
-            player = " ".join([player, player_args])
-
-        self.profile.player = player
-
-        print("\n".join(
-            [ "\t%d: %s" %(n, l)
-              for n, l in enumerate(
-                      utils.MLB_HLS_RESOLUTION_MAP
-              )]))
-        print("Select a default video resolution for MLB.tv streams:")
-        choice = int(
-            prompt(
-                "Choice: ",
-                validator=RangeNumberValidator(maximum=len(utils.MLB_HLS_RESOLUTION_MAP))))
-        if choice is not None:
-            self.profile.default_resolution = utils.MLB_HLS_RESOLUTION_MAP[
-                list(utils.MLB_HLS_RESOLUTION_MAP.keys())[choice]
-            ]
-
-        print("Your system time zone seems to be %s." %(tz_local))
-        if not confirm("Is that the time zone you'd like to use? (y/n) "):
-            while not time_zone:
-                response = prompt("Enter your preferred time zone: ")
-                if response in pytz.common_timezones:
-                    time_zone = response
-                    break
-                elif confirm("Can't find time zone %s: are you sure? (y/n) "):
-                    time_zone = response
-                    break
-
-        else:
-            time_zone = tz_local
-
-        self.profile.time_zone = time_zone
-        self.save()
+    # def get(self, keys, default=None):
+    #     return functools.reduce(lambda d, key: d.get(key, default)
+    #                   if isinstance(d, dict) else default,
+    #                   keys.split("."), self.profile)
 
     @property
     def profile(self):
@@ -288,7 +173,7 @@ class Config(Tree):
     def load(self):
         if not os.path.exists(self._config_file):
             raise Exception(f"config file {self._config_file} not found")
-        config = yaml.load(open(self._config_file), Loader=AttrDictYAMLLoader)
+        config = yaml.load(open(self._config_file), Loader=yaml_loader(ConfigTree))
         self.update(config.items())
 
     def save(self):
@@ -315,11 +200,10 @@ def main():
         os.path.expanduser("~/.config/streamglob/config.yaml"),
         merge_default=True
     )
-    print(test_settings)
+    # print(test_settings)
     # print(list(test_settings.profile.providers.keys()))
-    test_settings.set_profile("proxy")
-    print(list(test_settings.profile.proxies.keys()))
-    raise Exception
+    # test_settings.set_profile("proxy")
+    raise Exception(test_settings.profile.providers.youtube.get_path("output.template"))
     print(test_settings.profile.get("env"))
     print(test_settings.profiles["default"])
     print(test_settings.profiles[("default")].get("env"))
