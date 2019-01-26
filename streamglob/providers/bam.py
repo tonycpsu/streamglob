@@ -20,6 +20,16 @@ from .filters import *
 from ..player import *
 from .widgets import *
 
+class BAMListing(MediaListing):
+
+    @property
+    def start_date(self):
+        return self.start.strftime("%Y%m%d")
+
+    @property
+    def ext(self):
+        return "mp4"
+
 
 class BAMProviderData(model.ProviderData):
 
@@ -388,7 +398,7 @@ class BAMProviderMixin(abc.ABC):
                 else:
                     self.line_score = None
 
-                yield(AttrDict(
+                yield(BAMListing(
                     game_id = game_pk,
                     game_type = game_type,
                     away = away_team,
@@ -591,6 +601,10 @@ class BAMProviderMixin(abc.ABC):
 
     def on_select(self, widget, selection):
         self.open_watch_dialog(selection)
+
+    def on_activate(self):
+        self.refresh()
+
 
     def open_watch_dialog(self, selection):
         media = list(self.get_media(selection["game_id"]))

@@ -44,7 +44,8 @@ setup(name=name,
           "atoma",
           "youtube_dl",
           "instagram_private_api",
-          "pyperi==0.2.0"
+          "pyperi==0.2.0",
+          "dataclasses-json"
       ],
       test_suite="test",
       entry_points = {

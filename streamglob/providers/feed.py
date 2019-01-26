@@ -7,8 +7,20 @@ from .base import *
 from .widgets import *
 from .filters import *
 
-class FeedItem(MediaItem):
-    pass
+class FeedListing(MediaListing):
+
+    # @property
+    # def locator(self):
+    #     return self.content
+
+    @property
+    def feed_name(self):
+        return self.feed.name
+
+    @property
+    def timestamp(self):
+        return self.created.strftime("%Y%m%d_%H%M%S")
+
 
 # class URLFeed(model.MediaFeed):
 
@@ -70,7 +82,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     @db_session
     def mark_item_read(self, position):
         try:
-            if not isinstance(self[position].data, FeedItem):
+            if not isinstance(self[position].data, FeedListing):
                 return
         except IndexError:
             return
@@ -84,7 +96,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     @db_session
     def mark_item_unread(self, position):
-        if not isinstance(self[position].data, FeedItem):
+        if not isinstance(self[position].data, FeedListing):
             return
         item = self.item_at_position(position)
         if not item:
@@ -96,7 +108,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     @db_session
     def toggle_item_read(self, position):
-        if not isinstance(self[position].data, FeedItem):
+        if not isinstance(self[position].data, FeedListing):
             return
         logger.info(self.get_value(position, "read"))
         if self.get_value(position, "read") is not None:
@@ -355,5 +367,8 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
 
             for item in self.items_query[offset:offset+limit]:
                 d = AttrDict(item.to_dict(related_objects=True))
+                d.content = MediaSource.schema().loads(d.content, many=True)
+                # d.content = MediaSource.from_json(d.content, many=True)
+                # raise Exception(type(d.content))
                 d.feed = AttrDict(d.feed.to_dict())
-                yield(FeedItem(d))
+                yield(FeedListing(d))

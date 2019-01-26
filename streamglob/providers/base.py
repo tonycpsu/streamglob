@@ -2,10 +2,13 @@ import logging
 logger = logging.getLogger(__name__)
 import abc
 import asyncio
+import os
 
 from orderedattrdict import AttrDict, defaultdict
 from itertools import chain
 import re
+from dataclasses import *
+from dataclasses_json import dataclass_json
 
 from .widgets import *
 from panwid.dialog import BaseView
@@ -14,12 +17,76 @@ from ..session import *
 from ..state import *
 from ..player import Player
 from .. import model
+from .. import config
 
-class MediaItem(AttrDict):
+@dataclass_json
+@dataclass
+class MediaSource(object):
 
-    def __repr__(self):
-        s = ",".join(f"{k}={v}" for k, v in self.items() if k != "title")
-        return f"<{self.__class__.__name__}: {self.title}{ ' (' + s if s else ''})>"
+    locator: str
+    media_type: str = None
+
+
+class MediaListing(AttrDict):
+
+    __exclude_keys__ = {"default_name",
+                        "timestamp",
+                        "download_filename",
+                        "ext"}
+
+    @property
+    def provider(self):
+        return self._provider.NAME.lower()
+
+    @property
+    def default_name(self):
+        for s in reversed(self.locator.split("/")):
+            if not len(s): continue
+            return "".join(
+                [c for c in s if c.isalpha() or c.isdigit() or c in [" ", "-"]]
+            ).rstrip()
+        return "untitled"
+
+    @property
+    def timestamp(self):
+        return datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    @property
+    def ext(self):
+        return f"{self.provider}_dl" # *shrug*
+
+    @property
+    def download_filename(self):
+
+        outpath = (
+            self._provider.config.get_path("output.path")
+            or
+            config.settings.profile.get_path("output.path")
+            or
+            "."
+        )
+
+        template = (
+            self._provider.config.get_path("output.template")
+            or
+            config.settings.profile.get_path("output.template")
+        )
+
+        if template:
+            template = template.replace("{", "{self.")
+            # raise Exception(template)
+            outfile = template.format(self=self)
+        else:
+            # template = "{self.provider.name.lower()}.{self.default_name}.{self.timestamp}.{self.ext}"
+            # template = "{self.provider}.{self.ext}"
+            template = "{self.provider}.{self.default_name}.{self.timestamp}.{self.ext}"
+            outfile = template.format(self=self)
+
+        return os.path.join(outpath, outfile)
+
+    # def __repr__(self):
+    #     s = ",".join(f"{k}={v}" for k, v in self.items() if k != "title")
+    #     return f"<{self.__class__.__name__}: {self.title}{ ' (' + s if s else ''})>"
 
 
 # FIXME: move
@@ -95,6 +162,7 @@ class SimpleProviderView(BaseProviderView):
 
     def refresh(self):
         self.table.refresh()
+
 
     # def update(self):
     #     self.refresh()
@@ -285,10 +353,11 @@ class BaseProvider(abc.ABC):
     )
 
     def get_source(self, selection):
-        url = selection.url
-        if not isinstance(url, list):
-            url = [url]
-        return url
+        # raise Exception(type(selection.content))
+        source = selection.content
+        if not isinstance(source, list):
+            source = [source]
+        return source
 
     def play_args(self, selection, **kwargs):
         source = self.get_source(selection)
@@ -303,20 +372,82 @@ class BaseProvider(abc.ABC):
 
         source, kwargs = self.play_args(selection, **kwargs)
         media_type = kwargs.pop("media_type", None)
-        if media_type:
-            player = Player.get(set([media_type]))
-        else:
-            player = Player.get(self.MEDIA_TYPES)
+        # media_types = set([media_type]) if media_type else self.MEDIA_TYPES
 
-        if self.HELPER:
-            helper = Player.get(self.HELPER)#, *args, **kwargs)
+        # if the plugin specifies a helper, use it, and pipe it to the player
+        if getattr(self, "HELPER", None):
+            helper = next(Player.get(self.HELPER))
             helper.source = source
+            player = next(Player.get(media_types))
             player.source = helper
         else:
+            # Check the content types of the source(s) with a HTTP HEAD request.
+            # This won't always work, but if it does, and if the content type
+            # tells us it's an image, we can skip checking with
+            # streamlink/youtube-dl and just use an image viewer.
+            # ctypes = [
+            #     self.session.head(url).headers.get("Content-Type")
+            #     for url in (source if isinstance(source, list) else [source])
+            # ]
+            if all([ s.media_type == "image"
+                     for s in source]):
+                player = next(Player.get({"image"}))
+            else:
+                player = next(
+                    p for p in Player.get()
+                    if all([
+                        p.supports_url(s.locator)
+                        for s in source
+                            # (source if isinstance(source, list) else [source])
+                    ])
+                )
+            logger.info(f"{player}, {source}")
             player.source = source
 
         state.spawn_play_process(player, **kwargs)
         # player.play(**kwargs)
+
+
+    def download(self, selection, **kwargs):
+
+        source, kwargs = self.play_args(selection, **kwargs)
+
+        if getattr(self, "DOWNLOADER", None):
+            player = next(Player.get(self.DOWNLOADER))
+        elif getattr(self, "HELPER", None):
+            player = next(Player.get(self.HELPER))
+        else:
+            player = next(Player.get({"download"}))
+        player.source = source
+        # player.download(self.download_filename(selection), **kwargs)
+        # raise Exception(selection)
+        filename = selection.download_filename
+        logger.info(f"downloading {selection.locator} to {filename}")
+        player.download(selection.download_filename, **kwargs)
+
+
+    def download_filename(self, selection):
+
+        outpath = (
+            self.config.get_path("output.template")
+            or
+            config.settings.profile.get_path("output.template")
+            or
+            "."
+        )
+
+        template = (
+            self.config.get_path("output.path")
+            or
+            config.settings.profile.get_path("output.path")
+        )
+        if template:
+            outfile = template.format_map(selection)
+        else:
+            outfile = "{provider}.{default_name}.{date}.{ext}".format_map(selection)
+
+        return os.path.join(outpath, template)
+
 
     def on_select(self, widget, selection):
         self.play(selection)
@@ -328,6 +459,8 @@ class BaseProvider(abc.ABC):
     def refresh(self):
         self.view.refresh()
 
+    def __str__(self):
+        return self.name
 
 class PaginatedProviderMixin(object):
 

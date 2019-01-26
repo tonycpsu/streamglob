@@ -1,5 +1,6 @@
 import logging
 logger = logging.getLogger(__name__)
+import os
 
 from .feed import *
 
@@ -156,9 +157,17 @@ class YouTubeFeed(model.MediaFeed):
             if not i:
                 i = self.ITEM_CLASS(
                     feed=self,
-                    content = url,
+                    content = MediaSource.schema().dumps(
+                        [MediaSource(url, media_type="video")],
+                        many=True
+                    ),
                     **item
                 )
+
+class TemplateIngoreMissingDict(dict):
+
+     def __missing__(self, key):
+         return '{' + key + '}'
 
 class YouTubeProvider(PaginatedProviderMixin,
                       CachedFeedProvider):
@@ -173,6 +182,8 @@ class YouTubeProvider(PaginatedProviderMixin,
     MEDIA_TYPES = {"video"}
 
     SESSION_CLASS = YoutubeSession
+
+    DOWNLOADER = "youtube-dl"
 
     @property
     def selected_feed(self):
@@ -199,3 +210,24 @@ class YouTubeProvider(PaginatedProviderMixin,
 
     def feed_attrs(self, feed_name):
         return dict(locator=self.filters.feed[feed_name])
+
+    def play_args(self, selection, **kwargs):
+        source, kwargs = super().play_args(selection, **kwargs)
+        fmt = self.config.get_path("output.format")
+        if fmt:
+            kwargs["format"] = fmt
+        return (source, kwargs)
+
+
+    def download_filename(self, selection):
+
+        path = self.config.get_path("output.path")
+        template = self.config.get_path("output.template")
+        if template:
+            outfile = template.format_map(d)
+            return os.path.join(path, template)
+        elif path:
+            return path
+        else:
+            # youtube-dl generates a sane filename from the metadata by default
+            return None

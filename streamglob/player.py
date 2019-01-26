@@ -9,9 +9,11 @@ import shlex
 import subprocess
 from datetime import timedelta
 import distutils.spawn
+import argparse
 
 from orderedattrdict import AttrDict
 import youtube_dl
+import streamlink
 
 from . import config
 from .state import *
@@ -35,7 +37,7 @@ class Player(abc.ABC):
             self.args = args.split()
         else:
             self.args = args
-        self.exclude_types = exclude_types or set()
+        self.exclude_types = set(exclude_types) if exclude_types else set()
 
         self.extra_args_pre = []
         self.extra_args_post = []
@@ -63,23 +65,30 @@ class Player(abc.ABC):
             # get the player by name
             try:
                 p = PLAYERS[spec]
-                return p.cls(p.name, p.path)
+                # return p.cls(p.name, p.path)
+                return iter([p.cls(p.name, p.path, **p.cfg)])
             except KeyError:
                 raise SGException(f"Player {spec} not found")
 
         elif isinstance(spec, set):
-            try:
-                p = next(
-                    p for p in PLAYERS.values()
-                    if spec.intersection(
-                        p.cls.MEDIA_TYPES - set(getattr(p.cls, "exclude_types", []))
-                    ) == spec
-                )
-                return p.cls(p.name, p.path)
-            except StopIteration:
-                raise SGException(
-                    f"Player for media types {spec} not found"
-                )
+
+            return (
+                p.cls(p.name, p.path, **p.cfg)
+                for p in PLAYERS.values()
+                if spec.intersection(
+                    p.cls.MEDIA_TYPES - set(getattr(p.cfg, "exclude_types", set()))
+                )  == spec
+            )
+
+            # except StopIteration:
+            #     raise SGException(
+            #         f"Player for media types {spec} not found"
+            #     )
+        elif spec is None:
+            return (
+                p.cls(p.name, p.path, **p.cfg)
+                for p in PLAYERS.values()
+            )
         else:
             raise Exception
         raise SGException(f"Player for {spec} not found")
@@ -101,7 +110,7 @@ class Player(abc.ABC):
 
         # Add configured players
         for name, cfg in config.settings.profile.players.items():
-            path = cfg.get(
+            path = cfg.pop("path", None) or cfg.get(
                 "command",
                 distutils.spawn.find_executable(name)
             )
@@ -109,12 +118,13 @@ class Player(abc.ABC):
                 logger.warn(f"path for player {name} not found")
                 continue
             # PLAYERS[name] = Player.from_config(cfg)
-            klass = cls.SUBCLASSES.get(cfg.name, cls)
+            klass = cls.SUBCLASSES.get(name, cls)
+            # print(cfg)
             PLAYERS[name] = AttrDict(
-                dict(
-                    cls=klass,
-                    name=name,
-                    path=path
+                dict(cls=klass,
+                     name=name,
+                     path=path,
+                     cfg=cfg
                 )
             )
 
@@ -129,27 +139,10 @@ class Player(abc.ABC):
                     dict(
                         cls=klass,
                         name=name,
-                        path=path
+                        path=path,
+                        cfg = {}
                     )
                 )
-
-
-    # @property
-    # def path(self):
-    #     return self.cfg.command
-
-    # @property
-    # def args(self):
-    #     return self.cfg.get("args", "").split()
-
-
-    # @property
-    # def path(self):
-    #     return self.cfg.command
-
-    # @property
-    # def args(self):
-    #     return self.cfg.get("args", "").split()
 
     @property
     def source(self):
@@ -203,9 +196,11 @@ class Player(abc.ABC):
             self.proc = self.source.play(**kwargs)
             self.stdin = self.proc.stdout
         elif isinstance(self.source, list):
-            cmd += self.source
+            # cmd += self.source
+            cmd += [s.locator for s in self.source]
         else:
-            cmd += [self.source]
+            # cmd += [self.source]
+            cmd += [source.locator]
         cmd += self.extra_args_post
         logger.debug(f"cmd: {cmd}")
 
@@ -222,6 +217,13 @@ class Player(abc.ABC):
                 logger.warning(e)
         return self.proc
 
+    def download(self, outfile, **kwargs):
+        self.extra_args_post += ["-o", outfile]
+        self.play(**kwargs) # FIXME
+
+    def supports_url(self, url):
+        return False
+
 
 @Player.register_player_class("youtube-dl")
 class YoutubeDLPlayer(Player):
@@ -230,9 +232,25 @@ class YoutubeDLPlayer(Player):
     # def path(self):
     #     return "youtube-dl"
 
+    def process_kwargs(self, kwargs):
+        if "format" in kwargs:
+            self.extra_args_post += ["-f", str(kwargs["format"])]
+
     def pipe_to_dst(self):
         self.extra_args_post += ["-o", "-"]
 
+    def download(self, outfile, **kwargs):
+        if outfile:
+            self.extra_args_post += ["-o", outfile]
+        self.play(**kwargs) # FIXME
+
+    def supports_url(self, url):
+        ies = youtube_dl.extractor.gen_extractors()
+        for ie in ies:
+            if ie.suitable(url) and ie.IE_NAME != 'generic':
+                # Site has dedicated extractor
+                return True
+        return False
 
 @Player.register_player_class("streamlink")
 class StreamlinkPlayer(Player):
@@ -244,9 +262,9 @@ class StreamlinkPlayer(Player):
 
     def process_kwargs(self, kwargs):
 
-        resolution = kwargs.pop("resolution", None)
-        if resolution:
-            self.extra_args_post.insert(0, resolution)
+        resolution = kwargs.pop("resolution", "best")
+        # if resolution:
+        self.extra_args_post.insert(0, resolution)
 
         offset = kwargs.pop("offset", None)
 
@@ -273,6 +291,12 @@ class StreamlinkPlayer(Player):
             ]))
         # super().process_kwargs(kwargs)
 
+    def supports_url(self, url):
+        try:
+            return streamlink.api.Streamlink().resolve_url(url) is not None
+        except streamlink.exceptions.NoPluginError:
+            return False
+
 
 @Player.register_player_class("mpv", media_types={"image", "video"})
 class MPVPlayer(Player):
@@ -286,16 +310,46 @@ class VLCPlayer(Player):
 class FEHPlayer(Player):
     pass
 
+@Player.register_player_class("wget", media_types={"download"})
+class WgetPlayer(Player):
+
+    def download(self, outfile, **kwargs):
+        self.extra_args_post += ["-O", outfile]
+        self.play(**kwargs) # FIXME
+
+    def supports_url(self, url):
+        return True
+
+@Player.register_player_class("curl", media_types={"download"})
+class CurlPlayer(Player):
+
+    def download(self, outfile, **kwargs):
+        self.extra_args_post += ["-o", outfile]
+        self.play(**kwargs) # FIXME
+
+    def supports_url(self, url):
+        return True
+
 def main():
 
     from tonyc_utils import logging
 
     logging.setup_logging(2)
+    config.load(merge_default=True)
     config.settings.load()
-
     Player.load()
-    raise Exception(Player.get({"image"}))
 
+    parser = argparse.ArgumentParser()
+    options, args = parser.parse_known_args()
+
+    # for p in [
+    #         next(Player.get("streamlink")),
+    #         next(Player.get("youtube-dl"))
+    # ]:
+    #     print(p.supports_url(args[0]))
+
+    p = next(Player.get(args[0]))
+    raise Exception(p.supports_url(args[1]))
     # raise Exception(MPVPlayer.MEDIA_TYPES)
     # raise Exception(Player.get({"image"]))
 
@@ -304,12 +358,6 @@ def main():
     # v = Player.get(config.settings.profile.players.vlc, y)
     # proc = v.play()
     # proc.wait()
-
-    s = Player.get("streamlink")
-    m = Player.get("mpv")
-    m.source = s
-    proc = m.play(["https://www.youtube.com/watch?v=5aVU_0a8-A4", "720p"])
-    proc.wait()
 
 if __name__ == "__main__":
     main()

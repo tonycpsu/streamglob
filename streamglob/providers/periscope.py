@@ -33,7 +33,11 @@ class PeriscopeFeed(model.MediaFeed):
                         feed = self,
                         guid = guid,
                         subject = item["status"].strip() or "-",
-                        content = f"https://pscp.tv/w/{item['id']}",
+                        content = MediaSource.schema().dumps(
+                            [MediaSource(f"https://pscp.tv/w/{item['id']}",
+                                         media_type="video")],
+                            many=True
+                        ),
                         is_live = item.get("state") == "RUNNING"
                 )
         except pyperi.PyPeriConnectionError as e:

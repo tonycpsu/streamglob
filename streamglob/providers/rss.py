@@ -53,7 +53,10 @@ class RSSFeed(model.MediaFeed):
                         # created = datetime.fromtimestamp(
                         #     mktime(item.published_parsed)
                         # ),
-                        content = item.link
+                        content = MediaSource.schema().dumps(
+                            [MediaSource(item.link)],
+                            many=True
+                        )
                 )
         except SGFeedUpdateFailedException:
             logger.warn("couldn't update feed {self.name}")

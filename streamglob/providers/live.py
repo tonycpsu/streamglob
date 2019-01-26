@@ -3,6 +3,9 @@ from ..state import *
 from .base import *
 import abc
 
+class LiveStreamMediaListing(MediaListing):
+    pass
+
 class ChannelsFilter(ConfigFilter):
 
     key = "channels"
@@ -118,7 +121,7 @@ class LiveStreamProvider(BackgroundTasksMixin, BaseProvider):
             channel.updated = datetime.now()
             if s and s.channel not in [l.channel for l in self.live_channels]:
                 self.live_channels.append(
-                    MediaItem(
+                    LiveStreamMediaListing(
                         s
                     )
                 )

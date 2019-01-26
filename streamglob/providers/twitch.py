@@ -4,6 +4,9 @@ from .live import *
 # there's also a TwitchHelix client, but most of that isn't implemented yet
 from twitch import TwitchClient
 
+class TwitchMediaListing(MediaListing):
+    pass
+
 class TwitchSession(StreamSession):
 
     CLIENT_ID = "v5ccc0n21jf0b5nsrblxwszpg3zntd"
@@ -23,9 +26,9 @@ class TwitchSession(StreamSession):
         user_id = self.user_name_to_id(username)
         channel = AttrDict(self.client.streams.get_stream_by_user(user_id) or {})
         if channel:# and "channel" in channel:
-            return MediaItem(
+            return TwitchMediaListing(
                 channel = username,
-                url = channel.channel.url,
+                content = [MediaSource(channel.channel.url, media_type="video")],
                 description = channel.channel.description,
                 created = channel.created_at
             )

@@ -12,6 +12,9 @@ from orderedattrdict import DefaultAttrDict
 from instagram_web_api import Client, ClientCompatPatch, ClientError
 from pony.orm import *
 
+class InstagramMediaListing(MediaListing):
+    pass
+
 class InstagramSession(session.StreamSession):
 
     BATCH_COUNT = 25
@@ -55,6 +58,7 @@ class InstagramSession(session.StreamSession):
                 pass
 
             post_id = post["node"]["id"]
+
             try:
                 subject = post["node"]["caption"]["text"].replace("\n", "")
             except TypeError:
@@ -62,29 +66,36 @@ class InstagramSession(session.StreamSession):
 
             media_type = post["node"]["type"]
             if media_type == "video":
-                url = post["node"]["link"]
+                content = MediaSource(post["node"]["link"], media_type="video")
             elif media_type == "image":
                 if "carousel_media" in post["node"]:
-                    url = [ m["images"]["standard_resolution"]["url"]
-                            for m in post["node"]["carousel_media"] ]
+                    content = [
+                        MediaSource(m["images"]["standard_resolution"]["url"], media_type="image")
+                        if m["type"] == "image"
+                        else
+                        MediaSource(m["video_url"], media_type="video")
+                        if m["type"] == "video"
+                        else None
+                        for m in post["node"]["carousel_media"]
+                    ]
                 else:
-                    url = post["node"]["images"]["standard_resolution"]["url"]
+                    content = MediaSource(post["node"]["images"]["standard_resolution"]["url"], media_type="image")
+                    # raise Exception
             else:
                 logger.warn(f"no content for post {post_id}")
                 continue
 
             yield(
-                FeedItem(
+                InstagramMediaListing(
                     guid = post_id,
                     subject = subject,
                     created = datetime.fromtimestamp(
                         int(post["node"]["created_time"])
                     ),
                     media_type = media_type,
-                    url = url
+                    content = content
                 )
             )
-
 
 
 class InstagramItem(model.MediaItem):
@@ -108,7 +119,6 @@ class InstagramFeed(model.MediaFeed):
 
         last_count = 0
         count = 0
-
         while(count < limit):
             # instagram API will sometimes give duplicates using end_cursor
             # for pagination, so instead of specifying how many posts to get,
@@ -124,7 +134,12 @@ class InstagramFeed(model.MediaFeed):
                         subject = post.subject,
                         created = post.created,
                         media_type = post.media_type,
-                        content = post.url
+                        content =  MediaSource.schema().dumps(
+                            post.content
+                            if isinstance(post.content, list)
+                            else [post.content],
+                            many=True
+                        )
                     )
                     count += 1
 

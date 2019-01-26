@@ -90,7 +90,10 @@ class ProviderDataTable(panwid.DataTable):
     def query(self, *args, **kwargs):
 
         try:
-            return self.provider.listings(*args, **kwargs)
+            for l in self.provider.listings(*args, **kwargs):
+                l._provider = self.provider
+                yield(l)
+
         except SGException as e:
             logger.exception(e)
             return []
@@ -100,6 +103,8 @@ class ProviderDataTable(panwid.DataTable):
         key = super().keypress(size, key)
         if key == "ctrl r":
             self.provider.refresh()
+        elif key == "d":
+            self.provider.download(self.selection.data)
         elif key in ["left", "right"]:
             self._emit(f"cycle_filter", 0, -1 if key == "left" else 1)
         elif key in ["[", "]"]:

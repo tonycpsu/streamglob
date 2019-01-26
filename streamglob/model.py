@@ -18,6 +18,8 @@ CACHE_DURATION_DEFAULT = CACHE_DURATION_SHORT
 
 db = Database()
 
+from orderedattrdict import AttrDict
+
 class CacheEntry(db.Entity):
 
     url = Required(str, unique=True)
@@ -138,18 +140,21 @@ class MediaItem(db.Entity):
     def mark_unread(self):
         self.read = None
 
+    def created_date(self):
+        return datetime.now().strftime("%Y%m%d_%H%M%S")
+
     @property
     def age(self):
         return datetime.now() - self.created
 
     @property
-    def url(self):
+    def locator(self):
         return self.content
 
-    def to_dict(self, *args, **kwargs):
-        d = super().to_dict(*args, **kwargs)
-        d.update(url=d["content"])
-        return d
+    # def to_dict(self, *args, **kwargs):
+    #     d = super().to_dict(*args, **kwargs)
+    #     # d.update(url=d["content"])
+    #     return d
 
 
 class ProviderData(db.Entity):
