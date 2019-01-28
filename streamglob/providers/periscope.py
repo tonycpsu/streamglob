@@ -1,5 +1,6 @@
 from .feed import *
 from .. import session
+from .. import model
 
 import pyperi
 
@@ -9,6 +10,9 @@ class PeriscopeSession(session.StreamSession):
         super().__init__(*args, **kwargs)
         self.peri = pyperi.Peri(session=self)
 
+class PeriscopeMediaSource(model.MediaSource):
+    pass
+
 class PeriscopeItem(model.MediaItem):
 
     is_live = Required(bool)
@@ -17,6 +21,7 @@ class PeriscopeFeed(model.MediaFeed):
 
     ITEM_CLASS = PeriscopeItem
 
+    @db_session
     def update(self, limit=None):
 
         if not limit:
@@ -33,9 +38,10 @@ class PeriscopeFeed(model.MediaFeed):
                         feed = self,
                         guid = guid,
                         subject = item["status"].strip() or "-",
-                        content = MediaSource.schema().dumps(
-                            [MediaSource(f"https://pscp.tv/w/{item['id']}",
-                                         media_type="video")],
+                        content = PeriscopeMediaSource.schema().dumps(
+                            [PeriscopeMediaSource(
+                                f"https://pscp.tv/w/{item['id']}",
+                                media_type="video")],
                             many=True
                         ),
                         is_live = item.get("state") == "RUNNING"

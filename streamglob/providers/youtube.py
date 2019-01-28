@@ -14,10 +14,13 @@ from .filters import *
 
 import youtube_dl
 
+class YouTubeMediaSource(model.MediaSource):
+    pass
+
 class SearchResult(AttrDict):
     pass
 
-class YoutubeSession(session.StreamSession):
+class YouTubeSession(session.StreamSession):
 
     def youtube_dl_query(self, query, offset=None, limit=None):
 
@@ -157,8 +160,8 @@ class YouTubeFeed(model.MediaFeed):
             if not i:
                 i = self.ITEM_CLASS(
                     feed=self,
-                    content = MediaSource.schema().dumps(
-                        [MediaSource(url, media_type="video")],
+                    content = YouTubeMediaSource.schema().dumps(
+                        [YouTubeMediaSource(url, media_type="video")],
                         many=True
                     ),
                     **item
@@ -181,7 +184,7 @@ class YouTubeProvider(PaginatedProviderMixin,
 
     MEDIA_TYPES = {"video"}
 
-    SESSION_CLASS = YoutubeSession
+    SESSION_CLASS = YouTubeSession
 
     DOWNLOADER = "youtube-dl"
 

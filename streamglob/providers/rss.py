@@ -17,6 +17,10 @@ from pony.orm import *
 class SGFeedUpdateFailedException(Exception):
     pass
 
+
+class RSSMediaSource(model.MediaSource):
+    pass
+
 class RSSSession(session.StreamSession):
 
     def parse(self, url):
@@ -53,8 +57,8 @@ class RSSFeed(model.MediaFeed):
                         # created = datetime.fromtimestamp(
                         #     mktime(item.published_parsed)
                         # ),
-                        content = MediaSource.schema().dumps(
-                            [MediaSource(item.link)],
+                        content = RSSMediaSource.schema().dumps(
+                            [RSSMediaSource(item.link)],
                             many=True
                         )
                 )

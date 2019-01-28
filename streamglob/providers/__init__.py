@@ -8,7 +8,7 @@ from functools import wraps
 from stevedore import extension
 from orderedattrdict import AttrDict
 
-from .. import session
+# from .. import session
 from .. import config
 from ..exceptions import *
 

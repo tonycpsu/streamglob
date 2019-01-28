@@ -3,8 +3,11 @@ logger = logging.getLogger(__name__)
 
 import os
 from datetime import datetime, timedelta
+from dataclasses import *
+import typing
 
 from pony.orm import *
+from dataclasses_json import dataclass_json
 
 from . import config
 from . import providers
@@ -18,7 +21,17 @@ CACHE_DURATION_DEFAULT = CACHE_DURATION_SHORT
 
 db = Database()
 
-from orderedattrdict import AttrDict
+@dataclass_json
+@dataclass
+class MediaSource(object):
+
+    locator: str
+    media_type: typing.Optional[str] = None # Pony also uses Optional
+
+    @property
+    def helper(self):
+        return None
+
 
 class CacheEntry(db.Entity):
 

@@ -10,29 +10,50 @@ import subprocess
 from datetime import timedelta
 import distutils.spawn
 import argparse
+import re
+from dataclasses import *
 
-from orderedattrdict import AttrDict
+from orderedattrdict import AttrDict, Tree
 import youtube_dl
 import streamlink
 
 from . import config
+from . import model
 from .state import *
 from .utils import *
 from .exceptions import *
 
-PLAYERS = AttrDict()
+PROGRAMS = Tree()
 
-class Player(abc.ABC):
+@dataclass
+class ProgramDef(object):
 
-    SUBCLASSES = {}
+    cls: type
+    name: str
+    path: str
+    cfg: dict
 
-    MEDIA_TYPES = set()
+    @property
+    def media_types(self):
+        return self.cls.MEDIA_TYPES - set(getattr(self.cfg, "exclude_types", []))
+
+
+class Program(abc.ABC):
+
+    SUBCLASSES = Tree()
 
     PLAYER_INTEGRATED=False
 
-    def __init__(self, name, path=None, args=[], exclude_types=None):
-        self.name = name
-        self.path = path or self.name
+    MEDIA_TYPES = set()
+
+    FOREGROUND = False
+
+    PROGRAM_CMD_RE = re.compile(
+        '.+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$)'
+    )
+
+    def __init__(self, path, args=[], exclude_types=None):
+        self.path = path
         if isinstance(args, str):
             self.args = args.split()
         else:
@@ -48,50 +69,72 @@ class Player(abc.ABC):
         self.stderr = None
         self.proc = None
 
-    @classmethod
-    def register_player_class(cls, cmd, media_types=None):
-        def decorator(subclass):
-            cls.SUBCLASSES[cmd] = subclass
-            cls.SUBCLASSES[cmd].MEDIA_TYPES = media_types or set()
-            return subclass
-        return decorator
+
+    @classproperty
+    def cmd(cls):
+        # If player class doesn't have a CMD attribute, we generate the command
+        # name from the class name, e.g. MPVPlayer -> "mpv"
+        return getattr(cls, "CMD", None) or "".join([
+            x.group(0) for x in
+            cls.PROGRAM_CMD_RE.finditer(
+                cls.__name__
+            )
+        ][:-1]).lower()
 
     @classmethod
-    def get(cls, spec=None, *args, **kwargs):
+    def __init_subclass__(cls, **kwargs):
+        if cls.__base__ != Program:
+            cls.SUBCLASSES[cls.__base__][cls.cmd] = cls
+            for k, v in kwargs.items():
+                setattr(cls, k, v)
+        super().__init_subclass__()
 
-        global PLAYERS
+
+    @classmethod
+    def get(cls, spec=True, *args, **kwargs):
+
+        global PROGRAMS
 
         if isinstance(spec, str):
             # get the player by name
             try:
-                p = PLAYERS[spec]
-                # return p.cls(p.name, p.path)
-                return iter([p.cls(p.name, p.path, **p.cfg)])
+                p = PROGRAMS[cls][spec]
+                return iter([p.cls(p.path, **p.cfg)])
             except KeyError:
-                raise SGException(f"Player {spec} not found")
+                raise SGException(f"Program {spec} not found")
 
-        elif isinstance(spec, set):
+        elif isinstance(spec, dict):
 
+            def check_cfg_key(cfg, v):
+                if not v:
+                    return True
+                if isinstance(cfg, list):
+                    cfg = set(cfg)
+                if isinstance(cfg, set):
+                    if isinstance(v, set):
+                        return v.issubset(cfg)
+                    else:
+                        return v in cfg
+                else:
+                    return cfg == v
+            # raise Exception(PROGRAMS[cls]["elinks"].media_types)
             return (
-                p.cls(p.name, p.path, **p.cfg)
-                for p in PLAYERS.values()
-                if spec.intersection(
-                    p.cls.MEDIA_TYPES - set(getattr(p.cfg, "exclude_types", set()))
-                )  == spec
+                p.cls(p.path, **p.cfg)
+                for p in PROGRAMS[cls].values()
+                if not spec or all([
+                    check_cfg_key(getattr(p, k, None), v)
+                    for k, v in spec.items()
+                ])
             )
 
-            # except StopIteration:
-            #     raise SGException(
-            #         f"Player for media types {spec} not found"
-            #     )
-        elif spec is None:
+        elif spec is True:
             return (
                 p.cls(p.name, p.path, **p.cfg)
-                for p in PLAYERS.values()
+                for n, p in PROGRAMS[cls].items()
             )
         else:
             raise Exception
-        raise SGException(f"Player for {spec} not found")
+        raise SGException(f"Program for {spec} not found")
 
 
     @classmethod
@@ -104,45 +147,46 @@ class Player(abc.ABC):
     @classmethod
     def load(cls):
 
-        global PLAYERS
-
-        PLAYERS = AttrDict()
+        global PROGRAMS
 
         # Add configured players
-        for name, cfg in config.settings.profile.players.items():
-            path = cfg.pop("path", None) or cfg.get(
-                "command",
-                distutils.spawn.find_executable(name)
-            )
-            if not path:
-                logger.warn(f"path for player {name} not found")
-                continue
-            # PLAYERS[name] = Player.from_config(cfg)
-            klass = cls.SUBCLASSES.get(name, cls)
-            # print(cfg)
-            PLAYERS[name] = AttrDict(
-                dict(cls=klass,
-                     name=name,
-                     path=path,
-                     cfg=cfg
+
+        for ptype in [Player, Helper, Downloader]:
+            cfgkey = ptype.__name__.lower() + "s"
+            for name, cfg in config.settings.profile[cfgkey].items():
+                path = cfg.pop("path", None) or cfg.get(
+                    "command",
+                    distutils.spawn.find_executable(name)
                 )
-            )
+                try:
+                    # raise Exception(cls.SUBCLASSES[ptype])
+                    klass = next(
+                        c for c in cls.SUBCLASSES[ptype].values()
+                        if c.cmd == name
+                    )
+                except StopIteration:
+                    klass = ptype
+                PROGRAMS[ptype][name] = ProgramDef(
+                    cls=klass,
+                    name=name,
+                    path=path,
+                    cfg = AttrDict(cfg)
+                )
 
         # Try to find any players not configured
-        for name, klass in cls.SUBCLASSES.items():
-            if name in PLAYERS:
-                continue
-            path = distutils.spawn.find_executable(name)
-            if path:
-                # PLAYERS[name] = klass(name, path, [])
-                PLAYERS[name] = AttrDict(
-                    dict(
+
+        for ptype in cls.SUBCLASSES.keys():
+            for name, klass in cls.SUBCLASSES[ptype].items():
+                if name in PROGRAMS[ptype]:
+                    continue
+                path = distutils.spawn.find_executable(name)
+                if path:
+                    PROGRAMS[ptype][name] = ProgramDef(
                         cls=klass,
                         name=name,
                         path=path,
-                        cfg = {}
+                        cfg = AttrDict()
                     )
-                )
 
     @property
     def source(self):
@@ -151,7 +195,7 @@ class Player(abc.ABC):
     @source.setter
     def source(self, value):
         self._source = value
-        if isinstance(self.source, Player):
+        if isinstance(self.source, Program):
             if self.source.PLAYER_INTEGRATED:
                 self.source.integrate_player(self)
             else:
@@ -173,7 +217,7 @@ class Player(abc.ABC):
 
     @property
     def source_is_player(self):
-        return isinstance(self.source, Player)
+        return isinstance(self.source, Program)
 
     @property
     def source_integrated(self):
@@ -182,7 +226,7 @@ class Player(abc.ABC):
     def process_kwargs(self, kwargs):
         pass
 
-    def play(self, source=None, **kwargs):
+    def run(self, source=None, **kwargs):
 
         if source:
             self.source = source
@@ -193,15 +237,16 @@ class Player(abc.ABC):
         cmd = self.command + self.extra_args_pre
         if self.source_is_player:
             self.source.stdout = subprocess.PIPE
-            self.proc = self.source.play(**kwargs)
+            self.proc = self.source.run(**kwargs)
             self.stdin = self.proc.stdout
         elif isinstance(self.source, list):
             # cmd += self.source
             cmd += [s.locator for s in self.source]
         else:
             # cmd += [self.source]
-            cmd += [source.locator]
+            cmd += [self.source.locator]
         cmd += self.extra_args_post
+        # raise Exception(cmd)
         logger.debug(f"cmd: {cmd}")
 
         if not self.source_integrated:
@@ -217,20 +262,33 @@ class Player(abc.ABC):
                 logger.warning(e)
         return self.proc
 
-    def download(self, outfile, **kwargs):
-        self.extra_args_post += ["-o", outfile]
-        self.play(**kwargs) # FIXME
-
-    def supports_url(self, url):
+    @classmethod
+    def supports_url(cls, url):
         return False
 
+    def __repr__(self):
+        return "<%s: %s [%s]>" %(self.__class__.__name__, self.cmd, self.args)
 
-@Player.register_player_class("youtube-dl")
-class YoutubeDLPlayer(Player):
 
-    # @property
-    # def path(self):
-    #     return "youtube-dl"
+class Player(Program):
+
+    def play(self, **kwargs):
+        self.run(**kwargs) # FIXME
+
+
+class Helper(Program):
+    pass
+
+class Downloader(Program):
+
+    def download(self, outfile, **kwargs):
+        self.extra_args_post += ["-o", outfile]
+        self.run(**kwargs) # FIXME
+
+
+class YouTubeDLHelper(Helper):
+
+    CMD = "youtube-dl"
 
     def process_kwargs(self, kwargs):
         if "format" in kwargs:
@@ -244,7 +302,8 @@ class YoutubeDLPlayer(Player):
             self.extra_args_post += ["-o", outfile]
         self.play(**kwargs) # FIXME
 
-    def supports_url(self, url):
+    @classmethod
+    def supports_url(cls, url):
         ies = youtube_dl.extractor.gen_extractors()
         for ie in ies:
             if ie.suitable(url) and ie.IE_NAME != 'generic':
@@ -252,8 +311,7 @@ class YoutubeDLPlayer(Player):
                 return True
         return False
 
-@Player.register_player_class("streamlink")
-class StreamlinkPlayer(Player):
+class StreamlinkHelper(Helper):
 
     PLAYER_INTEGRATED=True
 
@@ -291,43 +349,44 @@ class StreamlinkPlayer(Player):
             ]))
         # super().process_kwargs(kwargs)
 
-    def supports_url(self, url):
+    @classmethod
+    def supports_url(cls, url):
         try:
             return streamlink.api.Streamlink().resolve_url(url) is not None
         except streamlink.exceptions.NoPluginError:
             return False
 
-
-@Player.register_player_class("mpv", media_types={"image", "video"})
-class MPVPlayer(Player):
+# Put image-only viewers first so they're selected for image links by default
+class FEHPlayer(Player, MEDIA_TYPES={"image"}):
     pass
 
-@Player.register_player_class("vlc", media_types={"image", "video"})
-class VLCPlayer(Player):
+class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
     pass
 
-@Player.register_player_class("feh", media_types={"image"})
-class FEHPlayer(Player):
+class VLCPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
     pass
 
-@Player.register_player_class("wget", media_types={"download"})
-class WgetPlayer(Player):
+class ElinksPlayer(Player, cmd="elinks", MEDIA_TYPES={"text"}, FOREGROUND=True):
+    pass
+
+class WgetDownloader(Downloader):
 
     def download(self, outfile, **kwargs):
         self.extra_args_post += ["-O", outfile]
         self.play(**kwargs) # FIXME
 
-    def supports_url(self, url):
+    @classmethod
+    def supports_url(cls, url):
         return True
 
-@Player.register_player_class("curl", media_types={"download"})
-class CurlPlayer(Player):
+class CurlDownloader(Downloader):
 
     def download(self, outfile, **kwargs):
         self.extra_args_post += ["-o", outfile]
         self.play(**kwargs) # FIXME
 
-    def supports_url(self, url):
+    @classmethod
+    def supports_url(cls, url):
         return True
 
 def main():
@@ -337,25 +396,38 @@ def main():
     logging.setup_logging(2)
     config.load(merge_default=True)
     config.settings.load()
-    Player.load()
+    Program.load()
+
+    # global PROGRAMS
+    # from pprint import pprint
+    # pprint(PROGRAMS)
+    # raise Exception
 
     parser = argparse.ArgumentParser()
     options, args = parser.parse_known_args()
 
     # for p in [
-    #         next(Player.get("streamlink")),
-    #         next(Player.get("youtube-dl"))
+    #         next(Program.get("streamlink")),
+    #         next(Program.get("youtube-dl"))
     # ]:
     #     print(p.supports_url(args[0]))
 
-    p = next(Player.get(args[0]))
-    raise Exception(p.supports_url(args[1]))
-    # raise Exception(MPVPlayer.MEDIA_TYPES)
-    # raise Exception(Player.get({"image"]))
+    # streamlink = next(Helper.get("streamlink"))
+    # streamlink.source = MediaSource("http://foo.com")
 
-    # y = Player.get(config.settings.profile.helpers.youtube_dl,
+    # mpv = next(Player.get("mpv"))
+    # mpv.source = streamlink
+    # mpv.play()
+
+    streamlink = next(Helper.get("streamlink"))
+    streamlink.source = model.MediaSource("http://foo.com")
+
+    p = next(Player.get({"media_types": {"text"}}))
+    raise Exception(p)
+
+    # y = Program.get(config.settings.profile.helpers.youtube_dl,
     #              "https://www.youtube.com/watch?v=5aVU_0a8-A4")
-    # v = Player.get(config.settings.profile.players.vlc, y)
+    # v = Program.get(config.settings.profile.players.vlc, y)
     # proc = v.play()
     # proc.wait()
 

@@ -30,6 +30,11 @@ class BAMListing(MediaListing):
     def ext(self):
         return "mp4"
 
+class BAMMediaSource(model.MediaSource):
+
+    @property
+    def helper(self):
+        return "streamlink"
 
 class BAMProviderData(model.ProviderData):
 
@@ -297,7 +302,7 @@ class BAMProviderMixin(abc.ABC):
         return (
             super().config_is_valid
             and
-            self.HELPER in list(player.PLAYERS.keys())
+            self.HELPER in list(player.PROGRAMS[Helper].keys())
         )
 
     # @memo(region="short")
@@ -620,7 +625,7 @@ class BAMProviderMixin(abc.ABC):
 
     def get_source(self, selection):
         game_id = selection.get("game_id")
-        return [self.get_url(game_id)]
+        return BAMMediaSource(self.get_url(game_id))
 
     def play_args(self, selection, **kwargs):
 

@@ -12,6 +12,14 @@ from orderedattrdict import DefaultAttrDict
 from instagram_web_api import Client, ClientCompatPatch, ClientError
 from pony.orm import *
 
+class InstagramMediaSource(model.MediaSource):
+
+    @property
+    def helper(self):
+        if self.media_type == "image":
+            return None
+        return True
+
 class InstagramMediaListing(MediaListing):
     pass
 
@@ -66,20 +74,20 @@ class InstagramSession(session.StreamSession):
 
             media_type = post["node"]["type"]
             if media_type == "video":
-                content = MediaSource(post["node"]["link"], media_type="video")
+                content = InstagramMediaSource(post["node"]["link"], media_type="video")
             elif media_type == "image":
                 if "carousel_media" in post["node"]:
                     content = [
-                        MediaSource(m["images"]["standard_resolution"]["url"], media_type="image")
+                        InstagramMediaSource(m["images"]["standard_resolution"]["url"], media_type="image")
                         if m["type"] == "image"
                         else
-                        MediaSource(m["video_url"], media_type="video")
+                        InstagramMediaSource(m["video_url"], media_type="video")
                         if m["type"] == "video"
                         else None
                         for m in post["node"]["carousel_media"]
                     ]
                 else:
-                    content = MediaSource(post["node"]["images"]["standard_resolution"]["url"], media_type="image")
+                    content = InstagramMediaSource(post["node"]["images"]["standard_resolution"]["url"], media_type="image")
                     # raise Exception
             else:
                 logger.warn(f"no content for post {post_id}")
@@ -134,7 +142,7 @@ class InstagramFeed(model.MediaFeed):
                         subject = post.subject,
                         created = post.created,
                         media_type = post.media_type,
-                        content =  MediaSource.schema().dumps(
+                        content =  InstagramMediaSource.schema().dumps(
                             post.content
                             if isinstance(post.content, list)
                             else [post.content],

@@ -1,11 +1,17 @@
+from .. import model
 from ..session import *
 from .live import *
+
 
 # there's also a TwitchHelix client, but most of that isn't implemented yet
 from twitch import TwitchClient
 
 class TwitchMediaListing(MediaListing):
     pass
+
+class TwitchMediaSource(model.MediaSource):
+    pass
+
 
 class TwitchSession(StreamSession):
 
@@ -28,7 +34,7 @@ class TwitchSession(StreamSession):
         if channel:# and "channel" in channel:
             return TwitchMediaListing(
                 channel = username,
-                content = [MediaSource(channel.channel.url, media_type="video")],
+                content = [TwitchMediaSource(channel.channel.url, media_type="video")],
                 description = channel.channel.description,
                 created = channel.created_at
             )

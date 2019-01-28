@@ -7,24 +7,16 @@ import os
 from orderedattrdict import AttrDict, defaultdict
 from itertools import chain
 import re
-from dataclasses import *
-from dataclasses_json import dataclass_json
 
 from .widgets import *
 from panwid.dialog import BaseView
 from .filters import *
 from ..session import *
 from ..state import *
-from ..player import Player
+from ..player import Player, Helper, Downloader
 from .. import model
 from .. import config
-
-@dataclass_json
-@dataclass
-class MediaSource(object):
-
-    locator: str
-    media_type: str = None
+from  ..utils import *
 
 
 class MediaListing(AttrDict):
@@ -167,43 +159,6 @@ class SimpleProviderView(BaseProviderView):
     # def update(self):
     #     self.refresh()
 
-class ClassPropertyDescriptor(object):
-
-    def __init__(self, fget, fset=None):
-        self.fget = fget
-        self.fset = fset
-
-    def __get__(self, obj, klass=None):
-        if klass is None:
-            klass = type(obj)
-        return self.fget.__get__(obj, klass)()
-
-    def __set__(self, obj, value):
-        if not self.fset:
-            raise AttributeError("can't set attribute")
-        type_ = type(obj)
-        return self.fset.__get__(obj, type_)(value)
-
-    def setter(self, func):
-        if not isinstance(func, (classmethod, staticmethod)):
-            func = classmethod(func)
-        self.fset = func
-        return self
-
-def classproperty(func):
-    if not isinstance(func, (classmethod, staticmethod)):
-        func = classmethod(func)
-
-    return ClassPropertyDescriptor(func)
-
-class ClassPropertyMetaClass(type):
-    def __setattr__(self, key, value):
-        if key in self.__dict__:
-            obj = self.__dict__.get(key)
-        if obj and type(obj) is ClassPropertyDescriptor:
-            return obj.__set__(self, value)
-
-        return super(ClassPropertyMetaClass, self).__setattr__(key, value)
 
 def with_view(view):
     def inner(cls):
@@ -226,7 +181,7 @@ class BaseProvider(abc.ABC):
     FILTERS = AttrDict()
     ATTRIBUTES = AttrDict(title={"width": ("weight", 1)})
     MEDIA_TYPES = None
-    HELPER = None
+    # HELPER = None
 
     def __init__(self, *args, **kwargs):
         self._view = None
@@ -371,40 +326,46 @@ class BaseProvider(abc.ABC):
     def play(self, selection, **kwargs):
 
         source, kwargs = self.play_args(selection, **kwargs)
-        media_type = kwargs.pop("media_type", None)
-        # media_types = set([media_type]) if media_type else self.MEDIA_TYPES
+        # media_type = kwargs.pop("media_type", None)
 
-        # if the plugin specifies a helper, use it, and pipe it to the player
-        if getattr(self, "HELPER", None):
-            helper = next(Player.get(self.HELPER))
-            helper.source = source
-            player = next(Player.get(media_types))
-            player.source = helper
-        else:
-            # Check the content types of the source(s) with a HTTP HEAD request.
-            # This won't always work, but if it does, and if the content type
-            # tells us it's an image, we can skip checking with
-            # streamlink/youtube-dl and just use an image viewer.
-            # ctypes = [
-            #     self.session.head(url).headers.get("Content-Type")
-            #     for url in (source if isinstance(source, list) else [source])
-            # ]
-            if all([ s.media_type == "image"
-                     for s in source]):
-                player = next(Player.get({"image"}))
-            else:
-                player = next(
-                    p for p in Player.get()
-                    if all([
-                        p.supports_url(s.locator)
-                        for s in source
-                            # (source if isinstance(source, list) else [source])
-                    ])
-                )
-            logger.info(f"{player}, {source}")
+        # FIXME: For now, we just throw playlists of media items at the default
+        # player program and hope it can handle all of them.
+
+        player_spec = dict()
+
+        if not isinstance(source, list):
+            source = [source]
+
+        for s in source:
+            if not s.media_type:
+            # Try to set the content types of the source(s) with a HTTP HEAD
+            # request if the provider didn't specify one.
+                s.media_type = self.session.head(
+                    s.locator
+                ).headers.get("Content-Type").split("/")[0]
+
+        media_types = set([s.media_type for s in source if s.media_type])
+
+        if len(source) == 1:
+            source = source[0]
+            if source.helper:
+                helper = next(Helper.get(source.helper))
+                helper.source = source
+                source = helper
+                logger.info(f"helper: {helper}")
+
+        player_spec = {"media_types": media_types}
+        logger.info(player_spec)
+        try:
+            player = next(Player.get(player_spec))
+            logger.info(f"player: {player}, source: {source}")
             player.source = source
+            state.spawn_play_process(player, **kwargs)
+        except StopIteration:
+            logger.error("no player found")
 
-        state.spawn_play_process(player, **kwargs)
+
+
         # player.play(**kwargs)
 
 
