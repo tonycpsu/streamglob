@@ -131,8 +131,6 @@ class ProfileTree(ConfigTree):
 
     def __getitem__(self, name):
         if isinstance(name, tuple):
-            # ???
-            raise Exception
             return functools.reduce(
                 lambda a, b: ProfileTree(a, **{ k: v for k, v in b.items() if k not in a}),
                 [ self[p] for p in reversed(name) ]
