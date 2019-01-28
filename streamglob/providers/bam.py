@@ -625,7 +625,7 @@ class BAMProviderMixin(abc.ABC):
 
     def get_source(self, selection):
         game_id = selection.get("game_id")
-        return BAMMediaSource(self.get_url(game_id))
+        return BAMMediaSource(self.get_url(game_id), media_type="video")
 
     def play_args(self, selection, **kwargs):
 

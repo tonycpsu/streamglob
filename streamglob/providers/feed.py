@@ -367,7 +367,8 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
 
             for item in self.items_query[offset:offset+limit]:
                 d = AttrDict(item.to_dict(related_objects=True))
-                d.content = model.MediaSource.schema().loads(d.content, many=True)
+                cls = getattr(self, "MEDIA_SOURCE_CLASS", model.MediaSource)
+                d.content = cls.schema().loads(d.content, many=True)
                 # d.content = MediaSource.from_json(d.content, many=True)
                 # raise Exception(type(d.content))
                 d.feed = AttrDict(d.feed.to_dict())

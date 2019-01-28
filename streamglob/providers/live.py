@@ -98,7 +98,6 @@ class LiveStreamProvider(BackgroundTasksMixin, BaseProvider):
         return self.live_channels
 
 
-    FOO = 0
     @db_session
     def update(self):
         self.create_channels()

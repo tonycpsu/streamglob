@@ -52,7 +52,7 @@ class Program(abc.ABC):
         '.+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$)'
     )
 
-    def __init__(self, path, args=[], exclude_types=None):
+    def __init__(self, path, args=[], exclude_types=None, **kwargs):
         self.path = path
         if isinstance(args, str):
             self.args = args.split()
@@ -91,7 +91,7 @@ class Program(abc.ABC):
 
 
     @classmethod
-    def get(cls, spec=True, *args, **kwargs):
+    def get(cls, spec=None, *args, **kwargs):
 
         global PROGRAMS
 
@@ -117,7 +117,6 @@ class Program(abc.ABC):
                         return v in cfg
                 else:
                     return cfg == v
-            # raise Exception(PROGRAMS[cls]["elinks"].media_types)
             return (
                 p.cls(p.path, **p.cfg)
                 for p in PROGRAMS[cls].values()
@@ -127,15 +126,40 @@ class Program(abc.ABC):
                 ])
             )
 
-        elif spec is True:
+        elif spec is None:
             return (
-                p.cls(p.name, p.path, **p.cfg)
+                p.cls(p.path, **p.cfg)
                 for n, p in PROGRAMS[cls].items()
             )
         else:
             raise Exception
         raise SGException(f"Program for {spec} not found")
 
+    @classmethod
+    def play(cls, source, player_spec=True, helper_spec=None, **kwargs):
+
+        logger.debug(f"source: {source}, player: {player_spec}, helper: {helper_spec}")
+        helper = None
+        player = next(cls.get(player_spec))
+        if helper_spec:
+            if isinstance(helper_spec, str):
+                helper = next(Helper.get(helper_spec))
+            elif isinstance(helper_spec, dict):
+                if player.cmd in helper_spec:
+                    helper_name = helper_spec[player.cmd]
+                else:
+                    helper_name = helper_spec.get(None, None)
+                if helper_name:
+                    helper = next(Helper.get(helper_name))
+
+        if helper:
+            helper.source = source
+            source = helper
+            player.source = source
+
+        player.source = source
+        logger.info(f"playing {source}: player={player}, helper={helper}")
+        return player.run(**kwargs)
 
     @classmethod
     def from_config(cls, cfg):
@@ -166,6 +190,10 @@ class Program(abc.ABC):
                     )
                 except StopIteration:
                     klass = ptype
+                if cfg.disabled == True:
+                    logger.info(f"player {name} is disabled")
+                    continue
+
                 PROGRAMS[ptype][name] = ProgramDef(
                     cls=klass,
                     name=name,
@@ -176,8 +204,10 @@ class Program(abc.ABC):
         # Try to find any players not configured
 
         for ptype in cls.SUBCLASSES.keys():
+            cfgkey = ptype.__name__.lower() + "s"
             for name, klass in cls.SUBCLASSES[ptype].items():
-                if name in PROGRAMS[ptype]:
+                cfg = config.settings.profile[cfgkey][name]
+                if name in PROGRAMS[ptype] or cfg.disabled == True:
                     continue
                 path = distutils.spawn.find_executable(name)
                 if path:
@@ -246,7 +276,7 @@ class Program(abc.ABC):
             # cmd += [self.source]
             cmd += [self.source.locator]
         cmd += self.extra_args_post
-        # raise Exception(cmd)
+        # raise Exception(" ".join(cmd))
         logger.debug(f"cmd: {cmd}")
 
         if not self.source_integrated:
@@ -267,14 +297,11 @@ class Program(abc.ABC):
         return False
 
     def __repr__(self):
-        return "<%s: %s [%s]>" %(self.__class__.__name__, self.cmd, self.args)
+        return "<%s: %s %s>" %(self.__class__.__name__, self.cmd, self.args)
 
 
 class Player(Program):
-
-    def play(self, **kwargs):
-        self.run(**kwargs) # FIXME
-
+    pass
 
 class Helper(Program):
     pass
@@ -419,11 +446,20 @@ def main():
     # mpv.source = streamlink
     # mpv.play()
 
-    streamlink = next(Helper.get("streamlink"))
-    streamlink.source = model.MediaSource("http://foo.com")
+    # streamlink = next(Helper.get("streamlink"))
+    # streamlink.source = model.MediaSource("http://foo.com")
 
-    p = next(Player.get({"media_types": {"text"}}))
-    raise Exception(p)
+    # p = next(Player.get({"media_types": {"text"}}))
+    # p, h = Player.get_with_helper(
+    #     {"media_types": {"video"}},
+    #     {
+    #         "mpv": None,
+    #         None: "youtube-dl",
+    #     }
+    # )
+
+    # raise Exception(p, h)
+
 
     # y = Program.get(config.settings.profile.helpers.youtube_dl,
     #              "https://www.youtube.com/watch?v=5aVU_0a8-A4")

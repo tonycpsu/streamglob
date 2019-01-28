@@ -1,8 +1,9 @@
 import logging
 logger = logging.getLogger(__name__)
+import sys
+import os
 import abc
 import asyncio
-import os
 
 from orderedattrdict import AttrDict, defaultdict
 from itertools import chain
@@ -181,7 +182,6 @@ class BaseProvider(abc.ABC):
     FILTERS = AttrDict()
     ATTRIBUTES = AttrDict(title={"width": ("weight", 1)})
     MEDIA_TYPES = None
-    # HELPER = None
 
     def __init__(self, *args, **kwargs):
         self._view = None
@@ -189,6 +189,12 @@ class BaseProvider(abc.ABC):
         self._active = False
         self._filters = AttrDict({n: f(provider=self, label=n)
                                   for n, f in self.FILTERS.items() })
+
+    @classproperty
+    def MEDIA_SOURCE_CLASS(cls):
+        clsname = f"{cls.NAME}MediaSource"
+        pkg = sys.modules.get(cls.__module__)
+        return getattr(pkg, clsname, model.MediaSource)
 
     @property
     def session_params(self):
@@ -331,15 +337,16 @@ class BaseProvider(abc.ABC):
         # FIXME: For now, we just throw playlists of media items at the default
         # player program and hope it can handle all of them.
 
-        player_spec = dict()
+        player_spec = None
+        helper_spec = None
 
         if not isinstance(source, list):
             source = [source]
 
         for s in source:
             if not s.media_type:
-            # Try to set the content types of the source(s) with a HTTP HEAD
-            # request if the provider didn't specify one.
+                # Try to set the content types of the source(s) with a HTTP HEAD
+                # request if the provider didn't specify one.
                 s.media_type = self.session.head(
                     s.locator
                 ).headers.get("Content-Type").split("/")[0]
@@ -348,25 +355,11 @@ class BaseProvider(abc.ABC):
 
         if len(source) == 1:
             source = source[0]
-            if source.helper:
-                helper = next(Helper.get(source.helper))
-                helper.source = source
-                source = helper
-                logger.info(f"helper: {helper}")
+            helper_spec = source.helper
 
         player_spec = {"media_types": media_types}
-        logger.info(player_spec)
-        try:
-            player = next(Player.get(player_spec))
-            logger.info(f"player: {player}, source: {source}")
-            player.source = source
-            state.spawn_play_process(player, **kwargs)
-        except StopIteration:
-            logger.error("no player found")
-
-
-
-        # player.play(**kwargs)
+        proc = Player.play(source, player_spec, helper_spec, **kwargs)
+        state.procs.append(proc)
 
 
     def download(self, selection, **kwargs):

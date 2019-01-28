@@ -11,7 +11,13 @@ class PeriscopeSession(session.StreamSession):
         self.peri = pyperi.Peri(session=self)
 
 class PeriscopeMediaSource(model.MediaSource):
-    pass
+
+    @property
+    def helper(self):
+        return {
+            "mpv": None,
+            None: "youtube-dl",
+        }
 
 class PeriscopeItem(model.MediaItem):
 

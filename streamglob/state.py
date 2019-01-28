@@ -21,9 +21,9 @@ class State(AttrDict):
     def procs(self, value):
         self._procs = value
 
-    def spawn_play_process(self, player, **kwargs):
+    # def spawn_play_process(self, player, **kwargs):
         # raise Exception(kwargs)
-        self.procs.append(player.play(**kwargs))
+        # self.procs.append(player.play(**kwargs))
         # raise Exception(self.procs)
 
 
