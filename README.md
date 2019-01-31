@@ -3,13 +3,14 @@ streamglob
 
 [![Build Status](https://travis-ci.org/tonycpsu/streamglob.svg?branch=master)](https://travis-ci.org/tonycpsu/streamglob )
 
-`streamglob` facilitates live and time-shifted viewing of streaming video.
+`streamglob` facilitates live and time-shifted viewing of online content.
 
 The current focus of this project is to provide a consistent console-based user
-experience for browsing and watching live and on-demand content from various
-providers.  The project was originally released under the name `mlbstreamer`
-with support for watching MLB.tv streams, but has expanded to include modules
-for watching video from NHL.tv, YouTube, Instagram, and RSS feeds, among others.
+experience for browsing and watching live and on-demand streaming content from
+various providers.  The project was originally released under the name
+`mlbstreamer` with support for watching MLB.tv streams, but has expanded to
+include modules for watching video from NHL.tv, YouTube, Instagram, and RSS
+feeds, among others.
 
 The `streamglob` package consists of the following programs:
 
