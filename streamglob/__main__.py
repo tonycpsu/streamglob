@@ -185,15 +185,15 @@ def run_gui(provider, **kwargs):
     entries.update(ScrollingListBox.get_palette_entries())
     # raise Exception(entries)
     palette = Palette("default", **entries)
-    screen = urwid.raw_display.Screen()
-    screen.set_terminal_properties(256)
+    state.screen = urwid.raw_display.Screen()
+    state.screen.set_terminal_properties(256)
 
-    view = MainView(provider)
+    state.main_view = MainView(provider)
 
     log_console = widgets.ConsoleWindow()
     # log_box = urwid.BoxAdapter(urwid.LineBox(log_console), 10)
     pile = urwid.Pile([
-        ("weight", 5, urwid.LineBox(view)),
+        ("weight", 5, urwid.LineBox(state.main_view)),
         ("weight", 1, urwid.LineBox(log_console))
     ])
 
@@ -206,7 +206,7 @@ def run_gui(provider, **kwargs):
     state.loop = urwid.MainLoop(
         pile,
         palette,
-        screen=screen,
+        screen=state.screen,
         event_loop=urwid.AsyncioEventLoop(loop=state.asyncio_loop),
         unhandled_input=global_input,
         pop_ups=True
@@ -216,7 +216,7 @@ def run_gui(provider, **kwargs):
         logger.setLevel(logging.DEBUG)
 
     def activate_view(loop, user_data):
-        view.activate()
+        state.main_view.activate()
 
     state.loop.set_alarm_in(0, activate_view)
     state.loop.run()

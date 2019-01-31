@@ -280,16 +280,23 @@ class Program(abc.ABC):
         logger.debug(f"cmd: {cmd}")
 
         if not self.source_integrated:
+            if self.FOREGROUND:
+                spawn_func = subprocess.call
+            else:
+                spawn_func = subprocess.Popen
+                self.stdin = open(os.devnull, 'w')
+                self.stdout = open(os.devnull, 'w')
+                self.stderr = subprocess.STDOUT
             try:
-                self.proc = subprocess.Popen(
+                self.proc = spawn_func(
                     cmd,
                     stdin = self.stdin,
-                    stdout = self.stdout or open(os.devnull, 'w'),
-                    stderr = self.stderr or open(os.devnull, 'w'),
-                    # stderr = self.stderr or open(os.devnull, 'w'),
+                    stdout = self.stdout,
+                    stderr = self.stderr
                 )
             except SGException as e:
                 logger.warning(e)
+
         return self.proc
 
     @classmethod
