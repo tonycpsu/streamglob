@@ -6,8 +6,11 @@ from .live import *
 # there's also a TwitchHelix client, but most of that isn't implemented yet
 from twitch import TwitchClient
 
-class TwitchMediaListing(MediaListing):
-    pass
+class TwitchMediaListing(LiveStreamMediaListing):
+
+    @property
+    def ext(self):
+        return "mp4"
 
 class TwitchMediaSource(model.MediaSource):
     pass

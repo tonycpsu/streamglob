@@ -119,8 +119,11 @@ class LiveStreamProvider(BackgroundTasksMixin, BaseProvider):
             s = self.check_channel(locator)
             channel.updated = datetime.now()
             if s and s.channel not in [l.channel for l in self.live_channels]:
+                listing_cls = getattr(
+                    self, "LISTING_CLASS", LiveStreamMediaListing
+                )
                 self.live_channels.append(
-                    LiveStreamMediaListing(
+                    listing_cls(
                         s
                     )
                 )
