@@ -193,16 +193,13 @@ class Program(abc.ABC):
                 if cfg.disabled == True:
                     logger.info(f"player {name} is disabled")
                     continue
-
                 PROGRAMS[ptype][name] = ProgramDef(
                     cls=klass,
                     name=name,
                     path=path,
                     cfg = AttrDict(cfg)
                 )
-
         # Try to find any players not configured
-
         for ptype in cls.SUBCLASSES.keys():
             cfgkey = ptype.__name__.lower() + "s"
             for name, klass in cls.SUBCLASSES[ptype].items():
@@ -276,7 +273,7 @@ class Program(abc.ABC):
             # cmd += [self.source]
             cmd += [self.source.locator]
         cmd += self.extra_args_post
-        # raise Exception(" ".join(cmd))
+
         logger.debug(f"cmd: {cmd}")
 
         if not self.source_integrated:
@@ -320,7 +317,23 @@ class Downloader(Program):
         self.run(**kwargs) # FIXME
 
 
-class YouTubeDLHelper(Helper):
+
+# Put image-only viewers first so they're selected for image links by default
+class FEHPlayer(Player, MEDIA_TYPES={"image"}):
+    pass
+
+class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
+    pass
+
+class VLCPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
+    pass
+
+class ElinksPlayer(Player, cmd="elinks", MEDIA_TYPES={"text"}, FOREGROUND=True):
+    pass
+
+
+
+class YouTubeDLHelper(Helper, Downloader):
 
     CMD = "youtube-dl"
 
@@ -331,11 +344,6 @@ class YouTubeDLHelper(Helper):
     def pipe_to_dst(self):
         self.extra_args_post += ["-o", "-"]
 
-    def download(self, outfile, **kwargs):
-        if outfile:
-            self.extra_args_post += ["-o", outfile]
-        self.play(**kwargs) # FIXME
-
     @classmethod
     def supports_url(cls, url):
         ies = youtube_dl.extractor.gen_extractors()
@@ -345,7 +353,7 @@ class YouTubeDLHelper(Helper):
                 return True
         return False
 
-class StreamlinkHelper(Helper):
+class StreamlinkHelper(Helper, Downloader):
 
     PLAYER_INTEGRATED=True
 
@@ -390,18 +398,6 @@ class StreamlinkHelper(Helper):
         except streamlink.exceptions.NoPluginError:
             return False
 
-# Put image-only viewers first so they're selected for image links by default
-class FEHPlayer(Player, MEDIA_TYPES={"image"}):
-    pass
-
-class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
-    pass
-
-class VLCPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
-    pass
-
-class ElinksPlayer(Player, cmd="elinks", MEDIA_TYPES={"text"}, FOREGROUND=True):
-    pass
 
 class WgetDownloader(Downloader):
 
@@ -414,10 +410,6 @@ class WgetDownloader(Downloader):
         return True
 
 class CurlDownloader(Downloader):
-
-    def download(self, outfile, **kwargs):
-        self.extra_args_post += ["-o", outfile]
-        self.play(**kwargs) # FIXME
 
     @classmethod
     def supports_url(cls, url):
@@ -440,6 +432,7 @@ def main():
     parser = argparse.ArgumentParser()
     options, args = parser.parse_known_args()
 
+    raise Exception(list(Helper.get()))
     # for p in [
     #         next(Program.get("streamlink")),
     #         next(Program.get("youtube-dl"))

@@ -22,6 +22,7 @@ class FeedListing(MediaListing):
         return self.created.strftime("%Y%m%d_%H%M%S")
 
 
+
 # class URLFeed(model.MediaFeed):
 
 #     url = Required(str)
@@ -366,10 +367,10 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
             self.update_feeds()
 
             for item in self.items_query[offset:offset+limit]:
-                d = AttrDict(item.to_dict(related_objects=True))
-                cls = getattr(self, "MEDIA_SOURCE_CLASS", model.MediaSource)
-                d.content = cls.schema().loads(d.content, many=True)
+                l = self.LISTING_CLASS(**item.to_dict(related_objects=True))
+                source_cls = getattr(self, "MEDIA_SOURCE_CLASS", model.MediaSource)
+                l.content = source_cls.schema().loads(l["content"], many=True)
                 # d.content = MediaSource.from_json(d.content, many=True)
                 # raise Exception(type(d.content))
-                d.feed = AttrDict(d.feed.to_dict())
-                yield(FeedListing(d))
+                l.feed = AttrDict(l.feed.to_dict())
+                yield(l)

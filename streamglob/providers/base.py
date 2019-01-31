@@ -33,7 +33,12 @@ class MediaListing(AttrDict):
 
     @property
     def default_name(self):
-        for s in reversed(self.locator.split("/")):
+        import time
+
+        if len(self.content) > 1:
+            raise NotImplementedError
+
+        for s in reversed(self.content[0].locator.split("/")):
             if not len(s): continue
             return "".join(
                 [c for c in s if c.isalpha() or c.isdigit() or c in [" ", "-"]]
@@ -195,6 +200,12 @@ class BaseProvider(abc.ABC):
         clsname = f"{cls.NAME}MediaSource"
         pkg = sys.modules.get(cls.__module__)
         return getattr(pkg, clsname, model.MediaSource)
+
+    @classproperty
+    def LISTING_CLASS(cls):
+        clsname = f"{cls.NAME}MediaListing"
+        pkg = sys.modules.get(cls.__module__)
+        return getattr(pkg, clsname, MediaListing)
 
     @property
     def session_params(self):
@@ -365,20 +376,28 @@ class BaseProvider(abc.ABC):
     def download(self, selection, **kwargs):
 
         source, kwargs = self.play_args(selection, **kwargs)
+        if not isinstance(source, list):
+            source = [source]
 
-        if getattr(self, "DOWNLOADER", None):
-            player = next(Player.get(self.DOWNLOADER))
-        elif getattr(self, "HELPER", None):
-            player = next(Player.get(self.HELPER))
+        if len(source) == 1:
+            source = source[0]
+            try:
+                downloader = next(
+                    h for h in Helper.get()
+                    if h.supports_url(source.locator)
+                )
+            except StopIteration:
+                downloader = next(Downloader.get())
+
+            downloader.source = source
+            # player.download(self.download_filename(selection), **kwargs)
+            # raise Exception(selection)
+            # raise Exception(selection)
+            filename = selection.download_filename
+            logger.info(f"{downloader} ]downloading {source} to {filename}")
+            downloader.download(selection.download_filename, **kwargs)
         else:
-            player = next(Player.get({"download"}))
-        player.source = source
-        # player.download(self.download_filename(selection), **kwargs)
-        # raise Exception(selection)
-        filename = selection.download_filename
-        logger.info(f"downloading {selection.locator} to {filename}")
-        player.download(selection.download_filename, **kwargs)
-
+            raise NotImplementedError
 
     def download_filename(self, selection):
 
@@ -414,7 +433,7 @@ class BaseProvider(abc.ABC):
         self.view.refresh()
 
     def __str__(self):
-        return self.name
+        return self.NAME
 
 class PaginatedProviderMixin(object):
 

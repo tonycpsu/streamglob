@@ -10,6 +10,14 @@ class PeriscopeSession(session.StreamSession):
         super().__init__(*args, **kwargs)
         self.peri = pyperi.Peri(session=self)
 
+
+class PeriscopeMediaListing(MediaListing):
+
+    @property
+    def ext(self):
+        return "mp4"
+
+
 class PeriscopeMediaSource(model.MediaSource):
 
     @property

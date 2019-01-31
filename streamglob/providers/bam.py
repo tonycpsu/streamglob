@@ -27,6 +27,14 @@ class BAMListing(MediaListing):
         return self.start.strftime("%Y%m%d")
 
     @property
+    def start_time(self):
+        return self.start.strftime("%H:%M:%S")
+
+    @property
+    def start_date_time(self):
+        return f"{self.start_date}_{self.start_time}"
+
+    @property
     def ext(self):
         return "mp4"
 
@@ -408,6 +416,8 @@ class BAMProviderMixin(abc.ABC):
                     game_type = game_type,
                     away = away_team,
                     home = home_team,
+                    away_abbrev = away_abbrev,
+                    home_abbrev = home_abbrev,
                     start = start_time,
                     line = self.line_score,
                     attrs = attrs

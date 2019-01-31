@@ -14,6 +14,23 @@ from .filters import *
 
 import youtube_dl
 
+class YoutubeMediaListing(MediaListing):
+
+    @property
+    def download_filename(self):
+
+        path = self._provider.config.get_path("output.path")
+        template = self._provider.config.get_path("output.template")
+        if template:
+            outfile = template.format_map(d)
+            return os.path.join(path, template)
+        elif path:
+            return path
+        else:
+            # youtube-dl generates a sane filename from the metadata by default
+            return None
+
+
 class YouTubeMediaSource(model.MediaSource):
     pass
 
@@ -220,17 +237,3 @@ class YouTubeProvider(PaginatedProviderMixin,
         if fmt:
             kwargs["format"] = fmt
         return (source, kwargs)
-
-
-    def download_filename(self, selection):
-
-        path = self.config.get_path("output.path")
-        template = self.config.get_path("output.template")
-        if template:
-            outfile = template.format_map(d)
-            return os.path.join(path, template)
-        elif path:
-            return path
-        else:
-            # youtube-dl generates a sane filename from the metadata by default
-            return None
