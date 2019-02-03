@@ -366,7 +366,9 @@ class BaseProvider(abc.ABC):
 
         if len(source) == 1:
             source = source[0]
-            helper_spec = source.helper
+            # helper_spec = source.helper
+            helper_spec = getattr(self.config, "helpers", None) or source.helper
+            # raise Exception(helper_spec)
 
         player_spec = {"media_types": media_types}
         proc = Player.play(source, player_spec, helper_spec, **kwargs)
@@ -382,10 +384,20 @@ class BaseProvider(abc.ABC):
         if len(source) == 1:
             source = source[0]
             try:
-                downloader = next(
-                    h for h in Helper.get()
-                    if h.supports_url(source.locator)
-                )
+                helpers = getattr(self.config, "helpers", [])
+                if isinstance(helpers, dict):
+                    helpers = [
+                        h for h in list(AttrDict.fromkeys(helpers.values()))
+                        if h
+                    ]
+                downloader = next(iter(
+                    sorted((
+                        h for h in Helper.get()
+                        if h.supports_url(source.locator)),
+                        key = lambda h: helpers.index(h.cmd)
+                           if h.cmd in helpers else len(helpers)+1
+                    )
+                ))
             except StopIteration:
                 downloader = next(Downloader.get())
 
@@ -399,27 +411,6 @@ class BaseProvider(abc.ABC):
         else:
             raise NotImplementedError
 
-    def download_filename(self, selection):
-
-        outpath = (
-            self.config.get_path("output.template")
-            or
-            config.settings.profile.get_path("output.template")
-            or
-            "."
-        )
-
-        template = (
-            self.config.get_path("output.path")
-            or
-            config.settings.profile.get_path("output.path")
-        )
-        if template:
-            outfile = template.format_map(selection)
-        else:
-            outfile = "{provider}.{default_name}.{date}.{ext}".format_map(selection)
-
-        return os.path.join(outpath, template)
 
 
     def on_select(self, widget, selection):

@@ -71,6 +71,13 @@ class LiveStreamProvider(BackgroundTasksMixin, BaseProvider):
             description = {"width": ("weight", 1)},
         )
 
+    @classproperty
+    def CHANNEL_CLASS(cls):
+        clsname = f"{cls.NAME}Channel"
+        pkg = sys.modules.get(cls.__module__)
+        return getattr(pkg, clsname, model.MediaSource)
+
+
     @property
     def channels(self):
         if isinstance(self.config.channels, dict):

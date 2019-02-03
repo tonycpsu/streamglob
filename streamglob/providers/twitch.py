@@ -52,8 +52,6 @@ class TwitchProvider(LiveStreamProvider):
 
     SESSION_CLASS = TwitchSession
 
-    CHANNEL_CLASS = TwitchChannel
-
     MEDIA_TYPES = {"video"}
 
     def check_channel(self, locator):

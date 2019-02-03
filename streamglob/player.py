@@ -155,7 +155,6 @@ class Program(abc.ABC):
         if helper:
             helper.source = source
             source = helper
-            player.source = source
 
         player.source = source
         logger.info(f"playing {source}: player={player}, helper={helper}")
@@ -281,9 +280,11 @@ class Program(abc.ABC):
                 spawn_func = subprocess.call
             else:
                 spawn_func = subprocess.Popen
-                self.stdin = open(os.devnull, 'w')
-                self.stdout = open(os.devnull, 'w')
-                self.stderr = subprocess.STDOUT
+                if self.stdin is None:
+                    self.stdin = open(os.devnull, 'w')
+                if self.stdout is None:
+                    self.stdout = open(os.devnull, 'w')
+                self.stderr = open(os.devnull, 'w')
             try:
                 self.proc = spawn_func(
                     cmd,
@@ -403,7 +404,7 @@ class WgetDownloader(Downloader):
 
     def download(self, outfile, **kwargs):
         self.extra_args_post += ["-O", outfile]
-        self.play(**kwargs) # FIXME
+        self.run(**kwargs) # FIXME
 
     @classmethod
     def supports_url(cls, url):

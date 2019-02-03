@@ -23,10 +23,10 @@ class PeriscopeMediaSource(model.MediaSource):
 
     @property
     def helper(self):
-        return {
-            "mpv": None,
-            None: "youtube-dl",
-        }
+        return AttrDict([
+            (None, "youtube-dl"),
+            ("mpv", None),
+        ])
 
 class PeriscopeItem(model.MediaItem):
 

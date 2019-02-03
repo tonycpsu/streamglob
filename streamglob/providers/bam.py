@@ -20,7 +20,7 @@ from .filters import *
 from ..player import *
 from .widgets import *
 
-class BAMListing(MediaListing):
+class BAMMediaListing(MediaListing):
 
     @property
     def start_date(self):
@@ -411,7 +411,7 @@ class BAMProviderMixin(abc.ABC):
                 else:
                     self.line_score = None
 
-                yield(BAMListing(
+                yield(BAMMediaListing(
                     game_id = game_pk,
                     game_type = game_type,
                     away = away_team,
