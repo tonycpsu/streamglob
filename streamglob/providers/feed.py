@@ -93,7 +93,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         item.mark_read()
         self[position].clear_attr("unread")
         self.set_value(position, "read", item.read)
-        self.invalidate_rows([self[position].data.item_id])
+        self.invalidate_rows([self[position].data.media_item_id])
 
     @db_session
     def mark_item_unread(self, position):
@@ -105,7 +105,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         item.mark_unread()
         self[position].set_attr("unread")
         self.set_value(position, "read", item.read)
-        self.invalidate_rows([self[position].data.item_id])
+        self.invalidate_rows([self[position].data.media_item_id])
 
     @db_session
     def toggle_item_read(self, position):
@@ -136,7 +136,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         elif key == "n":
             try:
                 idx = next(
-                    r.data.item_id
+                    r.data.media_item_id
                     for r in self[self.focus_position+1:]
                     if not r.data.read
                 )
@@ -151,7 +151,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         elif key == "p":
             try:
                 idx = next(
-                    r.data.item_id
+                    r.data.media_item_id
                     for r in self[self.focus_position-1::-1]
                     if not r.data.read
                 )
