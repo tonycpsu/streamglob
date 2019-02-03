@@ -17,6 +17,7 @@ from panwid.datatable import *
 from panwid.listbox import ScrollingListBox
 from panwid.dropdown import *
 from panwid.dialog import *
+from pony.orm import db_session
 from tonyc_utils.logging import *
 
 import pytz
@@ -261,19 +262,21 @@ def main():
 
     logger = logging.getLogger(config.PACKAGE_NAME)
 
+    providers.load()
+
     sh = logging.StreamHandler()
     setup_logging(options.verbose - options.quiet,
                   quiet_stdout=True)
     logger.debug(f"{PACKAGE_NAME} starting")
 
-    providers.load()
     model.init()
 
-    model.MediaFeed.purge_all(
-        min_items = config.settings.profile.cache.min_items,
-        max_items = config.settings.profile.cache.max_items,
-        max_age = config.settings.profile.cache.max_age
-    )
+    with db_session(optimistic=False):
+        model.MediaFeed.purge_all(
+            min_items = config.settings.profile.cache.min_items,
+            max_items = config.settings.profile.cache.max_items,
+            max_age = config.settings.profile.cache.max_age
+        )
 
     spec = None
     provider, selection, opts = providers.parse_spec(options.spec)

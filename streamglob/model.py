@@ -7,6 +7,8 @@ from dataclasses import *
 import typing
 
 from pony.orm import *
+from pony.orm.core import EntityMeta
+
 from dataclasses_json import dataclass_json
 
 from . import config
@@ -20,6 +22,34 @@ CACHE_DURATION_LONG = 60*60*24*30  # 30 days
 CACHE_DURATION_DEFAULT = CACHE_DURATION_SHORT
 
 db = Database()
+
+# Monkey-patch "upsert"-ish functionality into the Pony ORM db.Entity class.
+# via: https://github.com/ponyorm/pony/issues/131
+@db_session
+def upsert(cls, keys, values=None):
+    """
+    Update
+
+    :param cls: The entity class
+    :param get: dict identifying the object to be created/updated
+    :param set: dict identifying the values
+    :return:
+    """
+    values = values or {}
+
+    if not cls.exists(**keys):
+        # logger.info(f"insert: {keys}")
+        # make new object
+        return cls(**keys, **values)
+    else:
+        # logger.info(f"update: {keys}, {values}")
+        # get the existing object
+        obj = cls.get(**keys)
+        obj.set(**values)
+        return obj
+
+db.Entity.upsert = classmethod(upsert)
+
 
 @dataclass_json
 @dataclass
@@ -92,9 +122,16 @@ class MediaFeed(MediaChannel):
     items = Set(lambda: MediaItem)
 
     @db_session
-    def mark_all_read(self):
+    def mark_all_items_read(self):
         for i in self.items.select():
             i.read = datetime.now()
+
+    @classmethod
+    @db_session
+    def mark_all_feeds_read(cls):
+        for f in cls.select():
+            for i in f.items.select():
+                i.read = datetime.now()
 
     @classmethod
     @db_session
@@ -134,7 +171,7 @@ class MediaItem(db.Entity):
     MediaFeed.
     """
 
-    item_id = PrimaryKey(int, auto=True)
+    media_item_id = PrimaryKey(int, auto=True)
     feed = Required(lambda: MediaFeed)
     guid = Required(str, index=True)
     subject = Required(str)
@@ -186,7 +223,14 @@ def init(*args, **kwargs):
 def main():
 
     init()
-    MediaFeed.purge()
+    config.load(merge_default=True)
+
+    MediaFeed.purge_all(
+        min_items = config.settings.profile.cache.min_items,
+        max_items = config.settings.profile.cache.max_items,
+        max_age = config.settings.profile.cache.max_age
+    )
+
 
 if __name__ == "__main__":
     main()
