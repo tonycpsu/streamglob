@@ -84,6 +84,17 @@ class PeriscopeProvider(PaginatedProviderMixin, CachedFeedProvider):
     SESSION_CLASS = PeriscopeSession
 
     @property
+    def ATTRIBUTES(self):
+        return AttrDict(
+            super().ATTRIBUTES.items(),
+            **AttrDict(
+                is_live = {"label": "state", "width": 10,
+                           "format_fn": lambda v: "live" if v else "archived"}
+            )
+        )
+
+
+    @property
     def feed_filters(self):
         live_filters =  {
             "any": lambda: True,
