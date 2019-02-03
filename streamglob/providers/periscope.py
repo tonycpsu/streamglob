@@ -2,6 +2,7 @@ from .feed import *
 from .. import session
 from .. import model
 
+import dateparser
 import pyperi
 
 class PeriscopeSession(session.StreamSession):
@@ -46,20 +47,25 @@ class PeriscopeFeed(model.MediaFeed):
                     username=self.locator
             ):
                 guid = item["id"]
-                i = self.items.select(lambda i: i.guid == guid).first()
-                if not i:
-                    i = self.ITEM_CLASS(
+                self.ITEM_CLASS.upsert(
+                    dict(
                         feed = self,
-                        guid = guid,
+                        guid = guid
+                    ),
+                    dict(
                         subject = item["status"].strip() or "-",
                         content = PeriscopeMediaSource.schema().dumps(
                             [PeriscopeMediaSource(
                                 f"https://pscp.tv/w/{item['id']}",
                                 media_type="video")],
-                            many=True
+                            many=True,
                         ),
+                        created = dateparser.parse(item["created_at"]),
                         is_live = item.get("state") == "RUNNING"
+
+                    )
                 )
+
         except pyperi.PyPeriConnectionError as e:
             logger.warning(e)
 
@@ -82,6 +88,17 @@ class PeriscopeProvider(PaginatedProviderMixin, CachedFeedProvider):
     MEDIA_TYPES = {"video"}
 
     SESSION_CLASS = PeriscopeSession
+
+    @property
+    def ATTRIBUTES(self):
+        return AttrDict(
+            super().ATTRIBUTES.items(),
+            **AttrDict(
+                is_live = {"label": "state", "width": 10,
+                           "format_fn": lambda v: "live" if v else "archived"}
+            )
+        )
+
 
     @property
     def feed_filters(self):

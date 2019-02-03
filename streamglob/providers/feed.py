@@ -83,7 +83,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     @db_session
     def mark_item_read(self, position):
         try:
-            if not isinstance(self[position].data, FeedListing):
+            if not isinstance(self[position].data, MediaListing):
                 return
         except IndexError:
             return
@@ -97,7 +97,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     @db_session
     def mark_item_unread(self, position):
-        if not isinstance(self[position].data, FeedListing):
+        if not isinstance(self[position].data, MediaListing):
             return
         item = self.item_at_position(position)
         if not item:
@@ -109,7 +109,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     @db_session
     def toggle_item_read(self, position):
-        if not isinstance(self[position].data, FeedListing):
+        if not isinstance(self[position].data, MediaListing):
             return
         logger.info(self.get_value(position, "read"))
         if self.get_value(position, "read") is not None:
@@ -162,7 +162,10 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             self._modified()
         elif key == "A":
             with db_session:
-                self.provider.feed.mark_all_read()
+                if self.provider.feed:
+                    self.provider.feed.mark_all_items_read()
+                else:
+                    self.provider.FEED_CLASS.mark_all_feeds_read()
             self.reset()
         elif key == "u":
             self.toggle_item_read(self.focus_position)
