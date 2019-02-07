@@ -35,7 +35,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     with_scrollbar=True
     sort_by = ("created", True)
-    index = "item_id"
+    index = "media_item_id"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -55,6 +55,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                     return 0
                 # self._row_count = len(self.provider.feed.items)
                 self._row_count = self.provider.items_query.count()
+                logger.info(f"row count: {self._row_count}")
                 self.update_count = False
         return self._row_count
 
@@ -124,7 +125,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         )
 
     # def reset(self, *args, **kwargs):
-    #     self.update_count = True
+    #     self.update_c ount = True
     #     self.provider.update_query()
     #     super().reset(*args, **kwargs)
 
@@ -239,7 +240,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
     @property
     def ATTRIBUTES(self):
         return AttrDict(
-            item_id = {"hide": True},
+            media_item_id = {"hide": True},
             feed = {"width": 32, "format_fn": lambda f: f.name if hasattr(f, "name") else "none"},
             created = {"width": 19},
             subject = {"width": ("weight", 1), "label": self.SUBJECT_LABEL},
@@ -317,7 +318,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         # state.loop.draw_screen()
 
     def refresh(self):
-        self.update_count = True
+        logger.info("refresh")
         self.update_query()
         self.view.table.refresh()
 
@@ -356,6 +357,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
             self.items_query = self.items_query.filter(
                 lambda i: i.feed == self.feed
             )
+        self.view.table.update_count = True
 
     def listings(self, offset=None, limit=None, *args, **kwargs):
 

@@ -135,7 +135,7 @@ class LiveStreamProvider(BackgroundTasksMixin, BaseProvider):
                     )
                 )
 
-        self.view.table.refresh()
+        self.view.refresh()
 
 
     @abc.abstractmethod

@@ -56,3 +56,6 @@ class TwitchProvider(LiveStreamProvider):
 
     def check_channel(self, locator):
         return self.session.check_channel(locator)
+
+    def on_channel_change(self, *args):
+        self.refresh()

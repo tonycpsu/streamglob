@@ -313,6 +313,9 @@ class BAMProviderMixin(abc.ABC):
             self.HELPER in list(player.PROGRAMS[Helper].keys())
         )
 
+    def on_date_change(self, *args):
+        self.view.table.refresh()
+
     # @memo(region="short")
     def schedule(
             self,
