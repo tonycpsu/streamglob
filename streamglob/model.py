@@ -62,6 +62,14 @@ class MediaSource(object):
     def helper(self):
         return None
 
+@dataclass
+class MediaDownload(object):
+
+    provider: str
+    locator: str
+    path: str
+    pid: int
+
 
 class CacheEntry(db.Entity):
 

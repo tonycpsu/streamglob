@@ -4,6 +4,7 @@ import sys
 import os
 import abc
 import asyncio
+import dataclasses
 
 from orderedattrdict import AttrDict, defaultdict
 from itertools import chain
@@ -371,8 +372,11 @@ class BaseProvider(abc.ABC):
             # raise Exception(helper_spec)
 
         player_spec = {"media_types": media_types}
-        proc = Player.play(source, player_spec, helper_spec, **kwargs)
-        state.procs.append(proc)
+        # proc = Player.play(source, player_spec, helper_spec, **kwargs)
+        # state.procs.append(proc)
+        source = AttrDict(dataclasses.asdict(source))
+        source.provider = self.NAME
+        state.task_manager.play(source, player_spec, helper_spec, **kwargs)
 
 
     def download(self, selection, **kwargs):

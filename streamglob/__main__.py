@@ -17,6 +17,7 @@ from panwid.datatable import *
 from panwid.listbox import ScrollingListBox
 from panwid.dropdown import *
 from panwid.dialog import *
+from panwid.tabview import *
 from pony.orm import db_session
 from tonyc_utils.logging import *
 
@@ -64,6 +65,36 @@ class UrwidLoggingHandler(logging.Handler):
             os.write(self.pipe, (msg[:512]+"\n").encode("utf-8"))
 
 
+def exception_handler(loop, context):
+
+    # loop.default_exception_handler(context)
+
+    exception = context.get('exception')
+    logger.exception(exception)
+
+
+class BaseTabView(TabView):
+
+    CHANGE_TAB_KEYS = "!@#$%^&*()"
+
+    last_refresh = None
+
+    def keypress(self, size, key):
+
+        if key in self.CHANGE_TAB_KEYS:
+            idx = int(self.CHANGE_TAB_KEYS.index(key))
+            if idx < 0:
+                idx += 10
+            self.set_active_tab(idx)
+
+        elif key == 'tab':
+            self.set_active_next()
+
+        elif key == 'shift tab':
+            self.set_active_prev()
+
+        else:
+            return super(BaseTabView, self).keypress(size, key)
 
 class MainToolbar(urwid.WidgetWrap):
 
@@ -99,6 +130,8 @@ class MainToolbar(urwid.WidgetWrap):
         self.columns = urwid.Columns([
             # ('weight', 1, urwid.Padding(urwid.Edit("foo"))),
             ('weight', 1, self.provider_dropdown),
+            (1, urwid.Divider("|")),
+
         ])
         self.filler = urwid.Filler(self.columns)
         super(MainToolbar, self).__init__(self.filler)
@@ -107,13 +140,12 @@ class MainToolbar(urwid.WidgetWrap):
 
         self.provider_dropdown.cycle(step)
 
-
     @property
     def provider(self):
         return (self.provider_dropdown.selected_label)
 
 
-class MainView(BaseView):
+class BrowserView(BaseView):
 
     def __init__(self, provider):
 
@@ -124,22 +156,22 @@ class MainView(BaseView):
             lambda w, p: self.set_provider(p)
         )
 
-        self.provider_view_placeholder = urwid.WidgetPlaceholder(
+        self.browser_view_placeholder = urwid.WidgetPlaceholder(
             urwid.Filler(urwid.Text(""))
         )
 
         self.pile  = urwid.Pile([
             (1, self.toolbar),
             (1, urwid.Filler(urwid.Divider("-"))),
-            ('weight', 1, self.provider_view_placeholder),
+            ('weight', 1, self.browser_view_placeholder),
         ])
-        super(MainView, self).__init__(self.pile)
+        super().__init__(self.pile)
 
     def set_provider(self, provider):
 
         self.provider.deactivate()
         self.provider = providers.get(provider)
-        self.provider_view_placeholder.original_widget = self.provider.view
+        self.browser_view_placeholder.original_widget = self.provider.view
         if self.provider.config_is_valid:
             self.pile.focus_position = 2
         else:
@@ -157,11 +189,43 @@ class MainView(BaseView):
         else:
             return super().keypress(size, key)
 
+class TasksDataTable(DataTable):
+
+    columns = [
+        DataTableColumn("pid", width=6),
+        DataTableColumn("provider", width=16),
+        DataTableColumn("locator", width=("weight", 1)),
+    ]
+
+    def query(self, *args, **kwargs):
+        logger.info(f"query: {state.task_manager.active}")
+        return state.task_manager.active
+
+    def keypress(self, size, key):
+        if key == "ctrl r":
+            self.refresh()
+        else:
+            return super().keypress(size, key)
+
+class TasksView(BaseView):
+
+    def __init__(self):
+
+        self.table = TasksDataTable()
+        self.pile = urwid.Pile([
+            ("weight", 1, self.table)
+        ])
+        super().__init__(self.pile)
+
+    def refresh(self):
+        self.table.refresh()
+
 
 def run_gui(provider, **kwargs):
 
     log_file = os.path.join(config.CONFIG_DIR, f"{PACKAGE_NAME}.log")
     state.asyncio_loop = asyncio.get_event_loop()
+    state.asyncio_loop.set_exception_handler(exception_handler)
 
     ulh = UrwidLoggingHandler()
     setup_logging(options.verbose - options.quiet,
@@ -184,12 +248,21 @@ def run_gui(provider, **kwargs):
     entries.update(DataTable.get_palette_entries(user_entries=entries))
     entries.update(Dropdown.get_palette_entries())
     entries.update(ScrollingListBox.get_palette_entries())
+    entries.update(TabView.get_palette_entries())
     # raise Exception(entries)
     palette = Palette("default", **entries)
     state.screen = urwid.raw_display.Screen()
     state.screen.set_terminal_properties(256)
 
-    state.main_view = MainView(provider)
+    state.browser_view = BrowserView(provider)
+    state.tasks_view = TasksView()
+
+    state.views = [
+        Tab("Browser", state.browser_view, locked=True),
+        Tab("Tasks", state.tasks_view, locked=True)
+    ]
+
+    state.main_view = BaseTabView(state.views)
 
     log_console = widgets.ConsoleWindow()
     # log_box = urwid.BoxAdapter(urwid.LineBox(log_console), 10)
@@ -217,8 +290,9 @@ def run_gui(provider, **kwargs):
         logger.setLevel(logging.DEBUG)
 
     def activate_view(loop, user_data):
-        state.main_view.activate()
+        state.browser_view.activate()
 
+    state.start_task_manager()
     state.loop.set_alarm_in(0, activate_view)
     state.loop.run()
 
