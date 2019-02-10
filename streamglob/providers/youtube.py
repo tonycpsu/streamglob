@@ -63,7 +63,7 @@ class YouTubeSession(session.StreamSession):
             for item in playlist_dict['entries']:
                 yield SearchResult(
                     guid = item["id"],
-                    subject = item["title"],
+                    title = item["title"],
                     url = f"https://youtu.be/{item['url']}"
                 )
 

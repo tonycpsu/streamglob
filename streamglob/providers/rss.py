@@ -52,7 +52,7 @@ class RSSFeed(model.MediaFeed):
                     i = self.ITEM_CLASS(
                         feed = self,
                         guid = guid,
-                        subject = item.title,
+                        title = item.title,
                         created = item.pub_date.replace(tzinfo=None),
                         # created = datetime.fromtimestamp(
                         #     mktime(item.published_parsed)

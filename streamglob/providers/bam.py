@@ -38,6 +38,10 @@ class BAMMediaListing(MediaListing):
     def ext(self):
         return "mp4"
 
+    @property
+    def title(self):
+        return f"{self.away}@{self.home}"
+
 class BAMMediaSource(model.MediaSource):
 
     @property

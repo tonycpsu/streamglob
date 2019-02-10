@@ -68,9 +68,9 @@ class InstagramSession(session.StreamSession):
             post_id = post["node"]["id"]
 
             try:
-                subject = post["node"]["caption"]["text"].replace("\n", "")
+                title = post["node"]["caption"]["text"].replace("\n", "")
             except TypeError:
-                subject = "(no caption)"
+                title = "(no caption)"
 
             media_type = post["node"]["type"]
             if media_type == "video":
@@ -96,7 +96,7 @@ class InstagramSession(session.StreamSession):
             yield(
                 InstagramMediaListing(
                     guid = post_id,
-                    subject = subject,
+                    title = title,
                     created = datetime.fromtimestamp(
                         int(post["node"]["created_time"])
                     ),

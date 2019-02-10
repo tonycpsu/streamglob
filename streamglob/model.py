@@ -182,7 +182,7 @@ class MediaItem(db.Entity):
     media_item_id = PrimaryKey(int, auto=True)
     feed = Required(lambda: MediaFeed)
     guid = Required(str, index=True)
-    subject = Required(str)
+    title = Required(str)
     content = Required(Json)
     created = Required(datetime, default=datetime.now)
     read = Optional(datetime)

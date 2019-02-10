@@ -224,8 +224,6 @@ class CachedFeedProviderView(SimpleProviderView):
 class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
 
 
-    SUBJECT_LABEL = "title"
-
     UPDATE_INTERVAL = 300
 
     TASKS = [
@@ -243,7 +241,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
             media_item_id = {"hide": True},
             feed = {"width": 32, "format_fn": lambda f: f.name if hasattr(f, "name") else "none"},
             created = {"width": 19},
-            subject = {"width": ("weight", 1), "label": self.SUBJECT_LABEL},
+            title = {"width": ("weight", 1)},
         )
 
     @property

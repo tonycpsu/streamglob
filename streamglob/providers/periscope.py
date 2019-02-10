@@ -53,7 +53,7 @@ class PeriscopeFeed(model.MediaFeed):
                         guid = guid
                     ),
                     dict(
-                        subject = item["status"].strip() or "-",
+                        title = item["status"].strip() or "-",
                         content = PeriscopeMediaSource.schema().dumps(
                             [PeriscopeMediaSource(
                                 f"https://pscp.tv/w/{item['id']}",
