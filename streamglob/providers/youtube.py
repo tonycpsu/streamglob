@@ -32,7 +32,14 @@ class YoutubeMediaListing(MediaListing):
 
 
 class YouTubeMediaSource(model.MediaSource):
-    pass
+
+    @property
+    def helper(self):
+        return AttrDict([
+            (None, "youtube-dl"),
+            ("mpv", None),
+        ])
+
 
 class SearchResult(AttrDict):
     pass

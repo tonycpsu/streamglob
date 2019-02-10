@@ -1,4 +1,7 @@
+import logging
+logger = logging.getLogger(__name__)
 import asyncio
+from datetime import datetime, timedelta
 
 from .player import Player, Downloader
 from .state import *
@@ -35,7 +38,7 @@ class TaskManager(object):
 
     async def stop(self):
         logger.info("task_manager stopping")
-        import time; time.sleep(1)
+        # import time; time.sleep(1)
         for a in self.active:
             a.proc.terminate()
 
@@ -53,19 +56,21 @@ class TaskManager(object):
             logger.info(f"action: {action}")
             logger.info(f"{'playing' if action == 'play' else 'downloading'} source: {source}")
             if action == "play":
-                program = Player.play(source, *args, **kwargs)
+                program = await Player.play(source, *args, **kwargs)
             elif action == "download":
                 (filename, helper_spec) = args
                 # proc = downloader.download(source, filename, **kwargs)
-                program = Downloader.download(source, filename, helper_spec, **kwargs)
+                program = await Downloader.download(source, filename, helper_spec, **kwargs)
+                source.dest = filename
             else:
                 raise NotImplementedError
             source.action = action
             source.program = program
+            logger.info(f"program: {source.program}")
             source.proc = program.proc
-            source.pid = program.proc.pid
-            logger.info(source.proc)
-            logger.info(source.pid)
+            logger.info(f"proc: {source.proc}")
+            # source.pid = program.proc.pid
+            # logger.info(source.pid)
             source.started = datetime.now()
             source.elapsed = timedelta(0)
             self.active.append(source)
@@ -74,22 +79,16 @@ class TaskManager(object):
     async def poller(self):
 
         while True:
-            # logger.info("poller")
-            self.active = [ s for s in self.active if s.proc.poll() is None ]
+            self.active = [ s for s in self.active if s.proc.returncode is None ]
+            logger.info(f"poller: {self.active}")
+            # logger.info(dir(self.active[0].proc))
             for s in self.active:
                 s.elapsed = datetime.now() - s.started
                 if hasattr(s.program, "update_progress"):
-                    s.program.update_progress()
+                    # logger.info("foo")
+                    await s.program.update_progress()
             state.tasks_view.refresh()
             await asyncio.sleep(self.QUEUE_INTERVAL)
-
-
-def start_task_manager():
-    self.task_manager_task = state.asyncio_loop.create_task(self.task_manager.start())
-
-def stop_task_manager(self):
-    state.asyncio_loop.create_task(self.task_manager.stop())
-    self.task_manager_task.cancel()
 
 
 def main():

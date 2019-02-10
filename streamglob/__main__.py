@@ -9,6 +9,7 @@ import select
 import time
 import re
 import asyncio
+import functools
 
 import urwid
 import urwid.raw_display
@@ -30,7 +31,6 @@ import orderedattrdict.yamlutils
 from orderedattrdict.yamlutils import AttrDictYAMLLoader
 
 from .state import *
-from .state import memo
 from . import config
 from . import model
 from . import widgets
@@ -38,6 +38,7 @@ from . import utils
 from . import session
 from . import providers
 from . import player
+from . import tasks
 from .exceptions import *
 
 urwid.AsyncioEventLoop._idle_emulation_delay = 1/20
@@ -65,12 +66,40 @@ class UrwidLoggingHandler(logging.Handler):
             os.write(self.pipe, (msg[:512]+"\n").encode("utf-8"))
 
 
-def exception_handler(loop, context):
 
-    # loop.default_exception_handler(context)
+# urwid uses sys.exc_info() to get `(type, value, traceback)`, which is needed
+# in python2 to re-raise exceptions.  However, sys.exc_info() can return `(None,
+# None, None)` which leaves us with nothing to re-raise. It's possible this
+# happens only with the asyncio event loop.
+#
+# This is easily solved for asyncio/python3 since we only need the exception
+# which is guaranteed by asyncio.
+class AsyncioEventLoop_patched(urwid.AsyncioEventLoop):
+    def _exception_handler(self, loop, context):
+        exc = context.get('exception')
+        if exc:
+            loop.stop()
+            if not isinstance(exc, urwid.ExitMainLoop):
+                self._exc_info = exc
+        else:
+            loop.default_exception_handler(context)
 
-    exception = context.get('exception')
-    logger.exception(exception)
+    def run(self):
+        self._loop.set_exception_handler(self._exception_handler)
+        self._loop.run_forever()
+        if self._exc_info:
+            raise self._exc_info
+
+urwid.AsyncioEventLoop = AsyncioEventLoop_patched
+
+
+def quit_app():
+
+    # tasks.stop_task_manager()
+    state.asyncio_loop.create_task(state.task_manager.stop())
+    state.task_manager_task.cancel()
+
+    raise urwid.ExitMainLoop()
 
 
 class BaseTabView(TabView):
@@ -189,17 +218,30 @@ class BrowserView(BaseView):
         else:
             return super().keypress(size, key)
 
+
 class TasksDataTable(DataTable):
 
     columns = [
         DataTableColumn("pid", width=6),
-        DataTableColumn("provider", width=16),
-        DataTableColumn("locator", width=("weight", 1)),
+        DataTableColumn("started", width=20, format_fn = utils.format_datetime),
+        DataTableColumn("elapsed",  width=14, format_fn = utils.format_timedelta),
+        DataTableColumn("provider", width=18),
+        DataTableColumn("title", width=("weight", 1)),
+        DataTableColumn(
+            "locator", width=40,
+            # format_fn = lambda s: s[:39] + u"\u2026" if len(s) >= 40 else s)
+            format_fn = functools.partial(utils.format_str_truncated, 40)
+        )
     ]
 
+    @classmethod
+    def filter_task(cls, t):
+        return True
+
+
     def query(self, *args, **kwargs):
-        logger.info(f"query: {state.task_manager.active}")
-        return state.task_manager.active
+        # logger.info(f"query: {state.task_manager.active}")
+        return [ t for t in state.task_manager.active if self.filter_task(t) ]
 
     def keypress(self, size, key):
         if key == "ctrl r":
@@ -207,25 +249,60 @@ class TasksDataTable(DataTable):
         else:
             return super().keypress(size, key)
 
+
+class PlayingDataTable(TasksDataTable):
+
+    @classmethod
+    def filter_task(cls, t):
+        return t.action == "play"
+
+class DownloadsDataTable(TasksDataTable):
+
+    columns = PlayingDataTable.columns + [
+        DataTableColumn(
+            "dest", width=40,
+            format_fn = functools.partial(utils.format_str_truncated, 40)
+        ),
+        DataTableColumn(
+            "pct", width=5, format_record=True,
+            format_fn = lambda r: f"{r.program.progress.get('pct', '').split('.')[0]}%"
+        ),
+        DataTableColumn(
+            "rate", width=5, format_record=True,
+            format_fn = lambda r: f"{r.program.progress.get('rate')}%"
+        ),
+    ]
+
+    @classmethod
+    def filter_task(cls, t):
+        return t.action == "download"
+
+
 class TasksView(BaseView):
 
     def __init__(self):
 
-        self.table = TasksDataTable()
+        self.playing = PlayingDataTable()
+        self.downloads = DownloadsDataTable()
         self.pile = urwid.Pile([
-            ("weight", 1, self.table)
+            (1, urwid.Filler(urwid.Text("Playing"))),
+            ("weight", 1, self.playing),
+            (1, urwid.Filler(urwid.Text("Downloading"))),
+            ("weight", 1, self.downloads)
         ])
         super().__init__(self.pile)
 
     def refresh(self):
-        self.table.refresh()
+        self.playing.refresh()
+        self.downloads.refresh()
 
 
 def run_gui(provider, **kwargs):
 
     log_file = os.path.join(config.CONFIG_DIR, f"{PACKAGE_NAME}.log")
     state.asyncio_loop = asyncio.get_event_loop()
-    state.asyncio_loop.set_exception_handler(exception_handler)
+    state.task_manager = tasks.TaskManager()
+    state.task_manager_task = state.asyncio_loop.create_task(state.task_manager.start())
 
     ulh = UrwidLoggingHandler()
     setup_logging(options.verbose - options.quiet,
@@ -273,9 +350,10 @@ def run_gui(provider, **kwargs):
 
     def global_input(key):
         if key in ('q', 'Q'):
-            raise urwid.ExitMainLoop()
+            quit_app()
         else:
             return False
+
 
     state.loop = urwid.MainLoop(
         pile,
@@ -292,7 +370,8 @@ def run_gui(provider, **kwargs):
     def activate_view(loop, user_data):
         state.browser_view.activate()
 
-    state.start_task_manager()
+    # tasks.start_task_manager()
+
     state.loop.set_alarm_in(0, activate_view)
     state.loop.run()
 

@@ -372,46 +372,33 @@ class BaseProvider(abc.ABC):
             # raise Exception(helper_spec)
 
         player_spec = {"media_types": media_types}
-        # proc = Player.play(source, player_spec, helper_spec, **kwargs)
-        # state.procs.append(proc)
+
         source = AttrDict(dataclasses.asdict(source))
         source.provider = self.NAME
+        source.title = selection.title
         state.task_manager.play(source, player_spec, helper_spec, **kwargs)
 
 
     def download(self, selection, **kwargs):
 
         source, kwargs = self.play_args(selection, **kwargs)
+
         if not isinstance(source, list):
             source = [source]
 
         if len(source) == 1:
             source = source[0]
-            try:
-                helpers = getattr(self.config, "helpers", [])
-                if isinstance(helpers, dict):
-                    helpers = [
-                        h for h in list(AttrDict.fromkeys(helpers.values()))
-                        if h
-                    ]
-                downloader = next(iter(
-                    sorted((
-                        h for h in Helper.get()
-                        if h.supports_url(source.locator)),
-                        key = lambda h: helpers.index(h.cmd)
-                           if h.cmd in helpers else len(helpers)+1
-                    )
-                ))
-            except StopIteration:
-                downloader = next(Downloader.get())
-
-            downloader.source = source
-            # player.download(self.download_filename(selection), **kwargs)
-            # raise Exception(selection)
-            # raise Exception(selection)
             filename = selection.download_filename
-            logger.info(f"{downloader} ]downloading {source} to {filename}")
-            downloader.download(selection.download_filename, **kwargs)
+            helper_spec = getattr(self.config, "helpers", None) or source.helper
+            logger.info(f"helper: {helper_spec}")
+            source = AttrDict(dataclasses.asdict(source))
+            source.provider = self.NAME
+            source.title = selection.title
+            state.task_manager.download(
+                source, filename, helper_spec, **kwargs
+            )
+
+            # downloader.download(selection.download_filename, **kwargs)
         else:
             raise NotImplementedError
 

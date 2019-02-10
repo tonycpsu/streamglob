@@ -7,6 +7,7 @@ from itertools import chain
 from functools import reduce
 import shlex
 import subprocess
+import asyncio
 from datetime import timedelta
 import distutils.spawn
 import argparse
@@ -52,22 +53,29 @@ class Program(abc.ABC):
         '.+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$)'
     )
 
-    def __init__(self, path, args=[], exclude_types=None, **kwargs):
+    def __init__(self, path, args=[],
+                 exclude_types=None, no_progress=False, **kwargs):
         self.path = path
         if isinstance(args, str):
             self.args = args.split()
         else:
             self.args = args
         self.exclude_types = set(exclude_types) if exclude_types else set()
+        self.no_progress = no_progress
 
         self.extra_args_pre = []
         self.extra_args_post = []
 
         self.source = None
         self.stdin = None
-        self.stdout = None
+        if not self.no_progress:
+            self.stdout = subprocess.PIPE
+        else:
+            self.stdout = None
         self.stderr = None
         self.proc = None
+
+        self.progress = {}
 
 
     @classproperty
@@ -136,7 +144,7 @@ class Program(abc.ABC):
         raise SGException(f"Program for {spec} not found")
 
     @classmethod
-    def play(cls, source, player_spec=True, helper_spec=None, **kwargs):
+    async def play(cls, source, player_spec=True, helper_spec=None, **kwargs):
 
         logger.debug(f"source: {source}, player: {player_spec}, helper: {helper_spec}")
         helper = None
@@ -158,7 +166,8 @@ class Program(abc.ABC):
 
         player.source = source
         logger.info(f"playing {source}: player={player}, helper={helper}")
-        return player.run(**kwargs)
+        state.asyncio_loop.create_task(player.run(**kwargs))
+        return player
 
     @classmethod
     def from_config(cls, cfg):
@@ -252,11 +261,11 @@ class Program(abc.ABC):
     def process_kwargs(self, kwargs):
         pass
 
-    def run(self, source=None, **kwargs):
+
+    async def run(self, source=None, **kwargs):
 
         if source:
             self.source = source
-        # logger.info(f"{self.__class__.__name__} playing {self.source}")
 
         self.process_kwargs(kwargs)
 
@@ -276,18 +285,22 @@ class Program(abc.ABC):
         logger.debug(f"cmd: {cmd}")
 
         if not self.source_integrated:
-            if self.FOREGROUND:
-                spawn_func = subprocess.call
-            else:
-                spawn_func = subprocess.Popen
+            spawn_func = asyncio.create_subprocess_exec
+            # if self.FOREGROUND:
+            #     spawn_func = subprocess.call
+            # else:
+            if not self.FOREGROUND:
+                # spawn_func = asyncio.create_subprocess_exec
                 if self.stdin is None:
                     self.stdin = open(os.devnull, 'w')
+                # if not self.no_progress:
+                #     self.stdout = subprocess.PIPE
                 if self.stdout is None:
                     self.stdout = open(os.devnull, 'w')
                 self.stderr = open(os.devnull, 'w')
             try:
-                self.proc = spawn_func(
-                    cmd,
+                self.proc = await spawn_func(
+                    *cmd,
                     stdin = self.stdin,
                     stdout = self.stdout,
                     stderr = self.stderr
@@ -313,10 +326,37 @@ class Helper(Program):
 
 class Downloader(Program):
 
-    def download(self, outfile, **kwargs):
-        self.extra_args_post += ["-o", outfile]
-        self.run(**kwargs) # FIXME
+    @classmethod
+    async def download(cls, source, outfile, helper_spec=None, **kwargs):
+        if isinstance(helper_spec, str):
+            downloader = next(Helper.get(helper_spec))
+        elif isinstance(helper_spec, dict):
+            helper_spec = [
+                h for h in list(AttrDict.fromkeys(helper_spec.values()))
+                if h
+            ]
 
+            try:
+                downloader = next(iter(
+                    sorted((
+                        h for h in Helper.get()
+                        if h.supports_url(source.locator)),
+                        key = lambda h: helper_spec.index(h.cmd)
+                           if h.cmd in helper_spec else len(helper_spec)+1
+                    )
+                ))
+            except (TypeError, StopIteration):
+                downloader = next(cls.get())
+        else:
+            raise NotImplementedError
+
+        logger.info(f"{downloader} downloading {source} to {outfile}")
+        downloader.source = source
+        downloader.extra_args_post += ["-o", outfile]
+        # downloader.run(**kwargs)
+        # state.asyncio_loop.create_task(downloader.run(**kwargs))
+        await(downloader.run(**kwargs))
+        return downloader
 
 
 # Put image-only viewers first so they're selected for image links by default
@@ -334,9 +374,17 @@ class ElinksPlayer(Player, cmd="elinks", MEDIA_TYPES={"text"}, FOREGROUND=True):
 
 
 
-class YouTubeDLHelper(Helper, Downloader):
+class YouTubeDLHelper(Helper, Downloader, FOREGROUND=True):
 
     CMD = "youtube-dl"
+    PROGRESS_RE = re.compile(
+        r"(\d+\.\d+)% of (\d+.\d+\S+)(?: at\s+(\d+\.\d+\S+) ETA (\d+:\d+))?"
+    )
+
+    def __init__(self, path, no_progress=False, *args, **kwargs):
+        super().__init__(path, *args, **kwargs)
+        if not self.no_progress:
+            self.extra_args_pre += ["--newline"]
 
     def process_kwargs(self, kwargs):
         if "format" in kwargs:
@@ -353,6 +401,32 @@ class YouTubeDLHelper(Helper, Downloader):
                 # Site has dedicated extractor
                 return True
         return False
+
+    async def update_progress(self):
+
+        async def get_lines():
+            for line in iter(self.proc.stdout.readline, ""):#await self.proc.stdout.readline():
+                yield await line
+
+        async def process_lines():
+            async for line in get_lines():
+                if not line:
+                    return
+                # logger.info(f"update_progress: {line}")
+                # print(out.decode("utf-8").split("\n"))
+                try:
+                    self.progress = dict(zip(
+                        ["pct", "total", "rate", "eta"],
+                        self.PROGRESS_RE.search(line.decode("utf-8")).groups()
+                    ))
+                    logger.info(self.progress)
+                except AttributeError:
+                    pass
+
+        t = asyncio.create_task(process_lines())
+        await asyncio.sleep(1)
+        t.cancel()
+
 
 class StreamlinkHelper(Helper, Downloader):
 
@@ -403,8 +477,10 @@ class StreamlinkHelper(Helper, Downloader):
 class WgetDownloader(Downloader):
 
     def download(self, outfile, **kwargs):
+        self.source = source
         self.extra_args_post += ["-O", outfile]
         self.run(**kwargs) # FIXME
+        return self # FIXME x2
 
     @classmethod
     def supports_url(cls, url):
@@ -416,6 +492,25 @@ class CurlDownloader(Downloader):
     def supports_url(cls, url):
         return True
 
+
+
+async def get():
+    return await(Downloader.download(
+        model.MediaSource("https://www.youtube.com/watch?v=5aVU_0a8-A4"),
+        "foo.mp4",
+        "youtube-dl"
+    ))
+
+async def check_progress(downloader):
+    while True:
+        await asyncio.sleep(2)
+        await downloader.update_progress()
+        print(downloader.progress)
+
+async def go():
+    downloader = await get()
+    await check_progress(downloader)
+
 def main():
 
     from tonyc_utils import logging
@@ -424,6 +519,7 @@ def main():
     config.load(merge_default=True)
     config.settings.load()
     Program.load()
+    state.asyncio_loop = asyncio.get_event_loop()
 
     # global PROGRAMS
     # from pprint import pprint
@@ -433,7 +529,22 @@ def main():
     parser = argparse.ArgumentParser()
     options, args = parser.parse_known_args()
 
-    raise Exception(list(Helper.get()))
+    # downloader = Downloader.download(
+    #     model.MediaSource("https://www.youtube.com/watch?v=5aVU_0a8-A4"),
+    #     "foo.mp4",
+    #     "youtube-dl"
+    # )
+    # import time; time.sleep(5)
+
+    # import time
+    state.asyncio_loop.create_task(go())
+    state.asyncio_loop.run_forever()
+    # for line in iter(downloader.proc.stdout.readline, b""):
+    #     print(line)
+
+    # import time; time.sleep(5)
+
+    # raise Exception(list(Helper.get()))
     # for p in [
     #         next(Program.get("streamlink")),
     #         next(Program.get("youtube-dl"))

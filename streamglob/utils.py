@@ -44,5 +44,22 @@ def valid_date(s):
         msg = "Not a valid date: '{0}'.".format(s)
         raise argparse.ArgumentTypeError(msg)
 
+def format_datetime(t):
+    return t.strftime("%Y-%m-%d %H:%M:%S")
 
-__all__ = ["classproperty", "valid_date"]
+def format_timedelta(td):
+    days = td.days
+    hours, rem = divmod(td.seconds, 3600)
+    minutes, seconds = divmod(rem, 60)
+    return (f"{'%sd' % days if days else ''}"
+            f"{hours:02}:{minutes:02}:{seconds:02}")
+
+def format_str_truncated(n, s):
+    return s[:n-1] + u"\u2026" if len(s) >= n else s
+
+__all__ = [
+    "classproperty",
+    "valid_date",
+    "format_datetime",
+    "format_timedelta"
+]
