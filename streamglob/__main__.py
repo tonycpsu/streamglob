@@ -221,27 +221,50 @@ class BrowserView(BaseView):
 
 class TasksDataTable(DataTable):
 
-    columns = [
-        DataTableColumn("pid", width=6),
-        DataTableColumn("started", width=20, format_fn = utils.format_datetime),
-        DataTableColumn("elapsed",  width=14, format_fn = utils.format_timedelta),
-        DataTableColumn("provider", width=18),
-        DataTableColumn("title", width=("weight", 1)),
+    COLUMN_DEFS = AttrDict([
+        (c.name, c)
+        for c in [
+            DataTableColumn("program", width=16, format_fn = lambda p: p.cmd),
+            DataTableColumn("started", width=20, format_fn = utils.format_datetime),
+            DataTableColumn("elapsed",  width=14, format_fn = utils.format_timedelta),
+            DataTableColumn("provider", width=18),
+            DataTableColumn("title", width=("weight", 1)),
+            DataTableColumn(
+                "locator", label="source", width=40,
+                # format_fn = lambda s: s[:39] + u"\u2026" if len(s) >= 40 else s)
+                format_fn = functools.partial(utils.format_str_truncated, 40)
+            ),
         DataTableColumn(
-            "locator", width=40,
-            # format_fn = lambda s: s[:39] + u"\u2026" if len(s) >= 40 else s)
+            "dest", width=40,
             format_fn = functools.partial(utils.format_str_truncated, 40)
+        ),
+        DataTableColumn(
+            "size", width=8, format_record=True,
+            format_fn = lambda r: f"{r.program.progress.get('size', '')}"
+        ),
+        DataTableColumn(
+            "pct", width=5, format_record=True,
+            format_fn = lambda r: f"{r.program.progress.get('pct', '').split('.')[0]}%"
+        ),
+        DataTableColumn(
+            "rate", width=8, format_record=True,
+            format_fn = lambda r: f"{r.program.progress.get('rate')}"
         )
-    ]
+        ]
+    ])
+
+    COLUMNS = ["provider", "program", "locator", "title"]
+
+    def __init__(self, *args, **kwargs):
+        self.columns = [
+            self.COLUMN_DEFS[n] for n in self.COLUMNS
+        ]
+        super().__init__(*args, **kwargs)
 
     @classmethod
     def filter_task(cls, t):
         return True
 
-
-    def query(self, *args, **kwargs):
-        # logger.info(f"query: {state.task_manager.active}")
-        return [ t for t in state.task_manager.active if self.filter_task(t) ]
 
     def keypress(self, size, key):
         if key == "ctrl r":
@@ -252,49 +275,59 @@ class TasksDataTable(DataTable):
 
 class PlayingDataTable(TasksDataTable):
 
-    @classmethod
-    def filter_task(cls, t):
-        return t.action == "play"
+    COLUMNS = ["provider", "program", "locator", "title"]
 
-class DownloadsDataTable(TasksDataTable):
+    # @classmethod
+    # def filter_task(cls, t):
+    #     return t.action == "play"
+    def query(self, *args, **kwargs):
+        return [ t for t in state.task_manager.active if t.action == "play" ]
 
-    columns = PlayingDataTable.columns + [
-        DataTableColumn(
-            "dest", width=40,
-            format_fn = functools.partial(utils.format_str_truncated, 40)
-        ),
-        DataTableColumn(
-            "pct", width=5, format_record=True,
-            format_fn = lambda r: f"{r.program.progress.get('pct', '').split('.')[0]}%"
-        ),
-        DataTableColumn(
-            "rate", width=5, format_record=True,
-            format_fn = lambda r: f"{r.program.progress.get('rate')}%"
-        ),
-    ]
 
-    @classmethod
-    def filter_task(cls, t):
-        return t.action == "download"
 
+class ActiveDownloadsDataTable(TasksDataTable):
+
+    COLUMNS = ["provider", "program", "locator", "title",
+               "started", "elapsed", "size", "pct", "rate", "dest"]
+
+    # @classmethod
+    # def filter_task(cls, t):
+    #     return t.action == "download"
+
+    def query(self, *args, **kwargs):
+        return [ t for t in state.task_manager.active if t.action == "download" ]
+
+
+class CompletedDownloadsDataTable(TasksDataTable):
+
+    COLUMNS = ["provider", "program", "locator", "title",
+               "started", "elapsed", "size", "dest"]
+
+    def query(self, *args, **kwargs):
+        return [ t for t in state.task_manager.done
+        ]
 
 class TasksView(BaseView):
 
     def __init__(self):
 
         self.playing = PlayingDataTable()
-        self.downloads = DownloadsDataTable()
+        self.active_downloads = ActiveDownloadsDataTable()
+        self.completed_downloads = CompletedDownloadsDataTable()
         self.pile = urwid.Pile([
             (1, urwid.Filler(urwid.Text("Playing"))),
             ("weight", 1, self.playing),
-            (1, urwid.Filler(urwid.Text("Downloading"))),
-            ("weight", 1, self.downloads)
+            (1, urwid.Filler(urwid.Text("Active Downloads"))),
+            ("weight", 1, self.active_downloads),
+            (1, urwid.Filler(urwid.Text("Completed Downloads"))),
+            ("weight", 1, self.completed_downloads)
         ])
         super().__init__(self.pile)
 
     def refresh(self):
         self.playing.refresh()
-        self.downloads.refresh()
+        self.active_downloads.refresh()
+        self.completed_downloads.refresh()
 
 
 def run_gui(provider, **kwargs):

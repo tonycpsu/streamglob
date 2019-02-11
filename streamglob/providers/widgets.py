@@ -103,6 +103,7 @@ class ProviderDataTable(panwid.DataTable):
         key = super().keypress(size, key)
         if key == "ctrl r":
             self.provider.refresh()
+            # state.asyncio_loop.create_task(self.provider.refresh())
         elif key == "d":
             self.provider.download(self.selection.data)
         elif key in ["left", "right"]:

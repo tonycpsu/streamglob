@@ -49,7 +49,7 @@ class PeriscopeFeed(model.MediaFeed):
                 guid = item["id"]
                 self.ITEM_CLASS.upsert(
                     dict(
-                        feed = self,
+                        feed = self.channel_id,
                         guid = guid
                     ),
                     dict(

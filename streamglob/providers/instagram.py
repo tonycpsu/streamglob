@@ -20,7 +20,7 @@ class InstagramMediaSource(model.MediaSource):
             return None
         return True
 
-class InstagramMediaListing(MediaListing):
+class InstagramMediaListing(FeedListing):
     pass
 
 class InstagramSession(session.StreamSession):
@@ -139,7 +139,7 @@ class InstagramFeed(model.MediaFeed):
                     i = self.ITEM_CLASS(
                         feed = self,
                         guid = post.guid,
-                        subject = post.subject,
+                        title = post.title,
                         created = post.created,
                         media_type = post.media_type,
                         content =  InstagramMediaSource.schema().dumps(

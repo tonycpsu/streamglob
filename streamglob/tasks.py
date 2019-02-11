@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 
 from .player import Player, Downloader
 from .state import *
+from . import utils
 
 task_manager_task = None
 
@@ -17,6 +18,7 @@ class TaskManager(object):
         # global state
         self.pending = asyncio.Queue()
         self.active = list()
+        self.done = list()
 
     def add(self, *task):
 
@@ -58,10 +60,9 @@ class TaskManager(object):
             if action == "play":
                 program = await Player.play(source, *args, **kwargs)
             elif action == "download":
-                (filename, helper_spec) = args
+                # (filename, helper_spec) = args
                 # proc = downloader.download(source, filename, **kwargs)
-                program = await Downloader.download(source, filename, helper_spec, **kwargs)
-                source.dest = filename
+                program = await Downloader.download(source, *args, **kwargs)
             else:
                 raise NotImplementedError
             source.action = action
@@ -69,7 +70,7 @@ class TaskManager(object):
             logger.info(f"program: {source.program}")
             source.proc = program.proc
             logger.info(f"proc: {source.proc}")
-            # source.pid = program.proc.pid
+            source.pid = program.proc.pid
             # logger.info(source.pid)
             source.started = datetime.now()
             source.elapsed = timedelta(0)
@@ -79,8 +80,15 @@ class TaskManager(object):
     async def poller(self):
 
         while True:
-            self.active = [ s for s in self.active if s.proc.returncode is None ]
-            logger.info(f"poller: {self.active}")
+            (done, active) = utils.partition(
+                lambda s: s.proc.returncode is None,
+                self.active)
+            self.done += list(done)
+            self.active = list(active)
+            # logger.info(f"{[s.locator for s in self.done]}, {[s.locator for s in self.active]}")
+            # self.done += [ s for s in self.active if s.proc.returncode is not None ]
+            # self.active = [ s for s in self.active if s not in self.done ]
+            # logger.info(f"poller: {self.active}")
             # logger.info(dir(self.active[0].proc))
             for s in self.active:
                 s.elapsed = datetime.now() - s.started

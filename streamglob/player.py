@@ -75,7 +75,7 @@ class Program(abc.ABC):
         self.stderr = None
         self.proc = None
 
-        self.progress = {}
+        self.progress = {"pct": "0", "rate": ""}
 
 
     @classproperty
@@ -166,7 +166,7 @@ class Program(abc.ABC):
 
         player.source = source
         logger.info(f"playing {source}: player={player}, helper={helper}")
-        state.asyncio_loop.create_task(player.run(**kwargs))
+        await state.asyncio_loop.create_task(player.run(**kwargs))
         return player
 
     @classmethod
@@ -298,6 +298,8 @@ class Program(abc.ABC):
                 if self.stdout is None:
                     self.stdout = open(os.devnull, 'w')
                 self.stderr = open(os.devnull, 'w')
+            else:
+                raise NotImplementedError
             try:
                 self.proc = await spawn_func(
                     *cmd,
@@ -328,6 +330,10 @@ class Downloader(Program):
 
     @classmethod
     async def download(cls, source, outfile, helper_spec=None, **kwargs):
+
+        if helper_spec is None:
+            helper_spec = {}
+
         if isinstance(helper_spec, str):
             downloader = next(Helper.get(helper_spec))
         elif isinstance(helper_spec, dict):
@@ -336,27 +342,32 @@ class Downloader(Program):
                 if h
             ]
 
-            try:
-                downloader = next(iter(
-                    sorted((
-                        h for h in Helper.get()
-                        if h.supports_url(source.locator)),
-                        key = lambda h: helper_spec.index(h.cmd)
-                           if h.cmd in helper_spec else len(helper_spec)+1
-                    )
-                ))
-            except (TypeError, StopIteration):
-                downloader = next(cls.get())
-        else:
-            raise NotImplementedError
+        # else:
+        #     raise NotImplementedError
+        try:
+            downloader = next(iter(
+                sorted((
+                    h for h in Helper.get()
+                    if h.supports_url(source.locator)),
+                    key = lambda h: helper_spec.index(h.cmd)
+                       if h.cmd in helper_spec else len(helper_spec)+1
+                )
+            ))
+        except (TypeError, StopIteration):
+            downloader = next(cls.get())
 
-        logger.info(f"{downloader} downloading {source} to {outfile}")
+        logger.info(f"{downloader} downloading {source.locator} to {outfile}")
         downloader.source = source
         downloader.extra_args_post += ["-o", outfile]
         # downloader.run(**kwargs)
         # state.asyncio_loop.create_task(downloader.run(**kwargs))
         await(downloader.run(**kwargs))
         return downloader
+
+    async def get_lines(self):
+        for line in iter(self.proc.stdout.readline, ""):
+            yield (await line).decode("utf-8")
+
 
 
 # Put image-only viewers first so they're selected for image links by default
@@ -374,12 +385,13 @@ class ElinksPlayer(Player, cmd="elinks", MEDIA_TYPES={"text"}, FOREGROUND=True):
 
 
 
-class YouTubeDLHelper(Helper, Downloader, FOREGROUND=True):
+class YouTubeDLHelper(Helper, Downloader):
 
     CMD = "youtube-dl"
     PROGRESS_RE = re.compile(
-        r"(\d+\.\d+)% of (\d+.\d+\S+)(?: at\s+(\d+\.\d+\S+) ETA (\d+:\d+))?"
+        r"(\d+\.\d+)% of ~?(\d+.\d+\S+)(?: at\s+(\d+\.\d{2}\d*\S+) ETA (\d+:\d+))?"
     )
+    SIZE_RE = re.compile(r"(\d+\.\d+\w)")
 
     def __init__(self, path, no_progress=False, *args, **kwargs):
         super().__init__(path, *args, **kwargs)
@@ -404,22 +416,28 @@ class YouTubeDLHelper(Helper, Downloader, FOREGROUND=True):
 
     async def update_progress(self):
 
-        async def get_lines():
-            for line in iter(self.proc.stdout.readline, ""):#await self.proc.stdout.readline():
-                yield await line
-
         async def process_lines():
-            async for line in get_lines():
+            async for line in self.get_lines():
                 if not line:
                     return
+                # logger.info(line)
                 # logger.info(f"update_progress: {line}")
                 # print(out.decode("utf-8").split("\n"))
+                if line.startswith("[download] Destination:"):
+                    self.source.dest = line.split(":")[1].strip()#.decode("utf-8")
+                    continue
                 try:
                     self.progress = dict(zip(
-                        ["pct", "total", "rate", "eta"],
-                        self.PROGRESS_RE.search(line.decode("utf-8")).groups()
+                        ["pct", "size", "rate", "eta"],
+                        self.PROGRESS_RE.search(line).groups()
                     ))
-                    logger.info(self.progress)
+                    self.progress["size"] = self.SIZE_RE.search(
+                        self.progress["size"]
+                    ).groups()[0]
+                    self.progress["rate"] = self.SIZE_RE.search(
+                        self.progress["rate"]
+                    ).groups()[0] + "/s"
+                    # logger.info(self.progress)
                 except AttributeError:
                     pass
 
@@ -474,6 +492,23 @@ class StreamlinkHelper(Helper, Downloader):
             return False
 
 
+    async def update_progress(self):
+
+        async def get_output(self):
+            yield (await self.proc.stdout.read()).decode("utf-8")
+
+
+        async def process_lines():
+            async for line in self.get_output():
+                if not line:
+                    return
+                logger.info(line)
+
+        t = asyncio.create_task(process_lines())
+        await asyncio.sleep(1)
+        t.cancel()
+
+
 class WgetDownloader(Downloader):
 
     def download(self, outfile, **kwargs):
@@ -498,14 +533,14 @@ async def get():
     return await(Downloader.download(
         model.MediaSource("https://www.youtube.com/watch?v=5aVU_0a8-A4"),
         "foo.mp4",
-        "youtube-dl"
+        "streamlink"
     ))
 
 async def check_progress(downloader):
     while True:
         await asyncio.sleep(2)
-        await downloader.update_progress()
-        print(downloader.progress)
+        r = await downloader.proc.stdout.read()
+        print(r)
 
 async def go():
     downloader = await get()
@@ -529,11 +564,11 @@ def main():
     parser = argparse.ArgumentParser()
     options, args = parser.parse_known_args()
 
-    # downloader = Downloader.download(
-    #     model.MediaSource("https://www.youtube.com/watch?v=5aVU_0a8-A4"),
-    #     "foo.mp4",
-    #     "youtube-dl"
-    # )
+    downloader = Downloader.download(
+        model.MediaSource("https://www.youtube.com/watch?v=5aVU_0a8-A4"),
+        "foo.mp4",
+        "streamlink"
+    )
     # import time; time.sleep(5)
 
     # import time

@@ -38,7 +38,7 @@ class TwitchSession(StreamSession):
             return TwitchMediaListing(
                 channel = username,
                 content = [TwitchMediaSource(channel.channel.url, media_type="video")],
-                description = channel.channel.description,
+                title = channel.channel.description,
                 created = channel.created_at
             )
         else:

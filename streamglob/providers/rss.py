@@ -21,6 +21,9 @@ class SGFeedUpdateFailedException(Exception):
 class RSSMediaSource(model.MediaSource):
     pass
 
+class RSSMediaListing(FeedListing):
+    pass
+
 class RSSSession(session.StreamSession):
 
     def parse(self, url):
@@ -39,6 +42,7 @@ class RSSFeed(model.MediaFeed):
 
     ITEM_CLASS = RSSItem
 
+    @db_session
     def update(self, limit = None):
 
         if not limit:

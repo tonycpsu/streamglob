@@ -68,7 +68,7 @@ class LiveStreamProvider(BackgroundTasksMixin, BaseProvider):
         return AttrDict(
             channel = {"width": 32},
             created = {"width": 19},
-            description = {"width": ("weight", 1)},
+            title = {"width": ("weight", 1)},
         )
 
     @classproperty

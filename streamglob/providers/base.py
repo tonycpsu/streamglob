@@ -65,6 +65,7 @@ class MediaListing(AttrDict):
             "."
         )
 
+
         template = (
             self._provider.config.get_path("output.template")
             or
@@ -74,13 +75,17 @@ class MediaListing(AttrDict):
         if template:
             template = template.replace("{", "{self.")
             # raise Exception(template)
-            outfile = template.format(self=self)
+            try:
+                outfile = template.format(self=self)
+            except Exception as e:
+                logger.info(f"template: {template}")
+                logger.exception(e)
+                return None
         else:
             # template = "{self.provider.name.lower()}.{self.default_name}.{self.timestamp}.{self.ext}"
             # template = "{self.provider}.{self.ext}"
             template = "{self.provider}.{self.default_name}.{self.timestamp}.{self.ext}"
             outfile = template.format(self=self)
-
         return os.path.join(outpath, outfile)
 
     # def __repr__(self):
@@ -389,11 +394,12 @@ class BaseProvider(abc.ABC):
         if len(source) == 1:
             source = source[0]
             filename = selection.download_filename
-            helper_spec = getattr(self.config, "helpers", None) or source.helper
+            helper_spec = getattr(self.config, "helpers") or source.helper
             logger.info(f"helper: {helper_spec}")
             source = AttrDict(dataclasses.asdict(source))
             source.provider = self.NAME
             source.title = selection.title
+            source.dest = filename
             state.task_manager.download(
                 source, filename, helper_spec, **kwargs
             )
@@ -449,10 +455,15 @@ class BackgroundTasksMixin(object):
                 logger.info(f"running {fn.__name__} {args} {kwargs}")
                 # self._tasks[fn.__name__] = None
                 # fn(*args, **kwargs)
-                await state.asyncio_loop.run_in_executor(
-                    None, lambda: fn(*args, **kwargs)
-                )
+                # await state.asyncio_loop.run_in_executor(
+                #     None, lambda: fn(*args, **kwargs)
+                # )
+
+                # logger.info(fn)
+                # await fn(*args, **kwargs)
+                state.asyncio_loop.create_task(fn(*args, **kwargs))
                 # state.loop.event_loop.enter_idle(lambda: fn(*args, **kwargs))
+                logger.info(f"sleeping for {interval}")
                 await asyncio.sleep(interval)
 
         self._tasks[fn.__name__] = state.asyncio_loop.create_task(run())

@@ -132,8 +132,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     def keypress(self, size, key):
 
         if key == "meta r":
-            self.provider.update(force=True)
-            self.reset()
+            asyncio.create_task(self.provider.update(force=True))
         elif key == "n":
             try:
                 idx = next(
@@ -283,6 +282,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
 
     @db_session
     def update_feeds(self, force=False):
+        logger.info("update_feeds")
         if not self.feed:
             feeds = self.FEED_CLASS.select()
         else:
@@ -296,8 +296,13 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
                 datetime.now() - f.updated
                 > timedelta(seconds=f.update_interval)
             ):
+                logger.info(f"update {f}")
                 f.update()
+                # asyncio.create_task(f.update())
+                # await f.update()
+                # state.asyncio_loop.run_in_executor(None, f.update)
                 f.updated = datetime.now()
+        # state.asyncio_loop.create_task(self.refresh())
 
     @property
     def feed_filters(self):
@@ -305,20 +310,31 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
 
     def on_feed_change(self, *args):
         self.refresh()
+        # state.asyncio_loop.create_task(self.refresh())
         self.view.table.reset()
 
     # @db_session
-    def update(self, force=False):
+    async def update(self, force=False):
         logger.info(f"update: {force}")
-        self.create_feeds()
-        self.update_feeds(force=force)
         self.refresh()
+        self.create_feeds()
+        # state.loop.draw_screen()
+        logger.info("-update foo")
+        def update_feeds():
+            self.update_feeds(force=force)
+            self.refresh()
+        update_task = state.asyncio_loop.run_in_executor(None, update_feeds)
+        # logger.info("-update bar")
+        # state.loop.draw_screen()
+        logger.info("-update")
         # state.loop.draw_screen()
 
     def refresh(self):
-        logger.info("refresh")
+        logger.info("+refresh")
         self.update_query()
         self.view.table.refresh()
+        # state.loop.draw_screen()
+        logger.info("-refresh")
 
     # def on_activate(self):
     #     self.refresh()
@@ -367,7 +383,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
             limit = self.limit
 
         with db_session:
-            self.update_feeds()
+            # self.update_feeds()
 
             for item in self.items_query[offset:offset+limit]:
                 l = self.LISTING_CLASS(**item.to_dict(related_objects=True))
