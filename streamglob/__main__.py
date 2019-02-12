@@ -355,6 +355,9 @@ def run_gui(provider, **kwargs):
             background_high=b
         )
 
+    for k, v in config.settings.profile.attributes.items():
+        entries[k] = PaletteEntry.from_config(v)
+
     entries.update(DataTable.get_palette_entries(user_entries=entries))
     entries.update(Dropdown.get_palette_entries())
     entries.update(ScrollingListBox.get_palette_entries())

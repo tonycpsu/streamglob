@@ -200,6 +200,15 @@ class BaseProvider(abc.ABC):
         self._active = False
         self._filters = AttrDict({n: f(provider=self, label=n)
                                   for n, f in self.FILTERS.items() })
+        self.highlight_map = {
+            re.compile(k, re.IGNORECASE): v
+            for k, v in config.settings.profile.rules.highlight.items()
+        }
+        self.highlight_re = re.compile(
+            "("
+            + "|".join([k.pattern for k in self.highlight_map.keys()])
+            + ")", re.IGNORECASE)
+
 
     @classproperty
     def MEDIA_SOURCE_CLASS(cls):

@@ -2,6 +2,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 import functools
+import re
 
 import urwid
 import panwid
@@ -116,3 +117,15 @@ class ProviderDataTable(panwid.DataTable):
             logger.info(self.selection.data.read)
         else:
             return key
+
+    def decorate(self, row, column, value):
+
+        if column.name == "title":
+            return urwid.Text([
+                ( next(v for k, v in self.provider.highlight_map.items()
+                       if k.search(x)), x)
+                if self.provider.highlight_re.search(x)
+                else x for x in self.provider.highlight_re.split(value) if x
+            ])
+        else:
+            return super().decorate(row, column, value)
