@@ -202,7 +202,10 @@ class BaseProvider(abc.ABC):
                                   for n, f in self.FILTERS.items() })
         self.highlight_map = {
             re.compile(k, re.IGNORECASE): v
-            for k, v in config.settings.profile.rules.highlight.items()
+            for k, v in
+            (list(self.config.rules.highlight.items())
+             +list(config.settings.profile.rules.highlight.items())
+            )
         }
         self.highlight_re = re.compile(
             "("
