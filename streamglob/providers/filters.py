@@ -10,6 +10,7 @@ import dateutil.parser
 from dateutil.relativedelta import relativedelta
 from orderedattrdict import AttrDict
 
+from .. import config
 from ..exceptions import *
 
 class Filter(abc.ABC):
@@ -273,6 +274,14 @@ class ListingFilter(WidgetFilter, abc.ABC):
         return [self.values]
 
     @property
+    def widget_kwargs(self):
+        return dict(default=self.default)
+
+    @property
+    def default(self):
+        return None
+
+    @property
     def label(self):
         return self.widget.selected_label
 
@@ -354,6 +363,10 @@ def with_filters(*filters):
     return outer
 
 class ResolutionFilter(ListingFilter):
+
+    @property
+    def default(self):
+        return config.settings.profile.default_resolution
 
     @property
     def values(self):

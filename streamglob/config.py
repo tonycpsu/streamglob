@@ -92,12 +92,12 @@ class ProfileTree(ConfigTree):
 
     def __init__(self, profile=DEFAULT_PROFILE_NAME, merge_default = False,
                  *args, **kwargs):
-        super(ProfileTree, self).__init__(*args, **kwargs)
         self._merge_default = merge_default
         self._default_profile_name = profile
-        self.__exclude_keys__ |= {"_profile_name", "_default_profile_name",
+        self.__exclude_keys__ |= {"profile_name", "foo", "_default_profile_name",
                                   "_merge_default", "profile"}
         self.set_profile(self._default_profile_name)
+        super().__init__(*args, **kwargs)
 
     @property
     def profile(self):
@@ -108,26 +108,18 @@ class ProfileTree(ConfigTree):
         else:
             return p
 
+    @property
+    def foo(self):
+        return self._profile_name
 
     def set_profile(self, profile):
         self._profile_name = profile
-
 
     def __setattr__(self, name, value):
         if not name.startswith("_"):
             self[self._profile_name][name] = value
         else:
             object.__setattr__(self, name, value)
-
-    # def get(self, name, default=None):
-        # return self.profile.get(name, default)
-
-        # p = self.profile
-        # return (
-        #     p.get(name, default)
-        #     if name in p
-        #     else self[self._default_profile_name].get(name, default)
-        # )
 
     def __getitem__(self, name):
         if isinstance(name, tuple):
@@ -152,11 +144,6 @@ class Config(ConfigTree):
                                          merge_default=merge_default)
 
 
-    # def get(self, keys, default=None):
-    #     return functools.reduce(lambda d, key: d.get(key, default)
-    #                   if isinstance(d, dict) else default,
-    #                   keys.split("."), self.profile)
-
     @property
     def profile(self):
         return self._profile_tree.profile
@@ -164,6 +151,10 @@ class Config(ConfigTree):
     @property
     def profiles(self):
         return self._profile_tree
+
+    @property
+    def profile_name(self):
+        return self._profile_tree.foo
 
     def set_profile(self, profile):
         self._profile_tree.set_profile(profile)

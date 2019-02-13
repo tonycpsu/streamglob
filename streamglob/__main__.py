@@ -100,7 +100,7 @@ class BaseTabView(TabView):
 
 class MainToolbar(urwid.WidgetWrap):
 
-    signals = ["provider_change"]
+    signals = ["provider_change", "profile_change"]
     def __init__(self, default_provider):
 
         def format_provider(n, p):
@@ -129,14 +129,28 @@ class MainToolbar(urwid.WidgetWrap):
             lambda w, b, v: self._emit("provider_change", v)
         )
 
+        self.profile_dropdown = Dropdown(
+            AttrDict(
+                [ (k, k) for k in config.settings.profiles.keys()]
+            ),
+            label="Profile",
+            default=config.settings.profile_name, margin=1
+        )
+
+        urwid.connect_signal(
+            self.profile_dropdown, "change",
+            lambda w, b, v: self._emit("profile_change", v)
+        )
+
         self.columns = urwid.Columns([
             # ('weight', 1, urwid.Padding(urwid.Edit("foo"))),
-            ('weight', 1, self.provider_dropdown),
-            (1, urwid.Divider("|")),
+            (self.provider_dropdown.width, self.provider_dropdown),
+            # (1, urwid.Divider(u"\N{BOX DRAWINGS LIGHT VERTICAL}")),
+            (self.profile_dropdown.width, self.profile_dropdown),
 
-        ])
-        self.filler = urwid.Filler(self.columns)
-        super(MainToolbar, self).__init__(self.filler)
+        ], dividechars=3)
+        # self.filler = urwid.Filler(self.columns)
+        super(MainToolbar, self).__init__(urwid.Filler(self.columns))
 
     def cycle_provider(self, step=1):
 
@@ -156,6 +170,10 @@ class BrowserView(BaseView):
         urwid.connect_signal(
             self.toolbar, "provider_change",
             lambda w, p: self.set_provider(p)
+        )
+        urwid.connect_signal(
+            self.toolbar, "profile_change",
+            lambda w, p: config.settings.set_profile(p)
         )
 
         self.browser_view_placeholder = urwid.WidgetPlaceholder(
