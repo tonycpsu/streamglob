@@ -93,6 +93,7 @@ class ProviderDataTable(panwid.DataTable):
         try:
             for l in self.provider.listings(*args, **kwargs):
                 l._provider = self.provider
+                self.provider.on_new_listing(l)
                 yield(l)
 
         except SGException as e:

@@ -224,32 +224,33 @@ class TasksDataTable(DataTable):
     COLUMN_DEFS = AttrDict([
         (c.name, c)
         for c in [
-            DataTableColumn("program", width=16, format_fn = lambda p: p.cmd),
-            DataTableColumn("started", width=20, format_fn = utils.format_datetime),
-            DataTableColumn("elapsed",  width=14, format_fn = utils.format_timedelta),
-            DataTableColumn("provider", width=18),
-            DataTableColumn("title", width=("weight", 1)),
-            DataTableColumn(
-                "locator", label="source", width=40,
+                DataTableColumn("action", width=8),
+                DataTableColumn("program", width=16, format_fn = lambda p: p.cmd),
+                DataTableColumn("started", width=20, format_fn = utils.format_datetime),
+                DataTableColumn("elapsed",  width=14, format_fn = utils.format_timedelta),
+                DataTableColumn("provider", width=18),
+                DataTableColumn("title", width=("weight", 1)),
+                DataTableColumn(
+                    "locator", label="source", width=40,
                 # format_fn = lambda s: s[:39] + u"\u2026" if len(s) >= 40 else s)
-                format_fn = functools.partial(utils.format_str_truncated, 40)
-            ),
-        DataTableColumn(
-            "dest", width=40,
-            format_fn = functools.partial(utils.format_str_truncated, 40)
-        ),
-        DataTableColumn(
-            "size", width=8, format_record=True,
-            format_fn = lambda r: f"{r.program.progress.get('size', '')}"
-        ),
-        DataTableColumn(
-            "pct", width=5, format_record=True,
-            format_fn = lambda r: f"{r.program.progress.get('pct', '').split('.')[0]}%"
-        ),
-        DataTableColumn(
-            "rate", width=8, format_record=True,
-            format_fn = lambda r: f"{r.program.progress.get('rate')}"
-        )
+                    format_fn = functools.partial(utils.format_str_truncated, 40)
+                ),
+                DataTableColumn(
+                    "dest", width=40,
+                    format_fn = functools.partial(utils.format_str_truncated, 40)
+                ),
+                DataTableColumn(
+                    "size", width=8, format_record=True,
+                    format_fn = lambda r: f"{r.program.progress.get('size', '')}"
+                ),
+                DataTableColumn(
+                    "pct", width=5, format_record=True,
+                    format_fn = lambda r: f"{r.program.progress.get('pct', '').split('.')[0]}%"
+                ),
+                DataTableColumn(
+                    "rate", width=8, format_record=True,
+                    format_fn = lambda r: f"{r.program.progress.get('rate')}"
+                )
         ]
     ])
 
@@ -272,17 +273,33 @@ class TasksDataTable(DataTable):
         else:
             return super().keypress(size, key)
 
-
 class PlayingDataTable(TasksDataTable):
 
     COLUMNS = ["provider", "program", "locator", "title"]
 
-    # @classmethod
-    # def filter_task(cls, t):
-    #     return t.action == "play"
     def query(self, *args, **kwargs):
-        return [ t for t in state.task_manager.active if t.action == "play" ]
+        return [ t for t in state.task_manager.playing ]
 
+    def keypress(self, size, key):
+
+        if key == "delete":
+            self.selection.data.program.proc.terminate()
+        else:
+            return super().keypress(size, key)
+
+class PendingDataTable(TasksDataTable):
+
+    COLUMNS = ["provider", "locator", "title"]
+
+    def query(self, *args, **kwargs):
+        return [ t for t in state.task_manager.to_download ]
+
+    def keypress(self, size, key):
+        if key == "delete":
+            state.task_manager.to_download.remove_by_id(self.selection.data.task_id)
+            del self[self.focus_position]
+        else:
+            return super().keypress(size, key)
 
 
 class ActiveDownloadsDataTable(TasksDataTable):
@@ -290,13 +307,16 @@ class ActiveDownloadsDataTable(TasksDataTable):
     COLUMNS = ["provider", "program", "locator", "title",
                "started", "elapsed", "size", "pct", "rate", "dest"]
 
-    # @classmethod
-    # def filter_task(cls, t):
-    #     return t.action == "download"
-
     def query(self, *args, **kwargs):
         return [ t for t in state.task_manager.active if t.action == "download" ]
 
+    def keypress(self, size, key):
+
+        if key == "delete":
+            state.task_manager.active.remove_by_id(self.selection.data.task_id)
+            self.selection.data.program.proc.terminate()
+        else:
+            return super().keypress(size, key)
 
 class CompletedDownloadsDataTable(TasksDataTable):
 
@@ -304,19 +324,27 @@ class CompletedDownloadsDataTable(TasksDataTable):
                "started", "elapsed", "size", "dest"]
 
     def query(self, *args, **kwargs):
-        return [ t for t in state.task_manager.done
-        ]
+        return [ t for t in state.task_manager.done ]
 
 class TasksView(BaseView):
 
     def __init__(self):
 
         self.playing = PlayingDataTable()
+        self.pending = PendingDataTable()
         self.active_downloads = ActiveDownloadsDataTable()
         self.completed_downloads = CompletedDownloadsDataTable()
         self.pile = urwid.Pile([
-            (1, urwid.Filler(urwid.Text("Playing"))),
-            ("weight", 1, self.playing),
+            urwid.Columns([
+                ("weight", 1, urwid.Pile([
+                    (1, urwid.Filler(urwid.Text("Playing"))),
+                    ("weight", 1, self.playing),
+                ])),
+                ("weight", 1, urwid.Pile([
+                    (1, urwid.Filler(urwid.Text("Pending"))),
+                    ("weight", 1, self.pending),
+                ]))
+            ], dividechars=1),
             (1, urwid.Filler(urwid.Text("Active Downloads"))),
             ("weight", 1, self.active_downloads),
             (1, urwid.Filler(urwid.Text("Completed Downloads"))),
@@ -326,6 +354,7 @@ class TasksView(BaseView):
 
     def refresh(self):
         self.playing.refresh()
+        self.pending.refresh()
         self.active_downloads.refresh()
         self.completed_downloads.refresh()
 

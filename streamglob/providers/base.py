@@ -304,6 +304,9 @@ class BaseProvider(abc.ABC):
     def listings(self, filters=None):
         pass
 
+    def on_new_listing(self, listing):
+        pass
+
     @property
     def config(self):
         return config.settings.profile.providers.get(
@@ -407,7 +410,7 @@ class BaseProvider(abc.ABC):
             source = source[0]
             filename = selection.download_filename
             helper_spec = getattr(self.config, "helpers") or source.helper
-            logger.info(f"helper: {helper_spec}")
+            # logger.info(f"helper: {helper_spec}")
             source = AttrDict(dataclasses.asdict(source))
             source.provider = self.NAME
             source.title = selection.title
