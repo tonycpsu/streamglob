@@ -227,28 +227,31 @@ class TasksDataTable(DataTable):
                 DataTableColumn("action", width=8),
                 DataTableColumn("program", width=16, format_fn = lambda p: p.cmd),
                 DataTableColumn("started", width=20, format_fn = utils.format_datetime),
-                DataTableColumn("elapsed",  width=14, format_fn = utils.format_timedelta),
+                DataTableColumn("elapsed",  width=14, align="right",
+                                format_fn = utils.format_timedelta),
                 DataTableColumn("provider", width=18),
-                DataTableColumn("title", width=("weight", 1)),
+                DataTableColumn("title", width=("weight", 1), truncate=True),
                 DataTableColumn(
                     "locator", label="source", width=40,
                 # format_fn = lambda s: s[:39] + u"\u2026" if len(s) >= 40 else s)
-                    format_fn = functools.partial(utils.format_str_truncated, 40)
+                    format_fn = functools.partial(utils.format_str_truncated, 40),
+                    truncate=True
                 ),
                 DataTableColumn(
                     "dest", width=40,
-                    format_fn = functools.partial(utils.format_str_truncated, 40)
+                    format_fn = functools.partial(utils.format_str_truncated, 40),
+                    truncate=True
                 ),
                 DataTableColumn(
-                    "size", width=8, format_record=True,
+                    "size", width=8, format_record=True, align="right",
                     format_fn = lambda r: f"{r.program.progress.get('size', '')}"
                 ),
                 DataTableColumn(
-                    "pct", width=5, format_record=True,
+                    "pct", width=5, format_record=True, align="right",
                     format_fn = lambda r: f"{r.program.progress.get('pct', '').split('.')[0]}%"
                 ),
                 DataTableColumn(
-                    "rate", width=8, format_record=True,
+                    "rate", width=8, format_record=True, align="right",
                     format_fn = lambda r: f"{r.program.progress.get('rate')}"
                 )
         ]
