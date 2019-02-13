@@ -12,17 +12,78 @@ from ..exceptions import *
 from ..state import *
 from .. import model
 
-# class ResolutionDropdown(panwid.Dropdown):
 
-#     label = "Resolution"
+class TextFilterWidget(urwid.Edit):
 
-#     def __init__(self, resolutions, default=None):
-#         self.resolutions = resolutions
-#         super(ResolutionDropdown, self).__init__(resolutions, default=default)
+    signals = ["change", "select"]
 
-#     @property
-#     def items(self):
-#         return self.resolutions
+    def keypress(self, size, key):
+        if key == "enter":
+            if len(self.get_edit_text()):
+                self._emit("select", self.get_edit_text()[0])
+        else:
+            return super().keypress(size, key)
+
+    @property
+    def value(self):
+        return self.get_text()[0]
+
+    @value.setter
+    def value(self, value):
+        # t = list(self.get_text())
+        self.set_edit_text(value)
+
+
+class IntegerTextFilterWidget(TextFilterWidget):
+
+    def __init__(self, default=0, minimum=0, maximum=None, big_step=10):
+        self.minimum = minimum
+        self.maximum = maximum
+        self.big_step = big_step
+
+        self.default = default
+        if self.minimum is not None:
+            self.default = max(self.minimum, self.default)
+        if self.maximum is not None:
+            self.default = min(self.maximum, self.default)
+        super().__init__(edit_text=str(self.default))
+
+    @property
+    def value(self):
+        v = super().value
+        try:
+            return int(v)
+        except ValueError:
+            return 0
+
+    @value.setter
+    def value(self, value):
+        # https://gitlab.gnome.org/GNOME/gnome-music/snippets/31
+        super(IntegerTextFilterWidget, self.__class__).value.fset(self, str(value))
+
+    def cycle(self, step):
+        v = self.value + step
+        if (
+                (self.minimum is None or v >= self.minimum)
+                and (self.maximum is None or v <= self.maximum)
+        ):
+            self.value = v
+
+    def keypress(self, size, key):
+
+        if key == "ctrl up":
+            self.cycle(1)
+        elif key == "ctrl down":
+            self.cycle(-1)
+        elif key == "page up":
+            self.cycle(self.big_step)
+        elif key == "page down":
+            self.cycle(-self.big_step)
+        else:
+            if len(key) == 1 and key not in [ str(n) for n in range(10) ]:
+                return
+            return super().keypress(size, key)
+
 
 
 class FilterToolbar(urwid.WidgetWrap):

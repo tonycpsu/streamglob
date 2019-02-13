@@ -11,17 +11,22 @@ from dateutil.relativedelta import relativedelta
 from orderedattrdict import AttrDict
 
 from .. import config
+
+from .widgets import *
 from ..exceptions import *
 
-class Filter(abc.ABC):
+class Filter(object):
 
     def __init__(self, provider, *args, **kwargs):
         self.provider = provider
 
     @property
-    @abc.abstractmethod
     def value(self):
-        pass
+        return self.widget.value
+
+    @value.setter
+    def value(self, value):
+        self.widget.value = value
 
 
 class WidgetFilter(Filter):
@@ -95,27 +100,14 @@ class WidgetFilter(Filter):
         raise Exception
 
 
-class TextFilterWidget(urwid.Edit):
-
-    signals = ["change", "select"]
-
-    def keypress(self, size, key):
-        if key == "enter":
-            if len(self.get_edit_text()):
-                self._emit("select", self.get_edit_text()[0])
-        else:
-            return super().keypress(size, key)
-
 
 class TextFilter(WidgetFilter):
 
     WIDGET_CLASS = TextFilterWidget
 
-    @property
-    def value(self):
-        return self.widget.get_text()[0]
+class IntegerTextFilter(TextFilter):
 
-
+    WIDGET_CLASS = IntegerTextFilterWidget
 
 class DateDisplay(urwid.WidgetWrap):
 

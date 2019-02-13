@@ -142,9 +142,25 @@ class MainToolbar(urwid.WidgetWrap):
             lambda w, b, v: self._emit("profile_change", v)
         )
 
+        self.nax_concurrent_tasks_widget = providers.filters.IntegerTextFilterWidget(
+            default=config.settings.tasks.max,
+                minimum=1
+        )
+
+        def set_max_concurrent_tasks(e, v):
+            config.settings.tasks.max = int(v)
+
+        urwid.connect_signal(
+            self.nax_concurrent_tasks_widget,
+            "change",
+            set_max_concurrent_tasks
+        )
+
         self.columns = urwid.Columns([
             # ('weight', 1, urwid.Padding(urwid.Edit("foo"))),
             (self.provider_dropdown.width, self.provider_dropdown),
+            ("pack", urwid.Text(("Downloads"))),
+            (10, self.nax_concurrent_tasks_widget),
             ("weight", 1, urwid.Padding(urwid.Text(""))),
             # (1, urwid.Divider(u"\N{BOX DRAWINGS LIGHT VERTICAL}")),
             (self.profile_dropdown.width, self.profile_dropdown),
