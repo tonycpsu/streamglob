@@ -276,7 +276,7 @@ class PlayingDataTable(TasksDataTable):
 
     def keypress(self, size, key):
 
-        if key == "delete":
+        if key == "delete" and self.selection:
             self.selection.data.program.proc.terminate()
         else:
             return super().keypress(size, key)
@@ -289,7 +289,7 @@ class PendingDataTable(TasksDataTable):
         return [ t for t in state.task_manager.to_download ]
 
     def keypress(self, size, key):
-        if key == "delete":
+        if key == "delete" and self.selection:
             state.task_manager.to_download.remove_by_id(self.selection.data.task_id)
             del self[self.focus_position]
         else:
@@ -306,7 +306,7 @@ class ActiveDownloadsDataTable(TasksDataTable):
 
     def keypress(self, size, key):
 
-        if key == "delete":
+        if key == "delete" and self.selection:
             state.task_manager.active.remove_by_id(self.selection.data.task_id)
             self.selection.data.program.proc.terminate()
         else:
