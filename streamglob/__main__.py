@@ -145,9 +145,9 @@ class MainToolbar(urwid.WidgetWrap):
         self.columns = urwid.Columns([
             # ('weight', 1, urwid.Padding(urwid.Edit("foo"))),
             (self.provider_dropdown.width, self.provider_dropdown),
+            ("weight", 1, urwid.Padding(urwid.Text(""))),
             # (1, urwid.Divider(u"\N{BOX DRAWINGS LIGHT VERTICAL}")),
             (self.profile_dropdown.width, self.profile_dropdown),
-
         ], dividechars=3)
         # self.filler = urwid.Filler(self.columns)
         super(MainToolbar, self).__init__(urwid.Filler(self.columns))
