@@ -11,6 +11,7 @@ from dateutil.relativedelta import relativedelta
 from orderedattrdict import AttrDict
 
 from .. import config
+from ..widgets import *
 
 from .widgets import *
 from ..exceptions import *
@@ -255,11 +256,10 @@ class DateFilter(WidgetFilter):
                 raise Exception("invalid time period: %s" %(p))
 
 
-
 class ListingFilter(WidgetFilter, abc.ABC):
 
-    # WIDGET_CLASS = BoxedDropdown
-    WIDGET_CLASS = panwid.Dropdown
+    WIDGET_CLASS = BaseDropdown
+    # WIDGET_CLASS = panwid.Dropdown
 
     @property
     def widget_args(self):

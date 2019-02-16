@@ -6,6 +6,7 @@ from .feed import *
 
 from ..exceptions import *
 from ..state import *
+from ..widgets import *
 from .. import config
 from .. import model
 from .. import session
@@ -76,7 +77,7 @@ class YouTubeSession(session.StreamSession):
 
 class YouTubeChannelsDropdown(urwid.WidgetWrap):
 
-    signals = panwid.Dropdown.signals
+    signals = BaseDropdown.signals
 
     SEARCH_LABEL = "Search: "
 
@@ -84,7 +85,7 @@ class YouTubeChannelsDropdown(urwid.WidgetWrap):
 
         signals = ["change"]
 
-        self.dropdown = panwid.Dropdown(items, *args, **kwargs)
+        self.dropdown = BaseDropdown(items, *args, **kwargs)
         self.search_label = urwid.Text(self.SEARCH_LABEL)
         self.search_edit = TextFilterWidget("")
         self.search_widget = urwid.Columns([

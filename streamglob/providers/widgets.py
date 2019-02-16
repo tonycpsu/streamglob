@@ -12,29 +12,47 @@ from ..exceptions import *
 from ..state import *
 from .. import model
 
+class IntEdit(urwid.Edit):
 
-class TextFilterWidget(urwid.Edit):
+    def valid_char(self, ch):
+        return len(ch)==1 and ch in "0123456789"
+
+
+class TextFilterWidget(urwid.WidgetWrap):
 
     signals = ["change", "select"]
 
+    EDIT_WIDGET = urwid.Edit
+
+    def __init__(self, value, align="right", padding=1):
+        self.edit = self.EDIT_WIDGET(align=align, wrap="clip")
+        # FIXME: use different attributes
+        self.padding = urwid.Padding(self.edit, left=padding, right=padding)
+        self.attr = urwid.AttrMap(self.padding, "dropdown_text", "dropdown_focused")
+        super().__init__(self.attr)
+        self.value = value
+
     def keypress(self, size, key):
         if key == "enter":
-            if len(self.get_edit_text()):
-                self._emit("select", self.get_edit_text()[0])
+            if len(self.edit.get_edit_text()):
+                self._emit("select", self.edit.get_edit_text()[0])
         else:
             return super().keypress(size, key)
 
     @property
     def value(self):
-        return self.get_text()[0]
+        return self.edit.get_text()[0]
 
     @value.setter
     def value(self, value):
         # t = list(self.get_text())
-        self.set_edit_text(value)
+        self.edit.set_edit_text(value)
+        self.edit.set_edit_pos(len(str(self.value))-1)
 
 
 class IntegerTextFilterWidget(TextFilterWidget):
+
+    EDIT_WIDGET = IntEdit
 
     def __init__(self, default=0, minimum=0, maximum=None, big_step=10):
         self.minimum = minimum
@@ -46,7 +64,7 @@ class IntegerTextFilterWidget(TextFilterWidget):
             self.default = max(self.minimum, self.default)
         if self.maximum is not None:
             self.default = min(self.maximum, self.default)
-        super().__init__(edit_text=str(self.default))
+        super().__init__(str(self.default))
 
     @property
     def value(self):
@@ -63,10 +81,11 @@ class IntegerTextFilterWidget(TextFilterWidget):
 
     def cycle(self, step):
         v = self.value + step
-        if (
-                (self.minimum is None or v >= self.minimum)
-                and (self.maximum is None or v <= self.maximum)
-        ):
+        if (self.minimum is not None and v < self.minimum):
+            self.value = self.minimum
+        elif (self.maximum is not None and v > self.maximum):
+            self.value = self.maximum
+        else:
             self.value = v
 
     def keypress(self, size, key):
@@ -79,9 +98,12 @@ class IntegerTextFilterWidget(TextFilterWidget):
             self.cycle(self.big_step)
         elif key == "page down":
             self.cycle(-self.big_step)
+        elif key == "right" and self.edit.edit_pos==len(str(self.value))-1:
+            self.edit.set_edit_pos(len(str(self.value)))
+            super().keypress(size, "right")
+            # self.edit.set_edit_pos(len(str(self.value))-1)
+        #     return super().keypress(size, "next selectable")
         else:
-            if len(key) == 1 and key not in [ str(n) for n in range(10) ]:
-                return
             return super().keypress(size, key)
 
 

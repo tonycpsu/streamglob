@@ -2,6 +2,17 @@
 import urwid
 import panwid
 
+class BaseDropdown(panwid.Dropdown):
+
+    def keypress(self, size, key):
+
+        if key == "ctrl up":
+            self.cycle(-1)
+        elif key == "ctrl down":
+            self.cycle(1)
+        else:
+            return super().keypress(size, key)
+
 class ScrollbackListBox(panwid.listbox.ScrollingListBox):
 
     signals = ["updated"]

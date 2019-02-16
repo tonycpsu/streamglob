@@ -31,9 +31,10 @@ import orderedattrdict.yamlutils
 from orderedattrdict.yamlutils import AttrDictYAMLLoader
 
 from .state import *
+from .widgets import *
+
 from . import config
 from . import model
-from . import widgets
 from . import utils
 from . import session
 from . import providers
@@ -116,7 +117,7 @@ class MainToolbar(urwid.WidgetWrap):
             else:
                 return (1, str(v.NAME))
 
-        self.provider_dropdown = Dropdown(AttrDict(
+        self.provider_dropdown = BaseDropdown(AttrDict(
             [(format_provider(n, p), n)
               for n, p in sorted(
                       providers.PROVIDERS.items(),
@@ -129,7 +130,7 @@ class MainToolbar(urwid.WidgetWrap):
             lambda w, b, v: self._emit("provider_change", v)
         )
 
-        self.profile_dropdown = Dropdown(
+        self.profile_dropdown = BaseDropdown(
             AttrDict(
                 [ (k, k) for k in config.settings.profiles.keys()]
             ),
@@ -160,7 +161,7 @@ class MainToolbar(urwid.WidgetWrap):
             # ('weight', 1, urwid.Padding(urwid.Edit("foo"))),
             (self.provider_dropdown.width, self.provider_dropdown),
             ("pack", urwid.Text(("Downloads"))),
-            (10, self.nax_concurrent_tasks_widget),
+            (5, self.nax_concurrent_tasks_widget),
             ("weight", 1, urwid.Padding(urwid.Text(""))),
             # (1, urwid.Divider(u"\N{BOX DRAWINGS LIGHT VERTICAL}")),
             (self.profile_dropdown.width, self.profile_dropdown),
@@ -416,7 +417,7 @@ def run_gui(provider, **kwargs):
 
     state.main_view = BaseTabView(state.views)
 
-    log_console = widgets.ConsoleWindow()
+    log_console = ConsoleWindow()
     # log_box = urwid.BoxAdapter(urwid.LineBox(log_console), 10)
     pile = urwid.Pile([
         ("weight", 5, urwid.LineBox(state.main_view)),
