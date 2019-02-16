@@ -200,13 +200,24 @@ class BaseProvider(abc.ABC):
         self._active = False
         self._filters = AttrDict({n: f(provider=self, label=n)
                                   for n, f in self.FILTERS.items() })
+
+        rules = AttrDict(
+            self.config.rules.label,
+            **config.settings.profile.rules.label
+        )
+
+        labels = AttrDict(
+            self.config.labels,
+            **config.settings.profile.labels
+        )
+
         self.highlight_map = {
             re.compile(k, re.IGNORECASE): v
             for k, v in
-            (list(self.config.rules.highlight.items())
-             +list(config.settings.profile.rules.highlight.items())
-            )
+            [(r, labels[rules[r]])
+             for r in rules.keys()]
         }
+
         self.highlight_re = re.compile(
             "("
             + "|".join([k.pattern for k in self.highlight_map.keys()])
