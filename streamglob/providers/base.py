@@ -211,12 +211,17 @@ class BaseProvider(abc.ABC):
             **config.settings.profile.labels
         )
 
-        self.highlight_map = {
-            re.compile(k, re.IGNORECASE): v
+        self.rule_map = AttrDict([
+            (re.compile(k, re.IGNORECASE), v)
             for k, v in
-            [(r, labels[rules[r]])
+            [(r, rules[r])
              for r in rules.keys()]
-        }
+        ])
+
+        self.highlight_map = AttrDict([
+            (re.compile(k, re.IGNORECASE), labels[v])
+            for k, v in rules.items()
+        ])
 
         self.highlight_re = re.compile(
             "("
