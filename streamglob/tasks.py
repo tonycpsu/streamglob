@@ -36,6 +36,7 @@ class TaskManager(object):
         self.active = TaskList()
         self.done = TaskList()
         self.current_task_id = 0
+        self.started = asyncio.Condition()
 
     @property
     def max_concurrent_tasks(self):
@@ -78,6 +79,7 @@ class TaskManager(object):
         logger.info("task_manager starting")
         self.worker_task = state.asyncio_loop.create_task(self.worker())
         self.poller_task = state.asyncio_loop.create_task(self.poller())
+        self.started.notify_all()
 
     async def stop(self):
         logger.info("task_manager stopping")
@@ -89,6 +91,14 @@ class TaskManager(object):
         self.worker_task.cancel()
         self.poller_task.cancel()
         # print(self.poller_task.exception())
+
+    async def join(self):
+        async with self.started:
+            await self.started.wait()
+            state.asyncio_loop.run_until_complete(
+                self.worker_task,
+                self.poller_task
+            )
 
     async def worker(self):
 

@@ -173,10 +173,6 @@ class WatchDialog(BasePopUp):
             lambda s, b, media_id: self.update_offset_dropdown(media_id)
         )
 
-        # self.resolution_dropdown = ResolutionDropdown(
-        #     default=resolution
-        # )
-
         self.resolution_dropdown = panwid.Dropdown(
             self.provider.RESOLUTIONS, default=self.default_resolution
         )
@@ -586,8 +582,10 @@ class BAMProviderMixin(abc.ABC):
                 try:
                     (game_date, team) = identifier.split(".")
                 except ValueError:
-                    game_date = datetime.now().date()
-                    team = identifier
+                    game_date = identifier
+                    self.filters["date"].value = dateutil.parser.parse(game_date)
+                    raise SGIncompleteIdentifier
+
             except AttributeError:
                 raise SGIncompleteIdentifier
 
@@ -617,12 +615,16 @@ class BAMProviderMixin(abc.ABC):
                 date = schedule["dates"][-1]
                 game = date["games"][game_number-1]
                 game_id = game["gamePk"]
+                away_team = game["teams"]["away"]["team"]["teamName"]
+                home_team = game["teams"]["home"]["team"]["teamName"]
+
             except IndexError:
                 raise SGException("No game %d found for %s on %s" %(
                     game_number, team, game_date)
                 )
 
-        return AttrDict(game_id=game_id, options=options)
+
+        return BAMMediaListing(game_id=game_id, title=f"{away_team}@{home_team}")
 
     def on_select(self, widget, selection):
         self.open_watch_dialog(selection)

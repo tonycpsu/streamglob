@@ -57,6 +57,13 @@ class BaseDataClass:
     def keys(self):
         return self.__dataclass_fields__.keys()
 
+    def get(self, key, default=None):
+
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
     def __getitem__(self, key):
         return getattr(self, key)
 

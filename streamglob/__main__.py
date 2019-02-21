@@ -413,9 +413,6 @@ class TasksView(BaseView):
 def run_gui(provider, **kwargs):
 
     log_file = os.path.join(config.CONFIG_DIR, f"{PACKAGE_NAME}.log")
-    state.asyncio_loop = asyncio.get_event_loop()
-    state.task_manager = tasks.TaskManager()
-    state.task_manager_task = state.asyncio_loop.create_task(state.task_manager.start())
 
     ulh = UrwidLoggingHandler()
     setup_logging(options.verbose - options.quiet,
@@ -493,13 +490,19 @@ def run_gui(provider, **kwargs):
 
 def run_cli(provider, selection, **kwargs):
 
+    # raise Exception(selection)
     # provider.play(selection)
+    sources, kwargs = provider.play_args(selection, **kwargs)
+
     provider.play(selection, **kwargs)
-    while True:
-        state.procs = [p for p in state.procs if p.poll() is None]
-        if not len(state.procs):
-            break
-        time.sleep(0.25)
+    task = state.asyncio_loop.create_task(state.task_manager.join())
+    state.asyncio_loop.run_until_complete(task)
+
+    # while True:
+    #     state.procs = [p for p in state.procs if p.poll() is None]
+    #     if not len(state.procs):
+    #         break
+    #     time.sleep(0.25)
 
 def main():
 
@@ -549,6 +552,10 @@ def main():
 
     spec = None
     provider, selection, opts = providers.parse_spec(options.spec)
+
+    state.asyncio_loop = asyncio.get_event_loop()
+    state.task_manager = tasks.TaskManager()
+    state.task_manager_task = state.asyncio_loop.create_task(state.task_manager.start())
 
     if selection:
         run_cli(provider, selection, **opts)
