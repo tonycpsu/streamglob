@@ -301,11 +301,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
                     listing = self.item_to_listing(item)
                     self.on_new_listing(listing)
 
-                # asyncio.create_task(f.update())
-                # await f.update()
-                # state.asyncio_loop.run_in_executor(None, f.update)
                 f.updated = datetime.now()
-        # state.asyncio_loop.create_task(self.refresh())
 
     @property
     def feed_filters(self):

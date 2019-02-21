@@ -166,7 +166,6 @@ class Program(abc.ABC):
 
         player.source = source
         logger.info(f"playing {source}: player={player}, helper={helper}")
-        player.no_progress = True
         await state.asyncio_loop.create_task(player.run(**kwargs))
         return player
 
@@ -273,7 +272,7 @@ class Program(abc.ABC):
         cmd = self.command + self.extra_args_pre
         if self.source_is_player:
             self.source.stdout = subprocess.PIPE
-            self.proc = self.source.run(**kwargs)
+            self.proc = await self.source.run(**kwargs)
             self.stdin = self.proc.stdout
         elif isinstance(self.source, model.MediaTask):
             cmd += [s.locator for s in self.source.sources]

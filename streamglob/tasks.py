@@ -113,7 +113,6 @@ class TaskManager(object):
                 program = await Downloader.download(task, *task.args, **task.kwargs)
             else:
                 raise NotImplementedError
-
             task.program = program
             logger.info(f"program: {task.program}")
             task.proc = program.proc

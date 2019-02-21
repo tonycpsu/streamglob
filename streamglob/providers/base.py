@@ -432,25 +432,14 @@ class BaseProvider(abc.ABC):
         else:
             helper_spec = getattr(self.config, "helpers", None) or sources[0].helper
 
-        # sources = [
-        #     AttrDict(dataclasses.asdict(s), **dict(
-        #         provider=self.NAME,
-        #         title=selection.title
-        #     ))
-        #     for s in sources
-        # ]
         task = model.MediaTask(
             provider=self.NAME,
             title=selection.title,
             sources = sources
-            # sources = [
-            #     AttrDict(dataclasses.asdict(s))
-            #     for s in sources
-            # ]
         )
-        # source.provider = self.NAME
-        # source.title = selection.title
-        # state.task_manager.play(source, player_spec, helper_spec, **kwargs)
+
+        # asyncio.create_task(Player.play(task, player_spec, helper_spec))
+        # return
         logger.info(f"{player_spec}, {helper_spec}")
         state.task_manager.play(task, player_spec, helper_spec, **kwargs)
 
@@ -463,22 +452,6 @@ class BaseProvider(abc.ABC):
 
         if not isinstance(source, list):
             source = [source]
-
-        # if len(source) == 1:
-        #     source = source[0]
-        #     filename = selection.download_filename
-        #     helper_spec = getattr(self.config, "helpers") or source.helper
-        #     # logger.info(f"helper: {helper_spec}")
-        #     source = AttrDict(dataclasses.asdict(source))
-        #     source.provider = self.NAME
-        #     source.title = selection.title
-        #     source.dest = filename
-        #     state.task_manager.download(
-        #         source, filename, helper_spec, **kwargs
-        #     )
-
-        # else:
-        #     raise NotImplementedError
         for i, s in enumerate(source):
             # filename = s.download_filename
             kwargs = {"ext": getattr(s, "ext", None)}

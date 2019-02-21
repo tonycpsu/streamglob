@@ -46,7 +46,10 @@ class BAMMediaSource(model.MediaSource):
 
     @property
     def helper(self):
-        return "streamlink"
+        return {
+            None: "streamlink"
+        }
+
 
 class BAMProviderData(model.ProviderData):
 
