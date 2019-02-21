@@ -1,5 +1,5 @@
 import itertools
-
+import re
 
 def partition(pred, iterable):
     'Use a predicate to partition entries into false entries and true entries'
@@ -66,9 +66,46 @@ def format_timedelta(td):
 def format_str_truncated(n, s):
     return s[:n-1] + u"\u2026" if len(s) >= n else s
 
+
+EMOJI_RE = re.compile(
+    "["
+        u"\U00000080-\U000002AF"
+        u"\U00000300-\U000003FF"
+        u"\U00000600-\U000006FF"
+        u"\U00000C00-\U00000C7F"
+        u"\U00001DC0-\U00001DFF"
+        u"\U00001E00-\U00001EFF"
+        u"\U00002000-\U0000209F"
+        u"\U000020D0-\U0000214F"
+        u"\U00002190-\U000023FF"
+        u"\U00002460-\U000025FF"
+        u"\U00002600-\U000027EF"
+        u"\U00002900-\U000029FF"
+        u"\U00002B00-\U00002BFF"
+        u"\U00002C60-\U00002C7F"
+        u"\U00002E00-\U00002E7F"
+        u"\U00003000-\U0000303F"
+        u"\U0000A490-\U0000A4CF"
+        u"\U0000E000-\U0000F8FF"
+        u"\U0000FE00-\U0000FE0F"
+        u"\U0000FE30-\U0000FE4F"
+        u"\U0001F000-\U0001F02F"
+        u"\U0001F0A0-\U0001F0FF"
+        u"\U0001F100-\U0001F64F"
+        u"\U0001F680-\U0001F6FF"
+        u"\U0001F910-\U0001F96B"
+        u"\U0001F980-\U0001F9E0"
+"]+", flags=re.UNICODE)
+#NON_BMP_RE = re.compile(u"[^\U00000000-\U0000d7ff\U0000e000-\U0000ffff]", flags=re.UNICODE)
+
+def strip_emoji(s):
+    return EMOJI_RE.sub("", s)
+    # return NON_BMP_RE.sub("", s)
+
 __all__ = [
     "classproperty",
     "valid_date",
     "format_datetime",
-    "format_timedelta"
+    "format_timedelta",
+    "strip_emoji"
 ]

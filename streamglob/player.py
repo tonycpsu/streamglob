@@ -107,7 +107,7 @@ class Program(abc.ABC):
             # get the player by name
             try:
                 p = PROGRAMS[cls][spec]
-                return iter([p.cls(p.path, **p.cfg)])
+                return iter([p.cls(p.path, **dict(p.cfg, **kwargs))])
             except KeyError:
                 raise SGException(f"Program {spec} not found")
 
@@ -126,7 +126,7 @@ class Program(abc.ABC):
                 else:
                     return cfg == v
             return (
-                p.cls(p.path, **p.cfg)
+                p.cls(p.path, **dict(p.cfg, **kwargs))
                 for p in PROGRAMS[cls].values()
                 if not spec or all([
                     check_cfg_key(getattr(p, k, None), v)
@@ -136,7 +136,7 @@ class Program(abc.ABC):
 
         elif spec is None:
             return (
-                p.cls(p.path, **p.cfg)
+                p.cls(p.path, **dict(p.cfg, **kwargs))
                 for n, p in PROGRAMS[cls].items()
             )
         else:
@@ -148,7 +148,7 @@ class Program(abc.ABC):
 
         logger.debug(f"source: {source}, player: {player_spec}, helper: {helper_spec}")
         helper = None
-        player = next(cls.get(player_spec))
+        player = next(cls.get(player_spec, no_progress=True))
         if helper_spec:
             if isinstance(helper_spec, str):
                 helper = next(Helper.get(helper_spec))
@@ -166,6 +166,7 @@ class Program(abc.ABC):
 
         player.source = source
         logger.info(f"playing {source}: player={player}, helper={helper}")
+        player.no_progress = True
         await state.asyncio_loop.create_task(player.run(**kwargs))
         return player
 
@@ -274,6 +275,9 @@ class Program(abc.ABC):
             self.source.stdout = subprocess.PIPE
             self.proc = self.source.run(**kwargs)
             self.stdin = self.proc.stdout
+        elif isinstance(self.source, model.MediaTask):
+            cmd += [s.locator for s in self.source.sources]
+
         elif isinstance(self.source, list):
             # cmd += self.source
             cmd += [s.locator for s in self.source]

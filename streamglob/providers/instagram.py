@@ -14,11 +14,23 @@ from pony.orm import *
 
 class InstagramMediaSource(model.MediaSource):
 
+    EXTENSION_RE = re.compile("\.(\w+)\?")
+
+    @property
+    def ext(self):
+        try:
+            return self.EXTENSION_RE.search(self.locator).groups()[0]
+        except IndexError:
+            return None
+        except AttributeError:
+            raise Exception(self.locator)
+
     @property
     def helper(self):
-        if self.media_type == "image":
-            return None
-        return True
+        return AttrDict([
+            (None, "youtube-dl"),
+            ("mpv", None),
+        ])
 
 class InstagramMediaListing(FeedListing):
     pass
@@ -74,7 +86,9 @@ class InstagramSession(session.StreamSession):
 
             media_type = post["node"]["type"]
             if media_type == "video":
-                content = InstagramMediaSource(post["node"]["link"], media_type="video")
+                # content = InstagramMediaSource(post["node"]["link"], media_type="video")
+                content = InstagramMediaSource(post["node"]["videos"]["standard_resolution"]["url"], media_type="video")
+
             elif media_type == "image":
                 if "carousel_media" in post["node"]:
                     content = [
@@ -96,7 +110,7 @@ class InstagramSession(session.StreamSession):
             yield(
                 InstagramMediaListing(
                     guid = post_id,
-                    title = title,
+                    title = title.strip(),
                     created = datetime.fromtimestamp(
                         int(post["node"]["created_time"])
                     ),
@@ -114,7 +128,6 @@ class InstagramFeed(model.MediaFeed):
 
     ITEM_CLASS = InstagramItem
 
-    @db_session
     def update(self, limit = None):
 
         if self.locator.startswith("@"):
@@ -134,22 +147,24 @@ class InstagramFeed(model.MediaFeed):
             # we've gotten the desired number of posts, or after a batch
             # entirely comprised of duplicates
             for post in self.session.get_feed_items(user_name):
-                i = self.items.select(lambda i: i.guid == post.guid).first()
-                if not i:
-                    i = self.ITEM_CLASS(
-                        feed = self,
-                        guid = post.guid,
-                        title = post.title,
-                        created = post.created,
-                        media_type = post.media_type,
-                        content =  InstagramMediaSource.schema().dumps(
-                            post.content
-                            if isinstance(post.content, list)
-                            else [post.content],
-                            many=True
+                with db_session:
+                    i = self.items.select(lambda i: i.guid == post.guid).first()
+                    if not i:
+                        i = self.ITEM_CLASS(
+                            feed = self,
+                            guid = post.guid,
+                            title = post.title,
+                            created = post.created,
+                            media_type = post.media_type,
+                            content =  InstagramMediaSource.schema().dumps(
+                                post.content
+                                if isinstance(post.content, list)
+                                else [post.content],
+                                many=True
+                            )
                         )
-                    )
-                    count += 1
+                        count += 1
+                        yield i
 
                 if count == last_count:
                     logger.info(f"breaking after {count}")

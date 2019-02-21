@@ -46,6 +46,21 @@ urwid.AsyncioEventLoop._idle_emulation_delay = 1/20
 
 PACKAGE_NAME=__name__.split('.')[0]
 
+class PatchedAsyncioEventLoop(urwid.AsyncioEventLoop):
+    def _exception_handler(self, loop, context):
+        exc = context.get('exception')
+        if exc:
+            loop.stop()
+            if not isinstance(exc, urwid.ExitMainLoop):
+                # Store the exc_info so we can re-raise after the loop stops
+                import sys
+                self._exc_info = sys.exc_info()
+                if self._exc_info == (None, None, None):
+                    self._exc_info = (type(exc), exc, exc.__traceback__)
+        else:
+            loop.default_exception_handler(context)
+
+
 class UrwidLoggingHandler(logging.Handler):
 
     pipe = None
@@ -233,21 +248,30 @@ class TasksDataTable(DataTable):
         (c.name, c)
         for c in [
                 DataTableColumn("action", width=8),
-                DataTableColumn("program", width=16, format_fn = lambda p: p.cmd),
+                DataTableColumn("program", width=16, format_fn = lambda p: p.cmd if p else ""),
                 DataTableColumn("started", width=20, format_fn = utils.format_datetime),
                 DataTableColumn("elapsed",  width=14, align="right",
                                 format_fn = utils.format_timedelta),
                 DataTableColumn("provider", width=18),
-                DataTableColumn("title", width=("weight", 1), truncate=True),
                 DataTableColumn(
-                    "locator", label="source", width=40,
-                # format_fn = lambda s: s[:39] + u"\u2026" if len(s) >= 40 else s)
-                    format_fn = functools.partial(utils.format_str_truncated, 40),
+                    "title", width=("weight", 1),
+                    # FIXME: urwid miscalculates width of some unicode glyphs,
+                    # which causes data table to raise an exception when rows
+                    # are calculated with a different height than they render
+                    # at.  See https://github.com/urwid/urwid/issues/225
+                    # Workaround is to strip emoji
+                    format_fn = utils.strip_emoji,
                     truncate=True
                 ),
                 DataTableColumn(
+                    "sources", label="sources", width=60, wrap="any",
+                    format_fn = lambda l: f"[{len(l) if l else '.'}]",
+                    # truncate=True
+                ),
+                DataTableColumn(
                     "dest", width=40,
-                    format_fn = functools.partial(utils.format_str_truncated, 40),
+                    format_fn = utils.strip_emoji,
+                    # format_fn = functools.partial(utils.format_str_truncated, 40),
                     truncate=True
                 ),
                 DataTableColumn(
@@ -265,7 +289,18 @@ class TasksDataTable(DataTable):
         ]
     ])
 
-    COLUMNS = ["provider", "program", "locator", "title"]
+    COLUMNS = ["provider", "program", "sources", "title"]
+
+    def detail_fn(self, data):
+        return urwid.Columns([
+            (4, urwid.Padding(urwid.Text(""))),
+            ("weight", 1, urwid.Pile([
+                (1, urwid.Filler(DataTableText(s.locator)))
+                for s in data["sources"]]
+            )
+        )
+        ])
+
 
     def __init__(self, *args, **kwargs):
         self.columns = [
@@ -281,15 +316,20 @@ class TasksDataTable(DataTable):
     def keypress(self, size, key):
         if key == "ctrl r":
             self.refresh()
+        elif key == ".":
+            self.selection.toggle_details()
         else:
             return super().keypress(size, key)
 
 class PlayingDataTable(TasksDataTable):
 
-    COLUMNS = ["provider", "program", "locator", "title"]
+    COLUMNS = ["provider", "program", "sources", "title"]
 
     def query(self, *args, **kwargs):
-        return [ t for t in state.task_manager.playing ]
+        # return [ t for t in state.task_manager.playing ]
+        for t in state.task_manager.playing:
+            t._details_open = True
+            yield t
 
     def keypress(self, size, key):
 
@@ -300,7 +340,7 @@ class PlayingDataTable(TasksDataTable):
 
 class PendingDataTable(TasksDataTable):
 
-    COLUMNS = ["provider", "locator", "title"]
+    COLUMNS = ["provider", "sources", "title"]
 
     def query(self, *args, **kwargs):
         return [ t for t in state.task_manager.to_download ]
@@ -315,7 +355,7 @@ class PendingDataTable(TasksDataTable):
 
 class ActiveDownloadsDataTable(TasksDataTable):
 
-    COLUMNS = ["provider", "program", "locator", "title",
+    COLUMNS = ["provider", "program", "sources", "title",
                "started", "elapsed", "size", "pct", "rate", "dest"]
 
     def query(self, *args, **kwargs):
@@ -331,7 +371,7 @@ class ActiveDownloadsDataTable(TasksDataTable):
 
 class CompletedDownloadsDataTable(TasksDataTable):
 
-    COLUMNS = ["provider", "program", "locator", "title",
+    COLUMNS = ["provider", "program", "sources", "title",
                "started", "elapsed", "size", "dest"]
 
     def query(self, *args, **kwargs):
@@ -435,7 +475,7 @@ def run_gui(provider, **kwargs):
         pile,
         palette,
         screen=state.screen,
-        event_loop=urwid.AsyncioEventLoop(loop=state.asyncio_loop),
+        event_loop=PatchedAsyncioEventLoop(loop=state.asyncio_loop),
         unhandled_input=global_input,
         pop_ups=True
     )

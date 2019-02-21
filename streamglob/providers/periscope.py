@@ -36,7 +36,6 @@ class PeriscopeFeed(model.MediaFeed):
 
     ITEM_CLASS = PeriscopeItem
 
-    @db_session
     def update(self, limit=None):
 
         if not limit:
@@ -47,24 +46,26 @@ class PeriscopeFeed(model.MediaFeed):
                     username=self.locator
             ):
                 guid = item["id"]
-                self.ITEM_CLASS.upsert(
-                    dict(
-                        feed = self.channel_id,
-                        guid = guid
-                    ),
-                    dict(
-                        title = item["status"].strip() or "-",
-                        content = PeriscopeMediaSource.schema().dumps(
-                            [PeriscopeMediaSource(
-                                f"https://pscp.tv/w/{item['id']}",
-                                media_type="video")],
-                            many=True,
+                with db_session:
+                    i = self.ITEM_CLASS.upsert(
+                        dict(
+                            feed = self.channel_id,
+                            guid = guid
                         ),
-                        created = dateparser.parse(item["created_at"]),
-                        is_live = item.get("state") == "RUNNING"
+                        dict(
+                            title = item["status"].strip() or "-",
+                            content = PeriscopeMediaSource.schema().dumps(
+                                [PeriscopeMediaSource(
+                                    f"https://pscp.tv/w/{item['id']}",
+                                    media_type="video")],
+                                many=True,
+                            ),
+                            created = dateparser.parse(item["created_at"]).replace(tzinfo=None),
+                            is_live = item.get("state") == "RUNNING"
 
+                        )
                     )
-                )
+                    yield i
 
         except pyperi.PyPeriConnectionError as e:
             logger.warning(e)

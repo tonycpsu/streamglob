@@ -42,7 +42,7 @@ class RSSFeed(model.MediaFeed):
 
     ITEM_CLASS = RSSItem
 
-    @db_session
+    # @db_session
     def update(self, limit = None):
 
         if not limit:
@@ -50,22 +50,24 @@ class RSSFeed(model.MediaFeed):
 
         try:
             for item in self.session.parse(self.locator).items:
-                guid = getattr(item, "guid", item.link) or item.link
-                i = self.items.select(lambda i: i.guid == guid).first()
-                if not i:
-                    i = self.ITEM_CLASS(
-                        feed = self,
-                        guid = guid,
-                        title = item.title,
-                        created = item.pub_date.replace(tzinfo=None),
-                        # created = datetime.fromtimestamp(
-                        #     mktime(item.published_parsed)
-                        # ),
-                        content = RSSMediaSource.schema().dumps(
-                            [RSSMediaSource(item.link)],
-                            many=True
+                with db_session:
+                    guid = getattr(item, "guid", item.link) or item.link
+                    i = self.items.select(lambda i: i.guid == guid).first()
+                    if not i:
+                        i = self.ITEM_CLASS(
+                            feed = self,
+                            guid = guid,
+                            title = item.title,
+                            created = item.pub_date.replace(tzinfo=None),
+                            # created = datetime.fromtimestamp(
+                            #     mktime(item.published_parsed)
+                            # ),
+                            content = RSSMediaSource.schema().dumps(
+                                [RSSMediaSource(item.link)],
+                                many=True
+                            )
                         )
-                )
+                        yield i
         except SGFeedUpdateFailedException:
             logger.warn("couldn't update feed {self.name}")
 

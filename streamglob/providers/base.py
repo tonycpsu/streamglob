@@ -28,6 +28,8 @@ class MediaListing(AttrDict):
                         "download_filename",
                         "ext"}
 
+    TEMPLATE_RE=re.compile("\{((?!index|ext)[^}]+)\}")
+
     @property
     def provider(self):
         return self._provider.NAME.lower()
@@ -54,9 +56,14 @@ class MediaListing(AttrDict):
     def ext(self):
         return f"{self.provider}_dl" # *shrug*
 
-    @property
-    def download_filename(self):
+    # @property
+    # def index(self):
+    #     if self._index is None:
+    #         return ""
+    #     else:
+    #         return f"_{self._index}"
 
+    def download_filename(self, index=None, ext=None):
         outpath = (
             self._provider.config.get_path("output.path")
             or
@@ -65,7 +72,6 @@ class MediaListing(AttrDict):
             "."
         )
 
-
         template = (
             self._provider.config.get_path("output.template")
             or
@@ -73,15 +79,17 @@ class MediaListing(AttrDict):
         )
 
         if template:
-            template = template.replace("{", "{self.")
+            # template = template.replace("{", "{self."
+            template = self.TEMPLATE_RE.sub(r"{self.\1}", template)
             # raise Exception(template)
             try:
-                outfile = template.format(self=self)
+                outfile = template.format(self=self, index=index, ext=ext)
             except Exception as e:
                 logger.info(f"template: {template}")
                 logger.exception(e)
                 return None
         else:
+            raise Exception
             # template = "{self.provider.name.lower()}.{self.default_name}.{self.timestamp}.{self.ext}"
             # template = "{self.provider}.{self.ext}"
             template = "{self.provider}.{self.default_name}.{self.timestamp}.{self.ext}"
@@ -320,8 +328,26 @@ class BaseProvider(abc.ABC):
     def listings(self, filters=None):
         pass
 
+    def should_download(self, listing):
+        return listing.label in (
+            list(self.config.rules)
+            + list(config.settings.profile.rules.download)
+        )
+
     def on_new_listing(self, listing):
-        pass
+        try:
+            label = next(
+                l
+                for r, l in self.rule_map.items()
+                if r.search(listing.title)
+            )
+            listing.label = label
+            if self.should_download(listing):
+                self.download(listing)
+
+        except StopIteration:
+            pass
+
 
     @property
     def config(self):
@@ -362,7 +388,6 @@ class BaseProvider(abc.ABC):
     )
 
     def get_source(self, selection):
-        # raise Exception(type(selection.content))
         source = selection.content
         if not isinstance(source, list):
             source = [source]
@@ -379,7 +404,7 @@ class BaseProvider(abc.ABC):
 
     def play(self, selection, **kwargs):
 
-        source, kwargs = self.play_args(selection, **kwargs)
+        sources, kwargs = self.play_args(selection, **kwargs)
         # media_type = kwargs.pop("media_type", None)
 
         # FIXME: For now, we just throw playlists of media items at the default
@@ -388,10 +413,11 @@ class BaseProvider(abc.ABC):
         player_spec = None
         helper_spec = None
 
-        if not isinstance(source, list):
-            source = [source]
 
-        for s in source:
+        if not isinstance(sources, list):
+            sources = [sources]
+
+        for s in sources:
             if not s.media_type:
                 # Try to set the content types of the source(s) with a HTTP HEAD
                 # request if the provider didn't specify one.
@@ -399,46 +425,75 @@ class BaseProvider(abc.ABC):
                     s.locator
                 ).headers.get("Content-Type").split("/")[0]
 
-        media_types = set([s.media_type for s in source if s.media_type])
-
-        if len(source) == 1:
-            source = source[0]
-            # helper_spec = source.helper
-            helper_spec = getattr(self.config, "helpers", None) or source.helper
-            # raise Exception(helper_spec)
-
+        media_types = set([s.media_type for s in sources if s.media_type])
         player_spec = {"media_types": media_types}
+        if media_types == {"image"}:
+            helper_spec = None
+        else:
+            helper_spec = getattr(self.config, "helpers", None) or sources[0].helper
 
-        source = AttrDict(dataclasses.asdict(source))
-        source.provider = self.NAME
-        source.title = selection.title
-        state.task_manager.play(source, player_spec, helper_spec, **kwargs)
+        # sources = [
+        #     AttrDict(dataclasses.asdict(s), **dict(
+        #         provider=self.NAME,
+        #         title=selection.title
+        #     ))
+        #     for s in sources
+        # ]
+        task = model.MediaTask(
+            provider=self.NAME,
+            title=selection.title,
+            sources = sources
+            # sources = [
+            #     AttrDict(dataclasses.asdict(s))
+            #     for s in sources
+            # ]
+        )
+        # source.provider = self.NAME
+        # source.title = selection.title
+        # state.task_manager.play(source, player_spec, helper_spec, **kwargs)
+        logger.info(f"{player_spec}, {helper_spec}")
+        state.task_manager.play(task, player_spec, helper_spec, **kwargs)
 
 
     def download(self, selection, **kwargs):
 
         source, kwargs = self.play_args(selection, **kwargs)
 
+        # filename = selection.download_filename
+
         if not isinstance(source, list):
             source = [source]
 
-        if len(source) == 1:
-            source = source[0]
-            filename = selection.download_filename
-            helper_spec = getattr(self.config, "helpers") or source.helper
+        # if len(source) == 1:
+        #     source = source[0]
+        #     filename = selection.download_filename
+        #     helper_spec = getattr(self.config, "helpers") or source.helper
+        #     # logger.info(f"helper: {helper_spec}")
+        #     source = AttrDict(dataclasses.asdict(source))
+        #     source.provider = self.NAME
+        #     source.title = selection.title
+        #     source.dest = filename
+        #     state.task_manager.download(
+        #         source, filename, helper_spec, **kwargs
+        #     )
+
+        # else:
+        #     raise NotImplementedError
+        for i, s in enumerate(source):
+            # filename = s.download_filename
+            kwargs = {"ext": getattr(s, "ext", None)}
+            if len(source):
+                kwargs["index"] = i
+            filename = selection.download_filename(**kwargs)
+            helper_spec = getattr(self.config, "helpers") or s.helper
             # logger.info(f"helper: {helper_spec}")
-            source = AttrDict(dataclasses.asdict(source))
-            source.provider = self.NAME
-            source.title = selection.title
-            source.dest = filename
+            s = AttrDict(dataclasses.asdict(s))
+            s.provider = self.NAME
+            s.title = selection.title
+            s.dest = filename
             state.task_manager.download(
-                source, filename, helper_spec, **kwargs
+                s, filename, helper_spec, **kwargs
             )
-
-            # downloader.download(selection.download_filename, **kwargs)
-        else:
-            raise NotImplementedError
-
 
 
     def on_select(self, widget, selection):

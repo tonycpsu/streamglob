@@ -2,11 +2,15 @@ import logging
 logger = logging.getLogger(__name__)
 import asyncio
 from datetime import datetime, timedelta
+from orderedattrdict import AttrDict
+import dataclasses
 
 from .player import Player, Downloader
 from .state import *
 from . import utils
 from . import config
+from . import model
+from . import player
 
 task_manager_task = None
 
@@ -37,25 +41,38 @@ class TaskManager(object):
     def max_concurrent_tasks(self):
         return config.settings.tasks.max or self.DEFAULT_MAX_CONCURRENT_TASKS
 
-    def play(self, source, player_spec, helper_spec, **kwargs):
+    def play(self, task, player_spec, helper_spec, **kwargs):
 
-        # self.pending.put_nowait(("play", source, (player_spec, helper_spec), kwargs))
         self.current_task_id +=1
-        source.task_id = self.current_task_id
-        source.action = "play"
-        source.args = (player_spec, helper_spec)
-        source.kwargs = kwargs
-        self.to_play.append(source)
+        task.task_id = self.current_task_id
+        task.action = "play"
+        task.args = (player_spec, helper_spec)
+        task.kwargs = kwargs
+        task._details_open = True
+        self.to_play.append(task)
+        # self.playing.append(AttrDict(
+        #     title="foo",
+        #     sources=[model.MediaSource("a")],
+        #     action="play",
+        #     task_id=self.current_task_id,
+        #     program = player.Player("mpv"),
+        #     proc = None,
+        #     pid = None,
+        #     started=None,
+        #     elapsed=None,
+        #     args = (player_spec, helper_spec),
+        #     kwargs = kwargs,
+        #     _details_open = True
 
-    def download(self, source, filename, helper_spec, **kwargs):
+        # ))
 
-        # self.pending.put_nowait(("download", source, (filename, helper_spec), kwargs))
+    def download(self, task, filename, helper_spec, **kwargs):
         self.current_task_id +=1
-        source.task_id = self.current_task_id
-        source.action = "download"
-        source.args = (filename, helper_spec)
-        source.kwargs = kwargs
-        self.to_download.append(source)
+        task.task_id = self.current_task_id
+        task.action = "download"
+        task.args = (filename, helper_spec)
+        task.kwargs = kwargs
+        self.to_download.append(task)
 
     async def start(self):
         logger.info("task_manager starting")
@@ -85,38 +102,42 @@ class TaskManager(object):
                         return self.to_download.pop(0)
                     await asyncio.sleep(self.QUEUE_INTERVAL)
 
-            source = await wait_for_item()
-            logger.info(f"{'playing' if source.action == 'play' else 'downloading'} source: {source}")
+            task = await wait_for_item()
+            logger.info(task)
 
-            if source.action == "play":
-                program = await Player.play(source, *source.args, **source.kwargs)
-            elif source.action == "download":
-                program = await Downloader.download(source, *source.args, **source.kwargs)
+            logger.info(f"{'playing' if task.action == 'play' else 'downloading'} task: {task}")
+
+            if task.action == "play":
+                program = await Player.play(task, *task.args, **task.kwargs)
+            elif task.action == "download":
+                program = await Downloader.download(task, *task.args, **task.kwargs)
             else:
                 raise NotImplementedError
 
-            source.program = program
-            logger.info(f"program: {source.program}")
-            source.proc = program.proc
-            logger.info(f"proc: {source.proc}")
-            source.pid = program.proc.pid
-            # logger.info(source.pid)
-            source.started = datetime.now()
-            source.elapsed = timedelta(0)
-            if source.action == "play":
-                self.playing.append(source)
-            elif source.action == "download":
-                self.active.append(source)
+            task.program = program
+            logger.info(f"program: {task.program}")
+            task.proc = program.proc
+            logger.info(f"proc: {task.proc}")
+            task.pid = program.proc.pid
+            # logger.info(task.pid)
+            task.started = datetime.now()
+            task.elapsed = timedelta(9)
+            if task.action == "play":
+                self.playing.append(task)
+            elif task.action == "download":
+                self.active.append(task)
             await asyncio.sleep(self.QUEUE_INTERVAL)
             # self.pending.task_done()
 
     async def poller(self):
 
         while True:
-
             self.playing = list(filter(
                 lambda s: s.proc.returncode is None,
                 self.playing))
+
+            # if len(self.playing):
+            #     logger.info(type(self.playing[0]))
 
             (done, active) = utils.partition(
                 lambda s: s.proc.returncode is None,

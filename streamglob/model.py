@@ -51,9 +51,31 @@ def upsert(cls, keys, values=None):
 db.Entity.upsert = classmethod(upsert)
 
 
+@dataclass
+class BaseDataClass:
+
+    def keys(self):
+        return self.__dataclass_fields__.keys()
+
+    def __getitem__(self, key):
+        return getattr(self, key)
+
+    def __setitem__(self, key, value):
+        setattr(self, key, value)
+
+    def __delitem__(self, key):
+        delattr(self, key)
+
+    def __iter__(self):
+        return iter(self.keys())
+
+    def __len__(self):
+        return len(self.keys())
+
+
 @dataclass_json
 @dataclass
-class MediaSource(object):
+class MediaSource(BaseDataClass):
 
     locator: str
     media_type: typing.Optional[str] = None # Pony also uses Optional
@@ -62,13 +84,24 @@ class MediaSource(object):
     def helper(self):
         return None
 
+    def __str__(self):
+        return self.locator
+
+
 @dataclass
-class MediaDownload(object):
+class MediaTask(BaseDataClass):
 
     provider: str
-    locator: str
-    path: str
-    pid: int
+    title: str
+    sources: typing.List[MediaSource]
+    action: typing.Optional[str] = None
+    task_id: typing.Optional[int] = None
+    program: typing.Optional[typing.Any] = None
+    proc: typing.Optional[typing.Any] = None
+    pid: typing.Optional[int] = None
+    started: typing.Optional[datetime] = None
+    elapsed: typing.Optional[timedelta] = None
+    _details_open: bool = False
 
 
 class CacheEntry(db.Entity):

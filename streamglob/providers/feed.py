@@ -297,7 +297,10 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
                 > timedelta(seconds=f.update_interval)
             ):
                 logger.info(f"update {f}")
-                f.update()
+                for item in f.update():
+                    listing = self.item_to_listing(item)
+                    self.on_new_listing(listing)
+
                 # asyncio.create_task(f.update())
                 # await f.update()
                 # state.asyncio_loop.run_in_executor(None, f.update)
@@ -373,6 +376,16 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
             )
         self.view.table.update_count = True
 
+    def item_to_listing(self, item):
+
+        listing = self.LISTING_CLASS(**item.to_dict(related_objects=True))
+        listing._provider = self
+        source_cls = getattr(self, "MEDIA_SOURCE_CLASS", model.MediaSource)
+        listing.content = source_cls.schema().loads(listing["content"], many=True)
+        listing.feed = AttrDict(listing.feed.to_dict())
+        # raise Exception(listing)
+        return listing
+
     def listings(self, offset=None, limit=None, *args, **kwargs):
 
         count = 0
@@ -383,13 +396,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
             limit = self.limit
 
         with db_session:
-            # self.update_feeds()
 
             for item in self.items_query[offset:offset+limit]:
-                l = self.LISTING_CLASS(**item.to_dict(related_objects=True))
-                source_cls = getattr(self, "MEDIA_SOURCE_CLASS", model.MediaSource)
-                l.content = source_cls.schema().loads(l["content"], many=True)
-                # d.content = MediaSource.from_json(d.content, many=True)
-                # raise Exception(type(d.content))
-                l.feed = AttrDict(l.feed.to_dict())
-                yield(l)
+                listing = self.item_to_listing(item)
+                yield(listing)

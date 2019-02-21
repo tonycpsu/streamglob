@@ -41,7 +41,6 @@ class YouTubeMediaSource(model.MediaSource):
             ("mpv", None),
         ])
 
-
 class SearchResult(AttrDict):
     pass
 
@@ -179,18 +178,20 @@ class YouTubeFeed(model.MediaFeed):
             limit = self.DEFAULT_ITEM_LIMIT
 
         for item in self.session.youtube_dl_query(self.locator, limit=limit):
-            i = self.items.select(lambda i: i.guid == item["guid"]).first()
+            with db_session:
+                i = self.items.select(lambda i: i.guid == item["guid"]).first()
 
-            url = item.pop("url")
-            if not i:
-                i = self.ITEM_CLASS(
-                    feed=self,
-                    content = YouTubeMediaSource.schema().dumps(
-                        [YouTubeMediaSource(url, media_type="video")],
-                        many=True
-                    ),
-                    **item
-                )
+                url = item.pop("url")
+                if not i:
+                    i = self.ITEM_CLASS(
+                        feed=self,
+                        content = YouTubeMediaSource.schema().dumps(
+                            [YouTubeMediaSource(url, media_type="video")],
+                            many=True
+                        ),
+                        **item
+                    )
+                    yield i
 
 class TemplateIngoreMissingDict(dict):
 
