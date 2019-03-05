@@ -6,7 +6,7 @@ import abc
 import asyncio
 import dataclasses
 
-from orderedattrdict import AttrDict, defaultdict
+from orderedattrdict import AttrDict, defaultdict, Tree
 from itertools import chain
 import re
 
@@ -232,15 +232,12 @@ class BaseProvider(abc.ABC):
     @property
     def LISTING_CLASS(self):
         for cls in [self.__class__] + list(self.__class__.__bases__):
-            # print(f"foo: {cls}")
             pkg = sys.modules.get(cls.__module__)
-            pkgname = pkg.__name__.replace(pkg.__package__ + ".", "")
+            pkgname =  pkg.__name__.split(".")[-1]
             try:
                 return next(
                     v for k, v in pkg.__dict__.items()
-                    # if k.lower() == f"{cls.IDENTIFIER}MediaSource".lower()
                     if pkgname in k.lower() and k.endswith("MediaListing")
-                    # if k.endswith("MediaListing")
                 )
             except StopIteration:
                 continue
@@ -249,9 +246,8 @@ class BaseProvider(abc.ABC):
     @property
     def MEDIA_SOURCE_CLASS(self):
         for cls in [self.__class__] + list(self.__class__.mro()):
-            # print(f"foo: {cls}")
             pkg = sys.modules.get(cls.__module__)
-            pkgname = pkg.__name__.replace(pkg.__package__ + ".", "")
+            pkgname =  pkg.__name__.split(".")[-1]
             try:
                 return next(
                     v for k, v in pkg.__dict__.items()
@@ -384,8 +380,10 @@ class BaseProvider(abc.ABC):
 
     @property
     def config(self):
-        return config.settings.profile.providers.get(
-            self.IDENTIFIER, AttrDict()
+        return Tree(
+            config.settings.profile.providers.get(
+                self.IDENTIFIER, {}
+            )
         )
 
     @property
@@ -474,8 +472,8 @@ class BaseProvider(abc.ABC):
             sources = sources
         )
 
-        asyncio.create_task(Player.play(task, player_spec, helper_spec, **kwargs))
-        # state.task_manager.play(task, player_spec, helper_spec, **kwargs)
+        # asyncio.create_task(Player.play(task, player_spec, helper_spec, **kwargs))
+        state.task_manager.play(task, player_spec, helper_spec, **kwargs)
 
 
     def download(self, selection, **kwargs):
@@ -516,7 +514,6 @@ class BaseProvider(abc.ABC):
             state.task_manager.download(
                 task, filename, helper_spec, **kwargs
             )
-
 
     def on_select(self, widget, selection):
         self.play(selection)

@@ -48,24 +48,12 @@ class LiveStreamProvider(BackgroundTasksMixin, BaseProvider):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.filters["channel"].connect("changed", self.on_channel_change)
         self.live_channels = list()
         # self._update_alarm = None
 
-    # def on_activate(self):
-    #     self.update()
-
-    #     def update(loop, user_data): self.update()
-
-    #     if not self._update_alarm:
-    #         self._update_alarm = state.loop.set_alarm_in(
-    #             self.REFRESH_INTERVAL, update
-    #         )
-
-    # def on_deactivate(self):
-    #     if self._update_alarm:
-    #         state.loop.remove_alarm(self._update_alarm)
-    #     self._update_alarm = None
-
+    def on_channel_change(self, *args):
+        self.refresh()
 
     @property
     def ATTRIBUTES(self):
