@@ -19,9 +19,12 @@ class SGFeedUpdateFailedException(Exception):
 
 
 class RSSMediaSource(model.MediaSource):
-    pass
 
-class RSSMediaListing(FeedListing):
+    @property
+    def helper(self):
+        return True
+
+class RSSMediaListing(FeedMediaListing):
     pass
 
 class RSSSession(session.StreamSession):
@@ -54,6 +57,10 @@ class RSSFeed(model.MediaFeed):
                     guid = getattr(item, "guid", item.link) or item.link
                     i = self.items.select(lambda i: i.guid == guid).first()
                     if not i:
+                        source = self.provider.new_media_source(
+                            url=item.link,
+                            media_type="video" # FIXME: could be something else
+                        )
                         i = self.ITEM_CLASS(
                             feed = self,
                             guid = guid,
@@ -63,13 +70,13 @@ class RSSFeed(model.MediaFeed):
                             #     mktime(item.published_parsed)
                             # ),
                             content = RSSMediaSource.schema().dumps(
-                                [RSSMediaSource(item.link)],
+                                [source],
                                 many=True
                             )
                         )
                         yield i
         except SGFeedUpdateFailedException:
-            logger.warn("couldn't update feed {self.name}")
+            logger.warn(f"couldn't update feed {self.name}")
 
 
 

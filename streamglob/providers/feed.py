@@ -1,3 +1,7 @@
+from datetime import datetime
+from dataclasses import *
+import typing
+
 from orderedattrdict import AttrDict
 
 from .. import model
@@ -7,7 +11,16 @@ from .base import *
 from .widgets import *
 from .filters import *
 
-class FeedListing(MediaListing):
+@dataclass
+class FeedMediaListing(model.ContentMediaListing):
+
+    media_item_id: int = None
+    guid: str = None
+    media_type: str = None
+    feed: model.MediaFeed = None
+    read: bool = False
+    downloaded: bool = False
+    watched: bool = False
 
     # @property
     # def locator(self):
@@ -84,7 +97,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     @db_session
     def mark_item_read(self, position):
         try:
-            if not isinstance(self[position].data, MediaListing):
+            if not isinstance(self[position].data, model.MediaListing):
                 return
         except IndexError:
             return
@@ -229,6 +242,12 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         ("update", UPDATE_INTERVAL, [], {"force": True})
     ]
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.filters["feed"].connect("changed", self.on_feed_change)
+        self.filters["status"].connect("changed", self.on_status_change)
+        self.game_map = AttrDict()
+
     @property
     def ITEM_CLASS(self):
         return self.FEED_CLASS.ITEM_CLASS
@@ -250,7 +269,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
             return None
         with db_session:
             feed = self.FEED_CLASS.get(
-                provider_name = self.IDENTIFIER,
+                provider_id = self.IDENTIFIER,
                 name = self.selected_feed_label
             )
         return feed
@@ -270,7 +289,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
             feed = self.FEED_CLASS.get(locator=locator)
             if not feed:
                 feed = self.FEED_CLASS(
-                    provider_name = self.IDENTIFIER,
+                    provider_id = self.IDENTIFIER,
                     name = name,
                     locator=self.filters.feed[name]
                     # **self.feed_attrs(name)
@@ -298,9 +317,18 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
             ):
                 logger.info(f"update {f}")
                 for item in f.update():
-                    listing = self.item_to_listing(item)
+                    # listing = self.item_to_listing(item)
+                    # print(item)
+                    listing = self.new_listing(
+                        # feed = f.to_dict(),
+                        **item.to_dict(
+                            exclude=["media_item_id", "feed", "classtype"],
+                            related_objects=True
+                        )
+                    )
+                    listing.content = self.MEDIA_SOURCE_CLASS.schema().loads(listing["content"], many=True)
                     self.on_new_listing(listing)
-
+                    # raise Exception(listing)
                 f.updated = datetime.now()
 
     @property
@@ -310,7 +338,10 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
     def on_feed_change(self, *args):
         self.refresh()
         # state.asyncio_loop.create_task(self.refresh())
-        self.view.table.reset()
+        # self.view.table.reset()
+
+    def on_status_change(self, *args):
+        self.refresh()
 
     # @db_session
     async def update(self, force=False):
@@ -318,7 +349,6 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         self.refresh()
         self.create_feeds()
         # state.loop.draw_screen()
-        logger.info("-update foo")
         def update_feeds():
             self.update_feeds(force=force)
             self.refresh()
@@ -327,6 +357,14 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         # state.loop.draw_screen()
         logger.info("-update")
         # state.loop.draw_screen()
+
+    # def update2(self, force=False):
+    #     logger.info(f"update: {force}")
+    #     # self.refresh()
+    #     # self.create_feeds()
+    #     # state.loop.draw_screen()
+    #     self.update_feeds(force=True)
+    #     self.refresh()
 
     def refresh(self):
         logger.info("+refresh")
@@ -372,15 +410,6 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
             )
         self.view.table.update_count = True
 
-    def item_to_listing(self, item):
-
-        listing = self.LISTING_CLASS(**item.to_dict(related_objects=True))
-        listing._provider = self
-        source_cls = getattr(self, "MEDIA_SOURCE_CLASS", model.MediaSource)
-        listing.content = source_cls.schema().loads(listing["content"], many=True)
-        listing.feed = AttrDict(listing.feed.to_dict())
-        # raise Exception(listing)
-        return listing
 
     def listings(self, offset=None, limit=None, *args, **kwargs):
 
@@ -394,5 +423,13 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         with db_session:
 
             for item in self.items_query[offset:offset+limit]:
-                listing = self.item_to_listing(item)
+                # listing = self.item_to_listing(item)
+                listing = self.new_listing(
+                    feed = AttrDict(item.feed.to_dict()),
+                    **item.to_dict(
+                        exclude=["feed", "classtype"],
+                        related_objects=True
+                    )
+                )
+                listing.content = self.MEDIA_SOURCE_CLASS.schema().loads(listing["content"], many=True)
                 yield(listing)

@@ -28,6 +28,7 @@ from pony.orm import *
 
 from . import config
 from . import model
+from . import providers
 from .state import *
 from .exceptions import *
 
@@ -51,10 +52,12 @@ class StreamSession(object):
 
     def __init__(
             self,
+            provider_id,
             proxies=None,
             *args, **kwargs
     ):
 
+        self.provider_id = provider_id
         self.session = requests.Session()
         self.cookies = LWPCookieJar()
         if not os.path.exists(self.COOKIES_FILE):
@@ -67,6 +70,10 @@ class StreamSession(object):
         if proxies:
             self.proxies = proxies
         self._cache_responses = False
+
+    @property
+    def provider(self):
+        return providers.get(self.provider_id)
 
     def login(self):
         pass
@@ -92,12 +99,12 @@ class StreamSession(object):
         return self._SESSION_FILE()
 
     @classmethod
-    def new(cls, *args, **kwargs):
+    def new(cls, provider_id, *args, **kwargs):
         try:
-            return cls.load(**kwargs)
+            return cls.load(provider_id, **kwargs)
         except (FileNotFoundError, TypeError):
             logger.debug(f"creating new session: {args}, {kwargs}")
-            return cls(**kwargs)
+            return cls(provider_id, **kwargs)
 
     @property
     def cookies(self):
@@ -118,7 +125,7 @@ class StreamSession(object):
     def load(cls, **kwargs):
         state = yaml.load(open(cls._SESSION_FILE()), Loader=AttrDictYAMLLoader)
         logger.trace(f"load: {cls.__name__}, {state}")
-        return cls(**dict(kwargs, **state))
+        return cls(provider_id, **dict(kwargs, **state))
 
     def save(self):
         logger.trace(f"load: {self.__class__.__name__}, {self._state}")
@@ -214,11 +221,13 @@ class StreamSession(object):
 class AuthenticatedStreamSession(StreamSession):
 
     def __init__(
-        self,
-        username, password,
-        *args, **kwargs
+            self,
+            provider_id,
+            username, password,
+            *args, **kwargs
     ):
         super(AuthenticatedStreamSession, self).__init__(
+            provider_id,
             *args, **kwargs
         )
         self._state.username = username
@@ -235,9 +244,9 @@ class AuthenticatedStreamSession(StreamSession):
 
 
 def new(provider, *args, **kwargs):
-    session_class = globals().get(f"{provider.upper()}StreamSession")
-    return session_class.new(*args, **kwargs)
-
+    # session_class = globals().get(f"{provider.upper()}StreamSession")
+    # return session_class.new(provider, *args, **kwargs)
+    return provider.SESSION_CLASS.new(*args, **kwargs)
 
 def main():
 

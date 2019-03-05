@@ -2,10 +2,12 @@ from .. import model
 from ..session import *
 from .live import *
 
+from dataclasses import *
 
 # there's also a TwitchHelix client, but most of that isn't implemented yet
 from twitch import TwitchClient
 
+@dataclass
 class TwitchMediaListing(LiveStreamMediaListing):
 
     @property
@@ -35,9 +37,9 @@ class TwitchSession(StreamSession):
         user_id = self.user_name_to_id(username)
         channel = AttrDict(self.client.streams.get_stream_by_user(user_id) or {})
         if channel:# and "channel" in channel:
-            return TwitchMediaListing(
+            return self.provider.new_listing(
                 channel = username,
-                content = [TwitchMediaSource(channel.channel.url, media_type="video")],
+                content = [self.provider.new_media_source(channel.channel.url, media_type="video")],
                 title = channel.channel.description,
                 created = channel.created_at
             )

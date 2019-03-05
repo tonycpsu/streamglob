@@ -12,6 +12,7 @@ from orderedattrdict import DefaultAttrDict
 from instagram_web_api import Client, ClientCompatPatch, ClientError
 from pony.orm import *
 
+@dataclass
 class InstagramMediaSource(model.MediaSource):
 
     EXTENSION_RE = re.compile("\.(\w+)\?")
@@ -32,8 +33,10 @@ class InstagramMediaSource(model.MediaSource):
             ("mpv", None),
         ])
 
-class InstagramMediaListing(FeedListing):
-    pass
+@dataclass
+class InstagramMediaListing(FeedMediaListing):
+
+    post_type: str = ""
 
 class InstagramSession(session.StreamSession):
 
@@ -77,6 +80,7 @@ class InstagramSession(session.StreamSession):
             except KeyError:
                 pass
 
+            post_type = None
             post_id = post["node"]["id"]
 
             try:
@@ -86,35 +90,50 @@ class InstagramSession(session.StreamSession):
 
             media_type = post["node"]["type"]
             if media_type == "video":
+                post_type = "video"
                 # content = InstagramMediaSource(post["node"]["link"], media_type="video")
-                content = InstagramMediaSource(post["node"]["videos"]["standard_resolution"]["url"], media_type="video")
+                # content = InstagramMediaSource(post["node"]["videos"]["standard_resolution"]["url"], media_type="video")
+                content = self.provider.new_media_source(
+                    post["node"]["videos"]["standard_resolution"]["url"], media_type="video"
+                )
 
             elif media_type == "image":
                 if "carousel_media" in post["node"]:
+                    post_type = "story"
                     content = [
-                        InstagramMediaSource(m["images"]["standard_resolution"]["url"], media_type="image")
+                        # InstagramMediaSource(m["images"]["standard_resolution"]["url"], media_type="image")
+                        self.provider.new_media_source(
+                            m["images"]["standard_resolution"]["url"], media_type="image"
+                        )
                         if m["type"] == "image"
                         else
-                        InstagramMediaSource(m["video_url"], media_type="video")
+                        # InstagramMediaSource(m["video_url"], media_type="video")
+                        self.provider.new_media_source(
+                            m["video_url"], media_type="video"
+                        )
                         if m["type"] == "video"
                         else None
                         for m in post["node"]["carousel_media"]
                     ]
                 else:
-                    content = InstagramMediaSource(post["node"]["images"]["standard_resolution"]["url"], media_type="image")
+                    post_type = "image"
+                    # content = InstagramMediaSource(post["node"]["images"]["standard_resolution"]["url"], media_type="image")
+                    content = self.provider.new_media_source(
+                        post["node"]["images"]["standard_resolution"]["url"], media_type="image"
+                    )
                     # raise Exception
             else:
                 logger.warn(f"no content for post {post_id}")
                 continue
 
             yield(
-                InstagramMediaListing(
+                AttrDict(
                     guid = post_id,
                     title = title.strip(),
+                    post_type = post_type,
                     created = datetime.fromtimestamp(
                         int(post["node"]["created_time"])
                     ),
-                    media_type = media_type,
                     content = content
                 )
             )
@@ -122,7 +141,7 @@ class InstagramSession(session.StreamSession):
 
 class InstagramItem(model.MediaItem):
 
-    media_type = Required(str)
+    post_type = Required(str)
 
 class InstagramFeed(model.MediaFeed):
 
@@ -155,7 +174,7 @@ class InstagramFeed(model.MediaFeed):
                             guid = post.guid,
                             title = post.title,
                             created = post.created,
-                            media_type = post.media_type,
+                            post_type = post.post_type,
                             content =  InstagramMediaSource.schema().dumps(
                                 post.content
                                 if isinstance(post.content, list)
@@ -197,6 +216,18 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
     #     self.web_api = Client(auto_patch=True, drop_incompat_keys=False)
     #     self.end_cursor = None
     #     super().__init__(*args, **kwargs)
+
+    @property
+    def ATTRIBUTES(self):
+        attrs = list(super().ATTRIBUTES.items())
+        idx = next(i for i, a in enumerate(attrs) if a[0] == "title")
+        return AttrDict(
+            attrs[:idx]
+            + [
+                ("post_type", {"label": "type", "width": 5})
+            ]
+            + attrs[idx:]
+        )
 
     def play_args(self, selection, **kwargs):
 

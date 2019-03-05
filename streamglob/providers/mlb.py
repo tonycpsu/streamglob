@@ -17,6 +17,148 @@ from .. import model
 from ..exceptions import *
 from ..state import *
 
+@dataclass
+class MLBMediaListing(BAMMediaListing):
+
+    @property
+    def line(self):
+
+        columns = [
+            DataTableColumn("team", width=6, label="", align="right", padding=1),
+        ]
+
+        line_score = self.game_data["linescore"]
+        away_team = self.game_data["teams"]["away"]["team"]["abbreviation"]
+        home_team = self.game_data["teams"]["home"]["team"]["abbreviation"]
+
+        hide_spoiler_teams = config.settings.profile.get("hide_spoiler_teams", [])
+        if isinstance(hide_spoiler_teams, bool):
+            self.hide_spoilers = hide_spoiler_teams
+        else:
+            self.hide_spoilers = set([away_team, home_team]).intersection(
+                set(hide_spoiler_teams))
+
+        # logger.info(self.game_data)
+
+        if "teams" in line_score:
+            tk = line_score["teams"]
+        else:
+            tk = line_score
+
+        data = []
+        for s, side in enumerate(["away", "home"]):
+
+            i = -1
+            line = AttrDict()
+
+            if isinstance(line_score["innings"], list):
+                for i, inning in enumerate(line_score["innings"]):
+                    if not s:
+                        columns.append(
+                            DataTableColumn(str(i+1), label=str(i+1), width=3)
+                        )
+                        line.team = away_team
+                    else:
+                        line.team = home_team
+
+                    if self.hide_spoilers:
+                        setattr(line, str(i+1), "?")
+
+                    elif side in inning:
+                        if isinstance(inning[side], dict) and "runs" in inning[side]:
+                            setattr(line, str(i+1), parse_int(inning[side]["runs"]))
+                        # else:
+                        #     if "runs" in inning[side]:
+                        #         inning_score.append(parse_int(inning[side]))
+                    else:
+                        setattr(line, str(i+1), "X")
+
+                for n in range(i+1, 9):
+                    if not s:
+                        columns.append(
+                            DataTableColumn(str(n+1), label=str(n+1), width=3)
+                        )
+                    if self.hide_spoilers:
+                        setattr(line, str(n+1), "?")
+
+            if not s:
+                columns.append(
+                    DataTableColumn("empty", label="", width=3)
+                )
+
+            for stat in ["runs", "hits", "errors"]:
+                if not stat in tk[side]: continue
+
+                if not s:
+                    columns.append(
+                        DataTableColumn(stat, label=stat[0].upper(), width=3)
+                )
+                    if not self.hide_spoilers:
+                        setattr(line, stat, parse_int(tk[side][stat]))
+                    else:
+                        setattr(line, stat, "?")
+
+            data.append(line)
+
+        return urwid.BoxAdapter(panwid.DataTable(columns, data=data), 3)
+
+
+
+class HighlightsDataTable(panwid.DataTable):
+
+    columns = [
+        DataTableColumn("title"),
+        DataTableColumn("url", hide=True),
+    ]
+
+
+class MLBDetailBox(urwid.WidgetWrap):
+
+    signals = ["play"]
+
+    def __init__(self, game):
+        self.game = game
+        self.table = HighlightsDataTable(
+            data= [
+                AttrDict(dict(
+                    media_id = h["guid"],
+                    title = h["title"],
+                    description = h["description"],
+                    url = next(
+                        p for p in h["playbacks"]
+                        if p["name"] == "HTTP_CLOUD_WIRED_60"
+                    ),
+                )) for h in game["content"]["highlights"]["highlights"]["items"]
+            ]
+        )
+        # def foo(*args):
+        #     raise Exception
+        urwid.connect_signal(
+            self.table, "select",
+            # lambda source, selection: foo()
+            lambda source, selection: self._emit("play", selection.data.url)
+        )
+
+        self.columns = urwid.Columns([
+            (4, urwid.Filler(urwid.Text(""))),
+            ("weight", 1, self.table)
+        ])
+        self.attr = urwid.AttrMap(
+            self.columns,
+            # attr_map = {"table_row_body": "red"},
+            attr_map = {},
+            focus_map = {
+                "table_row_body focused": "blue",
+            },
+        )
+        self.box = urwid.BoxAdapter(self.attr, height=10)
+        super().__init__(self.box)
+
+    def selectable(self):
+        return True
+
+
+
 class MLBBAMProviderData(BAMProviderData):
     pass
 
@@ -49,6 +191,7 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
 
     def __init__(
             self,
+            provider_id,
             username, password,
             api_key=None,
             client_api_key=None,
@@ -58,6 +201,7 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
             *args, **kwargs
     ):
         super(MLBStreamSession, self).__init__(
+            provider_id,
             username, password,
             *args, **kwargs
         )
@@ -255,7 +399,8 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
 
     def get_stream(self, media):
 
-        media_id = media.get("mediaId", media.get("guid"))
+        # media_id = media.get("mediaId", media.get("guid"))
+        # logger.info(media_id)
 
         headers={
             "Authorization": self.access_token,
@@ -265,7 +410,7 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
             "x-bamsdk-platform": self.PLATFORM,
             "origin": "https://www.mlb.com"
         }
-        stream_url = self.STREAM_URL_TEMPLATE.format(media_id=media_id)
+        stream_url = self.STREAM_URL_TEMPLATE.format(media_id=media.media_id)
         logger.info("getting stream %s" %(stream_url))
         stream = self.get(
             stream_url,
@@ -273,87 +418,10 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
         ).json()
         logger.debug("stream response: %s" %(stream))
         if "errors" in stream and len(stream["errors"]):
-            return None
+            raise SGStreamNotFound(stream["errors"])
         stream = AttrDict(stream)
         stream.url = stream["stream"]["complete"]
         return stream
-
-
-class MLBLineScoreDataTable(DataTable):
-
-    @classmethod
-    def from_json(cls, line_score,
-                     away_team=None, home_team=None,
-                     hide_spoilers=False
-    ):
-
-        columns = [
-            DataTableColumn("team", width=6, label="", align="right", padding=1),
-        ]
-
-        if "teams" in line_score:
-            tk = line_score["teams"]
-        else:
-            tk = line_score
-
-        data = []
-        for s, side in enumerate(["away", "home"]):
-
-            i = -1
-            line = AttrDict()
-
-            if isinstance(line_score["innings"], list):
-                for i, inning in enumerate(line_score["innings"]):
-                    if not s:
-                        columns.append(
-                            DataTableColumn(str(i+1), label=str(i+1), width=3)
-                        )
-                        line.team = away_team
-                    else:
-                        line.team = home_team
-
-                    if hide_spoilers:
-                        setattr(line, str(i+1), "?")
-
-                    elif side in inning:
-                        if isinstance(inning[side], dict) and "runs" in inning[side]:
-                            setattr(line, str(i+1), parse_int(inning[side]["runs"]))
-                        # else:
-                        #     if "runs" in inning[side]:
-                        #         inning_score.append(parse_int(inning[side]))
-                    else:
-                        setattr(line, str(i+1), "X")
-
-                for n in range(i+1, 9):
-                    if not s:
-                        columns.append(
-                            DataTableColumn(str(n+1), label=str(n+1), width=3)
-                        )
-                    if hide_spoilers:
-                        setattr(line, str(n+1), "?")
-
-            if not s:
-                columns.append(
-                    DataTableColumn("empty", label="", width=3)
-                )
-
-            for stat in ["runs", "hits", "errors"]:
-                if not stat in tk[side]: continue
-
-                if not s:
-                    columns.append(
-                        DataTableColumn(stat, label=stat[0].upper(), width=3)
-                    )
-                if not hide_spoilers:
-                    setattr(line, stat, parse_int(tk[side][stat]))
-                else:
-                    setattr(line, stat, "?")
-
-
-            data.append(line)
-        return cls(columns, data=data)
-
-
 
 
 class MLBProvider(BAMProviderMixin,
@@ -378,7 +446,8 @@ class MLBProvider(BAMProviderMixin,
         "?sportId={sport_id}&startDate={start}&endDate={end}"
         "&gameType={game_type}&gamePk={game_id}"
         "&teamId={team_id}"
-        "&hydrate=linescore,team,game(content(summary,media(epg)),tickets)"
+        "&hydrate=linescore,team,game(content(summary,media(epg),"
+        "highlights(highlights(items))))"
     )
 
     SCHEDULE_TEMPLATE_BRIEF = (
@@ -388,9 +457,11 @@ class MLBProvider(BAMProviderMixin,
         "&teamId={team_id}"
     )
 
-    DATA_TABLE_CLASS = MLBLineScoreDataTable
+    # DATA_TABLE_CLASS = MLBLineScoreDataTable
 
     MEDIA_TITLE = "MLBTV"
+
+    MEDIA_ID_FIELD = "mediaId"
 
     @classproperty
     def NAME(cls):
@@ -472,10 +543,20 @@ class MLBProvider(BAMProviderMixin,
     def media_timestamps(self, game_id, media_id):
 
         try:
+            # try to get the precise timestamps for this stream
             airing = next(a for a in self.session.airings(game_id)
-                          if a["mediaId"] == media_id)
+                          if len(a["milestones"])
+                          and a["mediaId"] == media_id)
         except StopIteration:
-            raise SGStreamSessionException("No airing for media %s" %(media_id))
+            # welp, no timestamps -- try to get them from whatever feed has them
+            try:
+                airing = next(a for a in self.session.airings(game_id)
+                            if len(a["milestones"]))
+            except StopIteration:
+                logger.warning(SGStreamSessionException(
+                    "No airing for media %s" %(media_id))
+                )
+                return AttrDict([("Start", 0)])
 
         start_timestamps = []
         try:
@@ -538,6 +619,40 @@ class MLBProvider(BAMProviderMixin,
                  if m["milestoneType"] == "INNING_START"
         ]))
         return timestamps
+
+    def get_details(self, data):
+
+        game_id = data.game_id
+        game = self.game_data(game_id)
+
+        box = MLBDetailBox(game)
+        def foo(*args):
+            raise Exception
+
+        urwid.connect_signal(
+            box,
+            "play",
+            foo
+            # lambda source, url: self.play(
+            #     model.MediaSource(locator=url)
+            # )
+        )
+        return box
+
+
+
+    # def get_highlights(self, selection):
+
+    #     game_id = selection.game_id
+    #     game = self.game_data(game_id)
+
+        return [ AttrDict(dict(
+            media_id = h["guid"],
+            title = h["title"],
+            url = next(p for p in h["playbacks"] if p["name"] == "HTTP_CLOUD_WIRED_60"),
+            h=h
+        )) for h in j["highlights"]["highlights"]["items"] ]
+
 
 
     # def get_stream(self, media):

@@ -21,84 +21,75 @@ from .. import config
 from  ..utils import *
 
 
-class MediaListing(AttrDict):
+# class MediaListing(AttrDict):
 
-    __exclude_keys__ = {"default_name",
-                        "timestamp",
-                        "download_filename",
-                        "ext"}
+#     __exclude_keys__ = {"default_name",
+#                         "timestamp",
+#                         "download_filename",
+#                         "ext"}
 
-    TEMPLATE_RE=re.compile("\{((?!index|ext)[^}]+)\}")
+#     TEMPLATE_RE=re.compile("\{((?!index|ext)[^}]+)\}")
 
-    @property
-    def provider(self):
-        return self._provider.NAME.lower()
+#     @property
+#     def provider_id(self):
+#         return self.provider.NAME.lower()
 
-    @property
-    def default_name(self):
-        import time
+#     @property
+#     def default_name(self):
+#         import time
 
-        if len(self.content) > 1:
-            raise NotImplementedError
+#         if len(self.content) > 1:
+#             raise NotImplementedError
 
-        for s in reversed(self.content[0].locator.split("/")):
-            if not len(s): continue
-            return "".join(
-                [c for c in s if c.isalpha() or c.isdigit() or c in [" ", "-"]]
-            ).rstrip()
-        return "untitled"
+#         for s in reversed(self.content[0].locator.split("/")):
+#             if not len(s): continue
+#             return "".join(
+#                 [c for c in s if c.isalpha() or c.isdigit() or c in [" ", "-"]]
+#             ).rstrip()
+#         return "untitled"
 
-    @property
-    def timestamp(self):
-        return datetime.now().strftime("%Y%m%d_%H%M%S")
+#     @property
+#     def timestamp(self):
+#         return datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    @property
-    def ext(self):
-        return f"{self.provider}_dl" # *shrug*
+#     @property
+#     def ext(self):
+#         return f"{self.provider_id}_dl" # *shrug*
 
-    # @property
-    # def index(self):
-    #     if self._index is None:
-    #         return ""
-    #     else:
-    #         return f"_{self._index}"
 
-    def download_filename(self, index=None, ext=None):
-        outpath = (
-            self._provider.config.get_path("output.path")
-            or
-            config.settings.profile.get_path("output.path")
-            or
-            "."
-        )
+#     def download_filename(self, index=None, ext=None):
+#         outpath = (
+#             self.provider.config.get_path("output.path")
+#             or
+#             config.settings.profile.get_path("output.path")
+#             or
+#             "."
+#         )
 
-        template = (
-            self._provider.config.get_path("output.template")
-            or
-            config.settings.profile.get_path("output.template")
-        )
+#         template = (
+#             self.provider.config.get_path("output.template")
+#             or
+#             config.settings.profile.get_path("output.template")
+#         )
 
-        if template:
-            # template = template.replace("{", "{self."
-            template = self.TEMPLATE_RE.sub(r"{self.\1}", template)
-            # raise Exception(template)
-            try:
-                outfile = template.format(self=self, index=index, ext=ext)
-            except Exception as e:
-                logger.info(f"template: {template}")
-                logger.exception(e)
-                return None
-        else:
-            raise Exception
-            # template = "{self.provider.name.lower()}.{self.default_name}.{self.timestamp}.{self.ext}"
-            # template = "{self.provider}.{self.ext}"
-            template = "{self.provider}.{self.default_name}.{self.timestamp}.{self.ext}"
-            outfile = template.format(self=self)
-        return os.path.join(outpath, outfile)
-
-    # def __repr__(self):
-    #     s = ",".join(f"{k}={v}" for k, v in self.items() if k != "title")
-    #     return f"<{self.__class__.__name__}: {self.title}{ ' (' + s if s else ''})>"
+#         if template:
+#             # template = template.replace("{", "{self."
+#             template = self.TEMPLATE_RE.sub(r"{self.\1}", template)
+#             # raise Exception(template)
+#             try:
+#                 outfile = template.format(self=self, index=index, ext=ext)
+#             except Exception as e:
+#                 raise
+#                 logger.info(f"template: {template}")
+#                 logger.exception(e)
+#                 return None
+#         else:
+#             raise Exception
+#             # template = "{self.provider.name.lower()}.{self.default_name}.{self.timestamp}.{self.ext}"
+#             # template = "{self.provider}.{self.ext}"
+#             template = "{self.provider_id}.{self.default_name}.{self.timestamp}.{self.ext}"
+#             outfile = template.format(self=self)
+#         return os.path.join(outpath, outfile)
 
 
 # FIXME: move
@@ -150,24 +141,24 @@ class SimpleProviderView(BaseProviderView):
         self.provider = provider
         self.toolbar = FilterToolbar(self.provider.filters)
         self.table = self.PROVIDER_DATA_TABLE_CLASS(self.provider)
-        urwid.connect_signal(self.toolbar, "filter_change", self.filter_change)
+        # urwid.connect_signal(self.toolbar, "filter_change", self.filter_change)
         urwid.connect_signal(self.table, "select", self.provider.on_select)
         urwid.connect_signal(self.table, "cycle_filter", self.cycle_filter)
 
         self.pile  = urwid.Pile([
-            (1, self.toolbar),
+            ("pack", self.toolbar),
             ("weight", 1, self.table)
         ])
         self.pile.focus_position = 1
         super().__init__(self.pile)
 
-    def filter_change(self, f, name, *args):
-        logger.debug(f"filter_change: {name}, {args}")
-        func = getattr(self.provider, f"on_{name}_change", None)
-        if func:
-            func(self, *args)
-        # self.table.refresh()
-        # self.table.reset()
+    # def filter_change(self, f, name, *args):
+    #     logger.debug(f"filter_change: {name}, {args}")
+    #     func = getattr(self.provider, f"on_{name}_change", None)
+    #     if func:
+    #         func(*args)
+    #     # self.table.refresh()
+    #     # self.table.reset()
 
     def cycle_filter(self, widget, n, step):
         self.toolbar.cycle_filter(n, step)
@@ -234,20 +225,41 @@ class BaseProvider(abc.ABC):
         self.highlight_re = re.compile(
             "("
             + "|".join([k.pattern for k in self.highlight_map.keys()])
-            + ")", re.IGNORECASE)
+            + ")", re.IGNORECASE
+        )
 
 
-    @classproperty
-    def MEDIA_SOURCE_CLASS(cls):
-        clsname = f"{cls.NAME}MediaSource"
-        pkg = sys.modules.get(cls.__module__)
-        return getattr(pkg, clsname, model.MediaSource)
+    @property
+    def LISTING_CLASS(self):
+        for cls in [self.__class__] + list(self.__class__.__bases__):
+            # print(f"foo: {cls}")
+            pkg = sys.modules.get(cls.__module__)
+            pkgname = pkg.__name__.replace(pkg.__package__ + ".", "")
+            try:
+                return next(
+                    v for k, v in pkg.__dict__.items()
+                    # if k.lower() == f"{cls.IDENTIFIER}MediaSource".lower()
+                    if pkgname in k.lower() and k.endswith("MediaListing")
+                    # if k.endswith("MediaListing")
+                )
+            except StopIteration:
+                continue
+        return model.MediaListing
 
-    @classproperty
-    def LISTING_CLASS(cls):
-        clsname = f"{cls.NAME}MediaListing"
-        pkg = sys.modules.get(cls.__module__)
-        return getattr(pkg, clsname, MediaListing)
+    @property
+    def MEDIA_SOURCE_CLASS(self):
+        for cls in [self.__class__] + list(self.__class__.mro()):
+            # print(f"foo: {cls}")
+            pkg = sys.modules.get(cls.__module__)
+            pkgname = pkg.__name__.replace(pkg.__package__ + ".", "")
+            try:
+                return next(
+                    v for k, v in pkg.__dict__.items()
+                    if pkgname in k.lower() and k.endswith("MediaSource")
+                )
+            except (StopIteration, AttributeError):
+                continue
+        return model.MediaSource
 
     @property
     def session_params(self):
@@ -257,7 +269,10 @@ class BaseProvider(abc.ABC):
     def session(self):
         if self._session is None:
             session_params = self.session_params
-            self._session = self.SESSION_CLASS.new(**session_params)
+            self._session = self.SESSION_CLASS.new(
+                self.IDENTIFIER,
+                **session_params
+            )
         return self._session
 
     @property
@@ -275,15 +290,21 @@ class BaseProvider(abc.ABC):
             self._view.update()
         return self._view
 
+    @property
+    def is_active(self):
+        return self._active
+
     def activate(self):
-        if not self._active:
-            self._active = True
-            self.on_activate()
+        if self.is_active:
+            return
+        self._active = True
+        self.on_activate()
 
     def deactivate(self):
-        if self._active:
-            self.on_deactivate()
-            self._active = False
+        if not self.is_active:
+            return
+        self.on_deactivate()
+        self._active = False
 
     def on_activate(self):
         pass
@@ -296,7 +317,6 @@ class BaseProvider(abc.ABC):
         pass
 
     @classproperty
-    @abc.abstractmethod
     def IDENTIFIER(cls):
         return next(
             c.__module__ for c in cls.__mro__
@@ -323,6 +343,19 @@ class BaseProvider(abc.ABC):
 
     def parse_identifier(self, identifier):
         return
+
+    def new_media_source(self, *args, **kwargs):
+        return self.MEDIA_SOURCE_CLASS(
+            self.IDENTIFIER,
+            *args,
+            **kwargs
+        )
+
+    def new_listing(self, **kwargs):
+        return self.LISTING_CLASS(
+            self.IDENTIFIER,
+            **kwargs
+        )
 
     @abc.abstractmethod
     def listings(self, filters=None):
@@ -387,14 +420,14 @@ class BaseProvider(abc.ABC):
             )], **dict(o.split("=") for o in options.split(",") if "=" in o)
     )
 
-    def get_source(self, selection):
+    def get_source(self, selection, **kwargs):
         source = selection.content
         if not isinstance(source, list):
             source = [source]
         return source
 
     def play_args(self, selection, **kwargs):
-        source = self.get_source(selection)
+        source = self.get_source(selection, **kwargs)
         kwargs = {k: v
                   for k, v in list(kwargs.items())
                   + [ (f, self.filters[f].value)
@@ -404,7 +437,11 @@ class BaseProvider(abc.ABC):
 
     def play(self, selection, **kwargs):
 
-        sources, kwargs = self.play_args(selection, **kwargs)
+        try:
+            sources, kwargs = self.play_args(selection, **kwargs)
+        except SGStreamNotFound as e:
+            logger.error(f"stream not found: {e}")
+            return
         # media_type = kwargs.pop("media_type", None)
 
         # FIXME: For now, we just throw playlists of media items at the default
@@ -412,7 +449,6 @@ class BaseProvider(abc.ABC):
 
         player_spec = None
         helper_spec = None
-
 
         if not isinstance(sources, list):
             sources = [sources]
@@ -428,44 +464,57 @@ class BaseProvider(abc.ABC):
         media_types = set([s.media_type for s in sources if s.media_type])
         player_spec = {"media_types": media_types}
         if media_types == {"image"}:
-            helper_spec = None
+            helper_spec = {None: None}
         else:
             helper_spec = getattr(self.config, "helpers", None) or sources[0].helper
 
-        task = model.MediaTask(
+        task = model.PlayMediaTask(
             provider=self.NAME,
             title=selection.title,
             sources = sources
         )
 
-        # asyncio.create_task(Player.play(task, player_spec, helper_spec))
-        # return
-        logger.info(f"{player_spec}, {helper_spec}")
-        state.task_manager.play(task, player_spec, helper_spec, **kwargs)
+        asyncio.create_task(Player.play(task, player_spec, helper_spec, **kwargs))
+        # state.task_manager.play(task, player_spec, helper_spec, **kwargs)
 
 
     def download(self, selection, **kwargs):
 
-        source, kwargs = self.play_args(selection, **kwargs)
+        sources, kwargs = self.play_args(selection, **kwargs)
 
         # filename = selection.download_filename
 
-        if not isinstance(source, list):
-            source = [source]
-        for i, s in enumerate(source):
+        if not isinstance(sources, list):
+            sources = [sources]
+
+        for i, s in enumerate(sources):
             # filename = s.download_filename
-            kwargs = {"ext": getattr(s, "ext", None)}
-            if len(source):
+            # kwargs = {"ext": getattr(s, "ext", None)}
+            if len(sources):
                 kwargs["index"] = i
-            filename = selection.download_filename(**kwargs)
+            try:
+                filename = selection.download_filename(**kwargs)
+            except SGInvalidFilenameTemplate as e:
+                logger.warn(f"filename template for provider {self.IDENTIFIER} is invalid: {e}")
             helper_spec = getattr(self.config, "helpers") or s.helper
             # logger.info(f"helper: {helper_spec}")
-            s = AttrDict(dataclasses.asdict(s))
-            s.provider = self.NAME
-            s.title = selection.title
-            s.dest = filename
+
+            task = model.DownloadMediaTask(
+                provider=self.NAME,
+                title=selection.title,
+                sources = [s],
+                dest=filename
+            )
+
+            # s = AttrDict(dataclasses.asdict(s))
+            # s.provider = self.NAME
+            # s.title = selection.title
+            # s.dest = filename
+
+            # asyncio.create_task(Downloader.download(task, filename, helper_spec, **kwargs))
+
             state.task_manager.download(
-                s, filename, helper_spec, **kwargs
+                task, filename, helper_spec, **kwargs
             )
 
 
@@ -481,6 +530,9 @@ class BaseProvider(abc.ABC):
 
     def __str__(self):
         return self.NAME
+
+    def __repr__(self):
+        return f"<{type(self)}: {self.NAME}>"
 
 class PaginatedProviderMixin(object):
 

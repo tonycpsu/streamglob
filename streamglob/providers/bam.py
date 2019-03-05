@@ -10,7 +10,9 @@ from datetime import datetime, timedelta
 import dateutil.parser
 import pytz
 import distutils.spawn
-
+import dataclasses
+from dataclasses import *
+import typing
 
 from .. import player
 from .. import config
@@ -20,7 +22,72 @@ from .filters import *
 from ..player import *
 from .widgets import *
 
-class BAMMediaListing(MediaListing):
+
+@dataclass
+class BAMMediaListing(model.MediaListing):
+
+    FEED_TYPE_ORDER = [
+        "away",
+        "in_market_away",
+        "home",
+        "in_market_home",
+        "national",
+        "condensed",
+        "recap",
+        "..."
+    ]
+
+    game_id: int = None
+    game_type: str = None
+    away: int = None
+    home: int = None
+    away_abbrev: str = None
+    home_abbrev: str = None
+    start: datetime = None
+    attrs: str = None
+
+    @classmethod
+    def from_json(cls, provider, g):
+
+        game_pk = g["gamePk"]
+        game_type = g["gameType"]
+        status = g["status"]["statusCode"]
+        away_team = g["teams"]["away"]["team"]["teamName"]
+        home_team = g["teams"]["home"]["team"]["teamName"]
+        away_abbrev = g["teams"]["away"]["team"]["abbreviation"]
+        home_abbrev = g["teams"]["home"]["team"]["abbreviation"]
+        start_time = dateutil.parser.parse(g["gameDate"])
+        attrs = MediaAttributes()
+        try:
+            # FIXME: this is wrong
+            item = free_game = g["content"]["media"]["epg"][0]["items"][0]
+            attrs.state = item["mediaState"]
+            attrs.free = item["freeGame"]
+        except:
+            attrs.state = None
+            attrs.free = None
+
+        if config.settings.profile.time_zone:
+            start_time = start_time.astimezone(
+                pytz.timezone(config.settings.profile.time_zone)
+            )
+
+        return cls(
+            provider_id = provider,
+            game_id = game_pk,
+            game_type = game_type,
+            away = away_team,
+            home = home_team,
+            away_abbrev = away_abbrev,
+            home_abbrev = home_abbrev,
+            start = start_time,
+            attrs = attrs
+        )
+
+    # FIXME
+    # @property
+    # def provider(self):
+    #     return self.provider.NAME.lower()
 
     @property
     def start_date(self):
@@ -42,13 +109,170 @@ class BAMMediaListing(MediaListing):
     def title(self):
         return f"{self.away}@{self.home}"
 
+    @property
+    def game_data(self):
+        return self.provider.game_data(self.game_id)
+        # schedule = self.provider.schedule(game_id=self.game_id)
+        # try:
+        #     # Get last date for games that have been rescheduled to a later date
+        #     game = schedule["dates"][-1]["games"][0]
+        # except KeyError:
+        #     logger.warn("no game data for %s" %(self.game_id))
+        # # logger.info(f"game: {game}")
+        # return game
+
+    @property
+    @memo(region="short")
+    def media(self):
+
+        def fix_feed_type(feed_type, epg_title, title, description, blurb):
+            # MLB-specific -- mediaSubType is sometimes a team ID instead
+            # of away/home
+            if feed_type and feed_type.isdigit():
+                if int(feed_type) == game["teams"]["away"]["team"]["id"]:
+                    return "AWAY"
+                elif int(feed_type) == game["teams"]["home"]["team"]["id"]:
+                    return "HOME"
+            elif "Recap" in epg_title:
+                return "Recap"
+            elif "Highlights" in epg_title:
+                if ("CG" in title
+                    or "Condensed" in description
+                    or "Condensed" in blurb):
+                    return "Condensed"
+
+            if feed_type is None:
+                return title or "..."
+            return feed_type
+
+
+        logger.debug(f"geting media for game {self.game_id}")
+
+        game = self.game_data
+
+        epgs = (game["content"]["media"]["epg"]
+                + game["content"]["media"].get("epgAlternate", []))
+
+        # raise Exception(self.game_id, epgs)
+
+        if not isinstance(epgs, list):
+            epgs = [epgs]
+
+        items = sorted(
+            [ self.provider.new_media_source(
+                # mediaId and guid fields are both used to identify streams
+                # provider_id = self.provider_id,
+                game_id = self.game_id,
+                media_id = item.get(self.provider.MEDIA_ID_FIELD,
+                                    item.get("guid", "")),
+                title = item.get("title", ""),
+                description = item.get("description", ""),
+                state = (
+                    "live" if (item.get("mediaState") == "MEDIA_ON")
+                    else
+                    "archive" if (item.get("mediaState") == "MEDIA_ARCHIVE")
+                    else
+                    "off" if (item.get("mediaState") == "MEDIA_OFF")
+                    else
+                    "done" if (item.get("mediaState") == "MEDIA_DONE")
+                    else
+                    "unknown"
+                ),
+                call_letters = item.get("callLetters", ""),
+                # epg_title=epg["title"],
+                language=item.get("language", "").lower(),
+                media_type = "audio" if "audio" in epg["title"].lower() else "video",
+                feed_type = fix_feed_type(
+                    item.get("mediaFeedType", item.get("mediaFeedSubType")),
+                    epg["title"],
+                    item.get("title", ""),
+                    item.get("description", ""),
+                    item.get("blurb", ""),
+                ),
+                playbacks = item.get("playbacks", []),
+                **self.extra_media_attributes(item)
+            )
+              for epg in epgs
+              for item in epg["items"]],
+            key = lambda i: (
+                i.get("media_type", "") != "video",
+                self.FEED_TYPE_ORDER.index(i.get("feed_type", "").lower())
+                if i.get("feed_type", "").lower() in self.FEED_TYPE_ORDER
+                else len(self.FEED_TYPE_ORDER),
+                i.get("language", ""),
+            )
+        )
+
+        items = [
+            i for i in items
+            if i.media_id
+            and i.state not in ["off", "done" ]
+        ]
+        raise Exception(items)
+        return items
+
+    def extra_media_attributes(self, item):
+        return {}
+
+
+@dataclass
 class BAMMediaSource(model.MediaSource):
+
+    # provider: typing.Optional[BaseProvider] = None
+    game_id: str = ""
+    media_id: str = ""
+    title: str = ""
+    description: str = ""
+    state: str = "unknown"
+    call_letters: str = ""
+    language: str = ""
+    feed_type: str = ""
+    playbacks: typing.List[dict] = field(default_factory=list)
 
     @property
     def helper(self):
-        return {
-            None: "streamlink"
-        }
+        return "streamlink"
+
+    @property
+    @memo(region="long")
+    def locator(self):
+
+        # # FIXME: borked
+        # # Get any team-specific profile overrides, and apply settings for them
+        # profiles = tuple([ list(d.values())[0]
+        #              for d in config.settings.profile_map.get("team", {})
+        #              if list(d.keys())[0] in [
+        #                      self.listing.away_abbrev,
+        #                      self.listing.home_abbrev
+        #              ] ])
+
+        # if len(profiles):
+        #     # override proxies for team, if defined
+        #     if len(config.settings.profiles[profiles].proxies):
+        #         old_proxies = self.session.proxies
+        #         self.session.proxies = config.settings.profiles[profiles].proxies
+        #         # self.session.refresh_access_token(clear_token=True)
+        #         self.session.proxies = old_proxies
+
+        if len(self.playbacks):
+            playback = next(p for p in self.playbacks
+                            if p["name"] == "HTTP_CLOUD_WIRED_60")
+
+            try:
+                media_url = playback["url"]
+            except:
+                from pprint import pformat
+                raise Exception(pformat(media))
+        else:
+            stream = self.provider.session.get_stream(self)
+            try:
+                # media_url = stream["stream"]["complete"]
+                media_url = stream.url
+            except (TypeError, AttributeError):
+                raise SGException("no stream URL for game %d, %s" %(self.game_id))
+
+        return media_url
+
 
 
 class BAMProviderData(model.ProviderData):
@@ -102,7 +326,7 @@ class OffsetDropdown(urwid.WidgetWrap):
 
     def __init__(self, timestamps, live=False, default=None):
 
-        del timestamps["S"]
+        if "S" in timestamps: del timestamps["S"]
         timestamp_map = AttrDict(
 
             ( "Start" if k == "SO" else k, v ) for k, v in timestamps.items()
@@ -112,7 +336,7 @@ class OffsetDropdown(urwid.WidgetWrap):
 
         self.dropdown = panwid.Dropdown(
             timestamp_map, label="Begin playback",
-            default = timestamp_map[default]
+            default = timestamp_map.get(default, None)
         )
         super().__init__(self.dropdown)
 
@@ -142,35 +366,48 @@ class WatchDialog(BasePopUp):
 
         self.title = urwid.Text("%s@%s" %(
             selection["away"],
-            selection["home"]
+            selection["home"],
+
         ))
 
-        media = list(self.provider.get_media(self.game_id, title=self.media_title))
-        # raise Exception(media)
-        feed_map = sorted([
-            ("%s (%s)" %(e["mediaFeedType"].title(),
-                         e["callLetters"]), e["mediaId"].lower())
+        # media = list(self.provider.get_media(self.game_id, title=self.media_title))
+        # media = list(self.provider.get_media(self.game_id))
+        # raise Exception(selection)
+        media = selection.media
+
+        if not len(media):
+            raise SGStreamNotFound
+
+        feed_map = [
+            (
+                (f"""{e.media_type.title()}: {e.get("feed_type", "").title()} """
+                 f"""({e.get("call_letters", "")}{"/"+e.get("language") if e.get("language") else ""})"""),
+                e["media_id"].lower()
+            )
             for e in media
-        ], key=lambda v: v[0])
+        ]
+
+        # raise Exception(feed_map)
 
         try:
             home_feed = next(
                 e for e in media
-                if e["mediaFeedType"].lower() == "home"
+                if e["feed_type"].lower() == "home"
             )
         except StopIteration:
             home_feed = media[0]
 
-        self.live_stream = (home_feed.get("mediaState") == "MEDIA_ON")
+        self.live_stream = (home_feed.get("state") == "live")
         self.feed_dropdown = panwid.Dropdown(
             feed_map,
             label="Feed",
-            default=home_feed["mediaId"]
+            default=home_feed["media_id"],
+            max_height=8
         )
         urwid.connect_signal(
             self.feed_dropdown,
             "change",
-            lambda s, b, media_id: self.update_offset_dropdown(media_id)
+            lambda s, b, *args: self.update_offset_dropdown(*args)
         )
 
         self.resolution_dropdown = panwid.Dropdown(
@@ -181,8 +418,12 @@ class WatchDialog(BasePopUp):
         self.update_offset_dropdown(self.feed_dropdown.selected_value)
 
         def ok(s):
+            media_id = self.feed_dropdown.selected_value
             self.provider.play(
                 selection,
+                # media = selected_media,
+                media_id = media_id,
+                # media_type = selected_media.media_type,
                 offset=self.offset_dropdown.selected_value,
                 resolution=self.resolution_dropdown.selected_value
             )
@@ -200,11 +441,11 @@ class WatchDialog(BasePopUp):
         pile = urwid.Pile([
             ("pack", self.title),
             ("weight", 1, urwid.Pile([
-                ("weight", 1, urwid.Filler(
+                ("weight", 5, urwid.Filler(
                     urwid.Columns([
-                        ("weight", 1, self.feed_dropdown),
+                        ("weight", 4, self.feed_dropdown),
                         ("weight", 1, self.resolution_dropdown),
-                    ]))),
+                    ]), valign="top")),
                 ("weight", 1, urwid.Filler(self.offset_dropdown_placeholder)),
                 ("weight", 1, urwid.Filler(
                     urwid.Columns([
@@ -218,7 +459,7 @@ class WatchDialog(BasePopUp):
 
 
     def update_offset_dropdown(self, media_id):
-
+        # raise Exception(self.provider.media_timestamps(self.game_id, media_id))
         self.offset_dropdown = OffsetDropdown(
             self.provider.media_timestamps(self.game_id, media_id),
             live = self.live_stream,
@@ -229,6 +470,7 @@ class WatchDialog(BasePopUp):
 
     def keypress(self, size, key):
 
+        key = super(WatchDialog, self).keypress(size, key)
         if key == "meta enter":
             self.ok_button.keypress(size, "enter")
         elif key in ["<", ">"]:
@@ -237,12 +479,13 @@ class WatchDialog(BasePopUp):
             self.feed_dropdown.cycle(-1 if key == "[" else 1)
         elif key in ["-", "="]:
             self.offset_dropdown.cycle(-1 if key == "-" else 1)
+        if key == "q":
+            self.cancel()
         else:
             # return super(WatchDialog, self).keypress(size, key)
-            key = super(WatchDialog, self).keypress(size, key)
-        if key:
-            return
-        return key
+            # return super(WatchDialog, self).keypress(size, key)
+            return key
+
 
 class LiveStreamFilter(ListingFilter):
 
@@ -256,6 +499,12 @@ class LiveStreamFilter(ListingFilter):
 
 class BAMProviderDataTable(ProviderDataTable):
 
+    detail_selectable = True
+
+    @property
+    def detail_fn(self):
+        return self.provider.get_details
+
     def keypress(self, size, key):
         if key in ["meta left", "meta right"]:
             self._emit(f"cycle_filter", 0,("w", -1 if key == "meta left" else 1))
@@ -265,6 +514,8 @@ class BAMProviderDataTable(ProviderDataTable):
             self.provider.filters.date.value = datetime.today()
         elif key == "meta enter":
             self.provider.play(self.selection.data)
+        elif key == ".":
+            self.selection.toggle_details()
         else:
             return super().keypress(size, key)
 
@@ -297,12 +548,17 @@ class BAMProviderMixin(abc.ABC):
         away = {"width": 16},
         home = {"width": 16},
         line = {},
-        game_id = {}
+        game_id = {"width": 10},
     )
 
     HELPER = "streamlink"
 
     REQUIRED_CONFIG = {"credentials": ["username", "password"]}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.filters["date"].connect("changed", self.on_date_change)
+        self.game_map = AttrDict()
 
     @property
     def session_params(self):
@@ -316,10 +572,29 @@ class BAMProviderMixin(abc.ABC):
             self.HELPER in list(player.PROGRAMS[Helper].keys())
         )
 
-    def on_date_change(self, *args):
+    def on_date_change(self, date):
+        schedule = self.schedule(start=date, end=date)
+        games = sorted(schedule["dates"][-1]["games"],
+                       key= lambda g: g["gameDate"])
+
+        self.game_map.clear()
+        for game in games:
+            self.game_map[game["gamePk"]] = AttrDict(game)
         self.view.table.refresh()
 
-    # @memo(region="short")
+    def game_data(self, game_id):
+
+        return self.game_map[game_id]
+        # schedule = self.schedule(game_id=game_id)
+        # try:
+        #     # Get last date for games that have been rescheduled to a later date
+        #     game = schedule["dates"][-1]["games"][0]
+        # except KeyError:
+        #     raise SGException("no game data")
+        # return game
+
+
+    @memo(region="short")
     def schedule(
             self,
             # sport_id=None,
@@ -357,132 +632,19 @@ class BAMProviderMixin(abc.ABC):
             team_id = team_id if team_id else "",
             game_id = game_id if game_id else ""
         )
+        # raise Exception(url)
         # with self.cache_responses_short():
         return self.session.get(url).json()
 
 
     def listings(self, offset=None, limit=None, *args, **kwargs):
 
-        j = self.schedule(
-        #     # sport_id=self.sport_id,
-            start = self.filters.date.value,
-            end = self.filters.date.value,
-            # game_type = "R"
-        )
-        # logger.info(j)
-
-        for d in j["dates"]:
-            games = sorted(d["games"], key= lambda g: g["gameDate"])
-            for g in games:
-                logger.info(g)
-                game_pk = g["gamePk"]
-                game_type = g["gameType"]
-                status = g["status"]["statusCode"]
-                away_team = g["teams"]["away"]["team"]["teamName"]
-                home_team = g["teams"]["home"]["team"]["teamName"]
-                away_abbrev = g["teams"]["away"]["team"]["abbreviation"]
-                home_abbrev = g["teams"]["home"]["team"]["abbreviation"]
-                start_time = dateutil.parser.parse(g["gameDate"])
-                attrs = MediaAttributes()
-                try:
-                    item = free_game = g["content"]["media"]["epg"][0]["items"][0]
-                    attrs.state = item["mediaState"]
-                    attrs.free = item["freeGame"]
-                except:
-                    attrs.state = None
-                    attrs.free = None
-
-                if config.settings.profile.time_zone:
-                    start_time = start_time.astimezone(
-                        pytz.timezone(config.settings.profile.time_zone)
-                    )
-
-                hide_spoiler_teams = config.settings.profile.get("hide_spoiler_teams", [])
-                if isinstance(hide_spoiler_teams, bool):
-                    hide_spoilers = hide_spoiler_teams
-                else:
-                    hide_spoilers = set([away_abbrev, home_abbrev]).intersection(
-                        set(hide_spoiler_teams))
-                if "linescore" in g:
-                    self.line_score_table = self.DATA_TABLE_CLASS.from_json(
-                            g["linescore"],
-                            g["teams"]["away"]["team"]["abbreviation"],
-                            g["teams"]["home"]["team"]["abbreviation"],
-                            hide_spoilers
-                    )
-                    self.line_score = urwid.BoxAdapter(
-                        self.line_score_table,
-                        3
-                    )
-                else:
-                    self.line_score = None
-
-                yield(BAMMediaListing(
-                    game_id = game_pk,
-                    game_type = game_type,
-                    away = away_team,
-                    home = home_team,
-                    away_abbrev = away_abbrev,
-                    home_abbrev = home_abbrev,
-                    start = start_time,
-                    line = self.line_score,
-                    attrs = attrs
-                ))
-
-
-    # @memo(region="short")
-    def get_epgs(self, game_id, title=None):
-
-        schedule = self.schedule(game_id=game_id)
-        try:
-            # Get last date for games that have been rescheduled to a later date
-            game = schedule["dates"][-1]["games"][0]
-        except KeyError:
-            logger.debug("no game data")
-            return
-        epgs = game["content"]["media"]["epg"]
-
-        if not isinstance(epgs, list):
-            epgs = [epgs]
-
-        return [ e for e in epgs if (not title) or title == e["title"] ]
-
-    def get_media(self,
-                  game_id,
-                  media_id=None,
-                  title=None,
-                  preferred_stream=None,
-                  call_letters=None):
-
-        logger.debug(f"geting media for game {game_id} ({media_id}, {title}, {call_letters})")
-
-        epgs = self.get_epgs(game_id, title)
-        # raise Exception(epgs)
-        for epg in epgs:
-            for item in epg["items"]:
-                if "mediaId" not in item:
-                    item["mediaId"] = item.get("guid", "")
-                if (not preferred_stream
-                    or (item.get("mediaFeedType", "").lower() == preferred_stream)
-                ) and (
-                    not call_letters
-                    or (item.get("callLetters", "").lower() == call_letters)
-                ) and (
-                    not media_id
-                    or (item.get("mediaId", "").lower() == media_id)
-                ):
-                    logger.debug("found preferred stream")
-                    yield AttrDict(item)
-            else:
-                if len(epg["items"]):
-                    logger.debug("using non-preferred stream")
-                    yield AttrDict(epg["items"][0])
-        # raise StopIteration
-
+        return iter(self.LISTING_CLASS.from_json(self.IDENTIFIER, g)
+                         for g in self.game_map.values())
 
     def get_url(self, game_id,
+                media = None,
                 offset=None,
-                media_id = None,
                 preferred_stream=None,
                 call_letters=None,
                 output=None,
@@ -493,15 +655,17 @@ class BAMProviderMixin(abc.ABC):
         # sport_code = "mlb" # default sport is MLB
 
         # media_title = "MLBTV"
-        media_id = None
+        # media_id = None
         allow_stdout=False
 
-        schedule = self.schedule(
-            game_id = game_id
-        )
+        # schedule = self.schedule(
+        #     game_id = game_id
+        # )
 
-        date = schedule["dates"][-1]
-        game = date["games"][-1]
+        # date = schedule["dates"][-1]
+        # game = date["games"][-1]
+
+        game = self.game_data(game_id)
 
         away_team_abbrev = game["teams"]["away"]["team"]["abbreviation"].lower()
         home_team_abbrev = game["teams"]["home"]["team"]["abbreviation"].lower()
@@ -513,20 +677,19 @@ class BAMProviderMixin(abc.ABC):
                 else "home"
             )
 
-        try:
-            media = next(self.get_media(
-                game_id,
-                media_id = media_id,
-                # title=media_title,
-                preferred_stream=preferred_stream,
-                call_letters = call_letters
-            ))
-        except StopIteration:
-            raise SGException("no matching media for game %d" %(game_id))
 
-        # media_id = media["mediaId"] if "mediaId" in media else media["guid"]
-
-        media_state = media["mediaState"]
+        if not media:
+            try:
+                media = next(self.get_media(
+                    game_id,
+                    # media_id = media_id,
+                    # title=media_title,
+                    preferred_stream=preferred_stream,
+                    call_letters = call_letters
+                ))
+                # raise Exception(media)
+            except StopIteration:
+                raise SGStreamNotFound("no matching media for game %d" %(game_id))
 
         # Get any team-specific profile overrides, and apply settings for them
         profiles = tuple([ list(d.values())[0]
@@ -544,16 +707,21 @@ class BAMProviderMixin(abc.ABC):
                 self.session.proxies = old_proxies
 
         if "playbacks" in media:
-            playback = media["playbacks"][0]
-            media_url = playback["location"]
+            playback = next(p for p in media["playbacks"]
+                            if p["name"] == "HTTP_CLOUD_WIRED_60")
+
+            try:
+                media_url = playback["url"]
+            except:
+                from pprint import pformat
+                raise Exception(pformat(media))
         else:
             stream = self.session.get_stream(media)
-
             try:
                 # media_url = stream["stream"]["complete"]
                 media_url = stream.url
             except (TypeError, AttributeError):
-                raise SGException("no stream URL for game %d" %(game_id))
+                raise SGException("no stream URL for game %d, %s" %(game_id))
 
         return media_url
 
@@ -571,6 +739,9 @@ class BAMProviderMixin(abc.ABC):
 
         game_number = 1
         game_date = None
+        team = None
+
+        game_date = datetime.now().date()
 
         if isinstance(identifier, int):
             game_id = identifier
@@ -582,17 +753,24 @@ class BAMProviderMixin(abc.ABC):
                 try:
                     (game_date, team) = identifier.split(".")
                 except ValueError:
-                    game_date = identifier
-                    self.filters["date"].value = dateutil.parser.parse(game_date)
-                    raise SGIncompleteIdentifier
+                    try:
+                        game_date = dateutil.parser.parse(identifier).date()
+                    except ValueError:
+                        # assume it's a team code with today's date
+                        team = identifier
+                    # raise SGIncompleteIdentifier
 
             except AttributeError:
+                pass
+
+            self.filters["date"].value = game_date
+
+            if not team:
                 raise SGIncompleteIdentifier
 
             if "-" in team:
                 (sport_code, team) = team.split("-")
 
-            game_date = dateutil.parser.parse(game_date)
             game_number = int(game_number)
             teams =  self.teams(season=game_date.year)
             team_id = teams.get(team)
@@ -623,40 +801,65 @@ class BAMProviderMixin(abc.ABC):
                     game_number, team, game_date)
                 )
 
-
-        return BAMMediaListing(game_id=game_id, title=f"{away_team}@{home_team}")
+        return self.new_listing(game_id=game_id, title=f"{away_team}@{home_team}")
 
     def on_select(self, widget, selection):
         self.open_watch_dialog(selection)
 
     def on_activate(self):
-        self.refresh()
-
+        # logger.info(f"activate: {self.filters.date.value}")
+        self.filters.date.changed()
+        # self.refresh()
+        # if not self.filters.date.value:
+        #     raise Exception
+        #     self.filters.date.value = datetime.now()
 
     def open_watch_dialog(self, selection):
-        media = list(self.get_media(selection["game_id"]))
-        dialog = WatchDialog(self,
-                             selection,
-                             media_title = self.MEDIA_TITLE,
-                             default_resolution = self.filters.resolution.value,
-                             watch_live = self.filters.live_stream.value == "live"
-        )
-        self.view.open_popup(dialog, width=30, height=20)
+        # media = list(self.get_media(selection["game_id"]))
+        try:
+            dialog = WatchDialog(
+                self,
+                selection,
+                media_title = self.MEDIA_TITLE,
+                default_resolution = self.filters.resolution.value,
+                watch_live = self.filters.live_stream.value == "live"
+            )
+            self.view.open_popup(dialog, width=80, height=15)
+        except SGStreamNotFound:
+            logger.warn(f"no stream found for game {selection['game_id']}")
+
 
         # self.play(selection)
 
-    def get_source(self, selection):
-        game_id = selection.get("game_id")
-        return BAMMediaSource(self.get_url(game_id), media_type="video")
+    def get_source(self, selection, media_id=None, **kwargs):
+        try:
+            selected_media = next(m for m in selection.media if m.media_id == media_id)
+        except StopIteration:
+            selected_media = selection.media[0]
+        return selected_media
+        # game_id = selection.get("game_id")
+        # return BAMMediaSource(
+        #     game_id = game_id,
+        #     media_id = media.media_id,
+        #     # self.get_url(game_id, media=media),
+        #     media_type = media_type,
+        #     state = media.state
+        # )
 
     def play_args(self, selection, **kwargs):
 
         source, kwargs = super().play_args(selection, **kwargs)
 
         # kwargs["resolution"] = self.filters.resolution.value
+        media_type = kwargs.pop("media_type", None)
+        # don't use video resolution for audio feeds
+        if media_type == "audio":
+            kwargs["resolution"] = "best"
+
         offset = kwargs.pop("offset", None)
         if offset:
-            if (selection.attrs.state == "MEDIA_ON"): # live stream
+            # raise Exception(selection)
+            if (source.state == "live"): # live stream
                 logger.debug("live stream")
                 # calculate HLS offset, which is negative from end of stream
                 # for live streams
@@ -666,9 +869,21 @@ class BAMProviderMixin(abc.ABC):
                 offset_delta = (
                     datetime.now(pytz.utc)
                     - start_time.astimezone(pytz.utc)
-                    + (timedelta(seconds=-offset))
+                    - (timedelta(seconds=offset))
                 )
+                # offset_delta = (timedelta(seconds=-offset))
+                # raise Exception(
+                #     start_time,
+                #     start_time.astimezone(pytz.utc),
+                #     datetime.now(pytz.utc),
+                #     datetime.now(pytz.utc) - start_time.astimezone(pytz.utc),
+                #     (timedelta(seconds=-offset)),
+                #     offset,
+                #     offset_delta,
+                #     offset_delta.seconds,
+                # )
             else:
+                # raise Exception
                 logger.debug("recorded stream")
                 offset_delta = timedelta(seconds=offset)
 

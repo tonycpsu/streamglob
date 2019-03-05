@@ -54,9 +54,11 @@ def valid_date(s):
         raise argparse.ArgumentTypeError(msg)
 
 def format_datetime(t):
-    return t.strftime("%Y-%m-%d %H:%M:%S")
+    return t.strftime("%Y-%m-%d %H:%M:%S") if t is not None else ""
 
 def format_timedelta(td):
+    if td is None:
+        return ""
     days = td.days
     hours, rem = divmod(td.seconds, 3600)
     minutes, seconds = divmod(rem, 60)

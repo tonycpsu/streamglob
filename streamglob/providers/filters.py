@@ -16,9 +16,11 @@ from ..widgets import *
 from .widgets import *
 from ..exceptions import *
 
-class Filter(object):
+
+class Filter(Observable):
 
     def __init__(self, provider, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.provider = provider
 
     @property
@@ -27,17 +29,44 @@ class Filter(object):
 
     @value.setter
     def value(self, value):
+        # logger.info(f"filter {self} = {value}")
+        changed = (self.widget.value != value)
+        # self.widget.set_value(value)
         self.widget.value = value
+        if changed and self.provider.is_active:
+        # if changed
+            self.changed()
+
+
+class MaybeLabeledWidget(urwid.WidgetWrap):
+
+    def __init__(self, widget, label=None, sizing=("weight", 1)):
+        self.widget = widget
+
+        self.innerwidget = self.widget
+        if label:
+            label_text = f"{label.replace('_', ' ').title()}: "
+            self._text = urwid.Text(label_text)
+            self._columns = urwid.Columns([
+                ("pack", self._text),
+            ], dividechars=1)
+            self._columns.contents += [
+                (widget, self._columns.options(*sizing)),
+            ]
+            # self._columns.selectable = lambda: True
+            self._columns.focus_position = 1
+            self.innerwidget = self._columns
+        return super().__init__(self.innerwidget)
 
 
 class WidgetFilter(Filter):
 
     def __init__(self, provider, label=None,  hidden=False, *args, **kwargs):
-        super().__init__(provider)
-        self._label = label
+        if label is not None: self._label = label
         self.hidden = hidden
         self._placeholder = None
         self._widget = None
+        super().__init__(provider)
 
     @property
     def widget(self):
@@ -45,28 +74,17 @@ class WidgetFilter(Filter):
             self._widget = self.WIDGET_CLASS(
                 *self.widget_args, **self.widget_kwargs
             )
+            if isinstance(self._widget, Observable):
+                self._widget.connect("changed", lambda v: self.changed())
+                # self.changed()
         return self._widget
 
     @property
     def placeholder(self):
         if not self._placeholder:
-            # self.widget = self.WIDGET_CLASS(
-            #     *self.widget_args, **self.widget_kwargs
-            # )
-
-            self.innerwidget = self.widget
-
-            if self._label:
-                self._text = urwid.Text(f"{self._label.replace('_', ' ').title()}: ")
-                self._columns = urwid.Columns([
-                    ("pack", self._text),
-                ])
-                self._columns.contents += [
-                    (self.widget, self._columns.options(*self.widget_sizing(self.widget))),
-                ]
-                self._columns.selectable = lambda: True
-                self._columns.focus_position = 1
-                self.innerwidget = self._columns
+            self.innerwidget = MaybeLabeledWidget(
+                self.widget, self._label, sizing=self.widget_sizing(self.widget)
+            )
             self._placeholder = urwid.WidgetPlaceholder(self.innerwidget)
             if self.hidden:
                 self.hide()
@@ -110,6 +128,11 @@ class IntegerTextFilter(TextFilter):
 
     WIDGET_CLASS = IntegerTextFilterWidget
 
+    @property
+    def widget_kwargs(self):
+        return dict(align="right")
+
+
 class DateDisplay(urwid.WidgetWrap):
 
     def __init__(self, initial_date, date_format=None, selectable=False):
@@ -120,21 +143,21 @@ class DateDisplay(urwid.WidgetWrap):
         else:
             self.widget = urwid.Text("")
         super().__init__(self.widget)
-        self.date = self.initial_date
+        self.value = self.initial_date
 
     @property
-    def date(self):
+    def value(self):
         return self._date
 
-    @date.setter
-    def date(self, value):
+    @value.setter
+    def value(self, value):
         self._date = value
         self.widget.set_text(self._date.strftime(self.date_format))
 
 
-class DateFilterWidget(urwid.WidgetWrap):
+class DateFilterWidget(Observable, urwid.WidgetWrap):
 
-    signals = ["change"]
+    # signals = ["change"]
 
     def __init__(self, initial_date=None, date_format=None):
 
@@ -148,7 +171,7 @@ class DateFilterWidget(urwid.WidgetWrap):
         #     highlight_prop=("dp_highlight_focus", "dp_highlight_offFocus")
         # )
         self.date_picker = DateDisplay(self.initial_date, selectable=True)
-        self.button = urwid.Button("OK", on_press=lambda w: self.date_changed())
+        # self.button = urwid.Button("OK", on_press=lambda w: self.date_changed())
         self.columns = urwid.Columns([
             # (6, urwid.Padding(urwid.Text(""))),
             (40, self.date_picker),
@@ -161,39 +184,47 @@ class DateFilterWidget(urwid.WidgetWrap):
         return True
 
     @property
-    def date(self):
-        return self.date_picker.date
+    def value(self):
+        return self.date_picker.value
 
-    @date.setter
-    def date(self, value):
-        self.date_picker.date = value
-        self.date_changed()
+    @value.setter
+    def value(self, value):
+        self.date_picker.value = value
+        # logger.info("DateFilterWidget set value")
+        self.changed()
+        # self.date_changed()
 
     def reset(self):
-        self.date = self.initial_date
+        self.value = self.initial_date
 
     def cycle_day(self, n=1):
-        d = self.date + timedelta(days=n)
-        self.date_picker.date = d
-        self.date_changed()
+        d = self.value + timedelta(days=n)
+        self.value = d
+        # self.date_picker.date = d
+        # self.date_changed()
 
     def cycle_week(self, n=1):
-        d = self.date + timedelta(weeks=n)
-        self.date_picker.date = d
-        self.date_changed()
+        d = self.value + timedelta(weeks=n)
+        # self.date_picker.date = d
+        self.value = d
+
+        # self.date_changed()
 
     def cycle_month(self, n=1):
-        d = self.date + relativedelta(months=n)
-        self.date_picker.date = d
-        self.date_changed()
+        d = self.value + relativedelta(months=n)
+        self.value = d
+        # self.date_picker.date = d
+        # self.date_changed()
 
     def cycle_year(self, n=1):
-        d = self.date + relativedelta(years=n)
-        self.date_picker.date = d
-        self.date_changed()
+        d = self.value + relativedelta(years=n)
+        self.value = d
+        # self.date_picker.date = d
+        # self.date_changed()
 
     def date_changed(self):
-        self._emit("change", self, self.date)
+        self.changed()
+        # self._emit("change", self, self.value)
 
     def keypress(self, size, key):
         # key = super(DateFilterWidget, self).keypress(size, key)
@@ -232,14 +263,6 @@ class DateFilter(WidgetFilter):
 
     def reset(self):
         self.widget.reset()
-
-    @property
-    def value(self):
-        return self.widget.date
-
-    @value.setter
-    def value(self, value):
-        self.widget.date = value
 
     def cycle(self, step=1):
         if isinstance(step, int):
@@ -281,19 +304,19 @@ class ListingFilter(WidgetFilter, abc.ABC):
     def label(self, value):
         self.widget.select_label(value)
 
-    @property
-    def value(self):
-        return self.widget.selected_value
+    # @property
+    # def value(self):
+    #     return self.widget.selected_value
 
-    @value.setter
-    def value(self, value):
-        try:
-            self.widget.select_value(value)
-        except StopIteration:
-            try:
-                self.widget.select_label(value)
-            except:
-                raise SGInvalidFilterValue(f"Filter value {value} not valid")
+    # @value.setter
+    # def value(self, value):
+    #     try:
+    #         self.widget.select_value(value)
+    #     except StopIteration:
+    #         try:
+    #             self.widget.select_label(value)
+    #         except:
+    #             raise SGInvalidFilterValue(f"Filter value {value} not valid")
 
     def cycle(self, step=1):
         self.widget.cycle(step)
@@ -336,9 +359,13 @@ class ConfigFilter(ListingFilter, abc.ABC):
         elif isinstance(cfg, list):
             return AttrDict(items, **AttrDict([ (i, i) for i in cfg ]))
 
-    @property
-    def widget_sizing(self):
-        return lambda w: ("given", 40)
+    # @property
+    # def widget_kwargs(self):
+    #     return {"label": "foo"}
+
+    # @property
+    # def widget_sizing(self):
+    #     return lambda w: ("given", 40)
 
 
 

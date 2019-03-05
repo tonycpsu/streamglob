@@ -1,10 +1,14 @@
 from ..state import *
 
 from .base import *
+
+from dataclasses import *
 import abc
 
-class LiveStreamMediaListing(MediaListing):
-    pass
+@dataclass
+class LiveStreamMediaListing(model.ContentMediaListing):
+
+    channel: str = None
 
 class ChannelsFilter(ConfigFilter):
 
@@ -99,7 +103,7 @@ class LiveStreamProvider(BackgroundTasksMixin, BaseProvider):
             feed = self.CHANNEL_CLASS.get(locator=locator)
             if not feed:
                 feed = self.CHANNEL_CLASS(
-                    provider_name = self.IDENTIFIER,
+                    provider_id = self.IDENTIFIER,
                     name = name,
                     locator=self.filters.channel[name]
                     # **self.feed_attrs(name)
@@ -129,17 +133,10 @@ class LiveStreamProvider(BackgroundTasksMixin, BaseProvider):
             if not channel:
                 raise Exception
 
-            s = self.check_channel(locator)
+            listing = self.check_channel(locator)
             channel.updated = datetime.now()
-            if s and s.channel not in [l.channel for l in self.live_channels]:
-                listing_cls = getattr(
-                    self, "LISTING_CLASS", LiveStreamMediaListing
-                )
-                self.live_channels.append(
-                    listing_cls(
-                        s
-                    )
-                )
+            if listing and listing.channel not in [l.channel for l in self.live_channels]:
+                self.live_channels.append(listing)
 
         self.view.refresh()
 

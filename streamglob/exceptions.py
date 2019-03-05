@@ -15,3 +15,12 @@ class SGIncompleteIdentifier(SGException):
 
 class SGIncompleteSpecifier(SGException):
     pass
+
+class SGStreamNotFound(SGException):
+    pass
+
+class SGFileExists(SGException):
+    pass
+
+class SGInvalidFilenameTemplate(SGException):
+    pass

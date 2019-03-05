@@ -1,8 +1,138 @@
-
 import urwid
 import panwid
+from orderedattrdict import AttrDict, DefaultAttrDict
 
-class BaseDropdown(panwid.Dropdown):
+class Observable(object):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.callbacks = DefaultAttrDict(list)
+
+    def connect(self, event, callback):
+        self.callbacks[event].append(callback)
+        # logger.info(f"{self.__class__.__name__}, {self.callbacks}")
+
+    def notify(self, event, *args):
+        # logger.info(self.callbacks)
+        for fn in self.callbacks[event]:
+            # logger.info(f"callback: {event}, {fn}")
+            # raise Exception(fn, args)
+            fn(*args)
+
+    def changed(self):
+        self.notify("changed", self.value)
+
+    def selected(self):
+        self.notify("selected")
+
+
+class IntEdit(urwid.Edit):
+
+    def valid_char(self, ch):
+        return len(ch)==1 and ch in "0123456789"
+
+
+class TextFilterWidget(Observable, urwid.WidgetWrap):
+
+    signals = ["change", "select"]
+
+    EDIT_WIDGET = urwid.Edit
+
+    def __init__(self, value, align="left", padding=1):
+        self.edit = self.EDIT_WIDGET(align=align, wrap="clip")
+        # FIXME: use different attributes
+        self.padding = urwid.Padding(self.edit, left=padding, right=padding)
+        self.attr = urwid.AttrMap(self.padding, "dropdown_text", "dropdown_focused")
+        super().__init__(self.attr)
+        # urwid.connect_signal(self.edit, "select", lambda s, w: self.selected)
+        self.value = value
+
+    def keypress(self, size, key):
+        if key == "enter":
+            if len(self.edit.get_edit_text()):
+                self.selected()
+                # self._emit("select", self.edit.get_edit_text()[0])
+        else:
+            return super().keypress(size, key)
+
+    @property
+    def value(self):
+        return self.edit.get_text()[0]
+
+    @value.setter
+    def value(self, value):
+        # t = list(self.get_text())
+        self.edit.set_edit_text(value)
+        self.edit.set_edit_pos(len(str(self.value))-1)
+
+
+class IntegerTextFilterWidget(TextFilterWidget):
+
+    EDIT_WIDGET = IntEdit
+
+    def __init__(self, default=0, minimum=0, maximum=None, big_step=10):
+        self.minimum = minimum
+        self.maximum = maximum
+        self.big_step = big_step
+
+        self.default = default
+        if self.minimum is not None:
+            self.default = max(self.minimum, self.default)
+        if self.maximum is not None:
+            self.default = min(self.maximum, self.default)
+        super().__init__(str(self.default))
+
+    @property
+    def value(self):
+        v = super().value
+        try:
+            return int(v)
+        except ValueError:
+            return 0
+
+    @value.setter
+    def value(self, value):
+        # https://gitlab.gnome.org/GNOME/gnome-music/snippets/31
+        super(IntegerTextFilterWidget, self.__class__).value.fset(self, str(value))
+
+    def cycle(self, step):
+        v = self.value + step
+        if (self.minimum is not None and v < self.minimum):
+            self.value = self.minimum
+        elif (self.maximum is not None and v > self.maximum):
+            self.value = self.maximum
+        else:
+            self.value = v
+
+    def keypress(self, size, key):
+
+        if key == "ctrl up":
+            self.cycle(1)
+        elif key == "ctrl down":
+            self.cycle(-1)
+        elif key == "page up":
+            self.cycle(self.big_step)
+        elif key == "page down":
+            self.cycle(-self.big_step)
+        elif key == "right" and self.edit.edit_pos==len(str(self.value))-1:
+            self.edit.set_edit_pos(len(str(self.value)))
+            super().keypress(size, "right")
+            # self.edit.set_edit_pos(len(str(self.value))-1)
+        #     return super().keypress(size, "next selectable")
+        else:
+            return super().keypress(size, key)
+
+
+
+class BaseDropdown(Observable, panwid.Dropdown):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        urwid.connect_signal(
+            self,
+            "change",
+            lambda s, w, v: self.changed()
+        )
 
     def keypress(self, size, key):
 

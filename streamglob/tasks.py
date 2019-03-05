@@ -7,6 +7,7 @@ import dataclasses
 
 from .player import Player, Downloader
 from .state import *
+from .exceptions import *
 from . import utils
 from . import config
 from . import model
@@ -46,7 +47,7 @@ class TaskManager(object):
 
         self.current_task_id +=1
         task.task_id = self.current_task_id
-        task.action = "play"
+        # task.action = "play"
         task.args = (player_spec, helper_spec)
         task.kwargs = kwargs
         task._details_open = True
@@ -70,7 +71,7 @@ class TaskManager(object):
     def download(self, task, filename, helper_spec, **kwargs):
         self.current_task_id +=1
         task.task_id = self.current_task_id
-        task.action = "download"
+        # task.action = "download"
         task.args = (filename, helper_spec)
         task.kwargs = kwargs
         self.to_download.append(task)
@@ -113,28 +114,31 @@ class TaskManager(object):
                     await asyncio.sleep(self.QUEUE_INTERVAL)
 
             task = await wait_for_item()
-            logger.info(task)
 
-            logger.info(f"{'playing' if task.action == 'play' else 'downloading'} task: {task}")
-
-            if task.action == "play":
+            if isinstance(task, model.PlayMediaTask):
                 program = await Player.play(task, *task.args, **task.kwargs)
-            elif task.action == "download":
-                program = await Downloader.download(task, *task.args, **task.kwargs)
+            elif isinstance(task, model.DownloadMediaTask):
+                try:
+                    program = await Downloader.download(task, *task.args, **task.kwargs)
+                except SGFileExists as e:
+                    logger.warn(e)
+                    continue
             else:
                 raise NotImplementedError
             task.program = program
-            logger.info(f"program: {task.program}")
             task.proc = program.proc
-            logger.info(f"proc: {task.proc}")
+            logger.debug(f"proc: {task.proc}")
             task.pid = program.proc.pid
+            logger.debug(f"pid: {task.pid}")
             # logger.info(task.pid)
             task.started = datetime.now()
-            task.elapsed = timedelta(9)
-            if task.action == "play":
+            task.elapsed = timedelta(0)
+            if isinstance(task, model.PlayMediaTask):
                 self.playing.append(task)
-            elif task.action == "download":
+            elif isinstance(task, model.DownloadMediaTask):
                 self.active.append(task)
+            else:
+                raise NotImplementedError
             await asyncio.sleep(self.QUEUE_INTERVAL)
             # self.pending.task_done()
 
@@ -144,7 +148,6 @@ class TaskManager(object):
             self.playing = list(filter(
                 lambda s: s.proc.returncode is None,
                 self.playing))
-
             # if len(self.playing):
             #     logger.info(type(self.playing[0]))
 
@@ -153,6 +156,7 @@ class TaskManager(object):
                 self.active)
             self.done += TaskList(done)
             self.active = TaskList(active)
+            # logger.info(f"self.done: {self.done}, self.active: {self.active}")
 
             for s in self.active:
                 s.elapsed = datetime.now() - s.started

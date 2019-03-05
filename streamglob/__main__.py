@@ -247,7 +247,7 @@ class TasksDataTable(DataTable):
     COLUMN_DEFS = AttrDict([
         (c.name, c)
         for c in [
-                DataTableColumn("action", width=8),
+                # DataTableColumn("action", width=8),
                 DataTableColumn("program", width=16, format_fn = lambda p: p.cmd if p else ""),
                 DataTableColumn("started", width=20, format_fn = utils.format_datetime),
                 DataTableColumn("elapsed",  width=14, align="right",
@@ -275,16 +275,21 @@ class TasksDataTable(DataTable):
                     truncate=True
                 ),
                 DataTableColumn(
-                    "size", width=8, format_record=True, align="right",
-                    format_fn = lambda r: f"{r.program.progress.get('size', '')}"
+                    "size", width=8, align="right",
+                    value = lambda t, r: f"{r.program.progress.get('size', '')}"
+                    # value = foo,
                 ),
                 DataTableColumn(
-                    "pct", width=5, format_record=True, align="right",
-                    format_fn = lambda r: f"{r.program.progress.get('pct', '').split('.')[0]}%"
+                    "pct", width=5, align="right",
+                    # format_fn = lambda r: f"{r.program.progress.get('pct', '').split('.')[0]}%"
+                    value = lambda t, r: f"{r.program.progress.get('pct', '').split('.')[0]}%"
+                    # value = foo,
                 ),
                 DataTableColumn(
-                    "rate", width=8, format_record=True, align="right",
-                    format_fn = lambda r: f"{r.program.progress.get('rate')}"
+                    "rate", width=8, align="right",
+                    # format_fn = lambda r: f"{r.program.progress.get('rate')}"
+                    value = lambda t, r: f"{r.program.progress.get('rate')}"
+                    # value = foo,
                 )
         ]
     ])
@@ -359,7 +364,7 @@ class ActiveDownloadsDataTable(TasksDataTable):
                "started", "elapsed", "size", "pct", "rate", "dest"]
 
     def query(self, *args, **kwargs):
-        return [ t for t in state.task_manager.active if t.action == "download" ]
+        return [ t for t in state.task_manager.active if isinstance(t, model.DownloadMediaTask) ]
 
     def keypress(self, size, key):
 
@@ -412,12 +417,15 @@ class TasksView(BaseView):
 
 def run_gui(provider, **kwargs):
 
-    log_file = os.path.join(config.CONFIG_DIR, f"{PACKAGE_NAME}.log")
 
     ulh = UrwidLoggingHandler()
-    setup_logging(options.verbose - options.quiet,
-                  handlers=[logging.FileHandler(log_file), ulh],
-                  quiet_stdout=True)
+
+    set_stdout_level(logging.CRITICAL)
+    add_log_handler(ulh)
+
+    log_file = os.path.join(config.CONFIG_DIR, f"{PACKAGE_NAME}.log")
+    fh = logging.FileHandler(log_file)
+    add_log_handler(fh)
 
     entries = {}
     for (n, f, b) in  [
@@ -467,7 +475,6 @@ def run_gui(provider, **kwargs):
         else:
             return False
 
-
     state.loop = urwid.MainLoop(
         pile,
         palette,
@@ -489,6 +496,7 @@ def run_gui(provider, **kwargs):
     state.loop.run()
 
 def run_cli(provider, selection, **kwargs):
+
 
     # raise Exception(selection)
     # provider.play(selection)
@@ -532,14 +540,9 @@ def main():
 
     state.options = AttrDict(vars(options))
 
-    logger = logging.getLogger(config.PACKAGE_NAME)
+    logger = logging.getLogger()
 
     providers.load()
-
-    sh = logging.StreamHandler()
-    setup_logging(options.verbose - options.quiet,
-                  quiet_stdout=True)
-    logger.debug(f"{PACKAGE_NAME} starting")
 
     model.init()
 
@@ -551,6 +554,10 @@ def main():
         )
 
     spec = None
+
+    sh = logging.StreamHandler()
+    state.logger = setup_logging(options.verbose - options.quiet, quiet_stdout=False)
+    logger.debug(f"{PACKAGE_NAME} starting")
     provider, selection, opts = providers.parse_spec(options.spec)
 
     state.asyncio_loop = asyncio.get_event_loop()

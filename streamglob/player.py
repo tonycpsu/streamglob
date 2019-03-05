@@ -13,6 +13,7 @@ import distutils.spawn
 import argparse
 import re
 from dataclasses import *
+from collections.abc import MutableMapping
 
 from orderedattrdict import AttrDict, Tree
 import youtube_dl
@@ -44,6 +45,8 @@ class Program(abc.ABC):
     SUBCLASSES = Tree()
 
     PLAYER_INTEGRATED=False
+
+    INTEGRATED_HELPERS = []
 
     MEDIA_TYPES = set()
 
@@ -99,20 +102,33 @@ class Program(abc.ABC):
 
 
     @classmethod
-    def get(cls, spec=None, *args, **kwargs):
+    def get(cls, spec, *args, **kwargs):
 
         global PROGRAMS
 
-        if isinstance(spec, str):
-            # get the player by name
+        if spec is None:
+            return None
+        elif spec is True:
+            # get all known programs
+            return (
+                p.cls(p.path, **dict(p.cfg, **kwargs))
+                for n, p in PROGRAMS[cls].items()
+            )
+
+        elif isinstance(spec, str):
+            # get a program by name
             try:
                 p = PROGRAMS[cls][spec]
                 return iter([p.cls(p.path, **dict(p.cfg, **kwargs))])
             except KeyError:
                 raise SGException(f"Program {spec} not found")
 
-        elif isinstance(spec, dict):
+        elif isinstance(spec, list):
+            # get the listed programs by name
+            return [ cls.get(p) for p in spec ]
 
+        elif isinstance(spec, dict):
+            # get a program with a given configuration
             def check_cfg_key(cfg, v):
                 if not v:
                     return True
@@ -134,39 +150,54 @@ class Program(abc.ABC):
                 ])
             )
 
-        elif spec is None:
-            return (
-                p.cls(p.path, **dict(p.cfg, **kwargs))
-                for n, p in PROGRAMS[cls].items()
-            )
         else:
-            raise Exception
+            raise Exception(f"invalid program spec: {spec}")
         raise SGException(f"Program for {spec} not found")
 
     @classmethod
-    async def play(cls, source, player_spec=True, helper_spec=None, **kwargs):
+    async def play(cls, task, player_spec=True, helper_spec=None, **kwargs):
 
+        source = task.sources
         logger.debug(f"source: {source}, player: {player_spec}, helper: {helper_spec}")
-        helper = None
+
         player = next(cls.get(player_spec, no_progress=True))
-        if helper_spec:
-            if isinstance(helper_spec, str):
-                helper = next(Helper.get(helper_spec))
-            elif isinstance(helper_spec, dict):
-                if player.cmd in helper_spec:
-                    helper_name = helper_spec[player.cmd]
-                else:
-                    helper_name = helper_spec.get(None, None)
-                if helper_name:
-                    helper = next(Helper.get(helper_name))
+        if isinstance(helper_spec, MutableMapping):
+            # if helper spec is a dict, it maps players to helper programs
+            if player.cmd in helper_spec:
+                helper_spec = helper_spec[player.cmd]
+            else:
+                helper_spec= helper_spec.get(None, None)
+        # else:
+        #     # if helper is something else, resolve it, and get the default
+        #     # player for audio and video
+        #     player = next(cls.get(dict(media_types={"audio", "video"}),
+        #                           no_progress=True))
+
+        # FIXME: assumption if helper supports first source, it supports the rest
+        helper = Helper.get(helper_spec, task.sources[0].locator)
+
+        if helper and helper.cmd in player.INTEGRATED_HELPERS:
+            # if player integrates helper, use it instead of spawning
+            helper = None
+        # if helper_spec:
+        #     if isinstance(helper_spec, str):
+        #         helper = next(Helper.get(helper_spec))
+        #     elif isinstance(helper_spec, dict):
+        #         if player.cmd in helper_spec:
+        #             helper_name = helper_spec[player.cmd]
+        #         else:
+        #             helper_name = helper_spec.get(None, None)
+        #         if helper_name:
+        #             helper = next(Helper.get(helper_name))
 
         if helper:
             helper.source = source
             source = helper
 
         player.source = source
-        logger.info(f"playing {source}: player={player}, helper={helper}")
-        await state.asyncio_loop.create_task(player.run(**kwargs))
+        logger.info(f"player: {player.cmd}: helper={helper.cmd if helper else helper}, playing {source}")
+        task = player.run(**kwargs)
+        await state.asyncio_loop.create_task(task)
         return player
 
     @classmethod
@@ -271,9 +302,18 @@ class Program(abc.ABC):
 
         cmd = self.command + self.extra_args_pre
         if self.source_is_player:
-            self.source.stdout = subprocess.PIPE
+            read, write = os.pipe()
+            # self.source.stdout = asyncio.subprocess.PIPE#subprocess.PIPE
+            self.source.stdout = write
+            # self.source.stdout = subprocess.PIPE
             self.proc = await self.source.run(**kwargs)
-            self.stdin = self.proc.stdout
+            os.close(write)
+            self.stdin = read
+            self.stdout = subprocess.PIPE
+            # self.stdin = self.proc.stdout
+            # self.stdin = self.proc._transport._proc.stdout
+            # os.close(read)
+            # self.proc.stdout = await self.source.stdout.read()
         elif isinstance(self.source, model.MediaTask):
             cmd += [s.locator for s in self.source.sources]
 
@@ -281,6 +321,7 @@ class Program(abc.ABC):
             # cmd += self.source
             cmd += [s.locator for s in self.source]
         else:
+            # raise Exception
             # cmd += [self.source]
             cmd += [self.source.locator]
         cmd += self.extra_args_post
@@ -327,40 +368,66 @@ class Player(Program):
     pass
 
 class Helper(Program):
-    pass
+
+    @classmethod
+    def get(cls, spec, url=None):
+
+        if not spec:
+            return None
+
+        try:
+            return next(iter(
+                sorted((
+                    h for h in super().get(spec)
+                    if h.supports_url(url)),
+                    key = lambda h: spec.index(h.cmd)
+                       if h.cmd in spec else len(spec)+1
+                )
+            ))
+        except (TypeError, StopIteration):
+            return next(iter(super().get(spec)))
+
+
 
 class Downloader(Program):
 
     @classmethod
-    async def download(cls, source, outfile, helper_spec=None, **kwargs):
+    async def download(cls, task, outfile, helper_spec=None, **kwargs):
 
-        if helper_spec is None:
-            helper_spec = {}
+        if os.path.exists(outfile):
+            raise SGFileExists(f"File {outfile} already exists")
+        source = task.sources[0]
 
-        if isinstance(helper_spec, str):
-            downloader = next(Helper.get(helper_spec))
-        elif isinstance(helper_spec, dict):
-            helper_spec = [
-                h for h in list(AttrDict.fromkeys(helper_spec.values()))
-                if h
-            ]
+        downloader = Helper.get(helper_spec, source.locator)
+        logger.info(f"downloader: {downloader}")
 
-        # else:
-        #     raise NotImplementedError
-        try:
-            downloader = next(iter(
-                sorted((
-                    h for h in Helper.get()
-                    if h.supports_url(source.locator)),
-                    key = lambda h: helper_spec.index(h.cmd)
-                       if h.cmd in helper_spec else len(helper_spec)+1
-                )
-            ))
-        except (TypeError, StopIteration):
-            downloader = next(cls.get())
+        # if helper_spec is None:
+        #     helper_spec = {}
+
+        # if isinstance(helper_spec, str):
+        #     downloader = next(Helper.get(helper_spec))
+        # elif isinstance(helper_spec, dict):
+        #     helper_spec = [
+        #         h for h in list(AttrDict.fromkeys(helper_spec.values()))
+        #         if h
+        #     ]
+
+        # # else:
+        # #     raise NotImplementedError
+        # try:
+        #     downloader = next(iter(
+        #         sorted((
+        #             h for h in Helper.get()
+        #             if h.supports_url(source.locator)),
+        #             key = lambda h: helper_spec.index(h.cmd)
+        #                if h.cmd in helper_spec else len(helper_spec)+1
+        #         )
+        #     ))
+        # except (TypeError, StopIteration):
+        #     downloader = next(cls.get())
 
         logger.info(f"{downloader} downloading {source.locator} to {outfile}")
-        downloader.source = source
+        downloader.source = task
         downloader.extra_args_post += ["-o", outfile]
         # downloader.run(**kwargs)
         # state.asyncio_loop.create_task(downloader.run(**kwargs))
@@ -378,7 +445,8 @@ class FEHPlayer(Player, MEDIA_TYPES={"image"}):
     pass
 
 class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
-    pass
+
+    INTEGRATED_HELPERS = ["youtube-dl"]
 
 class VLCPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
     pass
@@ -567,15 +635,17 @@ def main():
     parser = argparse.ArgumentParser()
     options, args = parser.parse_known_args()
 
-    downloader = Downloader.download(
-        model.MediaSource("https://www.youtube.com/watch?v=5aVU_0a8-A4"),
-        "foo.mp4",
-        "streamlink"
-    )
-    # import time; time.sleep(5)
 
-    # import time
-    state.asyncio_loop.create_task(go())
+    task = model.PlayMediaTask(
+        provider="rss",
+        title= "foo",
+        sources = [
+            model.MediaSource("rss", "https://www.youtube.com/watch?v=5aVU_0a8-A4")
+        ]
+    )
+    # player = Player.play(task, {"media_type" "text"}, True)
+
+    state.asyncio_loop.create_task(Player.play(task, {"media_type" "text"}, True))
     state.asyncio_loop.run_forever()
     # for line in iter(downloader.proc.stdout.readline, b""):
     #     print(line)

@@ -15,6 +15,96 @@ from .filters import *
 from ..exceptions import *
 from ..state import *
 
+@dataclass
+class NHLMediaSource(BAMMediaSource):
+
+    event_id: str = None
+
+class NHLMediaListing(BAMMediaListing):
+
+    @property
+    def line(self):
+
+        columns = [
+            DataTableColumn("team", width=6, label="", align="right", padding=1),
+        ]
+
+        line_score = self.game_data["linescore"]
+        away_team = self.game_data["teams"]["away"]["team"]["abbreviation"]
+        home_team = self.game_data["teams"]["home"]["team"]["abbreviation"]
+
+        hide_spoiler_teams = config.settings.profile.get("hide_spoiler_teams", [])
+        if isinstance(hide_spoiler_teams, bool):
+            self.hide_spoilers = hide_spoiler_teams
+        else:
+            self.hide_spoilers = set([away_team, home_team]).intersection(
+                set(hide_spoiler_teams))
+
+        if "teams" in line_score:
+            tk = line_score["teams"]
+        else:
+            tk = line_score
+
+        data = []
+        for s, side in enumerate(["away", "home"]):
+
+            i = -1
+            line = AttrDict()
+            if "periods" in line_score and isinstance(line_score["periods"], list):
+                for i, period in enumerate(line_score["periods"]):
+                    if not s:
+                        columns.append(
+                            DataTableColumn(str(i+1), label=str(i+1) if i < 3 else "O", width=3)
+                        )
+                        line.team = away_team
+                    else:
+                        line.team = home_team
+
+                    if self.hide_spoilers:
+                        setattr(line, str(i+1), "?")
+
+                    elif side in period:
+                        if isinstance(period[side], dict) and "goals" in period[side]:
+                            setattr(line, str(i+1), parse_int(period[side]["goals"]))
+                    else:
+                        setattr(line, str(i+1), "X")
+
+                for n in list(range(i+1, 3)):
+                    if not s:
+                        columns.append(
+                            DataTableColumn(str(n+1), label=str(n+1), width=3)
+                        )
+                    if self.hide_spoilers:
+                        setattr(line, str(n+1), "?")
+
+            if not s:
+                columns.append(
+                    DataTableColumn("empty", label="", width=3)
+                )
+
+            for stat in ["goals", "shotsOnGoal"]:
+                if not stat in tk[side]: continue
+
+                if not s:
+                    columns.append(
+                        DataTableColumn(stat, label=stat[0].upper(), width=3)
+                    )
+                if not self.hide_spoilers:
+                    setattr(line, stat, parse_int(tk[side][stat]))
+                else:
+                    setattr(line, stat, "?")
+
+
+            data.append(line)
+
+        return urwid.BoxAdapter(panwid.DataTable(columns, data=data), 3)
+
+    def extra_media_attributes(self, item):
+        return {
+            "event_id": item.get("eventId")
+        }
+
+
 
 class NHLBAMProviderData(BAMProviderData):
     pass
@@ -42,11 +132,13 @@ class NHLStreamSession(session.AuthenticatedStreamSession):
 
     def __init__(
             self,
+            provider_id,
             username, password,
             session_key=None,
             *args, **kwargs
     ):
         super(NHLStreamSession, self).__init__(
+            provider_id,
             username, password,
             *args, **kwargs
         )
@@ -132,13 +224,11 @@ class NHLStreamSession(session.AuthenticatedStreamSession):
 
         self.login()
 
-        event_id = media["eventId"]
-        if not self.session_key:
+        if not self.session_key and media.event_id is not None:
             logger.info("getting session key")
 
-
             params = {
-                "eventId": event_id,
+                "eventId": media.event_id,
                 "format": "json",
                 "platform": "WEB_MEDIAPLAYER",
                 "subject": "NHLTV",
@@ -160,7 +250,8 @@ class NHLStreamSession(session.AuthenticatedStreamSession):
             self.save()
 
         params = {
-            "contentId": media["mediaPlaybackId"],
+            # "contentId": media["mediaPlaybackId"],
+            "contentId": media.media_id,
             "playbackScenario": "HTTP_CLOUD_WIRED_WEB",
             "sessionKey": self.session_key,
             "auth": "response",
@@ -171,7 +262,10 @@ class NHLStreamSession(session.AuthenticatedStreamSession):
             url,
             params=params
         )
-        j = res.json()
+        try:
+            j = res.json()
+        except:
+            raise Exception(res.content)
         logger.trace(json.dumps(j, sort_keys=True,
                                    indent=4, separators=(',', ': ')))
 
@@ -180,7 +274,7 @@ class NHLStreamSession(session.AuthenticatedStreamSession):
                               for x in j["session_info"]["sessionAttributes"]
                               if x["attributeName"] == "mediaAuth_v2")
         except KeyError:
-            raise SGStreamSessionException(f"No stream found for event {event_id}")
+            raise SGStreamSessionException(f"No stream found for media {media.media_id}")
 
         self.cookies.set_cookie(
             Cookie(0, 'mediaAuth_v2', media_auth,
@@ -202,7 +296,7 @@ class NHLStreamSession(session.AuthenticatedStreamSession):
 class NHLLineScoreDataTable(DataTable):
 
     @classmethod
-    def from_json(cls, line_score,
+    def from_json(cls, game,
                      away_team=None, home_team=None,
                      hide_spoilers=False
     ):
@@ -210,6 +304,8 @@ class NHLLineScoreDataTable(DataTable):
         columns = [
             DataTableColumn("team", width=6, label="", align="right", padding=1),
         ]
+
+        line_score = game["linescore"]
 
         if "teams" in line_score:
             tk = line_score["teams"]
@@ -307,9 +403,11 @@ class NHLProvider(BAMProviderMixin,
         # "&expand=schedule.game.content.media.milestones"
     )
 
-    DATA_TABLE_CLASS = NHLLineScoreDataTable
+    # DATA_TABLE_CLASS = NHLLineScoreDataTable
 
     MEDIA_TITLE = "NHLTV"
+
+    MEDIA_ID_FIELD = "mediaPlaybackId"
 
     @classproperty
     def NAME(cls):

@@ -15,7 +15,8 @@ from .filters import *
 
 import youtube_dl
 
-class YoutubeMediaListing(MediaListing):
+@dataclass
+class YoutubeMediaListing(FeedMediaListing):
 
     @property
     def download_filename(self):
@@ -31,7 +32,7 @@ class YoutubeMediaListing(MediaListing):
             # youtube-dl generates a sane filename from the metadata by default
             return None
 
-
+@dataclass
 class YouTubeMediaSource(model.MediaSource):
 
     @property
@@ -74,7 +75,7 @@ class YouTubeSession(session.StreamSession):
                     url = f"https://youtu.be/{item['url']}"
                 )
 
-class YouTubeChannelsDropdown(urwid.WidgetWrap):
+class YouTubeChannelsDropdown(Observable, urwid.WidgetWrap):
 
     signals = BaseDropdown.signals
 
@@ -85,8 +86,10 @@ class YouTubeChannelsDropdown(urwid.WidgetWrap):
         signals = ["change"]
 
         self.dropdown = BaseDropdown(items, *args, **kwargs)
+        self.dropdown.connect("changed", self.on_channel_change)
         self.search_label = urwid.Text(self.SEARCH_LABEL)
         self.search_edit = TextFilterWidget("")
+        self.search_edit.connect("selected", self.on_edit_select)
         self.search_widget = urwid.Columns([
             ("pack", self.search_label),
             ("weight", 1, urwid.AttrMap(self.search_edit, "dropdown_text")),
@@ -97,24 +100,24 @@ class YouTubeChannelsDropdown(urwid.WidgetWrap):
             ("weight", 1, urwid.Padding(self.search_placeholder))
         ], dividechars=1)
         super().__init__(self.columns)
-        urwid.connect_signal(self.dropdown, "change", self.on_channel_change)
-        urwid.connect_signal(self.search_edit, "select", self.on_edit_select)
+        # urwid.connect_signal(self.dropdown, "change", self.on_channel_change)
+        # urwid.connect_signal(self.search_edit, "select", self.on_edit_select)
         self.hide_search()
 
     def __getattr__(self, attr):
         if attr in ["cycle", "select_label", "select_value", "selected_label", "items"]:
             return getattr(self.dropdown, attr)
-        raise AttributeError
 
-    def on_channel_change(self, source, dropdown, value):
+    def on_channel_change(self, value):
         if value == "search":
             self.show_search()
         else:
             self.hide_search()
-        self._emit("change", self.value)
+        self.changed()
+        # self._emit("change", self.value)
 
-    def on_edit_select(self, source, value):
-        self._emit("change", self.value)
+    def on_edit_select(self):
+        self.changed()
 
     def show_search(self):
         self.search_placeholder.original_widget = self.search_widget
@@ -124,7 +127,7 @@ class YouTubeChannelsDropdown(urwid.WidgetWrap):
 
     @property
     def search(self):
-        return self.search_edit.get_text()[0]
+        return self.search_edit.value
 
     @property
     def channel(self):
@@ -163,6 +166,11 @@ class YouTubeChannelsFilter(FeedsFilter):
     def channel(self):
         return self.widget.channel
 
+    @property
+    def widget_sizing(self):
+        return lambda w: ("given", 30)
+
+
 
 class YouTubeItem(model.MediaItem):
     pass
@@ -186,7 +194,7 @@ class YouTubeFeed(model.MediaFeed):
                     i = self.ITEM_CLASS(
                         feed=self,
                         content = YouTubeMediaSource.schema().dumps(
-                            [YouTubeMediaSource(url, media_type="video")],
+                            [self.provider.new_media_source(url, media_type="video")],
                             many=True
                         ),
                         **item
@@ -203,7 +211,7 @@ class YouTubeProvider(PaginatedProviderMixin,
 
     FILTERS = AttrDict([
         ("feed", YouTubeChannelsFilter),
-        ("status", ItemStatusFilter)
+        ("status", ItemStatusFilter),
     ])
 
     FEED_CLASS = YouTubeFeed
@@ -224,7 +232,7 @@ class YouTubeProvider(PaginatedProviderMixin,
     def listings(self, offset=None, limit=None, *args, **kwargs):
         # if self.filters.feed.value == "search":
         if self.filters.feed.channel == "search":
-            if len(self.filters.feed.search):
+            if self.filters.feed.search:
                 query = f"ytsearch{offset+self.view.table.limit}:{self.filters.feed.search}"
                 return [
                     SearchResult(r)

@@ -12,13 +12,16 @@ class PeriscopeSession(session.StreamSession):
         self.peri = pyperi.Peri(session=self)
 
 
-class PeriscopeMediaListing(MediaListing):
+@dataclass
+class PeriscopeMediaListing(FeedMediaListing):
+
+    is_live: bool = False
 
     @property
     def ext(self):
         return "mp4"
 
-
+@dataclass
 class PeriscopeMediaSource(model.MediaSource):
 
     @property
@@ -55,7 +58,7 @@ class PeriscopeFeed(model.MediaFeed):
                         dict(
                             title = item["status"].strip() or "-",
                             content = PeriscopeMediaSource.schema().dumps(
-                                [PeriscopeMediaSource(
+                                [self.provider.new_media_source(
                                     f"https://pscp.tv/w/{item['id']}",
                                     media_type="video")],
                                 many=True,

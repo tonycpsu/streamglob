@@ -5,14 +5,24 @@ import os
 from datetime import datetime, timedelta
 from dataclasses import *
 import typing
+import re
+import dataclasses_json
+from dataclasses_json import dataclass_json
 
+from orderedattrdict import AttrDict
 from pony.orm import *
 from pony.orm.core import EntityMeta
 
-from dataclasses_json import dataclass_json
+
+# monkey-patch
+from marshmallow import fields as mm_fields
+dataclasses_json.mm._type_to_cons.update({
+    typing.Any: mm_fields.Raw
+})
 
 from . import config
 from . import providers
+from .exceptions import *
 
 DB_FILE=os.path.join(config.CONFIG_DIR, "streamglob.sqlite")
 
@@ -80,19 +90,116 @@ class BaseDataClass:
         return len(self.keys())
 
 
+@dataclass
+class MediaListing(BaseDataClass):
+
+    provider_id: str
+    _attrs: AttrDict = field(default_factory=AttrDict)
+
+    # def __init__(self, provider_id, *args, **kwargs):
+    #     self.provider_id = provider_id
+    #     super().__init__()
+
+    def __getattr__(self, name, default=None):
+        if name != "_attrs":
+            return self._attrs.get(name, default)
+
+    TEMPLATE_RE=re.compile("\{((?!index)[^}]+)\}")
+
+    @property
+    def provider(self):
+        return providers.get(self.provider_id)
+        # return self.provider.NAME.lower()
+
+    @property
+    def default_name(self):
+        import time
+
+        if len(self.content) > 1:
+            raise NotImplementedError
+
+        for s in reversed(self.content[0].locator.split("/")):
+            if not len(s): continue
+            return "".join(
+                [c for c in s if c.isalpha() or c.isdigit() or c in [" ", "-"]]
+            ).rstrip()
+        return "untitled"
+
+    @property
+    def timestamp(self):
+        return datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    @property
+    def ext(self):
+        return f"{self.provider_id}_dl" # *shrug*
+
+
+    # def download_filename(self, index=None, ext=None):
+    def download_filename(self, index=None, feed=None, **kwargs):
+        outpath = (
+            self.provider.config.get_path("output.path")
+            or
+            config.settings.profile.get_path("output.path")
+            or
+            "."
+        )
+
+        template = (
+            self.provider.config.get_path("output.template")
+            or
+            config.settings.profile.get_path("output.template")
+        )
+
+        if template:
+            # template = template.replace("{", "{self."
+            template = self.TEMPLATE_RE.sub(r"{self.\1}", template)
+            # raise Exception(template)
+            try:
+                outfile = template.format(self=self, index=index)
+            except Exception as e:
+                logger.exception(e)
+                raise SGInvalidFilenameTemplate
+        else:
+            # template = "{self.provider.name.lower()}.{self.default_name}.{self.timestamp}.{self.ext}"
+            # template = "{self.provider}.{self.ext}"
+            template = "{self.provider}.{self.default_name}.{self.timestamp}.{self.ext}"
+            outfile = template.format(self=self)
+        # logger.info(f"template: {template}, outfile: {outfile}")
+        return os.path.join(outpath, outfile)
+
+
+@dataclass
+class ContentMediaListing(MediaListing):
+
+    content: typing.Any = None
+    title: str = None
+    created: datetime = None
+
 @dataclass_json
 @dataclass
 class MediaSource(BaseDataClass):
 
-    locator: str
-    media_type: typing.Optional[str] = None # Pony also uses Optional
+    # listing: MediaListing
+    # locator: str
+    # provider: typing.Any = None
+    provider_id: str
+    url: typing.Optional[str] = None # Pony also uses Optional
+    media_type: typing.Optional[str] = None
+
+    @property
+    def provider(self):
+        return providers.get(self.provider_id)
 
     @property
     def helper(self):
         return None
 
-    def __str__(self):
-        return self.locator
+    @property
+    def locator(self):
+        return self.url
+
+    # def __str__(self):
+    #     return self.locator
 
 
 @dataclass
@@ -101,15 +208,28 @@ class MediaTask(BaseDataClass):
     provider: str
     title: str
     sources: typing.List[MediaSource]
-    action: typing.Optional[str] = None
     task_id: typing.Optional[int] = None
+    args: typing.List[str] = field(default_factory=list)
+    kwargs: typing.Dict[str, str] = field(default_factory=AttrDict)
+    _details_open: bool = False
+
+@dataclass
+class ProgramMediaTask(MediaTask):
+
     program: typing.Optional[typing.Any] = None
     proc: typing.Optional[typing.Any] = None
     pid: typing.Optional[int] = None
     started: typing.Optional[datetime] = None
     elapsed: typing.Optional[timedelta] = None
-    _details_open: bool = False
 
+@dataclass
+class PlayMediaTask(ProgramMediaTask):
+    pass
+
+@dataclass
+class DownloadMediaTask(ProgramMediaTask):
+
+    dest: typing.Optional[str] = None
 
 class CacheEntry(db.Entity):
 
@@ -140,7 +260,7 @@ class MediaChannel(db.Entity):
 
     channel_id = PrimaryKey(int, auto=True)
     name = Optional(str, index=True)
-    provider_name = Required(str, index=True)
+    provider_id = Required(str, index=True)
     locator = Required(str)
     updated = Required(datetime, default=datetime.now)
     last_seen = Optional(datetime)
@@ -148,7 +268,7 @@ class MediaChannel(db.Entity):
 
     @property
     def provider(self):
-        return providers.get(self.provider_name)
+        return providers.get(self.provider_id)
 
     @property
     def session(self):
