@@ -38,8 +38,6 @@ class MLBMediaListing(BAMMediaListing):
             self.hide_spoilers = set([away_team, home_team]).intersection(
                 set(hide_spoiler_teams))
 
-        # logger.info(self.game_data)
-
         if "teams" in line_score:
             tk = line_score["teams"]
         else:
@@ -67,9 +65,6 @@ class MLBMediaListing(BAMMediaListing):
                     elif side in inning:
                         if isinstance(inning[side], dict) and "runs" in inning[side]:
                             setattr(line, str(i+1), parse_int(inning[side]["runs"]))
-                        # else:
-                        #     if "runs" in inning[side]:
-                        #         inning_score.append(parse_int(inning[side]))
                     else:
                         setattr(line, str(i+1), "X")
 
@@ -92,11 +87,11 @@ class MLBMediaListing(BAMMediaListing):
                 if not s:
                     columns.append(
                         DataTableColumn(stat, label=stat[0].upper(), width=3)
-                )
-                    if not self.hide_spoilers:
-                        setattr(line, stat, parse_int(tk[side][stat]))
-                    else:
-                        setattr(line, stat, "?")
+                    )
+                if not self.hide_spoilers:
+                    setattr(line, stat, parse_int(tk[side][stat]))
+                else:
+                    setattr(line, stat, "?")
 
             data.append(line)
 

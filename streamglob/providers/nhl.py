@@ -50,6 +50,7 @@ class NHLMediaListing(BAMMediaListing):
 
             i = -1
             line = AttrDict()
+
             if "periods" in line_score and isinstance(line_score["periods"], list):
                 for i, period in enumerate(line_score["periods"]):
                     if not s:
@@ -93,7 +94,6 @@ class NHLMediaListing(BAMMediaListing):
                     setattr(line, stat, parse_int(tk[side][stat]))
                 else:
                     setattr(line, stat, "?")
-
 
             data.append(line)
 
