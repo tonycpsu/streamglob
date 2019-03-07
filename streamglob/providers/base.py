@@ -6,7 +6,7 @@ import abc
 import asyncio
 import dataclasses
 
-from orderedattrdict import AttrDict, defaultdict, Tree
+from orderedattrdict import AttrDict, defaultdict
 from itertools import chain
 import re
 
@@ -19,101 +19,6 @@ from ..player import Player, Helper, Downloader
 from .. import model
 from .. import config
 from  ..utils import *
-
-
-# class MediaListing(AttrDict):
-
-#     __exclude_keys__ = {"default_name",
-#                         "timestamp",
-#                         "download_filename",
-#                         "ext"}
-
-#     TEMPLATE_RE=re.compile("\{((?!index|ext)[^}]+)\}")
-
-#     @property
-#     def provider_id(self):
-#         return self.provider.NAME.lower()
-
-#     @property
-#     def default_name(self):
-#         import time
-
-#         if len(self.content) > 1:
-#             raise NotImplementedError
-
-#         for s in reversed(self.content[0].locator.split("/")):
-#             if not len(s): continue
-#             return "".join(
-#                 [c for c in s if c.isalpha() or c.isdigit() or c in [" ", "-"]]
-#             ).rstrip()
-#         return "untitled"
-
-#     @property
-#     def timestamp(self):
-#         return datetime.now().strftime("%Y%m%d_%H%M%S")
-
-#     @property
-#     def ext(self):
-#         return f"{self.provider_id}_dl" # *shrug*
-
-
-#     def download_filename(self, index=None, ext=None):
-#         outpath = (
-#             self.provider.config.get_path("output.path")
-#             or
-#             config.settings.profile.get_path("output.path")
-#             or
-#             "."
-#         )
-
-#         template = (
-#             self.provider.config.get_path("output.template")
-#             or
-#             config.settings.profile.get_path("output.template")
-#         )
-
-#         if template:
-#             # template = template.replace("{", "{self."
-#             template = self.TEMPLATE_RE.sub(r"{self.\1}", template)
-#             # raise Exception(template)
-#             try:
-#                 outfile = template.format(self=self, index=index, ext=ext)
-#             except Exception as e:
-#                 raise
-#                 logger.info(f"template: {template}")
-#                 logger.exception(e)
-#                 return None
-#         else:
-#             raise Exception
-#             # template = "{self.provider.name.lower()}.{self.default_name}.{self.timestamp}.{self.ext}"
-#             # template = "{self.provider}.{self.ext}"
-#             template = "{self.provider_id}.{self.default_name}.{self.timestamp}.{self.ext}"
-#             outfile = template.format(self=self)
-#         return os.path.join(outpath, outfile)
-
-
-# FIXME: move
-def get_output_filename(game, station, resolution, offset=None):
-
-    try:
-        start_time = dateutil.parser.parse(
-            game["gameDate"]
-        ).astimezone(pytz.timezone("US/Eastern"))
-
-        game_date = start_time.date().strftime("%Y%m%d")
-        game_time = start_time.time().strftime("%H%M")
-        if offset:
-            game_time = "%s_%s" %(game_time, offset)
-        return "mlb.%s.%s@%s.%s.%s.ts" \
-               % (game_date,
-                  game["teams"]["away"]["team"]["fileCode"],
-                  game["teams"]["home"]["team"]["fileCode"],
-                  game_time,
-                  station.lower()
-                  )
-    except KeyError:
-        return "mlb.%d.%s.ts" % (game["gamePk"], resolution)
-
 
 class BaseProviderView(BaseView):
 
@@ -380,7 +285,7 @@ class BaseProvider(abc.ABC):
 
     @property
     def config(self):
-        return Tree(
+        return config.ConfigTree(
             config.settings.profile.providers.get(
                 self.IDENTIFIER, {}
             )
@@ -510,10 +415,7 @@ class BaseProvider(abc.ABC):
             # s.dest = filename
 
             # asyncio.create_task(Downloader.download(task, filename, helper_spec, **kwargs))
-
-            state.task_manager.download(
-                task, filename, helper_spec, **kwargs
-            )
+            state.task_manager.download(task, filename, helper_spec, **kwargs)
 
     def on_select(self, widget, selection):
         self.play(selection)

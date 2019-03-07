@@ -158,10 +158,12 @@ class TaskManager(object):
             self.active = TaskList(active)
             # logger.info(f"self.done: {self.done}, self.active: {self.active}")
 
-            for s in self.active:
+            for s in self.playing + self.active:
                 s.elapsed = datetime.now() - s.started
                 if hasattr(s.program, "update_progress"):
                     await s.program.update_progress()
+                if hasattr(s.program.source, "update_progress"):
+                    await s.program.source.update_progress()
 
             state.tasks_view.refresh()
             await asyncio.sleep(self.QUEUE_INTERVAL)

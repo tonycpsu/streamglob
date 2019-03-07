@@ -208,7 +208,6 @@ class BAMMediaListing(model.MediaListing):
             if i.media_id
             and i.state not in ["off", "done" ]
         ]
-        raise Exception(items)
         return items
 
     def extra_media_attributes(self, item):
@@ -423,7 +422,6 @@ class WatchDialog(BasePopUp):
                 selection,
                 # media = selected_media,
                 media_id = media_id,
-                # media_type = selected_media.media_type,
                 offset=self.offset_dropdown.selected_value,
                 resolution=self.resolution_dropdown.selected_value
             )
@@ -851,11 +849,10 @@ class BAMProviderMixin(abc.ABC):
         source, kwargs = super().play_args(selection, **kwargs)
 
         # kwargs["resolution"] = self.filters.resolution.value
-        media_type = kwargs.pop("media_type", None)
+        media_type = source.media_type
         # don't use video resolution for audio feeds
         if media_type == "audio":
             kwargs["resolution"] = "best"
-
         offset = kwargs.pop("offset", None)
         if offset:
             # raise Exception(selection)

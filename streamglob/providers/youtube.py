@@ -17,20 +17,19 @@ import youtube_dl
 
 @dataclass
 class YoutubeMediaListing(FeedMediaListing):
-
-    @property
-    def download_filename(self):
-
-        path = self._provider.config.get_path("output.path")
-        template = self._provider.config.get_path("output.template")
-        if template:
-            outfile = template.format_map(d)
-            return os.path.join(path, template)
-        elif path:
-            return path
-        else:
-            # youtube-dl generates a sane filename from the metadata by default
-            return None
+    pass
+    # FIXME:
+    # def download_filename(self, **kwargs):
+        # path = self.provider.config.get_path("output.path")
+        # template = self.provider.config.get_path("output.template")
+        # if template:
+        #     outfile = template.format_map(d)
+        #     return os.path.join(path, template)
+        # elif path:
+        #     return path
+        # else:
+        #     # youtube-dl generates a sane filename from the metadata by default
+        #     return None
 
 @dataclass
 class YouTubeMediaSource(model.MediaSource):

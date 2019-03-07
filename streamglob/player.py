@@ -13,9 +13,12 @@ import distutils.spawn
 import argparse
 import re
 from dataclasses import *
+import typing
 from collections.abc import MutableMapping
+import pty
 
 from orderedattrdict import AttrDict, Tree
+import bitmath
 import youtube_dl
 import streamlink
 
@@ -27,8 +30,11 @@ from .exceptions import *
 
 PROGRAMS = Tree()
 
+bitmath.format_string = "{value:.1f}{unit}"
+bitmath.bestprefix = True
+
 @dataclass
-class ProgramDef(object):
+class ProgramDef:
 
     cls: type
     name: str
@@ -39,6 +45,48 @@ class ProgramDef(object):
     def media_types(self):
         return self.cls.MEDIA_TYPES - set(getattr(self.cfg, "exclude_types", []))
 
+@dataclass
+class ProgressStats:
+
+    dled: typing.Optional[bitmath.Byte] = None
+    total: typing.Optional[bitmath.Byte] = None
+    remaining: typing.Optional[bitmath.Byte] = None
+    pct: typing.Optional[float] = None
+    rate: typing.Optional[bitmath.Byte] = None
+    eta: typing.Optional[timedelta] = None
+
+    @property
+    def size_downloaded(self):
+        if not self.size_total:
+            return self.dled
+
+        # ensure downloaded size is expressed in the same units as total
+        total_cls = type(self.size_total)
+        if self.dled:
+            return total_cls.from_other(self.dled)
+        elif self.total and self.pct:
+            return total_cls.from_other((self.total * self.pct))
+        return None
+
+    @property
+    def size_remaining(self):
+        if self.remaining:
+            return self.remaining
+        if self.total and self.pct:
+            return self.total * (1.0-self.pct)
+        return None
+
+    @property
+    def size_total(self):
+        return self.total.best_prefix(system=bitmath.SI) if self.total else None
+
+    @property
+    def percent_downloaded(self):
+        return self.pct*100 if self.pct else None
+
+    @property
+    def transfer_rate(self):
+        return self.rate.best_prefix(system=bitmath.SI) if self.rate else None
 
 class Program(abc.ABC):
 
@@ -78,7 +126,8 @@ class Program(abc.ABC):
         self.stderr = None
         self.proc = None
 
-        self.progress = {"pct": "0", "rate": ""}
+        self.progress = ProgressStats()
+        self.progress_stream = None
 
 
     @classproperty
@@ -282,16 +331,20 @@ class Program(abc.ABC):
         return [self.path] + self.args
 
     @property
-    def source_is_player(self):
+    def source_is_program(self):
         return isinstance(self.source, Program)
 
     @property
     def source_integrated(self):
-        return self.source_is_player and self.source.PLAYER_INTEGRATED
+        return self.source_is_program and self.source.PLAYER_INTEGRATED
 
     def process_kwargs(self, kwargs):
         pass
 
+    async def get_output(self):
+        # yield os.read(self.progress_stream, 1024).decode("utf-8")
+        for line in os.read(self.progress_stream, 1024).decode("utf-8").split("\n"):
+            yield line
 
     async def run(self, source=None, **kwargs):
 
@@ -301,7 +354,7 @@ class Program(abc.ABC):
         self.process_kwargs(kwargs)
 
         cmd = self.command + self.extra_args_pre
-        if self.source_is_player:
+        if self.source_is_program:
             read, write = os.pipe()
             # self.source.stdout = asyncio.subprocess.PIPE#subprocess.PIPE
             self.source.stdout = write
@@ -326,22 +379,36 @@ class Program(abc.ABC):
             cmd += [self.source.locator]
         cmd += self.extra_args_post
 
-        logger.debug(f"cmd: {cmd}")
 
         if not self.source_integrated:
+
+            pty_stream = None
+            logger.debug(f"cmd: {' '.join(cmd)}")
             spawn_func = asyncio.create_subprocess_exec
             # if self.FOREGROUND:
             #     spawn_func = subprocess.call
             # else:
             if not self.FOREGROUND:
                 # spawn_func = asyncio.create_subprocess_exec
+                if not self.no_progress:
+                    # self.stdout = subprocess.PIPE
+                    # self.stderr = subprocess.PIPE
+                    self.progress_stream, pty_stream = pty.openpty()
+                    import termios, fcntl, struct
+                    fcntl.ioctl(pty_stream, termios.TIOCSWINSZ,
+                                struct.pack('HHHH', 50, 100, 0, 0)
+                    )
+                    # fl = fcntl.fcntl(pty_stream, fcntl.F_GETFL)
+                    # fcntl.fcntl(pty_stream, fcntl.F_SETFL, fl | os.O_NONBLOCK)
+                    self.stdin = pty_stream
+                    self.stdout = pty_stream
+                    self.stderr = pty_stream
                 if self.stdin is None:
                     self.stdin = open(os.devnull, 'w')
-                # if not self.no_progress:
-                #     self.stdout = subprocess.PIPE
                 if self.stdout is None:
                     self.stdout = open(os.devnull, 'w')
-                self.stderr = open(os.devnull, 'w')
+                if self.stderr is None:
+                    self.stderr = open(os.devnull, 'w')
             else:
                 raise NotImplementedError
             try:
@@ -351,6 +418,8 @@ class Program(abc.ABC):
                     stdout = self.stdout,
                     stderr = self.stderr
                 )
+                if pty_stream:
+                    os.close(pty_stream)
             except SGException as e:
                 logger.warning(e)
 
@@ -365,7 +434,16 @@ class Program(abc.ABC):
 
 
 class Player(Program):
+
     pass
+    # def update_progress(self):
+
+    #     if self.source_is_program and hasattr(self.source, "update_progress"):
+    #         return self.source.update_progress()
+
+    #     return
+
+
 
 class Helper(Program):
 
@@ -397,6 +475,9 @@ class Downloader(Program):
         if os.path.exists(outfile):
             raise SGFileExists(f"File {outfile} already exists")
         source = task.sources[0]
+
+        if isinstance(helper_spec, MutableMapping):
+            helper_spec = helper_spec.get(None, helper_spec)
 
         downloader = Helper.get(helper_spec, source.locator)
         logger.info(f"downloader: {downloader}")
@@ -434,9 +515,9 @@ class Downloader(Program):
         await(downloader.run(**kwargs))
         return downloader
 
-    async def get_lines(self):
-        for line in iter(self.proc.stdout.readline, ""):
-            yield (await line).decode("utf-8")
+    # async def get_lines(self):
+    #     for line in iter(self.progress_stream.readline, ""):
+    #         yield (await line).decode("utf-8")
 
 
 
@@ -462,12 +543,12 @@ class YouTubeDLHelper(Helper, Downloader):
     PROGRESS_RE = re.compile(
         r"(\d+\.\d+)% of ~?(\d+.\d+\S+)(?: at\s+(\d+\.\d{2}\d*\S+) ETA (\d+:\d+))?"
     )
-    SIZE_RE = re.compile(r"(\d+\.\d+\w)")
 
     def __init__(self, path, no_progress=False, *args, **kwargs):
         super().__init__(path, *args, **kwargs)
         if not self.no_progress:
             self.extra_args_pre += ["--newline"]
+
 
     def process_kwargs(self, kwargs):
         if "format" in kwargs:
@@ -488,27 +569,22 @@ class YouTubeDLHelper(Helper, Downloader):
     async def update_progress(self):
 
         async def process_lines():
-            async for line in self.get_lines():
+            async for line in self.get_output():
                 if not line:
-                    return
+                    continue
                 # logger.info(line)
-                # logger.info(f"update_progress: {line}")
-                # print(out.decode("utf-8").split("\n"))
-                if line.startswith("[download] Destination:"):
-                    self.source.dest = line.split(":")[1].strip()#.decode("utf-8")
+                if "[download] Destination:" in line:
+                    self.source.dest = line.split(":")[1].strip()
                     continue
                 try:
-                    self.progress = dict(zip(
-                        ["pct", "size", "rate", "eta"],
-                        self.PROGRESS_RE.search(line).groups()
-                    ))
-                    self.progress["size"] = self.SIZE_RE.search(
-                        self.progress["size"]
-                    ).groups()[0]
-                    self.progress["rate"] = self.SIZE_RE.search(
-                        self.progress["rate"]
-                    ).groups()[0] + "/s"
-                    # logger.info(self.progress)
+                    (pct, total, rate, eta) = self.PROGRESS_RE.search(line).groups()
+                    self.progress.pct = float(pct)/100
+                    self.progress.total = bitmath.parse_string(
+                            total
+                    )
+                    self.progress.dled = (self.progress.pct * self.progress.total)
+                    self.progress.rate = bitmath.parse_string(rate.split("/")[0]) if rate else None
+                    self.progress.eta = eta
                 except AttributeError:
                     pass
 
@@ -520,6 +596,14 @@ class YouTubeDLHelper(Helper, Downloader):
 class StreamlinkHelper(Helper, Downloader):
 
     PLAYER_INTEGRATED=True
+
+    PROGRESS_RE = re.compile(
+        r"Written (\d+.\d+ \S+) \((\d+\S+) @ (\d+.\d+ \S+)\)"
+    )
+
+    def __init__(self, path, no_progress=False, *args, **kwargs):
+        super().__init__(path, *args, **kwargs)
+
 
     def integrate_player(self, dst):
         self.extra_args_pre += ["--player"] + [" ".join(dst.command)]
@@ -565,15 +649,21 @@ class StreamlinkHelper(Helper, Downloader):
 
     async def update_progress(self):
 
-        async def get_output(self):
-            yield (await self.proc.stdout.read()).decode("utf-8")
-
-
         async def process_lines():
             async for line in self.get_output():
+                # logger.info(line)
                 if not line:
                     return
-                logger.info(line)
+                try:
+                    (dled, elapsed, rate) = self.PROGRESS_RE.search(line).groups()
+                except AttributeError:
+                    return
+                self.progress.dled = bitmath.parse_string(dled)
+                self.progress.rate = bitmath.parse_string(rate.split("/")[0]) if rate else None
+                    # pass
+
+
+                # logger.info(line)
 
         t = asyncio.create_task(process_lines())
         await asyncio.sleep(1)
@@ -607,15 +697,29 @@ async def get():
         "streamlink"
     ))
 
-async def check_progress(downloader):
+async def check_progress(program):
     while True:
         await asyncio.sleep(2)
-        r = await downloader.proc.stdout.read()
-        print(r)
+        # r = await program.proc.stdout.read()
+        await program.update_progress()
+        print(program.progress)
+        # print(program.progress.size)
+        # print(r)
 
 async def go():
-    downloader = await get()
-    await check_progress(downloader)
+    task = model.PlayMediaTask(
+        provider="rss",
+        title= "foo",
+        sources = [
+            model.MediaSource("youtube", "https://pscp.tv/w/1lDGLXnEeBPGm")
+            # model.MediaSource("twitch", "https://steamcommunity.com/sharedfiles/filedetails/?id=1672526416")
+        ]
+    )
+
+    # prog = await Player.play(task, {"media_types": {"video"}}, "streamlink")
+    prog = await Downloader.download(task, "foo.mp4", "youtube-dl")
+    # prog = await Downloader.download(task, "foo.mp4", "streamlink")
+    state.asyncio_loop.create_task(check_progress(prog))
 
 def main():
 
@@ -636,16 +740,7 @@ def main():
     options, args = parser.parse_known_args()
 
 
-    task = model.PlayMediaTask(
-        provider="rss",
-        title= "foo",
-        sources = [
-            model.MediaSource("rss", "https://www.youtube.com/watch?v=5aVU_0a8-A4")
-        ]
-    )
-    # player = Player.play(task, {"media_type" "text"}, True)
-
-    state.asyncio_loop.create_task(Player.play(task, {"media_type" "text"}, True))
+    state.asyncio_loop.create_task(go())
     state.asyncio_loop.run_forever()
     # for line in iter(downloader.proc.stdout.readline, b""):
     #     print(line)
@@ -679,6 +774,7 @@ def main():
     # )
 
     # raise Exception(p, h)
+
 
 
     # y = Program.get(config.settings.profile.helpers.youtube_dl,

@@ -8,7 +8,7 @@ orderedattrdict
 pyyaml
 py-dateutil
 streamlink>=0.11.0
-prompt_toolkit
+bitmath
 urwid
 urwid_utils>=0.1.2
 panwid>=0.2.5

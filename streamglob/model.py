@@ -134,7 +134,6 @@ class MediaListing(BaseDataClass):
         return f"{self.provider_id}_dl" # *shrug*
 
 
-    # def download_filename(self, index=None, ext=None):
     def download_filename(self, index=None, feed=None, **kwargs):
         outpath = (
             self.provider.config.get_path("output.path")

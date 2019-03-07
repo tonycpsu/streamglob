@@ -254,7 +254,7 @@ class TasksDataTable(DataTable):
                                 format_fn = utils.format_timedelta),
                 DataTableColumn("provider", width=18),
                 DataTableColumn(
-                    "title", width=("weight", 1),
+                    "title", width=("weight", 3),
                     # FIXME: urwid miscalculates width of some unicode glyphs,
                     # which causes data table to raise an exception when rows
                     # are calculated with a different height than they render
@@ -264,9 +264,9 @@ class TasksDataTable(DataTable):
                     truncate=True
                 ),
                 DataTableColumn(
-                    "sources", label="sources", width=60, wrap="any",
-                    format_fn = lambda l: f"[{len(l) if l else '.'}]",
-                    # truncate=True
+                    "sources", label="sources", width=("weight", 1), wrap="any",
+                    format_fn = lambda l: f"{l[0].locator if len(l) == 1 else '[%s]' %(len(l))}",
+                    truncate=True
                 ),
                 DataTableColumn(
                     "dest", width=40,
@@ -276,20 +276,30 @@ class TasksDataTable(DataTable):
                 ),
                 DataTableColumn(
                     "size", width=8, align="right",
-                    value = lambda t, r: f"{r.program.progress.get('size', '')}"
+                    value = lambda t, r: r.program.progress.size_total,
+                    format_fn = lambda v: v if v else "?"
+                    # value = foo,
+                ),
+                DataTableColumn(
+                    "size/total", width=16, align="right",
+                    value = lambda t, r: (
+                        r.program.progress.size_downloaded,
+                        r.program.progress.size_total
+                    ),
+                    format_fn = lambda v: (f"{v[0] or '?'}/{v[1] or '?'}")
                     # value = foo,
                 ),
                 DataTableColumn(
                     "pct", width=5, align="right",
                     # format_fn = lambda r: f"{r.program.progress.get('pct', '').split('.')[0]}%"
-                    value = lambda t, r: f"{r.program.progress.get('pct', '').split('.')[0]}%"
+                    value = lambda t, r: r.program.progress.percent_downloaded,
+                    format_fn = lambda v: f"{round(v, 1)}%" if v else "?",
                     # value = foo,
                 ),
                 DataTableColumn(
-                    "rate", width=8, align="right",
-                    # format_fn = lambda r: f"{r.program.progress.get('rate')}"
-                    value = lambda t, r: f"{r.program.progress.get('rate')}"
-                    # value = foo,
+                    "rate", width=10, align="right",
+                    value = lambda t, r: r.program.progress.transfer_rate,
+                    format_fn = lambda v: f"{v}/s" if v else "?"
                 )
         ]
     ])
@@ -361,7 +371,7 @@ class PendingDataTable(TasksDataTable):
 class ActiveDownloadsDataTable(TasksDataTable):
 
     COLUMNS = ["provider", "program", "sources", "title",
-               "started", "elapsed", "size", "pct", "rate", "dest"]
+               "started", "elapsed", "size/total", "pct", "rate", "dest"]
 
     def query(self, *args, **kwargs):
         return [ t for t in state.task_manager.active if isinstance(t, model.DownloadMediaTask) ]
