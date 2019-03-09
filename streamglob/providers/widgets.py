@@ -41,6 +41,7 @@ class FilterToolbar(urwid.WidgetWrap):
 class ProviderDataTable(BaseDataTable):
 
     no_load_on_init = True
+    ui_sort = False
 
     signals = ["cycle_filter"]
 
