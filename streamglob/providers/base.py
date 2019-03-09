@@ -71,6 +71,10 @@ class SimpleProviderView(BaseProviderView):
     def refresh(self):
         self.table.refresh()
 
+    def reset(self):
+        logger.info("reset")
+        self.table.reset()
+
 
     # def update(self):
     #     self.refresh()
@@ -426,6 +430,9 @@ class BaseProvider(abc.ABC):
 
     def refresh(self):
         self.view.refresh()
+
+    def reset(self):
+        self.view.reset()
 
     def __str__(self):
         return self.NAME

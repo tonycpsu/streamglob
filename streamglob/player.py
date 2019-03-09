@@ -16,6 +16,7 @@ from dataclasses import *
 import typing
 from collections.abc import MutableMapping
 import pty
+import select
 
 from orderedattrdict import AttrDict, Tree
 import bitmath
@@ -343,8 +344,12 @@ class Program(abc.ABC):
 
     async def get_output(self):
         # yield os.read(self.progress_stream, 1024).decode("utf-8")
-        for line in os.read(self.progress_stream, 1024).decode("utf-8").split("\n"):
-            yield line
+        r, w, e = select.select([ self.progress_stream ], [], [], 0)
+        if self.progress_stream in r:
+            for line in os.read(self.progress_stream, 1024).decode("utf-8").split("\n"):
+                yield line
+        else:
+            raise StopIteration
 
     async def run(self, source=None, **kwargs):
 
@@ -651,7 +656,7 @@ class StreamlinkHelper(Helper, Downloader):
 
         async def process_lines():
             async for line in self.get_output():
-                # logger.info(line)
+                logger.info(line)
                 if not line:
                     return
                 try:

@@ -336,12 +336,11 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         return None
 
     def on_feed_change(self, *args):
-        self.refresh()
+        self.reset()
         # state.asyncio_loop.create_task(self.refresh())
-        # self.view.table.reset()
 
     def on_status_change(self, *args):
-        self.refresh()
+        self.reset()
 
     # @db_session
     async def update(self, force=False):
@@ -372,6 +371,10 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         self.view.table.refresh()
         # state.loop.draw_screen()
         logger.info("-refresh")
+
+    def reset(self):
+        self.update_query()
+        self.view.reset()
 
     # def on_activate(self):
     #     self.refresh()

@@ -497,13 +497,16 @@ class LiveStreamFilter(ListingFilter):
 
 class BAMProviderDataTable(ProviderDataTable):
 
+    index = "game_id"
     detail_selectable = True
+    ui_sort = False
 
     @property
     def detail_fn(self):
         return self.provider.get_details
 
     def keypress(self, size, key):
+        key =super().keypress(size, key)
         if key in ["meta left", "meta right"]:
             self._emit(f"cycle_filter", 0,("w", -1 if key == "meta left" else 1))
         elif key in ["ctrl left", "ctrl right"]:
@@ -515,7 +518,7 @@ class BAMProviderDataTable(ProviderDataTable):
         elif key == ".":
             self.selection.toggle_details()
         else:
-            return super().keypress(size, key)
+            return key
 
 
 
@@ -578,7 +581,7 @@ class BAMProviderMixin(abc.ABC):
         self.game_map.clear()
         for game in games:
             self.game_map[game["gamePk"]] = AttrDict(game)
-        self.view.table.refresh()
+        self.view.table.reset()
 
     def game_data(self, game_id):
 
@@ -802,6 +805,7 @@ class BAMProviderMixin(abc.ABC):
         return self.new_listing(game_id=game_id, title=f"{away_team}@{home_team}")
 
     def on_select(self, widget, selection):
+        logger.info("select")
         self.open_watch_dialog(selection)
 
     def on_activate(self):

@@ -38,8 +38,7 @@ class FilterToolbar(urwid.WidgetWrap):
         return super(FilterToolbar, self).keypress(size, key)
 
 
-
-class ProviderDataTable(panwid.DataTable):
+class ProviderDataTable(BaseDataTable):
 
     no_load_on_init = True
 
@@ -58,7 +57,6 @@ class ProviderDataTable(panwid.DataTable):
         return self.provider.limit
 
     def query(self, *args, **kwargs):
-
         try:
             for l in self.provider.listings(*args, **kwargs):
                 # FIXME
@@ -75,7 +73,7 @@ class ProviderDataTable(panwid.DataTable):
 
         key = super().keypress(size, key)
         if key == "ctrl r":
-            self.provider.refresh()
+            self.provider.reset()
             # state.asyncio_loop.create_task(self.provider.refresh())
         elif key == "d":
             self.provider.download(self.selection.data)
@@ -85,9 +83,6 @@ class ProviderDataTable(panwid.DataTable):
             self._emit(f"cycle_filter", 1, -1 if key == "[" else 1)
         elif key in ["{", "}"]:
             self._emit(f"cycle_filter", 2, -1 if key == "{" else 1)
-        elif key == "ctrl l":
-            logger.info(type(self.selection.data))
-            self.log_dump(10)
         else:
             return key
 

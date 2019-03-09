@@ -210,7 +210,7 @@ class MediaTask(BaseDataClass):
     task_id: typing.Optional[int] = None
     args: typing.List[str] = field(default_factory=list)
     kwargs: typing.Dict[str, str] = field(default_factory=AttrDict)
-    _details_open: bool = False
+    # _details_open: bool = False
 
 @dataclass
 class ProgramMediaTask(MediaTask):

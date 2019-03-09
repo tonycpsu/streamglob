@@ -1,6 +1,22 @@
+import logging
+logger = logging.getLogger(__name__)
+
 import urwid
 import panwid
 from orderedattrdict import AttrDict, DefaultAttrDict
+
+class BaseDataTable(panwid.DataTable):
+
+       def keypress(self, size, key):
+
+        key = super().keypress(size, key)
+
+        if key == "ctrl d":
+            logger.info(self.focus_position)
+            # logger.info(f"{self.selection}, {type(self.selection)}")
+            self.log_dump(20)
+        else:
+            return key
 
 class Observable(object):
 
@@ -34,9 +50,10 @@ class IntEdit(urwid.Edit):
 
 class TextFilterWidget(Observable, urwid.WidgetWrap):
 
-    signals = ["change", "select"]
+    # signals = ["change", "select"]
 
     EDIT_WIDGET = urwid.Edit
+    VALUE_TYPE = str
 
     def __init__(self, value, align="left", padding=1):
         self.edit = self.EDIT_WIDGET(align=align, wrap="clip")
@@ -57,18 +74,25 @@ class TextFilterWidget(Observable, urwid.WidgetWrap):
 
     @property
     def value(self):
-        return self.edit.get_text()[0]
+        try:
+            return self.VALUE_TYPE(self.edit.get_text()[0])
+        except ValueError:
+            return None
 
     @value.setter
     def value(self, value):
+        changed = (self.value != value)
         # t = list(self.get_text())
-        self.edit.set_edit_text(value)
+        if not changed:
+            return
+        self.edit.set_edit_text(str(value))
         self.edit.set_edit_pos(len(str(self.value))-1)
-
+        self.changed()
 
 class IntegerTextFilterWidget(TextFilterWidget):
 
     EDIT_WIDGET = IntEdit
+    VALUE_TYPE = int
 
     def __init__(self, default=0, minimum=0, maximum=None, big_step=10):
         self.minimum = minimum
@@ -82,18 +106,18 @@ class IntegerTextFilterWidget(TextFilterWidget):
             self.default = min(self.maximum, self.default)
         super().__init__(str(self.default))
 
-    @property
-    def value(self):
-        v = super().value
-        try:
-            return int(v)
-        except ValueError:
-            return 0
+    # @property
+    # def value(self):
+    #     v = super().value
+    #     try:
+    #         return int(v)
+    #     except ValueError:
+    #         return 0
 
-    @value.setter
-    def value(self, value):
-        # https://gitlab.gnome.org/GNOME/gnome-music/snippets/31
-        super(IntegerTextFilterWidget, self.__class__).value.fset(self, str(value))
+    # @value.setter
+    # def value(self, value):
+    #     # https://gitlab.gnome.org/GNOME/gnome-music/snippets/31
+    #     super(IntegerTextFilterWidget, self.__class__).value.fset(self, str(value))
 
     def cycle(self, step):
         v = self.value + step

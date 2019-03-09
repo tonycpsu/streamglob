@@ -8,6 +8,7 @@ import dataclasses
 from .player import Player, Downloader
 from .state import *
 from .exceptions import *
+from .widgets import Observable
 from . import utils
 from . import config
 from . import model
@@ -22,7 +23,7 @@ class TaskList(list):
             if t.task_id == task_id:
                 del self[i]
 
-class TaskManager(object):
+class TaskManager(Observable):
 
     QUEUE_INTERVAL = 1
     DEFAULT_MAX_CONCURRENT_TASKS = 20
@@ -31,6 +32,7 @@ class TaskManager(object):
 
         # global state
         # self.pending = asyncio.Queue()
+        super().__init__()
         self.to_play = TaskList()
         self.to_download = TaskList()
         self.playing = TaskList()
@@ -50,7 +52,7 @@ class TaskManager(object):
         # task.action = "play"
         task.args = (player_spec, helper_spec)
         task.kwargs = kwargs
-        task._details_open = True
+        # task._details_open = (len(task.sources) > 1)
         self.to_play.append(task)
         # self.playing.append(AttrDict(
         #     title="foo",
@@ -145,20 +147,23 @@ class TaskManager(object):
     async def poller(self):
 
         while True:
-            self.playing = list(filter(
-                lambda s: s.proc.returncode is None,
-                self.playing))
-            # if len(self.playing):
-            #     logger.info(type(self.playing[0]))
+            logger.trace("poller")
+
+            (playing_done, playing) = utils.partition(
+                lambda t: t.proc.returncode is None,
+                self.playing)
+
+            self.playing = TaskList(playing)
 
             (done, active) = utils.partition(
-                lambda s: s.proc.returncode is None,
+                lambda t: t.proc.returncode is None,
                 self.active)
+
             self.done += TaskList(done)
             self.active = TaskList(active)
-            # logger.info(f"self.done: {self.done}, self.active: {self.active}")
 
             for s in self.playing + self.active:
+
                 s.elapsed = datetime.now() - s.started
                 if hasattr(s.program, "update_progress"):
                     await s.program.update_progress()

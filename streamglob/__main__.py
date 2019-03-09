@@ -163,14 +163,15 @@ class MainToolbar(urwid.WidgetWrap):
                 minimum=1
         )
 
-        def set_max_concurrent_tasks(e, v):
+        def set_max_concurrent_tasks(v):
             config.settings.tasks.max = int(v)
 
-        urwid.connect_signal(
-            self.nax_concurrent_tasks_widget,
-            "change",
-            set_max_concurrent_tasks
-        )
+        self.nax_concurrent_tasks_widget.connect("changed", set_max_concurrent_tasks)
+        # urwid.connect_signal(
+        #     self.nax_concurrent_tasks_widget,
+        #     "change",
+        #     set_max_concurrent_tasks
+        # )
 
         self.columns = urwid.Columns([
             # ('weight', 1, urwid.Padding(urwid.Edit("foo"))),
@@ -242,7 +243,9 @@ class BrowserView(BaseView):
             return super().keypress(size, key)
 
 
-class TasksDataTable(DataTable):
+class TasksDataTable(BaseDataTable):
+
+    index = "task_id"
 
     COLUMN_DEFS = AttrDict([
         (c.name, c)
@@ -327,12 +330,12 @@ class TasksDataTable(DataTable):
     def filter_task(cls, t):
         return True
 
-
     def keypress(self, size, key):
         if key == "ctrl r":
             self.refresh()
         elif key == ".":
             self.selection.toggle_details()
+            # self.selection.data._details_open = not self.selection.data._details_open
         else:
             return super().keypress(size, key)
 
@@ -343,7 +346,6 @@ class PlayingDataTable(TasksDataTable):
     def query(self, *args, **kwargs):
         # return [ t for t in state.task_manager.playing ]
         for t in state.task_manager.playing:
-            t._details_open = True
             yield t
 
     def keypress(self, size, key):
@@ -379,8 +381,11 @@ class ActiveDownloadsDataTable(TasksDataTable):
     def keypress(self, size, key):
 
         if key == "delete" and self.selection:
-            state.task_manager.active.remove_by_id(self.selection.data.task_id)
-            self.selection.data.program.proc.terminate()
+            try:
+                self.selection.data.program.proc.terminate()
+            except ProcessLookupError:
+                pass
+            # state.task_manager.active.remove_by_id(self.selection.data.task_id)
         else:
             return super().keypress(size, key)
 
@@ -464,6 +469,8 @@ def run_gui(provider, **kwargs):
 
     state.browser_view = BrowserView(provider)
     state.tasks_view = TasksView()
+    # state.task_manager.connect("play_done", state.tasks_view.on_play_done)
+    # state.task_manager.connect("download_done", state.tasks_view.on_download_done)
 
     state.views = [
         Tab("Browser", state.browser_view, locked=True),
@@ -572,6 +579,7 @@ def main():
 
     state.asyncio_loop = asyncio.get_event_loop()
     state.task_manager = tasks.TaskManager()
+
     state.task_manager_task = state.asyncio_loop.create_task(state.task_manager.start())
 
     if selection:

@@ -124,6 +124,10 @@ class TextFilter(WidgetFilter):
 
     WIDGET_CLASS = TextFilterWidget
 
+class IntegerFilter(WidgetFilter):
+
+    WIDGET_CLASS = IntegerTextFilterWidget
+
 class IntegerTextFilter(TextFilter):
 
     WIDGET_CLASS = IntegerTextFilterWidget
