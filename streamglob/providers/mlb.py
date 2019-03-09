@@ -17,19 +17,12 @@ from .. import model
 from ..exceptions import *
 from ..state import *
 
-class LineScoreBox(urwid.WidgetWrap):
+class MLBDetailBox(BAMDetailBox):
 
-    def __init__(self, columns, data):
-        self.table = panwid.DataTable(columns, data=data)
-        self.box = urwid.BoxAdapter(self.table, 3)
-        super().__init__(self.box)
+    @property
+    def HIGHLIGHT_ATTR(self):
+        return "highlights"
 
-
-    def selectable(self):
-        return True
-
-    def keypress(self, size, key):
-        return super().keypress(size, key)
 
 @dataclass
 class MLBMediaListing(BAMMediaListing):
@@ -113,78 +106,11 @@ class MLBMediaListing(BAMMediaListing):
 
 
 
-class HighlightsDataTable(panwid.DataTable):
-
-    ui_sort = False
-
-    columns = [
-        DataTableColumn("title"),
-        DataTableColumn("url", hide=True),
-        DataTableColumn("duration", width=10),
-    ]
-
-    def detail_fn(self, data):
-        return urwid.Columns([
-            (4, urwid.Text("")),
-            ("weight", 1, urwid.Text(data.get("description")))
-        ])
-
     # def keypress(self, size, key):
     #     if key == ".":
     #         self.selection.toggle_details()
     #     else:
     #         return super().keypress(size, key)
-
-
-class MLBDetailBox(Observable, urwid.WidgetWrap):
-
-    signals = ["play"]
-
-    def __init__(self, game):
-        self.game = game
-        self.table = HighlightsDataTable(
-            data= [
-                AttrDict(dict(
-                    media_id = h["guid"],
-                    title = h["title"],
-                    description = h["description"],
-                    duration = h["duration"],
-                    url = next(
-                        p for p in h["playbacks"]
-                        if p["name"] == "HTTP_CLOUD_WIRED_60"
-                    )["url"],
-                    _details_open = True
-
-                )) for h in game["content"]["highlights"]["highlights"]["items"]
-            ]
-        )
-
-        self.columns = urwid.Columns([
-            (4, urwid.Filler(urwid.Text(""))),
-            ("weight", 1, self.table)
-        ])
-        self.attr = urwid.AttrMap(
-            self.columns,
-            # attr_map = {"table_row_body": "red"},
-            attr_map = {},
-            focus_map = {
-                "table_row_body focused": "blue",
-            },
-        )
-        self.box = urwid.BoxAdapter(self.attr, height=10)
-        super().__init__(self.box)
-
-    def keypress(self, size, key):
-        if key == "enter":
-            logger.info(f"detail keypress: {key}")
-            self.notify("play", self.table.selection.data)
-            return
-        else:
-            key = super().keypress(size, key)
-            return key
-
-    def selectable(self):
-        return True
 
 
 
@@ -492,6 +418,8 @@ class MLBProvider(BAMProviderMixin,
 
     MEDIA_ID_FIELD = "mediaId"
 
+    DETAIL_BOX_CLASS = MLBDetailBox
+
     @classproperty
     def NAME(cls):
         return "MLB.tv"
@@ -649,48 +577,6 @@ class MLBProvider(BAMProviderMixin,
         ]))
         return timestamps
 
-    def get_details(self, data):
-
-        game_id = data.game_id
-        game = self.game_data(game_id)
-
-        def play_highlight(selection):
-            logger.info(f"play_highlight: {selection}")
-            task = model.PlayMediaTask(
-                provider=self.NAME,
-                title=selection.title,
-                sources = [
-                    model.MediaSource(
-                        provider_id=self.IDENTIFIER,
-                        url = selection.url,
-                        media_type = "video"
-                    )
-                ]
-            )
-            # raise Exception(task.sources)
-            logger.info(f"task: {task}")
-            player_spec = {"media_types": {"video"}}
-            # helper_spec = {None: "streamlink"}
-            helper_spec = None
-            asyncio.create_task(Player.play(task, player_spec, helper_spec))
-            # state.task_manager.play(
-            #     task,
-            #     player_spec,
-            #     helper_spec
-            # )
-
-
-        box = MLBDetailBox(game)
-        box.connect("play", play_highlight)
-        # urwid.connect_signal(
-        #     box,
-        #     "play",
-        #     foo
-        #     # lambda source, url: self.play(
-        #     #     model.MediaSource(locator=url)
-        #     # )
-        # )
-        return box
 
 
 

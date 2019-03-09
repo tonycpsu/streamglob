@@ -15,6 +15,12 @@ from .filters import *
 from ..exceptions import *
 from ..state import *
 
+class NHLDetailBox(BAMDetailBox):
+
+    @property
+    def HIGHLIGHT_ATTR(self):
+        return "gameCenter"
+
 @dataclass
 class NHLMediaSource(BAMMediaSource):
 
@@ -118,7 +124,8 @@ class NHLStreamSession(session.AuthenticatedStreamSession):
         "?sportId={sport_id}&startDate={start}&endDate={end}"
         "&gameType={game_type}&gamePk={game_id}"
         "&teamId={team_id}"
-        "&hydrate=linescore,team,game(content(summary,media(epg)),tickets)"
+        "&hydrate=linescore,team,game(content(summary,media(epg),"
+        "highlights(gamecenter(items))))"
     )
 
     RESOLUTIONS = AttrDict([
@@ -390,6 +397,7 @@ class NHLProvider(BAMProviderMixin,
         "&teamId={team_id}"
         "&expand=schedule.game.content.media.milestones"
         "&expand=schedule.game.content.media.epg"
+        "&expand=schedule.game.content.highlights.all"
         # "&expand=schedule.venue"
         "&expand=schedule.status"
         "&expand=schedule.teams"
@@ -408,6 +416,8 @@ class NHLProvider(BAMProviderMixin,
     MEDIA_TITLE = "NHLTV"
 
     MEDIA_ID_FIELD = "mediaPlaybackId"
+
+    DETAIL_BOX_CLASS = NHLDetailBox
 
     @classproperty
     def NAME(cls):

@@ -4,7 +4,7 @@ logger = logging.getLogger(__name__)
 import abc
 
 import urwid
-import panwid
+from panwid import *
 from orderedattrdict import AttrDict
 from datetime import datetime, timedelta
 import dateutil.parser
@@ -21,6 +21,92 @@ from .base import *
 from .filters import *
 from ..player import *
 from .widgets import *
+
+class LineScoreBox(urwid.WidgetWrap):
+
+    def __init__(self, columns, data):
+        self.table = DataTable(columns, data=data)
+        self.box = urwid.BoxAdapter(self.table, 3)
+        super().__init__(self.box)
+
+
+    def selectable(self):
+        return True
+
+    def keypress(self, size, key):
+        return super().keypress(size, key)
+
+class HighlightsDataTable(DataTable):
+
+    ui_sort = False
+
+    columns = [
+        DataTableColumn("title"),
+        DataTableColumn("url", hide=True),
+        DataTableColumn("duration", width=10),
+    ]
+
+    def detail_fn(self, data):
+        return urwid.Columns([
+            (4, urwid.Text("")),
+            ("weight", 1, urwid.Text(data.get("description")))
+        ])
+
+class BAMDetailBox(Observable, urwid.WidgetWrap):
+
+    signals = ["play"]
+
+    def __init__(self, game):
+        self.game = game
+        self.table = HighlightsDataTable(
+            data= [
+                AttrDict(dict(
+                    media_id = h.get("guid", h.get("id")),
+                    title = h["title"],
+                    description = h["description"],
+                    duration = h["duration"],
+                    url = next(
+                        p for p in h["playbacks"]
+                        if p["name"] == "HTTP_CLOUD_WIRED_60"
+                    )["url"],
+                    _details_open = True
+
+                )) for h in game["content"]["highlights"][self.HIGHLIGHT_ATTR]["items"]
+            ]
+        )
+
+        self.columns = urwid.Columns([
+            (4, urwid.Filler(urwid.Text(""))),
+            ("weight", 1, self.table)
+        ])
+        self.attr = urwid.AttrMap(
+            self.columns,
+            # attr_map = {"table_row_body": "red"},
+            attr_map = {},
+            focus_map = {
+                "table_row_body focused": "blue",
+            },
+        )
+        self.box = urwid.BoxAdapter(self.attr, height=10)
+        super().__init__(self.box)
+
+    @property
+    def HIGHLIGHT_ATTR(self):
+        raise NotImplementedError
+
+    def keypress(self, size, key):
+        if key == "enter":
+            logger.info(f"detail keypress: {key}")
+            self.notify("play", self.table.selection.data)
+            return
+        else:
+            key = super().keypress(size, key)
+            return key
+
+    def selectable(self):
+        return True
+
+
 
 
 @dataclass
@@ -333,7 +419,7 @@ class OffsetDropdown(urwid.WidgetWrap):
         if live:
             timestamp_map["Live"] = False
 
-        self.dropdown = panwid.Dropdown(
+        self.dropdown = Dropdown(
             timestamp_map, label="Begin playback",
             default = timestamp_map.get(default, None)
         )
@@ -397,7 +483,7 @@ class WatchDialog(BasePopUp):
             home_feed = media[0]
 
         self.live_stream = (home_feed.get("state") == "live")
-        self.feed_dropdown = panwid.Dropdown(
+        self.feed_dropdown = Dropdown(
             feed_map,
             label="Feed",
             default=home_feed["media_id"],
@@ -409,7 +495,7 @@ class WatchDialog(BasePopUp):
             lambda s, b, *args: self.update_offset_dropdown(*args)
         )
 
-        self.resolution_dropdown = panwid.Dropdown(
+        self.resolution_dropdown = Dropdown(
             self.provider.RESOLUTIONS, default=self.default_resolution
         )
 
@@ -633,7 +719,6 @@ class BAMProviderMixin(abc.ABC):
             team_id = team_id if team_id else "",
             game_id = game_id if game_id else ""
         )
-        # raise Exception(url)
         # with self.cache_responses_short():
         return self.session.get(url).json()
 
@@ -832,6 +917,33 @@ class BAMProviderMixin(abc.ABC):
 
 
         # self.play(selection)
+
+    def get_details(self, data):
+
+        game_id = data.game_id
+        game = self.game_data(game_id)
+
+        def play_highlight(selection):
+            logger.info(f"play_highlight: {selection}")
+            task = model.PlayMediaTask(
+                provider=self.NAME,
+                title=selection.title,
+                sources = [
+                    model.MediaSource(
+                        provider_id=self.IDENTIFIER,
+                        url = selection.url,
+                        media_type = "video"
+                    )
+                ]
+            )
+            logger.info(f"task: {task}")
+            player_spec = {"media_types": {"video"}}
+            helper_spec = None
+            asyncio.create_task(Player.play(task, player_spec, helper_spec))
+
+        box = self.DETAIL_BOX_CLASS(game)
+        box.connect("play", play_highlight)
+        return box
 
     def get_source(self, selection, media_id=None, **kwargs):
         try:
