@@ -90,7 +90,9 @@ class NHLMediaListing(BAMMediaListing):
                 )
 
             for stat in ["goals", "shotsOnGoal"]:
-                if not stat in tk[side]: continue
+                if not stat in tk[side]:
+                    data[s][stat] = None
+                    continue
 
                 if not s:
                     columns.append(
@@ -102,6 +104,20 @@ class NHLMediaListing(BAMMediaListing):
                     setattr(line, stat, "?")
 
             data.append(line)
+
+        if not self.hide_spoilers:
+
+            for s, side in enumerate(["away", "home"]):
+                for i, period in enumerate(line_score["periods"]):
+                    if str(i+1) in data[s] and data[s][str(i+1)] == 0:
+                        data[s][str(i+1)] = urwid.Text(("dim", str(data[s][str(i+1)])))
+
+            if data[0]["goals"] > data[1]["goals"]:
+                data[0]["goals"] = urwid.Text(("bold", str(data[0]["goals"])))
+                data[1]["goals"] = urwid.Text(("dim", str(data[1]["goals"])))
+            elif data[1]["goals"] > data[0]["goals"]:
+                data[1]["goals"] = urwid.Text(("bold", str(data[1]["goals"])))
+                data[0]["goals"] = urwid.Text(("dim", str(data[0]["goals"])))
 
         return urwid.BoxAdapter(panwid.DataTable(columns, data=data), 3)
 

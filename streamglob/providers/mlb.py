@@ -88,7 +88,9 @@ class MLBMediaListing(BAMMediaListing):
                 )
 
             for stat in ["runs", "hits", "errors"]:
-                if not stat in tk[side]: continue
+                if not stat in tk[side]:
+                    data[s][stat] = None
+                    continue
 
                 if not s:
                     columns.append(
@@ -100,6 +102,21 @@ class MLBMediaListing(BAMMediaListing):
                     setattr(line, stat, "?")
 
             data.append(line)
+
+        if not self.hide_spoilers:
+
+            for s, side in enumerate(["away", "home"]):
+                for i, inning in enumerate(line_score["innings"]):
+                    if str(i+1) in data[s] and data[s][str(i+1)] == 0:
+                        data[s][str(i+1)] = urwid.Text(("dim", str(data[s][str(i+1)])))
+
+
+            if data[0]["runs"] > data[1]["runs"]:
+                data[0]["runs"] = urwid.Text(("bold", str(data[0]["runs"])))
+                data[1]["runs"] = urwid.Text(("dim", str(data[1]["runs"])))
+            elif data[1]["runs"] > data[0]["runs"]:
+                data[1]["runs"] = urwid.Text(("bold", str(data[1]["runs"])))
+                data[0]["runs"] = urwid.Text(("dim", str(data[0]["runs"])))
 
         # return urwid.BoxAdapter(panwid.DataTable(columns, data=data), 3)
         return LineScoreBox(columns, data)
