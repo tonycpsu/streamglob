@@ -818,8 +818,8 @@ class BAMProviderMixin(abc.ABC):
     ATTRIBUTES = AttrDict(
         attrs = {"width": 6},
         start = {"width": 6, "format_fn": format_start_time},
-        away = {"width": 16},
-        home = {"width": 16},
+        away = {"width": "pack"},
+        home = {"width": "pack"},
         line = {"width": "pack"},
         game_id = {"width": 10},
         empty = {"label": "", "width": ("weight", 1)}
