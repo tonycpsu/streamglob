@@ -25,21 +25,17 @@ from .widgets import *
 
 class BAMLineScoreBox(urwid.WidgetWrap):
 
-    def __init__(self, columns, data, index):
-        kw = {}
-        if index:
-            kw = dict(tlcorner="├", trcorner="┤")
-
+    def __init__(self, columns, data):
+        kw = dict(
+        )
         self.table = DataTable(columns, data=data)
         self.box = urwid.BoxAdapter(
-            urwid.Filler(
-                urwid.LineBox(
-                    urwid.BoxAdapter(
-                        self.table, 3,
-                    ),
-                    **kw
-                )
-            ), 4
+            urwid.LineBox(
+                self.table,
+                tlcorner="", tline="", trcorner="",
+                blcorner="├", brcorner="┤"
+            ),
+            4
         )
         super().__init__(self.box)
 
@@ -198,7 +194,7 @@ class BAMLineScoreDataTable(DataTable):
                     # data[0][primary_scoring_attr] = urwid.Text(("dim", str(data[0][primary_scoring_attr])))
 
         # return urwid.BoxAdapter(panwid.DataTable(columns, data=data), 3)
-        return BAMLineScoreBox(columns, data, index)
+        return BAMLineScoreBox(columns, data)
 
 
 class HighlightsDataTable(DataTable):
@@ -297,7 +293,6 @@ class BAMMediaListing(model.MediaListing):
     home_abbrev: str = None
     start: datetime = None
     attrs: str = None
-    index: int = None
 
     @property
     def hide_spoilers(self):
@@ -312,7 +307,7 @@ class BAMMediaListing(model.MediaListing):
 
 
     @classmethod
-    def from_json(cls, provider, g, index):
+    def from_json(cls, provider, g):
 
 
         game_pk = g["gamePk"]
@@ -348,7 +343,6 @@ class BAMMediaListing(model.MediaListing):
             home_abbrev = home_abbrev,
             start = start_time,
             attrs = attrs,
-            index = index
         )
 
     # FIXME
@@ -918,7 +912,7 @@ class BAMProviderMixin(abc.ABC):
 
     def listings(self, offset=None, limit=None, *args, **kwargs):
 
-        return iter(self.LISTING_CLASS.from_json(self.IDENTIFIER, g, i)
+        return iter(self.LISTING_CLASS.from_json(self.IDENTIFIER, g)
                          # for g in list(self.game_map.values())[-1:])
                          for i, g in enumerate(self.game_map.values()))
 
