@@ -22,13 +22,48 @@ from .filters import *
 from ..player import *
 from .widgets import *
 
-class LineScoreBox(urwid.WidgetWrap):
 
-    def __init__(self, columns, data):
+
+class BAMLineScoreBox(urwid.WidgetWrap):
+
+    def __init__(self, columns, data, index):
+        kw = {}
+        if index:
+            kw = dict(tlcorner="├", trcorner="┤")
+
         self.table = DataTable(columns, data=data)
-        self.box = urwid.BoxAdapter(self.table, 3)
+        self.box = urwid.BoxAdapter(
+            urwid.Filler(
+                urwid.LineBox(
+                    urwid.BoxAdapter(
+                        self.table, 3,
+                    ),
+                    **kw
+                )
+            ), 4
+        )
         super().__init__(self.box)
 
+    def render(self, size, focus=False):
+        self._width = size[0]
+        if len(size) > 1:
+            self._height = size[1]
+        return super().render(size, focus)
+
+    @property
+    def width(self):
+        return self._width
+
+    @property
+    def min_width(self):
+        # raise Exception(self.table.width)
+        # logger.info(f"{id(self.table)}")
+        return self.table.min_width + 2
+        # return self._width
+
+    @property
+    def height(self):
+        return self._height
 
     def selectable(self):
         return True
@@ -36,14 +71,140 @@ class LineScoreBox(urwid.WidgetWrap):
     def keypress(self, size, key):
         return super().keypress(size, key)
 
+
+class BAMLineScoreDataTable(DataTable):
+
+    @classmethod
+    def for_game(
+            cls, game, index, scoring_attrs,
+            playing_period_attr, num_playing_periods, overtime_label = None
+    ):
+        primary_scoring_attr = scoring_attrs[0]
+
+        status = f"""{game["status"]["detailedState"]}"""
+
+        columns = [
+            DataTableColumn("team", width=10, label=status, align="right", padding=1),
+            DataTableColumn("empty_1", label="", width=3)
+        ]
+
+        away_team = game["teams"]["away"]["team"]["abbreviation"]
+        home_team = game["teams"]["home"]["team"]["abbreviation"]
+
+        line_score = game.get("linescore", None)
+
+        hide_spoiler_teams = config.settings.profile.get("hide_spoiler_teams", [])
+        if isinstance(hide_spoiler_teams, bool):
+            hide_spoilers = hide_spoiler_teams
+        else:
+            hide_spoilers = set([away_team, home_team]).intersection(
+                set(hide_spoiler_teams))
+
+        if not line_score:
+            line_score = {
+                "innings": [],
+                "teams": {
+                    "away": {},
+                    "home": {}
+                }
+            }
+
+        if "teams" in line_score:
+            tk = line_score["teams"]
+        else:
+            tk = line_score
+
+        data = []
+        for s, side in enumerate(["away", "home"]):
+
+            i = -1
+            line = AttrDict()
+            line.team = away_team if s == 0 else home_team
+
+            if isinstance(line_score[playing_period_attr], list):
+                for i, playing_period in enumerate(line_score[playing_period_attr]):
+                    if not s:
+                        columns.append(
+                            DataTableColumn(
+                                str(i+1),
+                                label=(
+                                    str(i+1)
+                                    if (
+                                            overtime_label is None
+                                            or i < num_playing_periods
+                                    )
+                                    else overtime_label
+                                ),
+                                width=3
+                            )
+                        )
+
+                    if hide_spoilers:
+                        setattr(line, str(i+1), "?")
+
+                    elif side in playing_period:
+                        if isinstance(playing_period[side], dict) and primary_scoring_attr in playing_period[side]:
+                            setattr(line, str(i+1), parse_int(playing_period[side][primary_scoring_attr]))
+                    else:
+                        setattr(line, str(i+1), "X")
+
+                for n in range(i+1, num_playing_periods):
+                    if not s:
+                        columns.append(
+                            DataTableColumn(str(n+1), label=str(n+1), width=3)
+                        )
+                    if hide_spoilers:
+                        setattr(line, str(n+1), "?")
+
+            if not s:
+                columns.append(
+                    DataTableColumn("empty_2", label="", width=3)
+                )
+
+            for stat in scoring_attrs:
+                if not stat in tk[side]:# and len(data) > 0:
+                    line[stat] = None
+                    continue
+
+                if not s:
+                    columns.append(
+                        DataTableColumn(stat, label=stat[0].upper(), width=3)
+                    )
+                if not hide_spoilers:
+                    setattr(line, stat, parse_int(tk[side][stat]))
+                else:
+                    setattr(line, stat, "?")
+
+            data.append(line)
+
+        if not hide_spoilers and len(data):
+
+            for s, side in enumerate(["away", "home"]):
+                for i, playing_period in enumerate(line_score[playing_period_attr]):
+                    if str(i+1) in data[s] and data[s][str(i+1)] == 0:
+                        data[s][str(i+1)] = urwid.Text(("dim", str(data[s][str(i+1)])))
+
+            if None not in [ data[i][primary_scoring_attr] for i in range(2) ]:
+                if data[0][primary_scoring_attr] > data[1][primary_scoring_attr]:
+                    data[0][primary_scoring_attr] = urwid.Text(("bold", str(data[0][primary_scoring_attr])))
+                    # data[1][primary_scoring_attr] = urwid.Text(("dim", str(data[1][primary_scoring_attr])))
+                elif data[1][primary_scoring_attr] > data[0][primary_scoring_attr]:
+                    data[1][primary_scoring_attr] = urwid.Text(("bold", str(data[1][primary_scoring_attr])))
+                    # data[0][primary_scoring_attr] = urwid.Text(("dim", str(data[0][primary_scoring_attr])))
+
+        # return urwid.BoxAdapter(panwid.DataTable(columns, data=data), 3)
+        return BAMLineScoreBox(columns, data, index)
+
+
 class HighlightsDataTable(DataTable):
 
+    with_header = False
     ui_sort = False
 
     columns = [
-        DataTableColumn("title"),
+        DataTableColumn("title", value = "{data.title}: ({data.media_id})"),
         DataTableColumn("url", hide=True),
-        DataTableColumn("duration", width=10),
+        # DataTableColumn("duration", width=10),
     ]
 
     def detail_fn(self, data):
@@ -131,9 +292,10 @@ class BAMMediaListing(model.MediaListing):
     home_abbrev: str = None
     start: datetime = None
     attrs: str = None
+    index: int = None
 
     @classmethod
-    def from_json(cls, provider, g):
+    def from_json(cls, provider, g, index):
 
         game_pk = g["gamePk"]
         game_type = g["gameType"]
@@ -167,7 +329,8 @@ class BAMMediaListing(model.MediaListing):
             away_abbrev = away_abbrev,
             home_abbrev = home_abbrev,
             start = start_time,
-            attrs = attrs
+            attrs = attrs,
+            index = index
         )
 
     # FIXME
@@ -236,8 +399,11 @@ class BAMMediaListing(model.MediaListing):
 
         game = self.game_data
 
-        epgs = (game["content"]["media"]["epg"]
-                + game["content"]["media"].get("epgAlternate", []))
+        try:
+            epgs = (game["content"]["media"]["epg"]
+                    + game["content"]["media"].get("epgAlternate", []))
+        except KeyError:
+            raise SGStreamNotFound("no matching media for game %d" %(self.game_id))
 
         # raise Exception(self.game_id, epgs)
 
@@ -385,6 +551,9 @@ class MediaAttributes(AttrDict):
         free = "_" if self.free else "$"
         return f"{state}{free}"
 
+    def __len__(self):
+        return len(str(self))
+
 def format_start_time(d):
     s = datetime.strftime(d, "%I:%M%p").lower()[:-1]
     if s[0] == "0":
@@ -458,7 +627,10 @@ class WatchDialog(BasePopUp):
         # media = list(self.provider.get_media(self.game_id, title=self.media_title))
         # media = list(self.provider.get_media(self.game_id))
         # raise Exception(selection)
-        media = selection.media
+        try:
+            media = selection.media
+        except SGStreamNotFound as e:
+            logger.warn(e)
 
         if not len(media):
             raise SGStreamNotFound
@@ -603,6 +775,8 @@ class BAMProviderDataTable(ProviderDataTable):
             self.provider.play(self.selection.data)
         elif key == ".":
             self.selection.toggle_details()
+        elif key == "ctrl w":
+            logger.info(self.width)
         else:
             return key
 
@@ -634,8 +808,9 @@ class BAMProviderMixin(abc.ABC):
         start = {"width": 6, "format_fn": format_start_time},
         away = {"width": 16},
         home = {"width": 16},
-        line = {},
+        line = {"width": "pack"},
         game_id = {"width": 10},
+        empty = {"label": "", "width": ("weight", 1)}
     )
 
     HELPER = "streamlink"
@@ -725,8 +900,9 @@ class BAMProviderMixin(abc.ABC):
 
     def listings(self, offset=None, limit=None, *args, **kwargs):
 
-        return iter(self.LISTING_CLASS.from_json(self.IDENTIFIER, g)
-                         for g in self.game_map.values())
+        return iter(self.LISTING_CLASS.from_json(self.IDENTIFIER, g, i)
+                         # for g in list(self.game_map.values())[-1:])
+                         for i, g in enumerate(self.game_map.values()))
 
     def get_url(self, game_id,
                 media = None,
@@ -939,7 +1115,8 @@ class BAMProviderMixin(abc.ABC):
             logger.info(f"task: {task}")
             player_spec = {"media_types": {"video"}}
             helper_spec = None
-            asyncio.create_task(Player.play(task, player_spec, helper_spec))
+            # asyncio.create_task/(Player.play(task, player_spec, helper_spec))
+            state.task_manager.play(task, player_spec, helper_spec)
 
         box = self.DETAIL_BOX_CLASS(game)
         box.connect("play", play_highlight)
@@ -951,14 +1128,6 @@ class BAMProviderMixin(abc.ABC):
         except StopIteration:
             selected_media = selection.media[0]
         return selected_media
-        # game_id = selection.get("game_id")
-        # return BAMMediaSource(
-        #     game_id = game_id,
-        #     media_id = media.media_id,
-        #     # self.get_url(game_id, media=media),
-        #     media_type = media_type,
-        #     state = media.state
-        # )
 
     def play_args(self, selection, **kwargs):
 

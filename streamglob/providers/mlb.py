@@ -28,107 +28,13 @@ class MLBDetailBox(BAMDetailBox):
 class MLBMediaListing(BAMMediaListing):
 
     @property
+    @memo(region="short")
     def line(self):
-
-        columns = [
-            DataTableColumn("team", width=6, label="", align="right", padding=1),
-        ]
-        line_score = self.game_data["linescore"]
-        away_team = self.game_data["teams"]["away"]["team"]["abbreviation"]
-        home_team = self.game_data["teams"]["home"]["team"]["abbreviation"]
-
-        hide_spoiler_teams = config.settings.profile.get("hide_spoiler_teams", [])
-        if isinstance(hide_spoiler_teams, bool):
-            self.hide_spoilers = hide_spoiler_teams
-        else:
-            self.hide_spoilers = set([away_team, home_team]).intersection(
-                set(hide_spoiler_teams))
-
-        if "teams" in line_score:
-            tk = line_score["teams"]
-        else:
-            tk = line_score
-
-        data = []
-        for s, side in enumerate(["away", "home"]):
-
-            i = -1
-            line = AttrDict()
-
-            if isinstance(line_score["innings"], list):
-                for i, inning in enumerate(line_score["innings"]):
-                    if not s:
-                        columns.append(
-                            DataTableColumn(str(i+1), label=str(i+1), width=3)
-                        )
-                        line.team = away_team
-                    else:
-                        line.team = home_team
-
-                    if self.hide_spoilers:
-                        setattr(line, str(i+1), "?")
-
-                    elif side in inning:
-                        if isinstance(inning[side], dict) and "runs" in inning[side]:
-                            setattr(line, str(i+1), parse_int(inning[side]["runs"]))
-                    else:
-                        setattr(line, str(i+1), "X")
-
-                for n in range(i+1, 9):
-                    if not s:
-                        columns.append(
-                            DataTableColumn(str(n+1), label=str(n+1), width=3)
-                        )
-                    if self.hide_spoilers:
-                        setattr(line, str(n+1), "?")
-
-            if not s:
-                columns.append(
-                    DataTableColumn("empty", label="", width=3)
-                )
-
-            for stat in ["runs", "hits", "errors"]:
-                if not stat in tk[side]:
-                    data[s][stat] = None
-                    continue
-
-                if not s:
-                    columns.append(
-                        DataTableColumn(stat, label=stat[0].upper(), width=3)
-                    )
-                if not self.hide_spoilers:
-                    setattr(line, stat, parse_int(tk[side][stat]))
-                else:
-                    setattr(line, stat, "?")
-
-            data.append(line)
-
-        if not self.hide_spoilers:
-
-            for s, side in enumerate(["away", "home"]):
-                for i, inning in enumerate(line_score["innings"]):
-                    if str(i+1) in data[s] and data[s][str(i+1)] == 0:
-                        data[s][str(i+1)] = urwid.Text(("dim", str(data[s][str(i+1)])))
-
-
-            if data[0]["runs"] > data[1]["runs"]:
-                data[0]["runs"] = urwid.Text(("bold", str(data[0]["runs"])))
-                data[1]["runs"] = urwid.Text(("dim", str(data[1]["runs"])))
-            elif data[1]["runs"] > data[0]["runs"]:
-                data[1]["runs"] = urwid.Text(("bold", str(data[1]["runs"])))
-                data[0]["runs"] = urwid.Text(("dim", str(data[0]["runs"])))
-
-        # return urwid.BoxAdapter(panwid.DataTable(columns, data=data), 3)
-        return LineScoreBox(columns, data)
-
-
-
-    # def keypress(self, size, key):
-    #     if key == ".":
-    #         self.selection.toggle_details()
-    #     else:
-    #         return super().keypress(size, key)
-
+        return BAMLineScoreDataTable.for_game(
+            self.game_data, self.index,
+            ["runs", "hits", "errors"],
+            "innings", 9,
+        )
 
 
 class MLBBAMProviderData(BAMProviderData):

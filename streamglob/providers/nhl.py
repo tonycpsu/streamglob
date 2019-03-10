@@ -29,97 +29,13 @@ class NHLMediaSource(BAMMediaSource):
 class NHLMediaListing(BAMMediaListing):
 
     @property
+    @memo(region="short")
     def line(self):
-
-        columns = [
-            DataTableColumn("team", width=6, label="", align="right", padding=1),
-        ]
-
-        line_score = self.game_data["linescore"]
-        away_team = self.game_data["teams"]["away"]["team"]["abbreviation"]
-        home_team = self.game_data["teams"]["home"]["team"]["abbreviation"]
-
-        hide_spoiler_teams = config.settings.profile.get("hide_spoiler_teams", [])
-        if isinstance(hide_spoiler_teams, bool):
-            self.hide_spoilers = hide_spoiler_teams
-        else:
-            self.hide_spoilers = set([away_team, home_team]).intersection(
-                set(hide_spoiler_teams))
-
-        if "teams" in line_score:
-            tk = line_score["teams"]
-        else:
-            tk = line_score
-
-        data = []
-        for s, side in enumerate(["away", "home"]):
-
-            i = -1
-            line = AttrDict()
-
-            if "periods" in line_score and isinstance(line_score["periods"], list):
-                for i, period in enumerate(line_score["periods"]):
-                    if not s:
-                        columns.append(
-                            DataTableColumn(str(i+1), label=str(i+1) if i < 3 else "O", width=3)
-                        )
-                        line.team = away_team
-                    else:
-                        line.team = home_team
-
-                    if self.hide_spoilers:
-                        setattr(line, str(i+1), "?")
-
-                    elif side in period:
-                        if isinstance(period[side], dict) and "goals" in period[side]:
-                            setattr(line, str(i+1), parse_int(period[side]["goals"]))
-                    else:
-                        setattr(line, str(i+1), "X")
-
-                for n in list(range(i+1, 3)):
-                    if not s:
-                        columns.append(
-                            DataTableColumn(str(n+1), label=str(n+1), width=3)
-                        )
-                    if self.hide_spoilers:
-                        setattr(line, str(n+1), "?")
-
-            if not s:
-                columns.append(
-                    DataTableColumn("empty", label="", width=3)
-                )
-
-            for stat in ["goals", "shotsOnGoal"]:
-                if not stat in tk[side]:
-                    data[s][stat] = None
-                    continue
-
-                if not s:
-                    columns.append(
-                        DataTableColumn(stat, label=stat[0].upper(), width=3)
-                    )
-                if not self.hide_spoilers:
-                    setattr(line, stat, parse_int(tk[side][stat]))
-                else:
-                    setattr(line, stat, "?")
-
-            data.append(line)
-
-        if not self.hide_spoilers:
-
-            for s, side in enumerate(["away", "home"]):
-                for i, period in enumerate(line_score["periods"]):
-                    if str(i+1) in data[s] and data[s][str(i+1)] == 0:
-                        data[s][str(i+1)] = urwid.Text(("dim", str(data[s][str(i+1)])))
-
-            if data[0]["goals"] > data[1]["goals"]:
-                data[0]["goals"] = urwid.Text(("bold", str(data[0]["goals"])))
-                data[1]["goals"] = urwid.Text(("dim", str(data[1]["goals"])))
-            elif data[1]["goals"] > data[0]["goals"]:
-                data[1]["goals"] = urwid.Text(("bold", str(data[1]["goals"])))
-                data[0]["goals"] = urwid.Text(("dim", str(data[0]["goals"])))
-
-        return urwid.BoxAdapter(panwid.DataTable(columns, data=data), 3)
+        return BAMLineScoreDataTable.for_game(
+            self.game_data, self.index,
+            ["goals", "shotsOnGoal"],
+            "periods", 3, "O"
+        )
 
     def extra_media_attributes(self, item):
         return {
