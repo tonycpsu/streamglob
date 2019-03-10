@@ -41,7 +41,7 @@ class MLBMediaListing(BAMMediaListing):
     @memo(region="short")
     def line(self):
         return MLBLineScoreDataTable.for_game(
-            self.game_data, self.index
+            self.game_data, self.index, self.hide_spoilers
         )
 
 

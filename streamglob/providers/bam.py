@@ -81,14 +81,18 @@ class BAMLineScoreDataTable(DataTable):
     #         self.PLAYING_PERIOD_ATTR, self.NUM_PLAYING_PERIODS, overtime_label = None
     # ):
     @classmethod
-    def for_game(cls, game, index):
+    def for_game(cls, game, index, hide_spoilers=False):
 
         line_score = game.get("linescore", None)
+        away_team = game["teams"]["away"]["team"]["abbreviation"]
+        home_team = game["teams"]["home"]["team"]["abbreviation"]
 
         primary_scoring_attr = cls.SCORING_ATTRS[0]
         # code = game["status"]["statusCode"]
         status = game["status"]["detailedState"]
-        if status == "Scheduled":
+        if hide_spoilers:
+            status = "?"
+        elif status == "Scheduled":
             start_time = dateutil.parser.parse(game["gameDate"]).astimezone(
                 pytz.timezone(config.settings.profile.time_zone)
             ).strftime("%I:%M%p").lower()
@@ -96,23 +100,10 @@ class BAMLineScoreDataTable(DataTable):
         elif status == "In Progress" and line_score:
             status = cls.PLAYING_PERIOD_DESC(line_score)
 
-        status_str = f"""{status}"""
-
         columns = [
-            DataTableColumn("team", width=10, label=status_str, align="right", padding=1),
+            DataTableColumn("team", width=10, label=status, align="right", padding=1),
             DataTableColumn("empty_1", label="", width=3)
         ]
-
-        away_team = game["teams"]["away"]["team"]["abbreviation"]
-        home_team = game["teams"]["home"]["team"]["abbreviation"]
-
-
-        hide_spoiler_teams = config.settings.profile.get("hide_spoiler_teams", [])
-        if isinstance(hide_spoiler_teams, bool):
-            hide_spoilers = hide_spoiler_teams
-        else:
-            hide_spoilers = set([away_team, home_team]).intersection(
-                set(hide_spoiler_teams))
 
         if not line_score:
             line_score = {
@@ -308,8 +299,21 @@ class BAMMediaListing(model.MediaListing):
     attrs: str = None
     index: int = None
 
+    @property
+    def hide_spoilers(self):
+        hide_spoiler_teams = self.provider.config.get("hide_spoiler_teams", [])
+        if isinstance(hide_spoiler_teams, bool):
+            return hide_spoiler_teams
+        else:
+            return len(set(
+                [self.away_abbrev, self.home_abbrev]).intersection(
+                    set(hide_spoiler_teams)
+                )) > 0
+
+
     @classmethod
     def from_json(cls, provider, g, index):
+
 
         game_pk = g["gamePk"]
         game_type = g["gameType"]

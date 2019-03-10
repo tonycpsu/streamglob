@@ -44,7 +44,7 @@ class NHLMediaListing(BAMMediaListing):
     @memo(region="short")
     def line(self):
         return NHLLineScoreDataTable.for_game(
-            self.game_data, self.index
+            self.game_data, self.index, self.hide_spoilers
         )
 
     def extra_media_attributes(self, item):
