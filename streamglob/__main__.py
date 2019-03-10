@@ -432,16 +432,6 @@ class TasksView(BaseView):
 
 def run_gui(provider, **kwargs):
 
-
-    ulh = UrwidLoggingHandler()
-
-    set_stdout_level(logging.CRITICAL)
-    add_log_handler(ulh)
-
-    log_file = os.path.join(config.CONFIG_DIR, f"{PACKAGE_NAME}.log")
-    fh = logging.FileHandler(log_file)
-    add_log_handler(fh)
-
     entries = {}
     for (n, f, b) in  [
             ("unread", "white", "black"),
@@ -479,12 +469,22 @@ def run_gui(provider, **kwargs):
 
     state.main_view = BaseTabView(state.views)
 
-    log_console = ConsoleWindow()
     # log_box = urwid.BoxAdapter(urwid.LineBox(log_console), 10)
     pile = urwid.Pile([
         ("weight", 5, urwid.LineBox(state.main_view)),
-        ("weight", 1, urwid.LineBox(log_console))
     ])
+
+    set_stdout_level(logging.CRITICAL)
+    if options.debug_console:
+        log_console = ConsoleWindow()
+
+        ulh = UrwidLoggingHandler()
+
+        add_log_handler(ulh)
+        pile.contents.append(
+            (urwid.LineBox(log_console), pile.options("weight", 1))
+        )
+
 
     def global_input(key):
         if key in ('q', 'Q'):
@@ -500,7 +500,10 @@ def run_gui(provider, **kwargs):
         unhandled_input=global_input,
         pop_ups=True
     )
-    ulh.connect(state.loop.watch_pipe(log_console.log_message))
+
+    if options.debug_console:
+        ulh.connect(state.loop.watch_pipe(log_console.log_message))
+
     if options.verbose:
         logger.setLevel(logging.DEBUG)
 
@@ -551,8 +554,14 @@ def main():
                         help="verbose logging")
     group.add_argument("-q", "--quiet", action="count", default=0,
                         help="quiet logging")
+
+    parser.add_argument("-d", "--debug-console", action="store_true",
+                        help="show debug console")
+
     parser.add_argument("spec", metavar="SPECIFIER",
                         help="media specifier", nargs="?")
+
+
     options, args = parser.parse_known_args(args)
 
     state.options = AttrDict(vars(options))
@@ -581,6 +590,10 @@ def main():
     state.task_manager = tasks.TaskManager()
 
     state.task_manager_task = state.asyncio_loop.create_task(state.task_manager.start())
+
+    log_file = os.path.join(config.CONFIG_DIR, f"{PACKAGE_NAME}.log")
+    fh = logging.FileHandler(log_file)
+    add_log_handler(fh)
 
     if selection:
         run_cli(provider, selection, **opts)
