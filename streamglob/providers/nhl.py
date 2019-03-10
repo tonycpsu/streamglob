@@ -15,6 +15,18 @@ from .filters import *
 from ..exceptions import *
 from ..state import *
 
+class NHLLineScoreDataTable(BAMLineScoreDataTable):
+
+    SCORING_ATTRS = ["goals", "shotsOnGoal"]
+    PLAYING_PERIOD_ATTR = "periods"
+    NUM_PLAYING_PERIODS = 3
+    OVERTIME_LABEL = "O"
+
+    @classmethod
+    def PLAYING_PERIOD_DESC(cls, line_score):
+        return f"""{line_score.get("currentPeriodOrdinal")}"""
+
+
 class NHLDetailBox(BAMDetailBox):
 
     @property
@@ -31,10 +43,8 @@ class NHLMediaListing(BAMMediaListing):
     @property
     @memo(region="short")
     def line(self):
-        return BAMLineScoreDataTable.for_game(
-            self.game_data, self.index,
-            ["goals", "shotsOnGoal"],
-            "periods", 3, "O"
+        return NHLLineScoreDataTable.for_game(
+            self.game_data, self.index
         )
 
     def extra_media_attributes(self, item):
@@ -229,80 +239,6 @@ class NHLStreamSession(session.AuthenticatedStreamSession):
         )
 
         return stream
-
-
-
-class NHLLineScoreDataTable(DataTable):
-
-    @classmethod
-    def from_json(cls, game,
-                     away_team=None, home_team=None,
-                     hide_spoilers=False
-    ):
-
-        columns = [
-            DataTableColumn("team", width=6, label="", align="right", padding=1),
-        ]
-
-        line_score = game["linescore"]
-
-        if "teams" in line_score:
-            tk = line_score["teams"]
-        else:
-            tk = line_score
-
-        data = []
-        for s, side in enumerate(["away", "home"]):
-
-            i = -1
-            line = AttrDict()
-            if "periods" in line_score and isinstance(line_score["periods"], list):
-                for i, period in enumerate(line_score["periods"]):
-                    if not s:
-                        columns.append(
-                            DataTableColumn(str(i+1), label=str(i+1) if i < 3 else "O", width=3)
-                        )
-                        line.team = away_team
-                    else:
-                        line.team = home_team
-
-                    if hide_spoilers:
-                        setattr(line, str(i+1), "?")
-
-                    elif side in period:
-                        if isinstance(period[side], dict) and "goals" in period[side]:
-                            setattr(line, str(i+1), parse_int(period[side]["goals"]))
-                    else:
-                        setattr(line, str(i+1), "X")
-
-                for n in list(range(i+1, 3)):
-                    if not s:
-                        columns.append(
-                            DataTableColumn(str(n+1), label=str(n+1), width=3)
-                        )
-                    if hide_spoilers:
-                        setattr(line, str(n+1), "?")
-
-            if not s:
-                columns.append(
-                    DataTableColumn("empty", label="", width=3)
-                )
-
-            for stat in ["goals", "shotsOnGoal"]:
-                if not stat in tk[side]: continue
-
-                if not s:
-                    columns.append(
-                        DataTableColumn(stat, label=stat[0].upper(), width=3)
-                    )
-                if not hide_spoilers:
-                    setattr(line, stat, parse_int(tk[side][stat]))
-                else:
-                    setattr(line, stat, "?")
-
-
-            data.append(line)
-        return cls(columns, data=data)
 
 
 class NHLProvider(BAMProviderMixin,

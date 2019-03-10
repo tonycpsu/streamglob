@@ -17,6 +17,16 @@ from .. import model
 from ..exceptions import *
 from ..state import *
 
+class MLBLineScoreDataTable(BAMLineScoreDataTable):
+
+    SCORING_ATTRS = ["runs", "hits", "errors"]
+    PLAYING_PERIOD_ATTR = "innings"
+    NUM_PLAYING_PERIODS = 9
+
+    @classmethod
+    def PLAYING_PERIOD_DESC(cls, line_score):
+        return f"""{line_score.get("inningHalf")[:3]} {line_score.get("currentInningOrdinal")}"""
+
 class MLBDetailBox(BAMDetailBox):
 
     @property
@@ -30,10 +40,8 @@ class MLBMediaListing(BAMMediaListing):
     @property
     @memo(region="short")
     def line(self):
-        return BAMLineScoreDataTable.for_game(
-            self.game_data, self.index,
-            ["runs", "hits", "errors"],
-            "innings", 9,
+        return MLBLineScoreDataTable.for_game(
+            self.game_data, self.index
         )
 
 

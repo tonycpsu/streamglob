@@ -23,7 +23,6 @@ from ..player import *
 from .widgets import *
 
 
-
 class BAMLineScoreBox(urwid.WidgetWrap):
 
     def __init__(self, columns, data, index):
@@ -74,24 +73,39 @@ class BAMLineScoreBox(urwid.WidgetWrap):
 
 class BAMLineScoreDataTable(DataTable):
 
-    @classmethod
-    def for_game(
-            cls, game, index, scoring_attrs,
-            playing_period_attr, num_playing_periods, overtime_label = None
-    ):
-        primary_scoring_attr = scoring_attrs[0]
+    OVERTIME_LABEL = None
 
-        status = f"""{game["status"]["detailedState"]}"""
+    # @classmethod
+    # def for_game(
+    #         cls, game, index, self.SCORING_ATTRS,
+    #         self.PLAYING_PERIOD_ATTR, self.NUM_PLAYING_PERIODS, overtime_label = None
+    # ):
+    @classmethod
+    def for_game(cls, game, index):
+
+        line_score = game.get("linescore", None)
+
+        primary_scoring_attr = cls.SCORING_ATTRS[0]
+        # code = game["status"]["statusCode"]
+        status = game["status"]["detailedState"]
+        if status == "Scheduled":
+            start_time = dateutil.parser.parse(game["gameDate"]).astimezone(
+                pytz.timezone(config.settings.profile.time_zone)
+            ).strftime("%I:%M%p").lower()
+            status = start_time[1:] if start_time.startswith("0") else start_time
+        elif status == "In Progress" and line_score:
+            status = cls.PLAYING_PERIOD_DESC(line_score)
+
+        status_str = f"""{status}"""
 
         columns = [
-            DataTableColumn("team", width=10, label=status, align="right", padding=1),
+            DataTableColumn("team", width=10, label=status_str, align="right", padding=1),
             DataTableColumn("empty_1", label="", width=3)
         ]
 
         away_team = game["teams"]["away"]["team"]["abbreviation"]
         home_team = game["teams"]["home"]["team"]["abbreviation"]
 
-        line_score = game.get("linescore", None)
 
         hide_spoiler_teams = config.settings.profile.get("hide_spoiler_teams", [])
         if isinstance(hide_spoiler_teams, bool):
@@ -121,8 +135,8 @@ class BAMLineScoreDataTable(DataTable):
             line = AttrDict()
             line.team = away_team if s == 0 else home_team
 
-            if isinstance(line_score[playing_period_attr], list):
-                for i, playing_period in enumerate(line_score[playing_period_attr]):
+            if isinstance(line_score[cls.PLAYING_PERIOD_ATTR], list):
+                for i, playing_period in enumerate(line_score[cls.PLAYING_PERIOD_ATTR]):
                     if not s:
                         columns.append(
                             DataTableColumn(
@@ -130,10 +144,10 @@ class BAMLineScoreDataTable(DataTable):
                                 label=(
                                     str(i+1)
                                     if (
-                                            overtime_label is None
-                                            or i < num_playing_periods
+                                            cls.OVERTIME_LABEL is None
+                                            or i < cls.NUM_PLAYING_PERIODS
                                     )
-                                    else overtime_label
+                                    else cls.OVERTIME_LABEL
                                 ),
                                 width=3
                             )
@@ -148,7 +162,7 @@ class BAMLineScoreDataTable(DataTable):
                     else:
                         setattr(line, str(i+1), "X")
 
-                for n in range(i+1, num_playing_periods):
+                for n in range(i+1, cls.NUM_PLAYING_PERIODS):
                     if not s:
                         columns.append(
                             DataTableColumn(str(n+1), label=str(n+1), width=3)
@@ -161,7 +175,7 @@ class BAMLineScoreDataTable(DataTable):
                     DataTableColumn("empty_2", label="", width=3)
                 )
 
-            for stat in scoring_attrs:
+            for stat in cls.SCORING_ATTRS:
                 if not stat in tk[side]:# and len(data) > 0:
                     line[stat] = None
                     continue
@@ -180,7 +194,7 @@ class BAMLineScoreDataTable(DataTable):
         if not hide_spoilers and len(data):
 
             for s, side in enumerate(["away", "home"]):
-                for i, playing_period in enumerate(line_score[playing_period_attr]):
+                for i, playing_period in enumerate(line_score[cls.PLAYING_PERIOD_ATTR]):
                     if str(i+1) in data[s] and data[s][str(i+1)] == 0:
                         data[s][str(i+1)] = urwid.Text(("dim", str(data[s][str(i+1)])))
 
