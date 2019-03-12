@@ -17,6 +17,8 @@ import typing
 from collections.abc import MutableMapping
 import pty
 import select
+import signal
+import termios, fcntl, struct
 
 from orderedattrdict import AttrDict, Tree
 import bitmath
@@ -396,18 +398,18 @@ class Program(abc.ABC):
             if not self.FOREGROUND:
                 # spawn_func = asyncio.create_subprocess_exec
                 if not self.no_progress:
-                    # self.stdout = subprocess.PIPE
-                    # self.stderr = subprocess.PIPE
+
                     self.progress_stream, pty_stream = pty.openpty()
-                    import termios, fcntl, struct
+                    # set width of console to 100 so we get full progress output
                     fcntl.ioctl(pty_stream, termios.TIOCSWINSZ,
                                 struct.pack('HHHH', 50, 100, 0, 0)
                     )
-                    # fl = fcntl.fcntl(pty_stream, fcntl.F_GETFL)
-                    # fcntl.fcntl(pty_stream, fcntl.F_SETFL, fl | os.O_NONBLOCK)
                     self.stdin = pty_stream
                     self.stdout = pty_stream
                     self.stderr = pty_stream
+                    # self.stdout = subprocess.PIPE
+                    # self.stderr = subprocess.PIPE
+
                 if self.stdin is None:
                     self.stdin = open(os.devnull, 'w')
                 if self.stdout is None:
@@ -417,14 +419,18 @@ class Program(abc.ABC):
             else:
                 raise NotImplementedError
             try:
+
                 self.proc = await spawn_func(
                     *cmd,
                     stdin = self.stdin,
                     stdout = self.stdout,
-                    stderr = self.stderr
+                    stderr = self.stderr,
+                    # preexec_fn = pre,
+                    # start_new_session = True
                 )
                 if pty_stream:
                     os.close(pty_stream)
+                # self.progress_stream = self.proc.stdout
             except SGException as e:
                 logger.warning(e)
 

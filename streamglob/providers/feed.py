@@ -3,6 +3,7 @@ from dataclasses import *
 import typing
 
 from orderedattrdict import AttrDict
+from panwid.dialog import *
 
 from .. import model
 
@@ -55,7 +56,6 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         self.ignore_blur = False
         self.mark_read_task = None
         self.update_count = True
-        self.items_query = None
         urwid.connect_signal(
             self, "focus",
             self.on_focus
@@ -244,6 +244,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.items_query = None
         self.filters["feed"].connect("changed", self.on_feed_change)
         self.filters["status"].connect("changed", self.on_status_change)
         self.game_map = AttrDict()
@@ -342,6 +343,22 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
     def on_status_change(self, *args):
         self.reset()
 
+    def open_popup(self):
+        class UpdateMessage(BasePopUp):
+            def __init__(self):
+                self.text = urwid.Text("Updating feeds...", align="center")
+                self.filler = urwid.Filler(self.text)
+                super().__init__(self.filler)
+
+            def selectable(self):
+                return False
+
+        self.message = UpdateMessage()
+        self.view.open_popup(self.message, width=24, height=5)
+
+    def close_popup(self):
+        self.view.close_popup()
+
     # @db_session
     async def update(self, force=False):
         logger.info(f"update: {force}")
@@ -349,8 +366,10 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         self.create_feeds()
         # state.loop.draw_screen()
         def update_feeds():
+            self.open_popup()
             self.update_feeds(force=force)
             self.refresh()
+            self.close_popup()
         update_task = state.asyncio_loop.run_in_executor(None, update_feeds)
         # logger.info("-update bar")
         # state.loop.draw_screen()
@@ -376,9 +395,10 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         self.update_query()
         self.view.reset()
 
-    # def on_activate(self):
-    #     self.refresh()
-    #     self.update()
+    def on_activate(self):
+        super().on_activate()
+        # self.refresh()
+        # self.update()
 
 
     @db_session

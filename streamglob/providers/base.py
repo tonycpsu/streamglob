@@ -25,6 +25,7 @@ class BaseProviderView(BaseView):
     def update(self):
         pass
 
+
 class InvalidConfigView(BaseProviderView):
 
     def __init__(self, name, required_config):
@@ -470,7 +471,7 @@ class BackgroundTasksMixin(object):
                           wait_for_first = False,
                           *args, **kwargs):
 
-        logger.info(f"run_in_background {fn.__name__} {interval}c")
+        logger.info(f"run_in_background {fn.__name__} {interval}")
         async def run():
             while True:
                 logger.info(f"running {fn.__name__} {args} {kwargs}")
@@ -483,6 +484,8 @@ class BackgroundTasksMixin(object):
                 # logger.info(fn)
                 # await fn(*args, **kwargs)
                 state.asyncio_loop.create_task(fn(*args, **kwargs))
+                # state.asyncio_loop.run_in_executor(None, lambda: fn(*args, **kwargs))
+
                 # state.loop.event_loop.enter_idle(lambda: fn(*args, **kwargs))
                 logger.info(f"sleeping for {interval}")
                 await asyncio.sleep(interval)

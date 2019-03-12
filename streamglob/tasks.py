@@ -87,8 +87,11 @@ class TaskManager(Observable):
     async def stop(self):
         logger.info("task_manager stopping")
         # import time; time.sleep(1)
-        for a in self.active:
-            a.proc.terminate()
+
+        # for a in self.active:
+        #     if a.program.progress_stream:
+        #         os.close(a.program.progress_stream)
+        #         # a.proc.terminate()
 
         # await self.pending.join()
         self.worker_task.cancel()
