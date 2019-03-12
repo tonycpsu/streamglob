@@ -554,10 +554,9 @@ def main():
                         help="verbose logging")
     group.add_argument("-q", "--quiet", action="count", default=0,
                         help="quiet logging")
-
-    parser.add_argument("-d", "--debug-console", action="store_true",
-                        help="show debug console")
-
+    parser.add_argument("-d", "--debug-console",
+                        help="show logging console (disables task manager UI)",
+                        action="store_true")
     parser.add_argument("spec", metavar="SPECIFIER",
                         help="media specifier", nargs="?")
 

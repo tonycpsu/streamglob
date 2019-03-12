@@ -381,8 +381,10 @@ class BaseProvider(abc.ABC):
             sources = sources
         )
 
-        # asyncio.create_task(Player.play(task, player_spec, helper_spec, **kwargs))
-        state.task_manager.play(task, player_spec, helper_spec, **kwargs)
+        if not state.options.debug_console:
+            state.task_manager.play(task, player_spec, helper_spec, **kwargs)
+        else:
+            asyncio.create_task(Player.play(task, player_spec, helper_spec, **kwargs))
 
 
     def download(self, selection, **kwargs):
@@ -418,8 +420,10 @@ class BaseProvider(abc.ABC):
             # s.title = selection.title
             # s.dest = filename
 
-            # asyncio.create_task(Downloader.download(task, filename, helper_spec, **kwargs))
-            state.task_manager.download(task, filename, helper_spec, **kwargs)
+            if not state.options.debug_console:
+                state.task_manager.download(task, filename, helper_spec, **kwargs)
+            else:
+                asyncio.create_task(Downloader.download(task, filename, helper_spec, **kwargs))
 
     def on_select(self, widget, selection):
         self.play(selection)
