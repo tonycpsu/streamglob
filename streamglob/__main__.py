@@ -289,7 +289,7 @@ class TasksDataTable(BaseDataTable):
                         r.program.progress.size_downloaded,
                         r.program.progress.size_total
                     ),
-                    format_fn = lambda v: (f"{v[0] or '?'}/{v[1] or '?'}")
+                    format_fn = lambda v: (f"{v[0] or '?'}/{v[1] or '?'}") if v else ""
                     # value = foo,
                 ),
                 DataTableColumn(
