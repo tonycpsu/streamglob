@@ -432,11 +432,11 @@ class TasksView(BaseView):
 
 def run_gui(provider, **kwargs):
 
-    entries = {}
+    state.palette_entries = {}
     for (n, f, b) in  [
             ("unread", "white", "black"),
     ]:
-        entries[n] = PaletteEntry(
+        state.palette_entries[n] = PaletteEntry(
             name=n,
             mono="white",
             foreground=f,
@@ -446,14 +446,28 @@ def run_gui(provider, **kwargs):
         )
 
     for k, v in config.settings.profile.attributes.items():
-        entries[k] = PaletteEntry.from_config(v)
+        state.palette_entries[k] = PaletteEntry.from_config(v)
 
-    entries.update(DataTable.get_palette_entries(user_entries=entries))
-    entries.update(Dropdown.get_palette_entries())
-    entries.update(ScrollingListBox.get_palette_entries())
-    entries.update(TabView.get_palette_entries())
-    # raise Exception(entries)
-    palette = Palette("default", **entries)
+    for pname, p in providers.PROVIDERS.items():
+        if not hasattr(p.config, "attributes"):
+            continue
+        for gname, group in p.config.attributes.items():
+            for k, v in group.items():
+                ename = f"{pname}.{gname}.{k}"
+                state.palette_entries[ename] = PaletteEntry.from_config(v)
+
+    state.palette_entries.update(DataTable.get_palette_entries(
+        user_entries=state.palette_entries
+    ))
+    state.palette_entries.update(Dropdown.get_palette_entries())
+    state.palette_entries.update(
+        ScrollingListBox.get_palette_entries()
+    )
+    state.palette_entries.update(TabView.get_palette_entries())
+
+    # raise Exception(state.palette_entries)
+    palette = Palette("default", **state.palette_entries)
+
     state.screen = urwid.raw_display.Screen()
     state.screen.set_terminal_properties(256)
 

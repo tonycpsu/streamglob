@@ -138,6 +138,8 @@ class BaseProvider(abc.ABC):
             + ")", re.IGNORECASE
         )
 
+    def init_config(self):
+        pass
 
     @property
     def LISTING_CLASS(self):

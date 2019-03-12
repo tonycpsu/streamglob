@@ -77,7 +77,7 @@ class BAMLineScoreDataTable(DataTable):
     #         self.PLAYING_PERIOD_ATTR, self.NUM_PLAYING_PERIODS, overtime_label = None
     # ):
     @classmethod
-    def for_game(cls, game, index, hide_spoilers=False):
+    def for_game(cls, provider, game, hide_spoilers=False):
 
         line_score = game.get("linescore", None)
         away_team = game["teams"]["away"]["team"]["abbreviation"]
@@ -120,7 +120,14 @@ class BAMLineScoreDataTable(DataTable):
 
             i = -1
             line = AttrDict()
-            line.team = away_team if s == 0 else home_team
+            team = away_team if s == 0 else home_team
+            color_cfg = provider.config.team_colors
+            if color_cfg is not False:
+                color_key = f"""teams{"_%s" %(color_cfg) if color_cfg else ""}"""
+                attr = f"{provider.IDENTIFIER.lower()}.{color_key}.{team.lower()}"
+            else:
+                attr = "bold"
+            line.team = urwid.Text((attr, team), align="right")
 
             if isinstance(line_score[cls.PLAYING_PERIOD_ATTR], list):
                 for i, playing_period in enumerate(line_score[cls.PLAYING_PERIOD_ATTR]):
@@ -888,6 +895,14 @@ class BAMProviderMixin(abc.ABC):
         super().__init__(*args, **kwargs)
         self.filters["date"].connect("changed", self.on_date_change)
         self.game_map = AttrDict()
+
+
+    def init_config(self):
+        # set alternate team color attributes
+        for teamname, attr in self.config.attributes.teams.items():
+            self.config.attributes.teams_fg[teamname] = {"fg": attr["fg"]}
+            self.config.attributes.teams_bg[teamname] = {"fg": attr["bg"]}
+
 
     @property
     def session_params(self):

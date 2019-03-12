@@ -15,7 +15,12 @@ from ..exceptions import *
 PROVIDERS = AttrDict()
 DEFAULT_PROVIDER=None
 
+# FOO=1
 def get(provider, *args, **kwargs):
+    # global FOO
+    # FOO+=1
+    # if FOO > 5:
+    #     raise Exception("get")
     try:
         return PROVIDERS.get(provider)
     except TypeError:
@@ -64,6 +69,8 @@ def load():
         (x.name, x.plugin())
         for x in mgr
     )
+    for p in PROVIDERS.values():
+        p.init_config()
 
     if len(config.settings.profile.providers):
         # first listed in config

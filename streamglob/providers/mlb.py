@@ -41,7 +41,7 @@ class MLBMediaListing(BAMMediaListing):
     @memo(region="short")
     def line(self):
         table = MLBLineScoreDataTable.for_game(
-            self.game_data, self.index, self.hide_spoilers
+            self.provider, self.game_data, self.hide_spoilers
         )
         return BAMLineScoreBox(table)
 
@@ -97,6 +97,7 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
         self._state.token = token
         self._state.access_token = access_token
         self._state.access_token_expiry = access_token_expiry
+
 
     def login(self):
 
