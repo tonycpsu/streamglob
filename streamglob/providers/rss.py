@@ -36,7 +36,11 @@ class RSSSession(session.StreamSession):
             logger.exception(e)
             raise SGFeedUpdateFailedException
         # print(content)
-        return atoma.parse_rss_bytes(content)
+        try:
+            return atoma.parse_rss_bytes(content)
+        except atoma.exceptions.FeedXMLError as e:
+            logger.error(f"{e}: {content}")
+            raise SGFeedUpdateFailedException
 
 class RSSItem(model.MediaItem):
     pass
