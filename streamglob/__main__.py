@@ -158,7 +158,7 @@ class MainToolbar(urwid.WidgetWrap):
             lambda w, b, v: self._emit("profile_change", v)
         )
 
-        self.nax_concurrent_tasks_widget = providers.filters.IntegerTextFilterWidget(
+        self.max_concurrent_tasks_widget = providers.filters.IntegerTextFilterWidget(
             default=config.settings.tasks.max,
                 minimum=1
         )
@@ -166,9 +166,9 @@ class MainToolbar(urwid.WidgetWrap):
         def set_max_concurrent_tasks(v):
             config.settings.tasks.max = int(v)
 
-        self.nax_concurrent_tasks_widget.connect("changed", set_max_concurrent_tasks)
+        self.max_concurrent_tasks_widget.connect("changed", set_max_concurrent_tasks)
         # urwid.connect_signal(
-        #     self.nax_concurrent_tasks_widget,
+        #     self.max_concurrent_tasks_widget,
         #     "change",
         #     set_max_concurrent_tasks
         # )
@@ -177,7 +177,7 @@ class MainToolbar(urwid.WidgetWrap):
             # ('weight', 1, urwid.Padding(urwid.Edit("foo"))),
             (self.provider_dropdown.width, self.provider_dropdown),
             ("pack", urwid.Text(("Downloads"))),
-            (5, self.nax_concurrent_tasks_widget),
+            (5, self.max_concurrent_tasks_widget),
             ("weight", 1, urwid.Padding(urwid.Text(""))),
             # (1, urwid.Divider(u"\N{BOX DRAWINGS LIGHT VERTICAL}")),
             (self.profile_dropdown.width, self.profile_dropdown),
