@@ -43,9 +43,10 @@ class NHLMediaListing(BAMMediaListing):
     @property
     @memo(region="short")
     def line(self):
-        return NHLLineScoreDataTable.for_game(
+        table = NHLLineScoreDataTable.for_game(
             self.game_data, self.index, self.hide_spoilers
         )
+        return BAMLineScoreBox(table)
 
     def extra_media_attributes(self, item):
         return {
@@ -223,7 +224,7 @@ class NHLStreamSession(session.AuthenticatedStreamSession):
                               for x in j["session_info"]["sessionAttributes"]
                               if x["attributeName"] == "mediaAuth_v2")
         except KeyError:
-            raise SGStreamSessionException(f"No stream found for media {media.media_id}")
+            raise SGStreamNotFound(f"No stream found for media {media.media_id}")
 
         self.cookies.set_cookie(
             Cookie(0, 'mediaAuth_v2', media_auth,

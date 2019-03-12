@@ -25,10 +25,8 @@ from .widgets import *
 
 class BAMLineScoreBox(urwid.WidgetWrap):
 
-    def __init__(self, columns, data):
-        kw = dict(
-        )
-        self.table = DataTable(columns, data=data)
+    def __init__(self, table):
+        self.table = table
         self.box = urwid.BoxAdapter(
             urwid.LineBox(
                 self.table,
@@ -69,6 +67,8 @@ class BAMLineScoreBox(urwid.WidgetWrap):
 
 class BAMLineScoreDataTable(DataTable):
 
+    sort_icons = False
+
     OVERTIME_LABEL = None
 
     # @classmethod
@@ -97,7 +97,7 @@ class BAMLineScoreDataTable(DataTable):
             status = cls.PLAYING_PERIOD_DESC(line_score)
 
         columns = [
-            DataTableColumn("team", width=10, label=status, align="right", padding=1),
+            DataTableColumn("team", width=max(10, len(status)), label=status, align="right"),
             DataTableColumn("empty_1", label="", width=3)
         ]
 
@@ -141,7 +141,7 @@ class BAMLineScoreDataTable(DataTable):
                         )
 
                     if hide_spoilers:
-                        setattr(line, str(i+1), "?")
+                        setattr(line, str(i+1), urwid.Text(("dim", "?")))
 
                     elif side in playing_period:
                         if isinstance(playing_period[side], dict) and primary_scoring_attr in playing_period[side]:
@@ -155,7 +155,7 @@ class BAMLineScoreDataTable(DataTable):
                             DataTableColumn(str(n+1), label=str(n+1), width=3)
                         )
                     if hide_spoilers:
-                        setattr(line, str(n+1), "?")
+                        setattr(line, str(n+1), urwid.Text(("dim", "?")))
 
             if not s:
                 columns.append(
@@ -174,7 +174,7 @@ class BAMLineScoreDataTable(DataTable):
                 if not hide_spoilers:
                     setattr(line, stat, parse_int(tk[side][stat]))
                 else:
-                    setattr(line, stat, "?")
+                    setattr(line, stat, urwid.Text(("dim", "?")))
 
             data.append(line)
 
@@ -194,7 +194,7 @@ class BAMLineScoreDataTable(DataTable):
                     # data[0][primary_scoring_attr] = urwid.Text(("dim", str(data[0][primary_scoring_attr])))
 
         # return urwid.BoxAdapter(panwid.DataTable(columns, data=data), 3)
-        return BAMLineScoreBox(columns, data)
+        return cls(columns, data)
 
 
 class HighlightsDataTable(DataTable):
@@ -203,7 +203,7 @@ class HighlightsDataTable(DataTable):
     ui_sort = False
 
     columns = [
-        DataTableColumn("title", value = "{data.title}: ({data.media_id})"),
+        DataTableColumn("video", value = "{data.title}: ({data.duration})"),
         DataTableColumn("url", hide=True),
         # DataTableColumn("duration", width=10),
     ]
@@ -280,6 +280,7 @@ class BAMMediaListing(model.MediaListing):
         "home",
         "in_market_home",
         "national",
+        "multi-cam",
         "condensed",
         "recap",
         "..."
@@ -292,7 +293,7 @@ class BAMMediaListing(model.MediaListing):
     away_abbrev: str = None
     home_abbrev: str = None
     start: datetime = None
-    attrs: str = None
+    # attrs: str = None
 
     @property
     def hide_spoilers(self):
@@ -305,6 +306,40 @@ class BAMMediaListing(model.MediaListing):
                     set(hide_spoiler_teams)
                 )) > 0
 
+    @property
+    def media_types(self):
+        return set([
+            m.media_type
+            for m in self.media
+        ])
+
+    @property
+    def has_video(self):
+        return "video" in self.media_types
+
+    @property
+    def has_audio(self):
+        return "audio" in self.media_types
+
+    @property
+    def attrs(self):
+        return "".join([
+            f"{'V' if self.has_video else ' '}",
+            f"{'a' if self.has_audio else ' '}",
+            f"{' ' if self.is_free else '$'}",
+        ])
+
+    @property
+    def media_available(self):
+        return "".join(["!" if self.is_free else "$"] + [
+            m.stream_indicator or "" for m in self.media
+        ])
+
+    @property
+    def is_free(self):
+        return any([
+            m.free for m in self.media
+        ])
 
     @classmethod
     def from_json(cls, provider, g):
@@ -318,15 +353,6 @@ class BAMMediaListing(model.MediaListing):
         away_abbrev = g["teams"]["away"]["team"]["abbreviation"]
         home_abbrev = g["teams"]["home"]["team"]["abbreviation"]
         start_time = dateutil.parser.parse(g["gameDate"])
-        attrs = MediaAttributes()
-        try:
-            # FIXME: this is wrong
-            item = free_game = g["content"]["media"]["epg"][0]["items"][0]
-            attrs.state = item["mediaState"]
-            attrs.free = item["freeGame"]
-        except:
-            attrs.state = None
-            attrs.free = None
 
         if config.settings.profile.time_zone:
             start_time = start_time.astimezone(
@@ -342,7 +368,7 @@ class BAMMediaListing(model.MediaListing):
             away_abbrev = away_abbrev,
             home_abbrev = home_abbrev,
             start = start_time,
-            attrs = attrs,
+            # attrs = attrs,
         )
 
     # FIXME
@@ -387,24 +413,28 @@ class BAMMediaListing(model.MediaListing):
     def media(self):
 
         def fix_feed_type(feed_type, epg_title, title, description, blurb):
+            # logger.info(f"{feed_type}, {epg_title}, {title}, {description}")
             # MLB-specific -- mediaSubType is sometimes a team ID instead
             # of away/home
             if feed_type and feed_type.isdigit():
                 if int(feed_type) == game["teams"]["away"]["team"]["id"]:
-                    return "AWAY"
+                    feed_type = "away"
                 elif int(feed_type) == game["teams"]["home"]["team"]["id"]:
-                    return "HOME"
+                    return "home"
+            elif feed_type and feed_type.lower() == "composite":
+                feed_type = "multi-cam"
             elif "Recap" in epg_title:
-                return "Recap"
+                feed_type = "recap"
             elif "Highlights" in epg_title:
                 if ("CG" in title
                     or "Condensed" in description
                     or "Condensed" in blurb):
-                    return "Condensed"
+                    feed_type = "condensed"
 
             if feed_type is None:
                 return title or "..."
-            return feed_type
+
+            return feed_type.title()
 
 
         logger.debug(f"geting media for game {self.game_id}")
@@ -415,7 +445,8 @@ class BAMMediaListing(model.MediaListing):
             epgs = (game["content"]["media"]["epg"]
                     + game["content"]["media"].get("epgAlternate", []))
         except KeyError:
-            raise SGStreamNotFound("no matching media for game %d" %(self.game_id))
+            return []
+            # raise SGStreamNotFound("no matching media for game %d" %(self.game_id))
 
         # raise Exception(self.game_id, epgs)
 
@@ -453,6 +484,7 @@ class BAMMediaListing(model.MediaListing):
                     item.get("description", ""),
                     item.get("blurb", ""),
                 ),
+                free = item.get("freeGame"),
                 playbacks = item.get("playbacks", []),
                 **self.extra_media_attributes(item)
             )
@@ -490,7 +522,31 @@ class BAMMediaSource(model.MediaSource):
     call_letters: str = ""
     language: str = ""
     feed_type: str = ""
+    free: bool = False
     playbacks: typing.List[dict] = field(default_factory=list)
+
+
+    MEDIA_STATE_MAP = {
+        "live": "!",
+        "archive": ".",
+        "done": "^",
+        "off": "X",
+    }
+
+    @property
+    def state_indicator(self):
+        return self.MEDIA_STATE_MAP.get(self.state, "?")
+
+    @property
+    def stream_indicator(self):
+        if not self.state in ["live", "done", "archive"]:
+            return None
+        c = self.media_type[0].lower()
+        if c == "v" and not any([ t in self.feed_type.lower() for t in ["away", "home"]]):
+            c = self.feed_type[0].lower()
+        if self.state == "live":
+            c = c.upper()
+        return c
 
     @property
     def helper(self):
@@ -527,8 +583,8 @@ class BAMMediaSource(model.MediaSource):
                 from pprint import pformat
                 raise Exception(pformat(media))
         else:
-            stream = self.provider.session.get_stream(self)
             try:
+                stream = self.provider.session.get_stream(self)
                 # media_url = stream["stream"]["complete"]
                 media_url = stream.url
             except (TypeError, AttributeError):
@@ -787,8 +843,6 @@ class BAMProviderDataTable(ProviderDataTable):
             self.provider.play(self.selection.data)
         elif key == ".":
             self.selection.toggle_details()
-        elif key == "ctrl w":
-            logger.info(self.width)
         else:
             return key
 
@@ -816,13 +870,14 @@ class BAMProviderMixin(abc.ABC):
     ])
 
     ATTRIBUTES = AttrDict(
-        attrs = {"width": 6},
+        # attrs = {"width": 6},
         start = {"width": 6, "format_fn": format_start_time},
-        away = {"width": "pack"},
-        home = {"width": "pack"},
+        away = {"width": 16},
+        home = {"width": 16},
         line = {"width": "pack"},
+        media_available = {"label": "media", "width": 10},
+        empty = {"label": "", "width": ("weight", 1)},
         game_id = {"width": 10},
-        empty = {"label": "", "width": ("weight", 1)}
     )
 
     HELPER = "streamlink"

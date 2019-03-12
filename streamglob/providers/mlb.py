@@ -40,9 +40,10 @@ class MLBMediaListing(BAMMediaListing):
     @property
     @memo(region="short")
     def line(self):
-        return MLBLineScoreDataTable.for_game(
+        table = MLBLineScoreDataTable.for_game(
             self.game_data, self.index, self.hide_spoilers
         )
+        return BAMLineScoreBox(table)
 
 
 class MLBBAMProviderData(BAMProviderData):
