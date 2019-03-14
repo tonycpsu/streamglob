@@ -49,7 +49,6 @@ class BAMLineScoreBox(urwid.WidgetWrap):
 
     @property
     def min_width(self):
-        # raise Exception(self.table.width)
         # logger.info(f"{id(self.table)}")
         return self.table.min_width + 2
         # return self._width
@@ -121,12 +120,7 @@ class BAMLineScoreDataTable(DataTable):
             i = -1
             line = AttrDict()
             team = away_team if s == 0 else home_team
-            color_cfg = provider.config.team_colors
-            if color_cfg is not False:
-                color_key = f"""teams{"_%s" %(color_cfg) if color_cfg else ""}"""
-                attr = f"{provider.IDENTIFIER.lower()}.{color_key}.{team.lower()}"
-            else:
-                attr = "bold"
+            attr = provider.team_color_attr(team.lower(), cfg="bg")
             line.team = urwid.Text((attr, team), align="right")
 
             if isinstance(line_score[cls.PLAYING_PERIOD_ATTR], list):
@@ -276,8 +270,6 @@ class BAMDetailBox(Observable, urwid.WidgetWrap):
         return True
 
 
-
-
 @dataclass
 class BAMMediaListing(model.MediaListing):
 
@@ -301,6 +293,57 @@ class BAMMediaListing(model.MediaListing):
     home_abbrev: str = None
     start: datetime = None
     # attrs: str = None
+
+    @classmethod
+    def from_json(cls, provider, g):
+
+
+        game_pk = g["gamePk"]
+        game_type = g["gameType"]
+        status = g["status"]["statusCode"]
+        away_team = g["teams"]["away"]["team"]["teamName"]
+        home_team = g["teams"]["home"]["team"]["teamName"]
+        away_abbrev = g["teams"]["away"]["team"]["abbreviation"]
+        home_abbrev = g["teams"]["home"]["team"]["abbreviation"]
+        start_time = dateutil.parser.parse(g["gameDate"])
+
+        if config.settings.profile.time_zone:
+            start_time = start_time.astimezone(
+                pytz.timezone(config.settings.profile.time_zone)
+            )
+
+        return cls(
+            provider_id = provider,
+            game_id = game_pk,
+            game_type = game_type,
+            away = away_team,
+            home = home_team,
+            away_abbrev = away_abbrev,
+            home_abbrev = home_abbrev,
+            start = start_time,
+            # attrs = attrs,
+        )
+
+
+    @property
+    def away_team_box(self):
+
+        attr = self.provider.team_color_attr(self.away_abbrev)
+        return urwid.AttrMap(
+            urwid.Text(self.away),
+            {None: attr}
+        )
+
+
+    @property
+    def home_team_box(self):
+
+        attr = self.provider.team_color_attr(self.home_abbrev)
+        return urwid.AttrMap(
+            urwid.Text(self.home),
+            {None: attr}
+        )
+
 
     @property
     def hide_spoilers(self):
@@ -347,36 +390,6 @@ class BAMMediaListing(model.MediaListing):
         return any([
             m.free for m in self.media
         ])
-
-    @classmethod
-    def from_json(cls, provider, g):
-
-
-        game_pk = g["gamePk"]
-        game_type = g["gameType"]
-        status = g["status"]["statusCode"]
-        away_team = g["teams"]["away"]["team"]["teamName"]
-        home_team = g["teams"]["home"]["team"]["teamName"]
-        away_abbrev = g["teams"]["away"]["team"]["abbreviation"]
-        home_abbrev = g["teams"]["home"]["team"]["abbreviation"]
-        start_time = dateutil.parser.parse(g["gameDate"])
-
-        if config.settings.profile.time_zone:
-            start_time = start_time.astimezone(
-                pytz.timezone(config.settings.profile.time_zone)
-            )
-
-        return cls(
-            provider_id = provider,
-            game_id = game_pk,
-            game_type = game_type,
-            away = away_team,
-            home = home_team,
-            away_abbrev = away_abbrev,
-            home_abbrev = home_abbrev,
-            start = start_time,
-            # attrs = attrs,
-        )
 
     # FIXME
     # @property
@@ -879,8 +892,10 @@ class BAMProviderMixin(abc.ABC):
     ATTRIBUTES = AttrDict(
         # attrs = {"width": 6},
         start = {"width": 6, "format_fn": format_start_time},
-        away = {"width": 16},
-        home = {"width": 16},
+        away_team_box = {"width": 16},
+        # away = {"width": 16},
+        # home = {"width": 16},
+        home_team_box = {"width": 16},
         line = {"width": "pack"},
         media_available = {"label": "media", "width": 10},
         empty = {"label": "", "width": ("weight", 1)},
@@ -900,9 +915,11 @@ class BAMProviderMixin(abc.ABC):
     def init_config(self):
         # set alternate team color attributes
         for teamname, attr in self.config.attributes.teams.items():
+            self.config.attributes.teams_normal[teamname] = attr
+            self.config.attributes.teams_inverse[teamname] = {"fg": attr["bg"], "bg": attr["fg"]}
             self.config.attributes.teams_fg[teamname] = {"fg": attr["fg"]}
             self.config.attributes.teams_bg[teamname] = {"fg": attr["bg"]}
-
+            # del self.config.attributes.teams[teamname]
 
     @property
     def session_params(self):
@@ -1258,3 +1275,18 @@ class BAMProviderMixin(abc.ABC):
         kwargs["cookies"] = self.session.cookies
 
         return (source, kwargs)
+
+    def team_color_attr(self, team, cfg=None):
+
+        if cfg is False:
+            return "bold"
+        color_cfg = "teams_" + (cfg or self.config.team_colors or "normal")
+        return f"{self.IDENTIFIER.lower()}.{color_cfg}.{team.lower()}"
+        # colkr
+        # if color_cfg is not False:
+        #     color_key
+        #     color_key = f"""teams{"_%s" %(color_cfg) if color_cfg else ""}"""
+        #     attr = f"{self.IDENTIFIER.lower()}.{color_key}.{team.lower()}"
+        # else:
+        #     attr = "bold"
+        # return attr
