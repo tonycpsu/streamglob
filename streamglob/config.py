@@ -109,7 +109,7 @@ class ProfileTree(ConfigTree):
             return p
 
     @property
-    def foo(self):
+    def profile_name(self):
         return self._profile_name
 
     def set_profile(self, profile):
@@ -154,7 +154,7 @@ class Config(ConfigTree):
 
     @property
     def profile_name(self):
-        return self._profile_tree.foo
+        return self._profile_tree.profile_name
 
     def set_profile(self, profile):
         self._profile_tree.set_profile(profile)
