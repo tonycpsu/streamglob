@@ -429,8 +429,7 @@ class TasksView(BaseView):
         self.active_downloads.refresh()
         self.completed_downloads.refresh()
 
-
-def run_gui(provider, **kwargs):
+def load_palette():
 
     state.palette_entries = {}
     for (n, f, b) in  [
@@ -466,8 +465,24 @@ def run_gui(provider, **kwargs):
     state.palette_entries.update(TabView.get_palette_entries())
 
     # raise Exception(state.palette_entries)
-    palette = Palette("default", **state.palette_entries)
+    return Palette("default", **state.palette_entries)
 
+
+def reload_config():
+
+    logger.info("reload config")
+    profile = config.settings.profile_name
+    config.load(merge_default=True)
+    providers.load_config()
+    if profile:
+        config.settings.set_profile(profile)
+    state.palette = load_palette()
+    state.screen.register_palette(state.palette)
+
+
+def run_gui(provider, **kwargs):
+
+    state.palette = load_palette()
     state.screen = urwid.raw_display.Screen()
     state.screen.set_terminal_properties(256)
 
@@ -503,12 +518,14 @@ def run_gui(provider, **kwargs):
     def global_input(key):
         if key in ('q', 'Q'):
             quit_app()
+        elif key == "meta C":
+            reload_config()
         else:
             return False
 
     state.loop = urwid.MainLoop(
         pile,
-        palette,
+        state.palette,
         screen=state.screen,
         event_loop=PatchedAsyncioEventLoop(loop=state.asyncio_loop),
         unhandled_input=global_input,

@@ -54,6 +54,10 @@ def parse_spec(spec):
         return (p, None, options)
     return (p, selection, options)
 
+def load_config():
+
+    for p in PROVIDERS.values():
+        p.init_config()
 
 def log_plugin_exception(manager, entrypoint, exception):
     logger.error('Failed to load %s: %s' % (entrypoint, exception))
@@ -69,8 +73,8 @@ def load():
         (x.name, x.plugin())
         for x in mgr
     )
-    for p in PROVIDERS.values():
-        p.init_config()
+
+    load_config()
 
     if len(config.settings.profile.providers):
         # first listed in config
