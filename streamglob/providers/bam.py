@@ -13,6 +13,7 @@ import distutils.spawn
 import dataclasses
 from dataclasses import *
 import typing
+import itertools
 
 from .. import player
 from .. import config
@@ -66,7 +67,7 @@ class BAMLineScoreBox(urwid.WidgetWrap):
 
 class BAMLineScoreDataTable(DataTable):
 
-    sort_icons = False
+    # sort_icons = False
 
     OVERTIME_LABEL = None
 
@@ -200,13 +201,15 @@ class BAMLineScoreDataTable(DataTable):
 
 class HighlightsDataTable(DataTable):
 
+    with_scrollbar = True
     with_header = False
     ui_sort = False
 
     columns = [
-        DataTableColumn("video", value = "{data.title}: ({data.duration})"),
-        DataTableColumn("url", hide=True),
-        # DataTableColumn("duration", width=10),
+        DataTableColumn("duration", width=10),
+        DataTableColumn("title", value = "{data.title}: ({data.duration})"),
+        # DataTableColumn("title"),
+        # DataTableColumn("url", hide=True),
     ]
 
     def detail_fn(self, data):
@@ -220,22 +223,25 @@ class BAMDetailBox(Observable, urwid.WidgetWrap):
     signals = ["play"]
 
     def __init__(self, game):
+
+        data =[
+            AttrDict(dict(
+                media_id = h.get("guid", h.get("id")),
+                title = h["title"],
+                description = h["description"],
+                duration = h["duration"],
+                url = next(
+                    p for p in h["playbacks"]
+                    if p["name"] == "HTTP_CLOUD_WIRED_60"
+                )["url"],
+                _details_open = True
+
+            )) for h in game["content"]["highlights"][self.HIGHLIGHT_ATTR]["items"]
+        ]
+
         self.game = game
         self.table = HighlightsDataTable(
-            data= [
-                AttrDict(dict(
-                    media_id = h.get("guid", h.get("id")),
-                    title = h["title"],
-                    description = h["description"],
-                    duration = h["duration"],
-                    url = next(
-                        p for p in h["playbacks"]
-                        if p["name"] == "HTTP_CLOUD_WIRED_60"
-                    )["url"],
-                    _details_open = True
-
-                )) for h in game["content"]["highlights"][self.HIGHLIGHT_ATTR]["items"]
-            ]
+            data = data
         )
 
         self.columns = urwid.Columns([
@@ -247,10 +253,11 @@ class BAMDetailBox(Observable, urwid.WidgetWrap):
             # attr_map = {"table_row_body": "red"},
             attr_map = {},
             focus_map = {
+                None: "blue",
                 "table_row_body focused": "blue",
             },
         )
-        self.box = urwid.BoxAdapter(self.attr, height=10)
+        self.box = urwid.BoxAdapter(self.attr, 10)
         super().__init__(self.box)
 
     @property
@@ -381,9 +388,31 @@ class BAMMediaListing(model.MediaListing):
 
     @property
     def media_available(self):
-        return "".join(["!" if self.is_free else "$"] + [
-            m.stream_indicator or "" for m in self.media
+        # return "".join(["!" if self.is_free else "$"] + [
+        #     m.stream_indicator or "" for m in self.media
+        # ])
+
+        # return urwid.Columns([
+        #     (2, m.stream_indicator or urwid.Text(" "))
+        #     for m in self.media
+        # ])
+        items = [ (k, list(x[1] for x in g))
+                  for k, g in itertools.groupby(
+                          (m.stream_indicator for m in self.media),
+                          lambda v: v[0]
+                  ) ]
+        return urwid.Pile([
+            ("pack",
+             urwid.Columns([
+                 (2, urwid.Padding(urwid.Text(("bold", media_type)), right=1))
+             ] + [
+                 ("pack", urwid.Text(f))
+                 for f in feed_types
+             ])
+            )
+            for media_type, feed_types in items
         ])
+
 
     @property
     def is_free(self):
@@ -561,12 +590,15 @@ class BAMMediaSource(model.MediaSource):
     def stream_indicator(self):
         if not self.state in ["live", "done", "archive"]:
             return None
-        c = self.media_type[0].lower()
-        if c == "v" and not any([ t in self.feed_type.lower() for t in ["away", "home"]]):
-            c = self.feed_type[0].lower()
+        media_type = self.media_type[0].upper()
+        feed_type = self.feed_type[0].lower()
         if self.state == "live":
-            c = c.upper()
-        return c
+            feed_type = feed_type.upper()
+        return media_type + feed_type
+        # return urwid.Pile([
+        #     ("pack", urwid.Text(c[0])),
+        #     ("pack", urwid.Text(c[1])),
+        # ])
 
     @property
     def helper(self):
@@ -863,6 +895,9 @@ class BAMProviderDataTable(ProviderDataTable):
             self.provider.play(self.selection.data)
         elif key == ".":
             self.selection.toggle_details()
+        elif key == "ctrl k":
+            # logger.info(self.selection.cells[6].contents.min_width)
+            logger.info(self.selection.pile.contents[1][0].table.row_height)
         else:
             return key
 
@@ -892,13 +927,13 @@ class BAMProviderMixin(abc.ABC):
     ATTRIBUTES = AttrDict(
         # attrs = {"width": 6},
         start = {"width": 6, "format_fn": format_start_time},
-        away_team_box = {"width": 16},
+        away_team_box = {"label": "away", "width": 16},
         # away = {"width": 16},
         # home = {"width": 16},
-        home_team_box = {"width": 16},
-        line = {"width": "pack"},
+        home_team_box = {"label": "home", "width": 16},
+        line = {"pack": True},
         media_available = {"label": "media", "width": 10},
-        empty = {"label": "", "width": ("weight", 1)},
+        empty = {"label": "", "width": ("weight", 1), "pack": True},
         game_id = {"width": 10},
     )
 
@@ -1214,11 +1249,12 @@ class BAMProviderMixin(abc.ABC):
             logger.info(f"task: {task}")
             player_spec = {"media_types": {"video"}}
             helper_spec = None
-            # asyncio.create_task/(Player.play(task, player_spec, helper_spec))
+            # asyncio.create_task(Player.play(task, player_spec, helper_spec))
             state.task_manager.play(task, player_spec, helper_spec)
 
         box = self.DETAIL_BOX_CLASS(game)
         box.connect("play", play_highlight)
+        # return urwid.BoxAdapter(DataTable(columns=[DataTableColumn("foo")], data=[{"foo": 1},{"foo": 2},{"foo": 3}]), 5)
         return box
 
     def get_source(self, selection, media_id=None, **kwargs):
