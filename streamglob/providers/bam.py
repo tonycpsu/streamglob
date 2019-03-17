@@ -101,7 +101,7 @@ class BAMLineScoreDataTable(DataTable):
         columns = [
             DataTableColumn("team", width=min(12, max(10, len(status))), min_width=10, label=status, align="right"),
             # DataTableColumn("team", width=len(status), label=status, align="right"),
-            DataTableColumn("empty_1", label="", width=3)
+            # DataTableColumn("empty_1", label="", width=3)
         ]
 
         if not line_score:
@@ -128,7 +128,9 @@ class BAMLineScoreDataTable(DataTable):
             line.team = urwid.Text((attr, team), align="right")
 
             if isinstance(line_score[cls.PLAYING_PERIOD_ATTR], list):
+
                 for i, playing_period in enumerate(line_score[cls.PLAYING_PERIOD_ATTR]):
+                    # continue
                     if not s:
                         columns.append(
                             DataTableColumn(
@@ -152,6 +154,8 @@ class BAMLineScoreDataTable(DataTable):
                     elif side in playing_period:
                         if isinstance(playing_period[side], dict) and primary_scoring_attr in playing_period[side]:
                             setattr(line, str(i+1), parse_int(playing_period[side][primary_scoring_attr]))
+                        else:
+                            setattr(line, str(i+1), "0")
                     else:
                         setattr(line, str(i+1), "X")
 
@@ -163,20 +167,13 @@ class BAMLineScoreDataTable(DataTable):
                     if hide_spoilers:
                         setattr(line, str(n+1), urwid.Text(("dim", "?")))
 
-            if not s:
-                columns.append(
-                    DataTableColumn("empty_2", label="", width=3, align="right")
-                )
-
             for stat in cls.SCORING_ATTRS:
-                if not stat in tk[side]:# and len(data) > 0:
-                    line[stat] = None
-                    continue
-
                 if not s:
                     columns.append(
                         DataTableColumn(stat, label=stat[0].upper(), width=3, align="right")
                     )
+                if not stat in tk[side]:# and len(data) > 0:
+                    continue
                 if not hide_spoilers:
                     setattr(line, stat, parse_int(tk[side][stat]))
                 else:
@@ -194,12 +191,9 @@ class BAMLineScoreDataTable(DataTable):
             if None not in [ data[i][primary_scoring_attr] for i in range(2) ]:
                 if data[0][primary_scoring_attr] > data[1][primary_scoring_attr]:
                     data[0][primary_scoring_attr] = urwid.Text(("bold", str(data[0][primary_scoring_attr])))
-                    # data[1][primary_scoring_attr] = urwid.Text(("dim", str(data[1][primary_scoring_attr])))
                 elif data[1][primary_scoring_attr] > data[0][primary_scoring_attr]:
                     data[1][primary_scoring_attr] = urwid.Text(("bold", str(data[1][primary_scoring_attr])))
-                    # data[0][primary_scoring_attr] = urwid.Text(("dim", str(data[0][primary_scoring_attr])))
 
-        # return urwid.BoxAdapter(panwid.DataTable(columns, data=data), 3)
         return cls(columns, data)
 
 
@@ -669,7 +663,7 @@ def parse_int(n):
     except ValueError:
         return n
     except TypeError:
-        return None
+        return ""
 
 
 class MediaAttributes(AttrDict):
@@ -951,7 +945,6 @@ class BAMProviderMixin(abc.ABC):
         home_team_box = {"label": "home", "width": 16},
         line = {"pack": True},
         media_available = {"label": "media", "width": 10},
-        empty = {"label": "", "width": ("weight", 1), "pack": True},
         game_id = {"width": 10},
     )
 
