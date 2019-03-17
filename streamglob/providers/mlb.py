@@ -38,7 +38,6 @@ class MLBDetailBox(BAMDetailBox):
 class MLBMediaListing(BAMMediaListing):
 
     @property
-    @memo(region="short")
     def line(self):
         style = self.provider.config.listings.line.style
         table = MLBLineScoreDataTable.for_game(

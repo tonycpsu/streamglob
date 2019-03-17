@@ -41,7 +41,6 @@ class NHLMediaSource(BAMMediaSource):
 class NHLMediaListing(BAMMediaListing):
 
     @property
-    @memo(region="short")
     def line(self):
         style = self.provider.config.listings.line.style
         table = NHLLineScoreDataTable.for_game(

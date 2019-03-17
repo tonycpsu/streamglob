@@ -48,16 +48,6 @@ class BAMLineScoreBox(urwid.WidgetWrap):
         self.box = urwid.BoxAdapter(w, self.STYLES[self.style]["height"])
         super().__init__(self.box)
 
-    def render(self, size, focus=False):
-        self._width = size[0]
-        if len(size) > 1:
-            self._height = size[1]
-        return super().render(size, focus)
-
-    @property
-    def width(self):
-        return self._width
-
     @property
     def min_width(self):
         # FIXME: this should just be +2 for the LineBox, but something causes
