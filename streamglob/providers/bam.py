@@ -26,16 +26,26 @@ from .widgets import *
 
 class BAMLineScoreBox(urwid.WidgetWrap):
 
-    def __init__(self, table):
-        self.table = table
-        self.box = urwid.BoxAdapter(
-            urwid.LineBox(
+    STYLES = {
+        "standard": {"height": 4, "boxed": True},
+        "compact": {"height": 3, "boxed": False},
+    }
+
+    def __init__(self, table, style=None):
+
+        self.table = w = table
+        self.style = style or "standard"
+        if not self.style in ["standard", "boxed", "compact"]:
+            raise Excpetion(f"line style {style} not invalid")
+
+        if self.STYLES[self.style]["boxed"]:
+            w = urwid.LineBox(
                 self.table,
                 tlcorner="", tline="", trcorner="",
                 blcorner="├", brcorner="┤"
-            ),
-            4
-        )
+            )
+
+        self.box = urwid.BoxAdapter(w, self.STYLES[self.style]["height"])
         super().__init__(self.box)
 
     def render(self, size, focus=False):
@@ -50,8 +60,9 @@ class BAMLineScoreBox(urwid.WidgetWrap):
 
     @property
     def min_width(self):
-        # logger.info(f"{id(self.table)}")
-        return self.table.min_width + 2
+        # FIXME: this should just be +2 for the LineBox, but something causes
+        # the last column header to clip
+        return self.table.min_width + 3
         # return self._width
 
     @property
@@ -67,17 +78,18 @@ class BAMLineScoreBox(urwid.WidgetWrap):
 
 class BAMLineScoreDataTable(DataTable):
 
-    # sort_icons = False
+    sort_icons = False
+    no_clip_header = True
 
     OVERTIME_LABEL = None
 
-    # @classmethod
-    # def for_game(
-    #         cls, game, index, self.SCORING_ATTRS,
-    #         self.PLAYING_PERIOD_ATTR, self.NUM_PLAYING_PERIODS, overtime_label = None
-    # ):
     @classmethod
     def for_game(cls, provider, game, hide_spoilers=False):
+
+        # style = style or "standard"
+
+        # if not style in ["standard", "boxed", "compact"]:
+        #     raise Exception(f"line style {style} not invalid")
 
         line_score = game.get("linescore", None)
         away_team = game["teams"]["away"]["team"]["abbreviation"]
@@ -97,7 +109,8 @@ class BAMLineScoreDataTable(DataTable):
             status = cls.PLAYING_PERIOD_DESC(line_score)
 
         columns = [
-            DataTableColumn("team", width=max(10, len(status)), label=status, align="right"),
+            DataTableColumn("team", width=min(12, max(10, len(status))), min_width=10, label=status, align="right"),
+            # DataTableColumn("team", width=len(status), label=status, align="right"),
             DataTableColumn("empty_1", label="", width=3)
         ]
 
@@ -138,7 +151,8 @@ class BAMLineScoreDataTable(DataTable):
                                     )
                                     else cls.OVERTIME_LABEL
                                 ),
-                                width=3
+                                width=3,
+                                align="right"
                             )
                         )
 
@@ -154,14 +168,14 @@ class BAMLineScoreDataTable(DataTable):
                 for n in range(i+1, cls.NUM_PLAYING_PERIODS):
                     if not s:
                         columns.append(
-                            DataTableColumn(str(n+1), label=str(n+1), width=3)
+                            DataTableColumn(str(n+1), label=str(n+1), width=3, align="right")
                         )
                     if hide_spoilers:
                         setattr(line, str(n+1), urwid.Text(("dim", "?")))
 
             if not s:
                 columns.append(
-                    DataTableColumn("empty_2", label="", width=3)
+                    DataTableColumn("empty_2", label="", width=3, align="right")
                 )
 
             for stat in cls.SCORING_ATTRS:
@@ -171,7 +185,7 @@ class BAMLineScoreDataTable(DataTable):
 
                 if not s:
                     columns.append(
-                        DataTableColumn(stat, label=stat[0].upper(), width=3)
+                        DataTableColumn(stat, label=stat[0].upper(), width=3, align="right")
                     )
                 if not hide_spoilers:
                     setattr(line, stat, parse_int(tk[side][stat]))
@@ -300,6 +314,10 @@ class BAMMediaListing(model.MediaListing):
     home_abbrev: str = None
     start: datetime = None
     # attrs: str = None
+
+    @property
+    def style(self):
+        return config.settings.profile.listings.line.style
 
     @classmethod
     def from_json(cls, provider, g):
@@ -878,6 +896,7 @@ class BAMProviderDataTable(ProviderDataTable):
     index = "game_id"
     detail_selectable = True
     ui_sort = False
+    sort_icons = False
 
     @property
     def detail_fn(self):
@@ -897,7 +916,16 @@ class BAMProviderDataTable(ProviderDataTable):
             self.selection.toggle_details()
         elif key == "ctrl k":
             # logger.info(self.selection.cells[6].contents.min_width)
-            logger.info(self.selection.pile.contents[1][0].table.row_height)
+            logger.info(self.selection.data.line.table.visible_columns[0].name)
+            logger.info(self.selection.data.line.table.visible_columns[0].width)
+            logger.info(self.selection.data.line.table.visible_columns[0].min_width)
+            logger.info(self.selection.data.line.table.header.column_widths())
+            logger.info(self.selection.data.line.table.header.cells[28].contents.contents)
+            logger.info(self.selection.data.line.table.header.cells[0].width)
+            logger.info(self.selection.data.line.table.header.cells[0].sort_icon)
+            logger.info(self.selection.data.line.table.header.cells[0].min_width)
+            logger.info(self.selection.data.line.table.min_width)
+            logger.info(self.selection.data.line.table.width)
         else:
             return key
 

@@ -43,10 +43,12 @@ class NHLMediaListing(BAMMediaListing):
     @property
     @memo(region="short")
     def line(self):
+        style = self.provider.config.listings.line.style
         table = NHLLineScoreDataTable.for_game(
-            self.provider, self.game_data, self.hide_spoilers
+            self.provider, self.game_data, self.hide_spoilers,
+            # style = style
         )
-        return BAMLineScoreBox(table)
+        return BAMLineScoreBox(table, style)
 
     def extra_media_attributes(self, item):
         return {
