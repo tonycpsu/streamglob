@@ -211,6 +211,7 @@ class HighlightsDataTable(DataTable):
     with_scrollbar = True
     with_header = False
     ui_sort = False
+    empty_message = "(no highlights available)"
 
     columns = [
         # DataTableColumn("duration", width=10),
@@ -266,7 +267,9 @@ class BAMDetailBox(Observable, urwid.WidgetWrap):
                 "table_row_body focused": "blue",
             },
         )
-        self.box = urwid.BoxAdapter(self.attr, 10)
+        self.box = urwid.BoxAdapter(
+            self.attr, 2*len(data) + 1 if len(data) else 2
+        )
         super().__init__(self.box)
 
     @property
