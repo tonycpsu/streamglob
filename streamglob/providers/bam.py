@@ -100,8 +100,7 @@ class BAMLineScoreDataTable(DataTable):
 
         columns = [
             DataTableColumn("team", width=min(12, max(10, len(status))), min_width=10, label=status, align="right"),
-            # DataTableColumn("team", width=len(status), label=status, align="right"),
-            # DataTableColumn("empty_1", label="", width=3)
+            DataTableDivider("\N{BOX DRAWINGS DOUBLE VERTICAL}", in_header=False),
         ]
 
         if not line_score:
@@ -150,7 +149,6 @@ class BAMLineScoreDataTable(DataTable):
 
                     if hide_spoilers:
                         setattr(line, str(i+1), urwid.Text(("dim", "?")))
-
                     elif side in playing_period:
                         if isinstance(playing_period[side], dict) and primary_scoring_attr in playing_period[side]:
                             setattr(line, str(i+1), parse_int(playing_period[side][primary_scoring_attr]))
@@ -166,6 +164,10 @@ class BAMLineScoreDataTable(DataTable):
                         )
                     if hide_spoilers:
                         setattr(line, str(n+1), urwid.Text(("dim", "?")))
+                    # else:
+                    #     setattr(line, str(n+1), "x")
+            if not s:
+                columns.append(DataTableDivider("\N{BOX DRAWINGS LIGHT VERTICAL}", in_header=False))
 
             for stat in cls.SCORING_ATTRS:
                 if not s:
@@ -173,6 +175,7 @@ class BAMLineScoreDataTable(DataTable):
                         DataTableColumn(stat, label=stat[0].upper(), width=3, align="right")
                     )
                 if not stat in tk[side]:# and len(data) > 0:
+                    # setattr(line, stat, "")
                     continue
                 if not hide_spoilers:
                     setattr(line, stat, parse_int(tk[side][stat]))
@@ -204,8 +207,8 @@ class HighlightsDataTable(DataTable):
     ui_sort = False
 
     columns = [
-        DataTableColumn("duration", width=10),
-        DataTableColumn("title", value = "{data.title}: ({data.duration})"),
+        # DataTableColumn("duration", width=10),
+        DataTableColumn("title", value = lambda t, r: f"{r.data.title}: ({r.data.duration})"),
         # DataTableColumn("title"),
         # DataTableColumn("url", hide=True),
     ]
@@ -213,8 +216,10 @@ class HighlightsDataTable(DataTable):
     def detail_fn(self, data):
         return urwid.Columns([
             (4, urwid.Text("")),
-            ("weight", 1, urwid.Text(data.get("description")))
+            ("weight", 1, urwid.Text(f"{(data.get('description'))}"))
         ])
+
+DURATION_RE = re.compile("(?:0+:)?(.*)")
 
 class BAMDetailBox(Observable, urwid.WidgetWrap):
 
@@ -227,7 +232,7 @@ class BAMDetailBox(Observable, urwid.WidgetWrap):
                 media_id = h.get("guid", h.get("id")),
                 title = h["title"],
                 description = h["description"],
-                duration = h["duration"],
+                duration = DURATION_RE.search(h["duration"]).groups()[0],
                 url = next(
                     p for p in h["playbacks"]
                     if p["name"] == "HTTP_CLOUD_WIRED_60"
@@ -1046,8 +1051,8 @@ class BAMProviderMixin(abc.ABC):
     def listings(self, offset=None, limit=None, *args, **kwargs):
 
         return iter(self.LISTING_CLASS.from_json(self.IDENTIFIER, g)
-                         # for g in list(self.game_map.values())[-1:])
-                         for i, g in enumerate(self.game_map.values()))
+                         # for g in list(self.game_map.values())[:5])
+                         for g in self.game_map.values())
 
     def get_url(self, game_id,
                 media = None,
