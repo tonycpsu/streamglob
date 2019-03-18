@@ -344,7 +344,9 @@ class BAMMediaListing(model.MediaListing):
 
         attr = self.provider.team_color_attr(self.away_abbrev)
         return urwid.AttrMap(
-            urwid.Text(self.away),
+            urwid.Padding(
+                urwid.Text(self.away)
+            ),
             {None: attr}
         )
 
@@ -354,7 +356,9 @@ class BAMMediaListing(model.MediaListing):
 
         attr = self.provider.team_color_attr(self.home_abbrev)
         return urwid.AttrMap(
-            urwid.Text(self.home),
+            urwid.Padding(
+                urwid.Text(self.home)
+            ),
             {None: attr}
         )
 
@@ -1333,12 +1337,8 @@ class BAMProviderMixin(abc.ABC):
         if cfg is False:
             return "bold"
         color_cfg = "teams_" + (cfg or self.config.team_colors or "normal")
-        return f"{self.IDENTIFIER.lower()}.{color_cfg}.{team.lower()}"
-        # colkr
-        # if color_cfg is not False:
-        #     color_key
-        #     color_key = f"""teams{"_%s" %(color_cfg) if color_cfg else ""}"""
-        #     attr = f"{self.IDENTIFIER.lower()}.{color_key}.{team.lower()}"
-        # else:
-        #     attr = "bold"
-        # return attr
+        if team.lower() in self.config.attributes[color_cfg]:
+            key = team.lower()
+        else:
+            key = "none"
+        return f"{self.IDENTIFIER.lower()}.{color_cfg}.{key}"
