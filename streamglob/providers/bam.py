@@ -191,7 +191,7 @@ class BAMLineScoreDataTable(DataTable):
                     if str(i+1) in data[s] and data[s][str(i+1)] == 0:
                         data[s][str(i+1)] = urwid.Text(("dim", str(data[s][str(i+1)])))
 
-            if None not in [ data[i][primary_scoring_attr] for i in range(2) ]:
+            if None not in [ data[i].get(primary_scoring_attr) for i in range(2) ]:
                 if data[0][primary_scoring_attr] > data[1][primary_scoring_attr]:
                     data[0][primary_scoring_attr] = urwid.Text(("bold", str(data[0][primary_scoring_attr])))
                 elif data[1][primary_scoring_attr] > data[0][primary_scoring_attr]:
