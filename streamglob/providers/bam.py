@@ -413,22 +413,29 @@ class BAMMediaListing(model.MediaListing):
         #     {None: attr}
         # ), valign="bottom"), LINE_STYLES[self.style]["height"])
 
+        record_text = (
+            f"({wins}-{losses}, {('%.3f' %(pct)).lstrip('0')})"
+            if not self.hide_spoilers
+            else ""
+        )
+        pile = urwid.Pile([
+            ( "pack", urwid.Padding(
+            urwid.Text(((attr2), getattr(self, f"{side}_city"))),
+                width="pack", align="center"),
+            ),
+            ( "pack", urwid.Padding(
+                urwid.Text( ((attr3), getattr(self, f"{side}_team"))),
+                width="pack", align="center"),
+            ),
+            ("pack", urwid.Padding(
+                urwid.Text(
+                    record_text),
+                width="pack", align="center")
+            )
+        ])
+
         return urwid.BoxAdapter(urwid.Filler(urwid.AttrMap(
-            urwid.Pile([
-                ( "pack", urwid.Padding(
-                    urwid.Text(((attr2), getattr(self, f"{side}_city"))),
-                    width="pack", align="center"),
-                ),
-                ( "pack", urwid.Padding(
-                    urwid.Text( ((attr3), getattr(self, f"{side}_team"))),
-                    width="pack", align="center"),
-                ),
-                ( "pack", urwid.Padding(
-                    urwid.Text(
-                        f"({wins}-{losses}, {('%.3f' %(pct)).lstrip('0')})"),
-                    width="pack", align="center")
-                )
-            ]),
+            pile,
             {None: attr1}
         ), valign="bottom"), LINE_STYLES[self.style]["height"])
 
