@@ -2,7 +2,6 @@ from .feed import *
 from .. import session
 from .. import model
 
-import dateparser
 import pyperi
 
 class PeriscopeSession(session.StreamSession):
@@ -63,7 +62,7 @@ class PeriscopeFeed(model.MediaFeed):
                                     media_type="video")],
                                 many=True,
                             ),
-                            created = dateparser.parse(item["created_at"]).replace(tzinfo=None),
+                            created = dateutil.parser.parse(item["created_at"]).replace(tzinfo=None),
                             is_live = item.get("state") == "RUNNING"
 
                         )
