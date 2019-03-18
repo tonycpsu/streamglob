@@ -24,28 +24,28 @@ from ..player import *
 from .widgets import *
 
 
-class BAMLineScoreBox(urwid.WidgetWrap):
+LINE_STYLES = {
+    "standard": {"height": 4, "boxed": True},
+    "compact": {"height": 3, "boxed": False},
+}
 
-    STYLES = {
-        "standard": {"height": 4, "boxed": True},
-        "compact": {"height": 3, "boxed": False},
-    }
+class BAMLineScoreBox(urwid.WidgetWrap):
 
     def __init__(self, table, style=None):
 
         self.table = w = table
         self.style = style or "standard"
         if not self.style in ["standard", "boxed", "compact"]:
-            raise Excpetion(f"line style {style} not invalid")
+            raise Exception(f"line style {style} not invalid")
 
-        if self.STYLES[self.style]["boxed"]:
+        if LINE_STYLES[self.style]["boxed"]:
             w = urwid.LineBox(
                 self.table,
                 tlcorner="", tline="", trcorner="",
                 blcorner="├", brcorner="┤"
             )
 
-        self.box = urwid.BoxAdapter(w, self.STYLES[self.style]["height"])
+        self.box = urwid.BoxAdapter(w, LINE_STYLES[self.style]["height"])
         super().__init__(self.box)
 
     @property
@@ -64,6 +64,7 @@ class BAMLineScoreBox(urwid.WidgetWrap):
 
     def keypress(self, size, key):
         return super().keypress(size, key)
+
 
 
 class BAMLineScoreDataTable(DataTable):
@@ -123,8 +124,13 @@ class BAMLineScoreDataTable(DataTable):
             i = -1
             line = AttrDict()
             team = away_team if s == 0 else home_team
-            attr = provider.team_color_attr(team.lower(), cfg="bg")
-            line.team = urwid.Text((attr, team), align="right")
+            attr = provider.team_color_attr(team.lower(),
+                                            provider.config.listings.line.colors)
+            line.team = urwid.Padding(
+                urwid.Text((attr, f"{team:>3s}"), align="right"),
+                width=3,
+                align="right"
+            )
 
             if isinstance(line_score[cls.PLAYING_PERIOD_ATTR], list):
 
@@ -297,16 +303,20 @@ class BAMMediaListing(model.MediaListing):
 
     game_id: int = None
     game_type: str = None
-    away: int = None
-    home: int = None
+    away_team: int = None
+    home_team: int = None
+    away_city: str = None
+    home_city: str = None
     away_abbrev: str = None
     home_abbrev: str = None
+    away_record: tuple = None
+    home_record: tuple = None
     start: datetime = None
     # attrs: str = None
 
     @property
     def style(self):
-        return config.settings.profile.listings.line.style
+        return self.provider.config.listings.line.style or "standard"
 
     @classmethod
     def from_json(cls, provider, g):
@@ -317,8 +327,18 @@ class BAMMediaListing(model.MediaListing):
         status = g["status"]["statusCode"]
         away_team = g["teams"]["away"]["team"]["teamName"]
         home_team = g["teams"]["home"]["team"]["teamName"]
+        away_city = g["teams"]["away"]["team"]["name"].replace(away_team, "").strip()
+        home_city = g["teams"]["home"]["team"]["name"].replace(home_team, "").strip()
         away_abbrev = g["teams"]["away"]["team"]["abbreviation"]
         home_abbrev = g["teams"]["home"]["team"]["abbreviation"]
+        away_record = tuple(
+            [g["teams"]["away"]["leagueRecord"][x]
+             for x in ["wins", "losses"]]
+        )
+        home_record = tuple(
+            [g["teams"]["home"]["leagueRecord"][x]
+             for x in ["wins", "losses"]]
+        )
         start_time = dateutil.parser.parse(g["gameDate"])
 
         if config.settings.profile.time_zone:
@@ -330,38 +350,93 @@ class BAMMediaListing(model.MediaListing):
             provider_id = provider,
             game_id = game_pk,
             game_type = game_type,
-            away = away_team,
-            home = home_team,
+            away_team = away_team,
+            home_team = home_team,
             away_abbrev = away_abbrev,
             home_abbrev = home_abbrev,
+            away_city = away_city,
+            home_city = home_city,
+            away_record = away_record,
+            home_record = home_record,
             start = start_time,
             # attrs = attrs,
         )
 
 
+    def team_box(self, side):
+
+        wins = getattr(self, f"{side}_record")[0]
+        losses = getattr(self, f"{side}_record")[1]
+        pct = wins/(wins+losses) if (wins+losses) else 0.0
+
+        attrcfg = self.provider.config.listings.colors
+        if isinstance(attrcfg, list):
+            if len(attrcfg) > 2:
+                attr1, attr2, attr3 = attrcfg
+            else:
+                attr1, attr2 = attrcfg
+                att3 = attr2
+        else:
+            attr1 = attr2 = attr3 = attrcfg
+
+        attr1 = self.provider.team_color_attr(getattr(self, f"{side}_abbrev"),
+                                              self.provider.config.listings.colors,
+                                              style=attr1)
+
+        attr2 = self.provider.team_color_attr(getattr(self, f"{side}_abbrev"),
+                                              self.provider.config.listings.colors,
+                                              style=attr2)
+
+        attr3 = self.provider.team_color_attr(getattr(self, f"{side}_abbrev"),
+                                              self.provider.config.listings.colors,
+                                              style=attr3)
+
+        # return urwid.BoxAdapter(urwid.Filler(urwid.AttrMap(
+        #     urwid.Pile([
+        #         ( "pack", urwid.Padding(
+        #             urwid.Text(getattr(self, f"{side}_city")),
+        #             width="pack", align="center"),
+        #         ),
+        #         ( "pack", urwid.Padding(
+        #             urwid.Text(getattr(self, f"{side}_team")),
+        #             width="pack", align="center"),
+        #         ),
+        #         ( "pack", urwid.Padding(
+        #             urwid.Text(
+        #                 f"({wins}-{losses}, {('%.3f' %(pct)).lstrip('0')})"),
+        #             width="pack", align="center")
+        #         )
+        #     ]),
+        #     {None: attr}
+        # ), valign="bottom"), LINE_STYLES[self.style]["height"])
+
+        return urwid.BoxAdapter(urwid.Filler(urwid.AttrMap(
+            urwid.Pile([
+                ( "pack", urwid.Padding(
+                    urwid.Text(((attr2), getattr(self, f"{side}_city"))),
+                    width="pack", align="center"),
+                ),
+                ( "pack", urwid.Padding(
+                    urwid.Text( ((attr3), getattr(self, f"{side}_team"))),
+                    width="pack", align="center"),
+                ),
+                ( "pack", urwid.Padding(
+                    urwid.Text(
+                        f"({wins}-{losses}, {('%.3f' %(pct)).lstrip('0')})"),
+                    width="pack", align="center")
+                )
+            ]),
+            {None: attr1}
+        ), valign="bottom"), LINE_STYLES[self.style]["height"])
+
+
     @property
     def away_team_box(self):
-
-        attr = self.provider.team_color_attr(self.away_abbrev)
-        return urwid.AttrMap(
-            urwid.Padding(
-                urwid.Text(self.away)
-            ),
-            {None: attr}
-        )
-
+        return self.team_box("away")
 
     @property
     def home_team_box(self):
-
-        attr = self.provider.team_color_attr(self.home_abbrev)
-        return urwid.AttrMap(
-            urwid.Padding(
-                urwid.Text(self.home)
-            ),
-            {None: attr}
-        )
-
+        return self.team_box("home")
 
     @property
     def hide_spoilers(self):
@@ -454,7 +529,7 @@ class BAMMediaListing(model.MediaListing):
 
     @property
     def title(self):
-        return f"{self.away}@{self.home}"
+        return f"{self.away_abbrev}@{self.home_abbrev}"
 
     @property
     def game_data(self):
@@ -907,18 +982,6 @@ class BAMProviderDataTable(ProviderDataTable):
             self.provider.play(self.selection.data)
         elif key == ".":
             self.selection.toggle_details()
-        elif key == "ctrl k":
-            # logger.info(self.selection.cells[6].contents.min_width)
-            logger.info(self.selection.data.line.table.visible_columns[0].name)
-            logger.info(self.selection.data.line.table.visible_columns[0].width)
-            logger.info(self.selection.data.line.table.visible_columns[0].min_width)
-            logger.info(self.selection.data.line.table.header.column_widths())
-            logger.info(self.selection.data.line.table.header.cells[28].contents.contents)
-            logger.info(self.selection.data.line.table.header.cells[0].width)
-            logger.info(self.selection.data.line.table.header.cells[0].sort_icon)
-            logger.info(self.selection.data.line.table.header.cells[0].min_width)
-            logger.info(self.selection.data.line.table.min_width)
-            logger.info(self.selection.data.line.table.width)
         else:
             return key
 
@@ -970,10 +1033,10 @@ class BAMProviderMixin(abc.ABC):
     def init_config(self):
         # set alternate team color attributes
         for teamname, attr in self.config.attributes.teams.items():
-            self.config.attributes.teams_normal[teamname] = attr
+            self.config.attributes.teams_standard[teamname] = {"fg": attr["bg"]}
+            self.config.attributes.teams_full[teamname] = attr
             self.config.attributes.teams_inverse[teamname] = {"fg": attr["bg"], "bg": attr["fg"]}
-            self.config.attributes.teams_fg[teamname] = {"fg": attr["fg"]}
-            self.config.attributes.teams_bg[teamname] = {"fg": attr["bg"]}
+            self.config.attributes.teams_alternate[teamname] = {"fg": attr["fg"]}
             # del self.config.attributes.teams[teamname]
 
     @property
@@ -1332,13 +1395,14 @@ class BAMProviderMixin(abc.ABC):
 
         return (source, kwargs)
 
-    def team_color_attr(self, team, cfg=None):
+    def team_color_attr(self, team, cfg, style=None):
 
         if cfg is False:
             return "bold"
-        color_cfg = "teams_" + (cfg or self.config.team_colors or "normal")
+        color_cfg = "teams_" + (style or cfg or "standard")
         if team.lower() in self.config.attributes[color_cfg]:
             key = team.lower()
         else:
             key = "none"
-        return f"{self.IDENTIFIER.lower()}.{color_cfg}.{key}"
+        attr = f"{self.IDENTIFIER.lower()}.{color_cfg}.{key}"
+        return attr
