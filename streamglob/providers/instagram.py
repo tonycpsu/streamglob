@@ -64,10 +64,14 @@ class InstagramSession(session.StreamSession):
 
     def get_feed_items(self, user_name, count=BATCH_COUNT):
 
-        feed = self.web_api.user_feed(
-            self.user_name_to_id(user_name), count=self.BATCH_COUNT,
-            end_cursor = self.end_cursors[user_name]
-        )
+        try:
+            feed = self.web_api.user_feed(
+                self.user_name_to_id(user_name), count=self.BATCH_COUNT,
+                end_cursor = self.end_cursors[user_name]
+            )
+        except instagram_web_api.errors.ClientConnectionError as e:
+            logger.warn(f"connection error: {e}")
+
 
         for post in feed:
             try:
