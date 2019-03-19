@@ -14,6 +14,7 @@ import dataclasses
 from dataclasses import *
 import typing
 import itertools
+import requests
 
 from .. import player
 from .. import config
@@ -62,8 +63,8 @@ class BAMLineScoreBox(urwid.WidgetWrap):
     def selectable(self):
         return True
 
-    def keypress(self, size, key):
-        return super().keypress(size, key)
+    # def keypress(self, size, key):
+    #     return super().keypress(size, key)
 
 
 
@@ -211,51 +212,72 @@ class HighlightsDataTable(DataTable):
     with_scrollbar = True
     with_header = False
     ui_sort = False
-    empty_message = "(no highlights available)"
+    sort_icons = False
 
-    columns = [
+    empty_message = "(no highlights available)"
+    detail_hanging_indent = "title"
+    divider = "\N{BOX DRAWINGS LIGHT VERTICAL}"
+
+    COLUMNS = [
         # DataTableColumn("duration", width=10),
-        DataTableColumn("title", value = lambda t, r: f"{r.data.title}: ({r.data.duration})"),
-        # DataTableColumn("title"),
+        DataTableColumn(
+            "type",
+            pack=True,
+            value = lambda t, r: f"{r.data.attrs.get('event_type') or ' '}"
+        ),
+        DataTableColumn(
+            "title",
+            pack=True,
+            value = lambda t, r: ("title", f"{r.data.title} ({r.data.duration})")
+        ),
+        # DataTableColumn("description"),
         # DataTableColumn("url", hide=True),
     ]
 
     def detail_fn(self, data):
         return urwid.Columns([
-            (4, urwid.Text("")),
+            # (4, urwid.Text("")),
             ("weight", 1, urwid.Text(f"{(data.get('description'))}"))
         ])
 
-DURATION_RE = re.compile("(?:0+:)?(.*)")
+
+# Strip off leading zeroes if they represent hours.  Because MLB expresses
+# duration as hh:mm:ss while NHL expresses it as mm:ss, it's a little clumsy.
+DURATION_RE = re.compile("(?:(?:0+:)(?=\d+:\d+))?(.*)")
 
 class BAMDetailBox(Observable, urwid.WidgetWrap):
 
     signals = ["play"]
 
-    def __init__(self, game):
+    def __init__(self, provider, listing):
 
-        data =[
-            AttrDict(dict(
-                media_id = h.get("guid", h.get("id")),
-                title = h["title"],
-                description = h["description"],
-                duration = DURATION_RE.search(h["duration"]).groups()[0],
-                url = next(
-                    p for p in h["playbacks"]
-                    if p["name"] == "HTTP_CLOUD_WIRED_60"
-                )["url"],
-                _details_open = True
+        self.provider = provider
+        self.listing = listing
+        self.game = self.listing.game_data
 
-            )) for h in game["content"]["highlights"][self.HIGHLIGHT_ATTR]["items"]
-        ]
+        try:
+            data = sorted([
+                AttrDict(dict(
+                    media_id = h.get("guid", h.get("id")),
+                    title = h["title"],
+                    description = h["description"],
+                    duration = DURATION_RE.search(h["duration"]).groups()[0],
+                    url = next(
+                        p for p in h["playbacks"]
+                        if p["name"] == "HTTP_CLOUD_WIRED_60"
+                    )["url"],
+                    attrs = self.get_highlight_attrs(h, self.listing),
+                    _details_open = True
+                )) for h in self.game["content"]["highlights"][self.HIGHLIGHT_ATTR]["items"]
+            ], key = lambda h: (h.attrs.timestamp is None, h.attrs.timestamp, h.attrs.event_type == "Other"))
+        except KeyError:
+            data = []
 
-        self.game = game
-        self.table = HighlightsDataTable(
+        self.table = self.HIGHLIGHT_TABLE_CLASS(
             data = data
         )
 
         self.columns = urwid.Columns([
-            (4, urwid.Filler(urwid.Text(""))),
             ("weight", 1, self.table)
         ])
         self.attr = urwid.AttrMap(
@@ -263,8 +285,9 @@ class BAMDetailBox(Observable, urwid.WidgetWrap):
             # attr_map = {"table_row_body": "red"},
             attr_map = {},
             focus_map = {
-                None: "blue",
-                "table_row_body focused": "blue",
+                None: "highlight",
+                "table_row_body focused": "highlight",
+                "title focused": "title highlight"
             },
         )
         self.box = urwid.BoxAdapter(
@@ -274,6 +297,9 @@ class BAMDetailBox(Observable, urwid.WidgetWrap):
 
     @property
     def HIGHLIGHT_ATTR(self):
+        raise NotImplementedError
+
+    def get_highlight_attrs(self, highlight):
         raise NotImplementedError
 
     def keypress(self, size, key):
@@ -288,6 +314,17 @@ class BAMDetailBox(Observable, urwid.WidgetWrap):
     def selectable(self):
         return True
 
+
+def get_team_city_and_name(team):
+    # They don't make this very easy...
+    city = team["locationName"]
+    name = team["teamName"]
+    if team["teamName"] in team["name"]:
+        city = team["name"].replace(name, "").strip()
+    elif team["shortName"] in team["name"]:
+        name = team["name"].replace(team["shortName"], "").strip()
+        city = team["name"].replace(name, "").strip()
+    return (city, name)
 
 @dataclass
 class BAMMediaListing(model.MediaListing):
@@ -324,14 +361,18 @@ class BAMMediaListing(model.MediaListing):
     @classmethod
     def from_json(cls, provider, g):
 
-
         game_pk = g["gamePk"]
         game_type = g["gameType"]
         status = g["status"]["statusCode"]
-        away_team = g["teams"]["away"]["team"]["teamName"]
-        home_team = g["teams"]["home"]["team"]["teamName"]
-        away_city = g["teams"]["away"]["team"]["name"].replace(away_team, "").strip()
-        home_city = g["teams"]["home"]["team"]["name"].replace(home_team, "").strip()
+        away_city_name = get_team_city_and_name(g["teams"]["away"]["team"])
+        (away_city, away_team) = away_city_name
+        # away_team = g["teams"]["away"]["team"]["teamName"]
+        # away_city = g["teams"]["away"]["team"]["name"].replace(away_team, "").strip()
+        home_city_name = get_team_city_and_name(g["teams"]["home"]["team"])
+        # home_team = g["teams"]["home"]["team"]["teamName"]
+        # home_city = g["teams"]["home"]["team"]["name"].replace(home_team, "").strip()
+        (home_city, home_team) = home_city_name
+
         away_abbrev = g["teams"]["away"]["team"]["abbreviation"]
         home_abbrev = g["teams"]["home"]["team"]["abbreviation"]
         away_record = tuple(
@@ -416,7 +457,7 @@ class BAMMediaListing(model.MediaListing):
         record_text = (
             f"({wins}-{losses}, {('%.3f' %(pct)).lstrip('0')})"
             if not self.hide_spoilers
-            else ""
+            else " "
         )
         pile = urwid.Pile([
             ( "pack", urwid.Padding(
@@ -552,6 +593,20 @@ class BAMMediaListing(model.MediaListing):
         #     logger.warn("no game data for %s" %(self.game_id))
         # # logger.info(f"game: {game}")
         # return game
+
+    @property
+    @memo(region="medium")
+    def game_feed_data(self):
+        return requests.get(
+            self.provider.GAME_DATA_TEMPLATE.format(
+                game_id=self.game_id
+            )
+        ).json()
+
+    @property
+    def plays(self):
+        return (p for p in self.game_feed_data["liveData"]["plays"]["allPlays"])
+
 
     @property
     @memo(region="short")
@@ -972,9 +1027,10 @@ class LiveStreamFilter(ListingFilter):
 class BAMProviderDataTable(ProviderDataTable):
 
     index = "game_id"
-    detail_selectable = True
     ui_sort = False
     sort_icons = False
+    detail_selectable = True
+    detail_hanging_indent = "away_team_box"
 
     @property
     def detail_fn(self):
@@ -992,6 +1048,8 @@ class BAMProviderDataTable(ProviderDataTable):
             self.provider.play(self.selection.data)
         elif key == ".":
             self.selection.toggle_details()
+        elif key == "ctrl k":
+            logger.info(self.selection.pile.contents[1][0].table.selection.data.keywords)
         else:
             return key
 
@@ -1019,11 +1077,8 @@ class BAMProviderMixin(abc.ABC):
     ])
 
     ATTRIBUTES = AttrDict(
-        # attrs = {"width": 6},
         start = {"width": 6, "format_fn": format_start_time},
         away_team_box = {"label": "away", "width": 16},
-        # away = {"width": 16},
-        # home = {"width": 16},
         home_team_box = {"label": "home", "width": 16},
         line = {"pack": True},
         media_available = {"label": "media", "width": 10},
@@ -1321,9 +1376,9 @@ class BAMProviderMixin(abc.ABC):
 
         # self.play(selection)
 
-    def get_details(self, data):
+    def get_details(self, listing):
 
-        game_id = data.game_id
+        game_id = listing.game_id
         game = self.game_data(game_id)
 
         def play_highlight(selection):
@@ -1345,9 +1400,8 @@ class BAMProviderMixin(abc.ABC):
             # asyncio.create_task(Player.play(task, player_spec, helper_spec))
             state.task_manager.play(task, player_spec, helper_spec)
 
-        box = self.DETAIL_BOX_CLASS(game)
+        box = self.DETAIL_BOX_CLASS(self, listing)
         box.connect("play", play_highlight)
-        # return urwid.BoxAdapter(DataTable(columns=[DataTableColumn("foo")], data=[{"foo": 1},{"foo": 2},{"foo": 3}]), 5)
         return box
 
     def get_source(self, selection, media_id=None, **kwargs):

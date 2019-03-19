@@ -42,8 +42,8 @@ state = State()
 store = {}
 memo = Memoizer(store)
 memo.regions['short'] = {'max_age': 60}
-memo.regions['medium'] = {'max_age': 60*15}
-memo.regions['long'] = {'max_age': 60*60*24}
+memo.regions['medium'] = {'max_age': 60*5}
+memo.regions['long'] = {'max_age': 60*60}
 
 
 # def set_provider(p, **kwargs):

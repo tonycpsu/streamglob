@@ -6,6 +6,8 @@ import urwid
 from orderedattrdict import AttrDict
 from panwid.datatable import *
 from pony.orm import *
+import requests
+import dateutil.parser
 
 from .. import session
 
@@ -27,12 +29,97 @@ class MLBLineScoreDataTable(BAMLineScoreDataTable):
     def PLAYING_PERIOD_DESC(cls, line_score):
         return f"""{line_score.get("inningHalf")[:3]} {line_score.get("currentInningOrdinal")}"""
 
+class MLBHighlightsDataTable(HighlightsDataTable):
+
+    columns = [
+        DataTableColumn("inning", width=5,
+                        value = lambda t, r: r.data.attrs.inning),
+        # DataTableColumn("top_play", width=5,
+        #                 value = lambda t, r: r.data.attrs.top_play),
+    ] + HighlightsDataTable.COLUMNS
+
+
 class MLBDetailBox(BAMDetailBox):
+
+    HIGHLIGHT_TABLE_CLASS = MLBHighlightsDataTable
+
+    EVENT_TYPES = AttrDict(
+        hitting="H",
+        pitching="P",
+        defense="F",
+        baserunning="R"
+    )
 
     @property
     def HIGHLIGHT_ATTR(self):
         return "highlights"
 
+    def get_highlight_attrs(self, highlight, listing):
+
+        timestamp = None
+        running_time = None
+        event_type = None
+        inning = None
+
+        plays = listing.plays
+        keywords = highlight.get("keywordsAll", None)
+
+        game_start = dateutil.parser.parse(
+            listing.game_data["gameDate"]
+        )
+
+        try:
+            event_id = next(k["value"] for k in keywords if k["type"] == "sv_id")
+        except StopIteration:
+            event_id = None
+
+        try:
+            play, event = next( (p, pe) for p in plays
+                        for pe in p["playEvents"]
+                        if event_id and pe.get("playId", None) == event_id)
+        except StopIteration:
+            play = None
+            event = None
+
+        if play:
+            event_type = play["result"].get("event", None)
+
+            timestamp = dateutil.parser.parse(play["about"].get(
+                    "startTime", None)
+            ).astimezone(
+                pytz.timezone(config.settings.profile.time_zone)
+            )
+
+            running_time = timestamp - game_start
+            inning = f"{play['about']['halfInning'][:3].title()} {play['about']['inning']}"
+
+        if not event_type:
+            if any((k["type"] == "mlbtax"
+                   and k["displayName"] == "Interview"
+                   for k in keywords)):
+                event_type = "Interview"
+            elif any((k["type"] == "mlbtax"
+                   and k["displayName"] == "Managers"
+                   for k in keywords)):
+                event_type = "Postgame"
+            elif any((k["type"] == "mlbtax"
+                   and k["displayName"] == "Managers"
+                   for k in keywords)):
+                event_type = "News Conference"
+            else:
+                event_type = "Other"
+
+        return AttrDict(
+            timestamp = timestamp,
+            running_time = running_time,
+            event_type = event_type,
+            inning = inning
+            # top_play = top_play,
+            # description = play["result"].get("description", None),
+        )
+
+    def __repr__(self):
+        return ""
 
 @dataclass
 class MLBMediaListing(BAMMediaListing):
@@ -345,6 +432,10 @@ class MLBProvider(BAMProviderMixin,
         "?sportId={sport_id}&startDate={start}&endDate={end}"
         "&gameType={game_type}&gamePk={game_id}"
         "&teamId={team_id}"
+    )
+
+    GAME_DATA_TEMPLATE = (
+        "http://statsapi.mlb.com/api/v1.1/game/{game_id}/feed/live"
     )
 
     # DATA_TABLE_CLASS = MLBLineScoreDataTable

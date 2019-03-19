@@ -26,12 +26,79 @@ class NHLLineScoreDataTable(BAMLineScoreDataTable):
     def PLAYING_PERIOD_DESC(cls, line_score):
         return f"""{line_score.get("currentPeriodOrdinal")}"""
 
+class NHLHighlightsDataTable(HighlightsDataTable):
+
+    columns = [
+        DataTableColumn("period",  width=3,
+                        value = lambda t, r: r.data.attrs.period),
+        DataTableColumn("period_time", width=5,
+                        value = lambda t, r: r.data.attrs.period_time),
+        # DataTableColumn("strength", width=10,
+        #                 value = lambda t, r: r.data.attrs.event_type),
+    ] + HighlightsDataTable.COLUMNS
+
 
 class NHLDetailBox(BAMDetailBox):
+
+    HIGHLIGHT_TABLE_CLASS = NHLHighlightsDataTable
 
     @property
     def HIGHLIGHT_ATTR(self):
         return "gameCenter"
+
+    def get_highlight_attrs(self, highlight, listing):
+
+        timestamp = None
+        running_time = None
+        event_type = None
+        period = None
+        period_time = None
+        period_remaining = None
+        strength = None
+
+        plays = listing.plays
+        keywords = highlight.get("keywords", None)
+
+        game_start = dateutil.parser.parse(
+            listing.game_data["gameDate"]
+        )
+
+        try:
+            play_id = int(next(k["value"] for k in keywords if k["type"] == "statsEventId"))
+        except StopIteration:
+            play_id = None
+
+        try:
+            play = next( p for p in plays
+                        if p["about"].get("eventId", None) == play_id)
+        except StopIteration:
+            play = None
+
+        if play:
+            event_type = play["result"].get("event", None)
+
+            timestamp = dateutil.parser.parse(play["about"].get(
+                "dateTime", None)
+            ).astimezone(
+                pytz.timezone(config.settings.profile.time_zone)
+            )
+
+            running_time = timestamp - game_start
+            period = play["about"]["ordinalNum"]
+            period_time = play["about"]["periodTime"]
+            period_remaining = play["about"]["periodTimeRemaining"]
+            strength = play["result"].get("strength", {}).get("name", None)
+
+        return AttrDict(
+            timestamp = timestamp,
+            running_time = running_time,
+            # description = play["result"].get("description", None),
+            event_type = event_type,
+            period = period,
+            period_time = period_time,
+            period_remaining = period_remaining,
+            strength = strength,
+        )
 
 @dataclass
 class NHLMediaSource(BAMMediaSource):
@@ -63,15 +130,6 @@ class NHLBAMProviderData(BAMProviderData):
 class NHLStreamSession(session.AuthenticatedStreamSession):
 
     AUTH = b"web_nhl-v1.0.0:2d1d846ea3b194a18ef40ac9fbce97e3"
-
-    SCHEDULE_TEMPLATE = (
-        "https://statsapi.web.nhl.com/api/v1/schedule"
-        "?sportId={sport_id}&startDate={start}&endDate={end}"
-        "&gameType={game_type}&gamePk={game_id}"
-        "&teamId={team_id}"
-        "&hydrate=linescore,team,game(content(summary,media(epg),"
-        "highlights(gamecenter(items))))"
-    )
 
     RESOLUTIONS = AttrDict([
         ("720p", "720p"),
@@ -261,28 +319,42 @@ class NHLProvider(BAMProviderMixin,
         ("216p", "216p")
     ])
 
+    # SCHEDULE_TEMPLATE = (
+    #     "https://statsapi.web.nhl.com/api/v1/schedule"
+    #     "?sportId={sport_id}&startDate={start}&endDate={end}"
+    #     "&gameType={game_type}&gamePk={game_id}"
+    #     "&teamId={team_id}"
+    #     "&expand=schedule.game.content.media.milestones"
+    #     "&expand=schedule.game.content.media.epg"
+    #     "&expand=schedule.game.content.highlights.all"
+    #     # "&expand=schedule.venue"
+    #     "&expand=schedule.status"
+    #     "&expand=schedule.teams"
+    #     "&expand=schedule.linescore"
+    #     "&expand=schedule.broadcasts.all"
+    #     # "&expand=schedule.ticket"
+    #     "&expand=schedule.radioBroadcasts"
+    #     # "&expand=schedule.game.seriesSummary"
+    #     # "&expand=seriesSummary.series"
+    #     # "&hydrate=linescore,team,game(content(summary,media(epg)),tickets)"
+    #     # "&expand=schedule.game.content.media.milestones"
+    # )
+
     SCHEDULE_TEMPLATE = (
         "https://statsapi.web.nhl.com/api/v1/schedule"
         "?sportId={sport_id}&startDate={start}&endDate={end}"
         "&gameType={game_type}&gamePk={game_id}"
         "&teamId={team_id}"
-        "&expand=schedule.game.content.media.milestones"
-        "&expand=schedule.game.content.media.epg"
-        "&expand=schedule.game.content.highlights.all"
-        # "&expand=schedule.venue"
-        "&expand=schedule.status"
-        "&expand=schedule.teams"
-        "&expand=schedule.linescore"
-        "&expand=schedule.broadcasts.all"
-        # "&expand=schedule.ticket"
-        "&expand=schedule.radioBroadcasts"
-        # "&expand=schedule.game.seriesSummary"
-        # "&expand=seriesSummary.series"
-        # "&hydrate=linescore,team,game(content(summary,media(epg)),tickets)"
-        # "&expand=schedule.game.content.media.milestones"
+        "&hydrate=linescore,team,game(content(summary,media(epg),"
+        "highlights(gamecenter(items))))"
     )
 
     # DATA_TABLE_CLASS = NHLLineScoreDataTable
+
+    GAME_DATA_TEMPLATE = (
+        "https://statsapi.web.nhl.com/api/v1/game/{game_id}/feed/live"
+    )
+
 
     MEDIA_TITLE = "NHLTV"
 
@@ -349,7 +421,10 @@ class NHLProvider(BAMProviderMixin,
 
     def media_timestamps(self, game_id, media_id):
         j =  self.schedule(game_id=game_id)
-        milestones = j["dates"][0]["games"][0]["content"]["media"]["milestones"]
+        try:
+            milestones = j["dates"][0]["games"][0]["content"]["media"]["milestones"]
+        except:
+            return AttrDict()
 
         start_timestamps = []
 

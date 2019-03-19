@@ -476,6 +476,8 @@ def reload_config():
     providers.load_config()
     if profile:
         config.settings.set_profile(profile)
+    for k in list(state.screen._palette.keys()):
+        del state.screen._palette[k]
     state.palette = load_palette()
     state.screen.register_palette(state.palette)
 
