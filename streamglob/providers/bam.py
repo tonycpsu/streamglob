@@ -888,11 +888,23 @@ class WatchDialog(BasePopUp):
         self.default_resolution = default_resolution
         self.watch_live = watch_live
 
-        self.title = urwid.Text("%s@%s" %(
-            selection["away"],
-            selection["home"],
+        away_attr = provider.team_color_attr(
+            selection.away_abbrev.lower(),
+            provider.config.listings.line.colors,
+            "standard"
+        )
 
-        ))
+        home_attr = provider.team_color_attr(
+            selection.home_abbrev.lower(),
+            provider.config.listings.line.colors,
+            "standard"
+        )
+
+        self.title = urwid.Text([
+            (away_attr ,f"{selection.away_city} {selection.away_team}"),
+            ("bold", " @ "),
+            (home_attr, f"{selection.home_city} {selection.home_team}")
+        ])
 
         # media = list(self.provider.get_media(self.game_id, title=self.media_title))
         # media = list(self.provider.get_media(self.game_id))
@@ -982,7 +994,8 @@ class WatchDialog(BasePopUp):
         urwid.connect_signal(self.cancel_button, "click", cancel)
 
         pile = urwid.Pile([
-            ("pack", self.title),
+            ("pack", urwid.Padding(self.title, width="pack", align="center")),
+            ("pack", urwid.Text(" ")),
             ("weight", 1, urwid.Pile([
                 ("weight", 5, urwid.Filler(
                     urwid.Columns([
@@ -1013,7 +1026,7 @@ class WatchDialog(BasePopUp):
             ]))
         ])
         super(WatchDialog, self).__init__(pile)
-        pile.contents[1][0].focus_position = 2
+        pile.contents[2][0].focus_position = 2
 
 
     def update_offset_dropdown(self, media_id):
@@ -1130,9 +1143,9 @@ class BAMProviderMixin(abc.ABC):
         # set alternate team color attributes
         for teamname, attr in self.config.attributes.teams.items():
             self.config.attributes.teams_standard[teamname] = {"fg": attr["bg"]}
+            self.config.attributes.teams_alternate[teamname] = {"fg": attr["fg"]}
             self.config.attributes.teams_full[teamname] = attr
             self.config.attributes.teams_inverse[teamname] = {"fg": attr["bg"], "bg": attr["fg"]}
-            self.config.attributes.teams_alternate[teamname] = {"fg": attr["fg"]}
             # del self.config.attributes.teams[teamname]
 
     @property
