@@ -478,7 +478,7 @@ class BAMMediaListing(model.MediaListing):
         return urwid.BoxAdapter(urwid.Filler(urwid.AttrMap(
             pile,
             {None: attr1}
-        ), valign="bottom"), LINE_STYLES[self.style]["height"])
+        ), valign="middle"), LINE_STYLES[self.style]["height"])
 
 
     @property
@@ -792,7 +792,6 @@ class BAMMediaSource(model.MediaSource):
                 media_url = stream.url
             except (TypeError, AttributeError):
                 raise SGException("no stream URL for game %d, %s" %(self.game_id))
-
         return media_url
 
 
@@ -939,15 +938,27 @@ class WatchDialog(BasePopUp):
         )
 
         self.resolution_dropdown = Dropdown(
-            self.provider.RESOLUTIONS, default=self.default_resolution
+            self.provider.RESOLUTIONS, default=self.default_resolution,
+            label="Resolution"
         )
 
         self.offset_dropdown_placeholder = urwid.WidgetPlaceholder(urwid.Text(""))
         self.update_offset_dropdown(self.feed_dropdown.selected_value)
 
-        def ok(s):
+        def play(s):
             media_id = self.feed_dropdown.selected_value
             self.provider.play(
+                selection,
+                # media = selected_media,
+                media_id = media_id,
+                offset=self.offset_dropdown.selected_value,
+                resolution=self.resolution_dropdown.selected_value
+            )
+            self._emit("close_popup")
+
+        def download(s):
+            media_id = self.feed_dropdown.selected_value
+            self.provider.download(
                 selection,
                 # media = selected_media,
                 media_id = media_id,
@@ -959,10 +970,15 @@ class WatchDialog(BasePopUp):
         def cancel(s):
             self._emit("close_popup")
 
-        self.ok_button = urwid.Button("OK")
+        self.play_button = urwid.Button("Play")
+        self.play_button._label.align = 'center'
+        self.download_button = urwid.Button("Download")
+        self.download_button._label.align = 'center'
         self.cancel_button = urwid.Button("Cancel")
+        self.cancel_button._label.align = 'center'
 
-        urwid.connect_signal(self.ok_button, "click", ok)
+        urwid.connect_signal(self.play_button, "click", play)
+        urwid.connect_signal(self.download_button, "click", download)
         urwid.connect_signal(self.cancel_button, "click", cancel)
 
         pile = urwid.Pile([
@@ -970,14 +986,29 @@ class WatchDialog(BasePopUp):
             ("weight", 1, urwid.Pile([
                 ("weight", 5, urwid.Filler(
                     urwid.Columns([
-                        ("weight", 4, self.feed_dropdown),
+                        ("weight", 3, self.feed_dropdown),
                         ("weight", 1, self.resolution_dropdown),
                     ]), valign="top")),
                 ("weight", 1, urwid.Filler(self.offset_dropdown_placeholder)),
                 ("weight", 1, urwid.Filler(
                     urwid.Columns([
-                    ("weight", 1, self.ok_button),
-                    ("weight", 1, self.cancel_button),
+                        ("weight", 1,
+                         urwid.Padding(
+                             urwid.AttrMap(self.play_button, "dropdown_text", "dropdown_focused"),
+                             width=16
+                         )),
+                        ("weight", 1, urwid.Text("")),
+                        ("weight", 1,
+                         urwid.Padding(
+                             urwid.AttrMap(self.download_button, "dropdown_text", "dropdown_focused"),
+                             width=16
+                         )),
+                        ("weight", 1, urwid.Text("")),
+                        ("weight", 1,
+                         urwid.Padding(
+                             urwid.AttrMap(self.cancel_button, "dropdown_text", "dropdown_focused"),
+                             width=16
+                         )),
                 ])))
             ]))
         ])
@@ -999,7 +1030,7 @@ class WatchDialog(BasePopUp):
 
         key = super(WatchDialog, self).keypress(size, key)
         if key == "meta enter":
-            self.ok_button.keypress(size, "enter")
+            self.play_button.keypress(size, "enter")
         elif key in ["<", ">"]:
             self.resolution_dropdown.cycle(1 if key == "<" else -1)
         elif key in ["[", "]"]:

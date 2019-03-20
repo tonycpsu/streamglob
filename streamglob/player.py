@@ -227,7 +227,11 @@ class Program(abc.ABC):
         #                           no_progress=True))
 
         # FIXME: assumption if helper supports first source, it supports the rest
-        helper = Helper.get(helper_spec, task.sources[0].locator)
+        try:
+            helper = Helper.get(helper_spec, task.sources[0].locator)
+        except SGStreamNotFound as e:
+            logger.warn(e)
+            return
 
         if helper and helper.cmd in player.INTEGRATED_HELPERS:
             # if player integrates helper, use it instead of spawning
@@ -491,7 +495,12 @@ class Downloader(Program):
         if isinstance(helper_spec, MutableMapping):
             helper_spec = helper_spec.get(None, helper_spec)
 
-        downloader = Helper.get(helper_spec, source.locator)
+        try:
+            downloader = Helper.get(helper_spec, source.locator)
+        except SGStreamNotFound as e:
+            logger.warn(e)
+            return
+
         logger.info(f"downloader: {downloader}")
 
         # if helper_spec is None:
