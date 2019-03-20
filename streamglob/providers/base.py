@@ -470,7 +470,6 @@ class BackgroundTasksMixin(object):
         self._tasks = defaultdict(lambda: None)
 
     def run_in_background(self, fn, interval=DEFAULT_INTERVAL,
-                          wait_for_first = False,
                           *args, **kwargs):
 
         logger.info(f"run_in_background {fn.__name__} {interval}")

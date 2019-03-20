@@ -50,6 +50,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     with_scrollbar=True
     sort_by = ("created", True)
     index = "media_item_id"
+    no_load_on_init = True
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -234,7 +235,6 @@ class CachedFeedProviderView(SimpleProviderView):
 
 @with_view(CachedFeedProviderView)
 class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
-
 
     UPDATE_INTERVAL = 300
 
