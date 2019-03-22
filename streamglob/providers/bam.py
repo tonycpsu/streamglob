@@ -520,7 +520,7 @@ class BAMMediaListing(model.MediaListing):
         return "".join([
             f"{'V' if self.has_video else ' '}",
             f"{'a' if self.has_audio else ' '}",
-            f"{' ' if self.is_free else '$'}",
+            f"{'!' if self.is_free else '$'}",
         ])
 
     @property
@@ -540,9 +540,9 @@ class BAMMediaListing(model.MediaListing):
                   ) ]
         return urwid.Pile([
             ("pack",
-             urwid.Columns([
+             urwid.Columns( [
                  (2, urwid.Padding(urwid.Text(("bold", media_type)), right=1))
-             ] + [
+             ] + [ ("pack", urwid.Text("!" if self.is_free else"$"))] + [
                  ("pack", urwid.Text(f))
                  for f in feed_types
              ])

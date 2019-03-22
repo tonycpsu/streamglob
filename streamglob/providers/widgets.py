@@ -80,12 +80,14 @@ class ProviderDataTable(BaseDataTable):
             # state.asyncio_loop.create_task(self.provider.refresh())
         elif key == "d":
             self.provider.download(self.selection.data)
-        elif key in ["left", "right"]:
-            self._emit(f"cycle_filter", 0, -1 if key == "left" else 1)
         elif key in ["[", "]"]:
-            self._emit(f"cycle_filter", 1, -1 if key == "[" else 1)
+            self._emit(f"cycle_filter", 0, -1 if key == "[" else 1)
         elif key in ["{", "}"]:
-            self._emit(f"cycle_filter", 2, -1 if key == "{" else 1)
+            self._emit(f"cycle_filter", 1, -1 if key == "{" else 1)
+        elif key in ["-", "="]:
+            self._emit(f"cycle_filter", 2, -1 if key == "-" else 1)
+        elif key in ["_", "+"]:
+            self._emit(f"cycle_filter", 3, -1 if key == "_" else 1)
         else:
             return key
 
