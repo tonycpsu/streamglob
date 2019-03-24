@@ -190,6 +190,8 @@ class UrwidMarkdownRenderer(mistune.Renderer):
     def autolink(self, link, is_email=False):
         return [("link", link)]
 
+    def block_quote(self, link):
+        return [("blockquote", link)]
 
     def inline_html(self, html):
         return [("html", html)]
