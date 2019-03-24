@@ -280,29 +280,29 @@ class TasksDataTable(BaseDataTable):
                 ),
                 DataTableColumn(
                     "size", width=8, align="right",
-                    value = lambda t, r: r.program.progress.size_total,
+                    value = lambda t, r: r.data.program.progress.size_total,
                     format_fn = lambda v: v if v else "?"
                     # value = foo,
                 ),
                 DataTableColumn(
                     "size/total", width=16, align="right",
                     value = lambda t, r: (
-                        r.program.progress.size_downloaded,
-                        r.program.progress.size_total
+                        r.data.program.progress.size_downloaded,
+                        r.data.program.progress.size_total
                     ),
                     format_fn = lambda v: (f"{v[0] or '?'}/{v[1] or '?'}") if v else ""
                     # value = foo,
                 ),
                 DataTableColumn(
                     "pct", width=5, align="right",
-                    # format_fn = lambda r: f"{r.program.progress.get('pct', '').split('.')[0]}%"
-                    value = lambda t, r: r.program.progress.percent_downloaded,
+                    # format_fn = lambda r: f"{r.data.program.progress.get('pct', '').split('.')[0]}%"
+                    value = lambda t, r: r.data.program.progress.percent_downloaded,
                     format_fn = lambda v: f"{round(v, 1)}%" if v else "?",
                     # value = foo,
                 ),
                 DataTableColumn(
                     "rate", width=10, align="right",
-                    value = lambda t, r: r.program.progress.transfer_rate,
+                    value = lambda t, r: r.data.program.progress.transfer_rate,
                     format_fn = lambda v: f"{v}/s" if v else "?"
                 )
         ]
@@ -334,6 +334,8 @@ class TasksDataTable(BaseDataTable):
     def keypress(self, size, key):
         if key == "ctrl r":
             self.refresh()
+        elif key == "ctrl k":
+            logger.info(type(self.selection.data.program.progress.transfer_rate))
         elif key == ".":
             self.selection.toggle_details()
             # self.selection.data._details_open = not self.selection.data._details_open
