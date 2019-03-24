@@ -1,5 +1,14 @@
 import itertools
 import re
+import mistune
+import html2text
+import html.parser
+
+def pairwise(iterable):
+    "s -> (s0,s1), (s1,s2), (s2, s3), ..."
+    a, b = itertools.tee(iterable)
+    next(b, None)
+    return zip(a, b)
 
 def partition(pred, iterable):
     'Use a predicate to partition entries into false entries and true entries'
@@ -104,10 +113,119 @@ def strip_emoji(s):
     return EMOJI_RE.sub("", s)
     # return NON_BMP_RE.sub("", s)
 
+
+class MLStripper(html.parser.HTMLParser):
+    def __init__(self):
+        self.reset()
+        self.strict = False
+        self.convert_charrefs= True
+        self.fed = []
+    def handle_data(self, d):
+        self.fed.append(d)
+    def get_data(self):
+        return ''.join(self.fed)
+
+def strip_html(html):
+    s = MLStripper()
+    s.feed(html)
+    return s.get_data()
+
+CLEAN_NEWLINES_RE = re.compile(r"\s*\n+\s*")
+
+def clean_text_paragraphs(s):
+
+    return CLEAN_NEWLINES_RE.sub(
+        "\n\n",
+        s
+    )
+
+html_to_text = html2text.HTML2Text()
+html_to_text.body_width=0
+
+def stripit(x):
+    if isinstance(x, str):
+        return x.lstrip(" ")
+    elif isinstance(x, tuple):
+        if len(x) > 1:
+            return (x[0], stripit(x[1:]))
+        else:
+            return stripit(x[0])
+    else:
+        return [stripit(xx) for xx in x]
+
+
+class UrwidMarkdownRenderer(mistune.Renderer):
+
+    def placeholder(self):
+        return []
+
+    def linebreak(self):
+        return ["\n\n"]
+
+    def newline(self):
+        return ["\n"]
+
+    def text(self, text):
+        return [(text,)]
+        # return [stripit(text)]
+        # return [text.strip() if len(text.strip()) else None] or None
+
+    def paragraph(self, text):
+        # return [ ("paragraph", [ x for x in stripit(text) if x ])]
+        return [ x for x in stripit(text) if x ] + ["\n\n"]
+        # return [text + ["\n\n"]]
+
+    def emphasis(self, text):
+        return [("italics", text)]
+
+    def codespan(self, text):
+        return [("foo", text)]
+    def double_emphasis(self, text):
+        return [("bold", text)]
+        # return [ ("bold", [ x for x in stripit(text) if x ])]
+
+    def link(self, link, title, content):
+        return [("link", content)]
+
+    def autolink(self, link, is_email=False):
+        return [("link", link)]
+
+
+    def inline_html(self, html):
+        return [("html", html)]
+
+    def block_html(self, html):
+        return [("block_html", html)]
+
+def html_to_urwid_text_markup(html, excludes=[]):
+
+    md2urwid = mistune.Markdown(renderer=UrwidMarkdownRenderer())
+    markdown = html_to_text.handle(html)
+
+    markup = md2urwid(strip_emoji(markdown))
+    if excludes:
+        markup = [
+            item
+            for item in markup
+            for exclude in excludes
+            if not exclude(item)
+        ]
+
+    # filter out any duplicate line breaks
+    return [markup[0]] + [
+        b for a, b in pairwise(markup)
+        if a != "\n\n"
+        or a != b
+    ]
+
+
+
 __all__ = [
     "classproperty",
     "valid_date",
     "format_datetime",
     "format_timedelta",
-    "strip_emoji"
+    "strip_emoji",
+    "strip_html",
+    "html_to_urwid_text_markup"
 ]

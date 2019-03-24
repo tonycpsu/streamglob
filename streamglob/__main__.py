@@ -246,6 +246,7 @@ class BrowserView(BaseView):
 class TasksDataTable(BaseDataTable):
 
     index = "task_id"
+    empty_message = None
 
     COLUMN_DEFS = AttrDict([
         (c.name, c)

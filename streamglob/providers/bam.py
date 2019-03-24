@@ -15,10 +15,14 @@ from dataclasses import *
 import typing
 import itertools
 import requests
+import html2text
+import webbrowser
 
 from .. import player
 from .. import config
 from .. import model
+from .. import utils
+
 from .base import *
 from .filters import *
 from ..player import *
@@ -207,7 +211,7 @@ class BAMLineScoreDataTable(DataTable):
         return cls(columns, data)
 
 
-class HighlightsDataTable(DataTable):
+class HighlightsDataTable(Observable, DataTable):
 
     with_scrollbar = True
     with_header = False
@@ -240,14 +244,151 @@ class HighlightsDataTable(DataTable):
             ("weight", 1, urwid.Text(f"{(data.get('description'))}"))
         ])
 
+    def keypress(self, size, key):
+        if key == "enter":
+            self.notify("play", self.selection.data)
+        else:
+            return super().keypress(size, key)
+
+
+class ExpandableAnchorIcon(urwid.WidgetWrap):
+
+    ICON_CLOSED = "\N{BLACK RIGHT-POINTING SMALL TRIANGLE}"
+    ICON_OPEN = "\N{BLACK DOWN-POINTING SMALL TRIANGLE}"
+
+    def __init__(self, icon_closed=None, icon_open=None):
+
+        self.icon_closed = icon_closed or self.ICON_CLOSED
+        self.icon_open = icon_open or self.ICON_OPEN
+
+        self.icon = urwid.SelectableIcon(self.icon_closed)
+        # self.icon.selectable = lambda: True
+        super().__init__(self.icon)
+
+    def open(self):
+        self.icon.set_text(self.icon_open)
+
+    def close(self):
+        self.icon.set_text(self.icon_closed)
+
+    # def selectable(self):
+    #     return True
+
+class ExpandableAnchor(urwid.WidgetWrap):
+
+    def __init__(self, anchor, contents):
+
+        self.anchor = anchor
+        self.contents = contents
+        self._contents_showing = False
+
+        self.icon = ExpandableAnchorIcon()
+        self.columns = urwid.Columns([
+            ("pack", self.icon),
+            ("pack", urwid.Text( ("anchor", self.anchor) ))
+        ], dividechars=1)
+
+        self.pile = urwid.Pile([
+            ("pack", self.columns)
+        ])
+
+        self.attr = urwid.AttrMap(
+            self.pile,
+            attr_map = {},
+            focus_map = {
+                None: "highlight",
+                "anchor": "highlight"
+            },
+        )
+        super().__init__(self.attr)
+
+    def show_contents(self):
+
+        if self._contents_showing: return
+
+        self.pile.contents +=[
+            (urwid.Divider("-"), self.pile.options("pack")),
+            (self.contents, self.pile.options("pack"))
+        ]
+        self.pile.focus_position = 2
+        self._contents_showing = True
+        self.icon.open()
+
+    def hide_contents(self):
+
+        if not self._contents_showing: return
+        self.pile.focus_position = 0
+        del self.pile.contents[1:]
+        self._contents_showing = False
+        self.icon.close()
+
+    def toggle_contents(self):
+        if not self._contents_showing:
+            self.show_contents()
+        else:
+            self.hide_contents()
+
+    def selectable(self):
+        return True
+
+    def keypress(self, size, key):
+        key = super().keypress(size, key)
+        if key == "enter":
+            self.toggle_contents()
+        elif key == "right":
+            self.show_contents()
+        elif key in ["left", "esc", "q"] and self._contents_showing:
+            self.hide_contents()
+        else:
+            return key#super().keypress(size, key)
+
+
+class BAMArticleBody(BasePopUp):
+
+    def __init__(self, body):
+        super().__init__(
+            urwid.LineBox(
+                ScrollBar(Scrollable(urwid.Text(body)))
+                # panwid.listbox.ScrollingListBox([urwid.Text(l) for l in body])
+            )
+        )
+
 
 # Strip off leading zeroes if they represent hours.  Because MLB expresses
 # duration as hh:mm:ss while NHL expresses it as mm:ss, it's a little clumsy.
 DURATION_RE = re.compile("(?:(?:0+:)(?=\d+:\d+))?(.*)")
 
-class BAMDetailBox(Observable, urwid.WidgetWrap):
+@dataclass
+class BAMEditorial:
 
-    signals = ["play"]
+    HEADLINE_SEPARATOR = " \N{EM DASH} "
+    editorial_type: str
+    headline: str
+    subhead: str = None
+    blurb: str = None
+    body: str = None
+    url: str = None
+
+    @property
+    def full_headline(self):
+        headline = self.headline
+        if self.subhead:
+            headline = f"{headline}{self.HEADLINE_SEPARATOR}{self.subhead}"
+        return headline
+
+def get_playback_url(playbacks):
+    # FIXME: make configurable
+    for name in [ "hlsCloud", "HTTP_CLOUD_WIRED_60", "mp4Avc"]:
+        try:
+            return next(
+                p["url"] for p in playbacks
+                if p["name"] == name
+            )
+        except StopIteration:
+            continue
+    raise StopIteration
+
+class BAMDetailBox(Observable, urwid.WidgetWrap):
 
     def __init__(self, provider, listing):
 
@@ -256,44 +397,173 @@ class BAMDetailBox(Observable, urwid.WidgetWrap):
         self.game = self.listing.game_data
 
         try:
-            data = sorted([
+            highlights = sorted([
                 AttrDict(dict(
                     media_id = h.get("guid", h.get("id")),
                     title = h["title"],
                     description = h["description"],
                     duration = DURATION_RE.search(h["duration"]).groups()[0],
-                    url = next(
-                        p for p in h["playbacks"]
-                        if p["name"] == "HTTP_CLOUD_WIRED_60"
-                    )["url"],
+                    url = get_playback_url(h["playbacks"]),
                     attrs = self.get_highlight_attrs(h, self.listing),
-                    _details_open = True
+                    _details = {"open": True, "disabled": True}
                 )) for h in self.game["content"]["highlights"][self.HIGHLIGHT_ATTR]["items"]
             ], key = lambda h: (h.attrs.timestamp is None, h.attrs.timestamp, h.attrs.event_type == "Other"))
         except KeyError:
-            data = []
+            highlights = []
+        except StopIteration:
+            import pprint
+            raise Exception(self.game.get("gamePk"), pprint.pformat(self.game["content"]["highlights"]))
 
-        self.table = self.HIGHLIGHT_TABLE_CLASS(
-            data = data
-        )
+        self.preview = self.get_editorial("preview")
+        self.recap = self.get_editorial("recap")
 
-        self.columns = urwid.Columns([
-            ("weight", 1, self.table)
-        ])
-        self.attr = urwid.AttrMap(
-            self.columns,
-            # attr_map = {"table_row_body": "red"},
-            attr_map = {},
-            focus_map = {
-                None: "highlight",
-                "table_row_body focused": "highlight",
-                "title focused": "title highlight"
-            },
-        )
-        self.box = urwid.BoxAdapter(
-            self.attr, 2*len(data) + 1 if len(data) else 2
-        )
-        super().__init__(self.box)
+        if self.recap:
+            self.editorial = self.recap
+        elif self.preview:
+            self.editorial = self.preview
+        else:
+            self.editorial = None
+
+        self.pile = urwid.Pile([])
+
+        if not (self.editorial or len(highlights)):
+            super().__init__(urwid.Text(""))
+            return
+
+        if self.editorial:
+
+            self.editorial_blurb_pile = urwid.Pile([
+                    ("pack", urwid.Text(self.editorial.blurb)),
+            ])
+
+            self.editorial_blurb_attr = urwid.AttrMap(
+                self.editorial_blurb_pile,
+                attr_map = {
+                    None: "table_row_body focused",
+                    "bold": "bold focused",
+                    "link": "link focused"
+                }
+            )
+
+            if self.editorial.body:
+
+                blurb_more_button = SquareButton(("bold", "more"))
+
+                body_markup = utils.html_to_urwid_text_markup(
+                    self.editorial.body,
+                    excludes = [lambda item: item[0] == "link" and item[1][0].startswith("Video:")]
+
+                )
+
+                def open_body_popup(b):
+
+                    self.provider.view.open_popup(
+                        BAMArticleBody(body_markup),
+                        width=("relative", 80),
+                        height=("relative", 80),
+                    )
+
+                urwid.connect_signal(blurb_more_button, "click", open_body_popup)
+
+            elif self.editorial.url:
+                blurb_more_button = SquareButton(("bold", "open"))
+
+                def open_body_url(b, u):
+                    logger.info(u)
+                    webbrowser.open(u)
+
+                urwid.connect_signal(
+                    blurb_more_button, "click", open_body_url,
+                    f"{self.provider.URL_ROOT}/{self.editorial.url}"
+                )
+            else:
+                blurb_more_button = None
+
+            if blurb_more_button:
+
+                blurb_more_attr = urwid.AttrMap(
+                    blurb_more_button,
+                    attr_map = {},
+                    focus_map = {
+                        "bold": "highlight"
+                    }
+                )
+
+                self.editorial_blurb_pile.contents.append(
+                    (urwid.Columns([
+                        ("pack", blurb_more_attr),
+                        ("weight", 1, urwid.Text(" "))
+                    ]), self.pile.options("pack"))
+                )
+                self.editorial_blurb_pile.focus_position = 1
+
+            self.editorial_anchor = ExpandableAnchor(
+                f"{self.editorial.editorial_type.title()}: "
+                f"{self.editorial.full_headline}",
+                self.editorial_blurb_attr
+            )
+            self.pile.contents.append(
+                (self.editorial_anchor, self.pile.options("pack"))
+            )
+
+        if len(highlights):
+
+            self.table = self.HIGHLIGHT_TABLE_CLASS(
+                data = highlights
+            )
+
+            self.table_attr = urwid.AttrMap(
+                self.table,
+                attr_map = {},
+                focus_map = {
+                    None: "highlight",
+                    "table_row_body focused": "highlight",
+                    "title focused": "highlight"
+                },
+            )
+
+            def play(h): self.notify("play", h)
+
+            self.table.connect("play", play)
+            self.table_box = urwid.BoxAdapter(
+                self.table_attr, min(2*len(highlights), 10) + 1
+            )
+
+            self.table_anchor = ExpandableAnchor(
+                "Highlights",
+                self.table_box
+            )
+
+            self.pile.contents.append(
+                (self.table_anchor, self.pile.options("pack"))
+            )
+
+        self.pile.focus_position = 0
+        super().__init__(self.pile)
+
+    def close_all(self):
+        for c in self.pile.contents:
+            if isinstance(c[0], ExpandableAnchor):
+                c[0].hide_contents()
+
+    def get_editorial_item(self, editorial):
+        raise NotImplementedError
+
+    def get_editorial(self, editorial_type):
+        try:
+            item = self.get_editorial_item(
+                self.game["content"]["editorial"][editorial_type]
+            )
+            return BAMEditorial(
+                editorial_type,
+                item.get("headline", None),
+                item.get("subhead", None),
+                item.get("blurb", item.get("seoDescription", None)),
+                item.get("body", None),
+                item.get("url", None)
+            )
+        except (AttributeError, KeyError, IndexError):
+            return None
 
     @property
     def HIGHLIGHT_ATTR(self):
@@ -302,22 +572,24 @@ class BAMDetailBox(Observable, urwid.WidgetWrap):
     def get_highlight_attrs(self, highlight):
         raise NotImplementedError
 
-    def keypress(self, size, key):
-        if key == "enter":
-            logger.info(f"detail keypress: {key}")
-            self.notify("play", self.table.selection.data)
-            return
-        else:
-            key = super().keypress(size, key)
-            return key
-
     def selectable(self):
         return True
+
+    def keypress(self, size, key):
+        key = super().keypress(size, key)
+        if key in ["left", "escape", "q"]:
+            self.close_all()
+            return key
+        else:
+            return key
 
 
 def get_team_city_and_name(team):
     # They don't make this very easy...
-    city = team["locationName"]
+    try:
+        city = team["locationName"]
+    except:
+        return (None, team.get("teamName", "?"))
     name = team["teamName"]
     if team["teamName"] in team["name"]:
         city = team["name"].replace(name, "").strip()
@@ -352,6 +624,7 @@ class BAMMediaListing(model.MediaListing):
     away_record: tuple = None
     home_record: tuple = None
     start: datetime = None
+    venue: str = None
     # attrs: str = None
 
     @property
@@ -384,6 +657,7 @@ class BAMMediaListing(model.MediaListing):
              for x in ["wins", "losses"]]
         )
         start_time = dateutil.parser.parse(g["gameDate"])
+        venue = g["venue"]["name"]
 
         if config.settings.profile.time_zone:
             start_time = start_time.astimezone(
@@ -403,6 +677,7 @@ class BAMMediaListing(model.MediaListing):
             away_record = away_record,
             home_record = home_record,
             start = start_time,
+            venue = venue
             # attrs = attrs,
         )
 
@@ -435,35 +710,13 @@ class BAMMediaListing(model.MediaListing):
                                               self.provider.config.listings.colors,
                                               style=attr3)
 
-        # return urwid.BoxAdapter(urwid.Filler(urwid.AttrMap(
-        #     urwid.Pile([
-        #         ( "pack", urwid.Padding(
-        #             urwid.Text(getattr(self, f"{side}_city")),
-        #             width="pack", align="center"),
-        #         ),
-        #         ( "pack", urwid.Padding(
-        #             urwid.Text(getattr(self, f"{side}_team")),
-        #             width="pack", align="center"),
-        #         ),
-        #         ( "pack", urwid.Padding(
-        #             urwid.Text(
-        #                 f"({wins}-{losses}, {('%.3f' %(pct)).lstrip('0')})"),
-        #             width="pack", align="center")
-        #         )
-        #     ]),
-        #     {None: attr}
-        # ), valign="bottom"), LINE_STYLES[self.style]["height"])
-
         record_text = (
             f"({wins}-{losses}, {('%.3f' %(pct)).lstrip('0')})"
             if not self.hide_spoilers
             else " "
         )
+
         pile = urwid.Pile([
-            ( "pack", urwid.Padding(
-            urwid.Text(((attr2), getattr(self, f"{side}_city"))),
-                width="pack", align="center"),
-            ),
             ( "pack", urwid.Padding(
                 urwid.Text( ((attr3), getattr(self, f"{side}_team"))),
                 width="pack", align="center"),
@@ -474,6 +727,22 @@ class BAMMediaListing(model.MediaListing):
                 width="pack", align="center")
             )
         ])
+
+        if getattr(self, f"{side}_city"):
+            pile.contents.insert(
+                0,
+                (urwid.Padding(
+                    urwid.Text(((attr2), getattr(self, f"{side}_city"))),
+                    width="pack", align="center"
+                ), pile.options("pack"))
+            )
+        else:
+            pile.contents.insert(
+                0,
+                (urwid.Padding(
+                    urwid.Text(" ")
+                ), pile.options("pack"))
+            )
 
         return urwid.BoxAdapter(urwid.Filler(urwid.AttrMap(
             pile,
@@ -535,10 +804,14 @@ class BAMMediaListing(model.MediaListing):
         # ])
         items = [ (k, list(x[1] for x in g))
                   for k, g in itertools.groupby(
-                          (m.stream_indicator for m in self.media),
+                          (m.stream_indicator
+                           for m in self.media
+                           if m.stream_indicator),
                           lambda v: v[0]
                   ) ]
         return urwid.Pile([
+            ("pack", urwid.Text(" " ))
+            ] + [
             ("pack",
              urwid.Columns( [
                  (2, urwid.Padding(urwid.Text(("bold", media_type)), right=1))
@@ -556,6 +829,10 @@ class BAMMediaListing(model.MediaListing):
         return any([
             m.free for m in self.media
         ])
+
+    @property
+    def _details(self):
+        return {"open": True, "disabled": True}
 
     # FIXME
     # @property
@@ -739,8 +1016,8 @@ class BAMMediaSource(model.MediaSource):
 
     @property
     def stream_indicator(self):
-        if not self.state in ["live", "done", "archive"]:
-            return None
+        if not self.state in ["unknown", "live", "done", "archive"]:
+            logger.warn(f"game {self.game_id} media {self.media_id} state: {self.state}")
         media_type = self.media_type[0].upper()
         feed_type = self.feed_type[0].lower()
         if self.state == "live":
@@ -971,7 +1248,7 @@ class WatchDialog(BasePopUp):
         def download(s):
             media_id = self.feed_dropdown.selected_value
             self.provider.download(
-                selection,
+                selection.data,
                 # media = selected_media,
                 media_id = media_id,
                 offset=self.offset_dropdown.selected_value,
@@ -982,11 +1259,11 @@ class WatchDialog(BasePopUp):
         def cancel(s):
             self._emit("close_popup")
 
-        self.play_button = urwid.Button("Play")
+        self.play_button = SquareButton("Play")
         self.play_button._label.align = 'center'
-        self.download_button = urwid.Button("Download")
+        self.download_button = SquareButton("Download")
         self.download_button._label.align = 'center'
-        self.cancel_button = urwid.Button("Cancel")
+        self.cancel_button = SquareButton("Cancel")
         self.cancel_button._label.align = 'center'
 
         urwid.connect_signal(self.play_button, "click", play)
@@ -995,6 +1272,8 @@ class WatchDialog(BasePopUp):
 
         pile = urwid.Pile([
             ("pack", urwid.Padding(self.title, width="pack", align="center")),
+            ("pack", urwid.Padding(urwid.Text( ("bold", selection.venue) ),
+                                   width="pack", align="center")),
             ("pack", urwid.Text(" ")),
             ("weight", 1, urwid.Pile([
                 ("weight", 5, urwid.Filler(
@@ -1026,7 +1305,7 @@ class WatchDialog(BasePopUp):
             ]))
         ])
         super(WatchDialog, self).__init__(pile)
-        pile.contents[2][0].focus_position = 2
+        pile.contents[3][0].focus_position = 2
 
 
     def update_offset_dropdown(self, media_id):
@@ -1081,8 +1360,17 @@ class BAMProviderDataTable(ProviderDataTable):
         return self.provider.get_details
 
     def keypress(self, size, key):
-        key =super().keypress(size, key)
-        if key in ["meta left", "meta right"]:
+        key = super().keypress(size, key)
+        if key in ["right", "space"]:
+            if self.selection.details_disabled:
+                self.selection.details_disabled = False
+                self.selection.details_focused = True
+        elif key in ["left", "esc", "q"]:
+            if self.selection.details_focused and not self.selection.details_disabled:
+                self.selection.details_disabled = True
+            else:
+                return key
+        elif key in ["meta left", "meta right"]:
             self._emit(f"cycle_filter", 0,("w", -1 if key == "meta left" else 1))
         elif key in ["ctrl left", "ctrl right"]:
             self._emit(f"cycle_filter", 0, ("m", -1 if key == "ctrl left" else 1))
@@ -1090,10 +1378,11 @@ class BAMProviderDataTable(ProviderDataTable):
             self.provider.filters.date.value = datetime.today()
         elif key == "meta enter":
             self.provider.play(self.selection.data)
-        elif key == ".":
-            self.selection.toggle_details()
+        # elif key == ".":
+        #     self.selection.toggle_details()
         elif key == "ctrl k":
-            logger.info(self.selection.pile.contents[1][0].table.selection.data.keywords)
+            self.selection.details_disabled = not self.selection.details_disabled
+            logger.info(f"{self.selection.details_disabled}")
         else:
             return key
 
@@ -1220,6 +1509,8 @@ class BAMProviderMixin(abc.ABC):
             team_id = team_id if team_id else "",
             game_id = game_id if game_id else ""
         )
+        logger.debug(url)
+
         # with self.cache_responses_short():
         return self.session.get(url).json()
 
@@ -1227,7 +1518,7 @@ class BAMProviderMixin(abc.ABC):
     def listings(self, offset=None, limit=None, *args, **kwargs):
 
         return iter(self.LISTING_CLASS.from_json(self.IDENTIFIER, g)
-                         # for g in list(self.game_map.values())[:5])
+                         # for g in list(self.game_map.values())[:2])
                          for g in self.game_map.values())
 
     def get_url(self, game_id,
@@ -1392,7 +1683,6 @@ class BAMProviderMixin(abc.ABC):
         return self.new_listing(game_id=game_id, title=f"{away_team}@{home_team}")
 
     def on_select(self, widget, selection):
-        logger.info("select")
         self.open_watch_dialog(selection)
 
     def on_activate(self):

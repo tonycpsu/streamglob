@@ -5,15 +5,28 @@ import urwid
 import panwid
 from orderedattrdict import AttrDict, DefaultAttrDict
 
+class SquareButton(urwid.Button):
+
+    button_left = urwid.Text("[")
+    button_right = urwid.Text("]")
+
+    def pack(self, size, focus=False):
+        cols = sum(
+            [ w.pack()[0] for w in [
+                self.button_left,
+                self._label,
+                self.button_right
+            ]]) + self._w.dividechars*2
+
+        return ( cols, )
+
 class BaseDataTable(panwid.DataTable):
 
-       def keypress(self, size, key):
-
+    def keypress(self, size, key):
         key = super().keypress(size, key)
 
         if key == "ctrl d":
             logger.info(self.focus_position)
-            # logger.info(f"{self.selection}, {type(self.selection)}")
             self.log_dump(20)
         else:
             return key
@@ -22,15 +35,14 @@ class Observable(object):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.callbacks = DefaultAttrDict(list)
+        self._callbacks = DefaultAttrDict(list)
 
     def connect(self, event, callback):
-        self.callbacks[event].append(callback)
-        # logger.info(f"{self.__class__.__name__}, {self.callbacks}")
+        self._callbacks[event].append(callback)
+        # logger.info(f"{self.__class__.__name__}, {self._callbacks}")
 
     def notify(self, event, *args):
-        # logger.info(self.callbacks)
-        for fn in self.callbacks[event]:
+        for fn in self._callbacks[event]:
             # logger.info(f"callback: {event}, {fn}")
             # raise Exception(fn, args)
             fn(*args)

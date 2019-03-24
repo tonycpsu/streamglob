@@ -6,6 +6,7 @@ from orderedattrdict import AttrDict
 from panwid.dialog import *
 
 from .. import model
+from .. import utils
 
 from .base import *
 
@@ -260,7 +261,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
             media_item_id = {"hide": True},
             feed = {"width": 32, "format_fn": lambda f: f.name if hasattr(f, "name") else "none"},
             created = {"width": 19},
-            title = {"width": ("weight", 1)},
+            title = {"width": ("weight", 1), "format_fn": utils.strip_emoji},
         )
 
     @property

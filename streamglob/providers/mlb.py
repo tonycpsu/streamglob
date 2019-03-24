@@ -39,6 +39,7 @@ class MLBHighlightsDataTable(HighlightsDataTable):
     ] + HighlightsDataTable.COLUMNS
 
 
+
 class MLBDetailBox(BAMDetailBox):
 
     HIGHLIGHT_TABLE_CLASS = MLBHighlightsDataTable
@@ -53,6 +54,9 @@ class MLBDetailBox(BAMDetailBox):
     @property
     def HIGHLIGHT_ATTR(self):
         return "highlights"
+
+    def get_editorial_item(self, editorial):
+        return editorial.get("mlb", None)
 
     def get_highlight_attrs(self, highlight, listing):
 
@@ -424,7 +428,7 @@ class MLBProvider(BAMProviderMixin,
         "&gameType={game_type}&gamePk={game_id}"
         "&teamId={team_id}"
         "&hydrate=linescore,team,game(content(summary,media(epg),"
-        "highlights(highlights(items))))"
+        "editorial(preview,recap),highlights(highlights(items))))"
     )
 
     SCHEDULE_TEMPLATE_BRIEF = (
@@ -445,6 +449,8 @@ class MLBProvider(BAMProviderMixin,
     MEDIA_ID_FIELD = "mediaId"
 
     DETAIL_BOX_CLASS = MLBDetailBox
+
+    URL_ROOT = "http://www.mlb.com"
 
     @classproperty
     def NAME(cls):

@@ -46,6 +46,12 @@ class NHLDetailBox(BAMDetailBox):
     def HIGHLIGHT_ATTR(self):
         return "gameCenter"
 
+    def get_editorial_item(self, editorial):
+        try:
+            return editorial.get("items", [])[0]
+        except IndexError:
+            return None
+
     def get_highlight_attrs(self, highlight, listing):
 
         timestamp = None
@@ -319,34 +325,13 @@ class NHLProvider(BAMProviderMixin,
         ("216p", "216p")
     ])
 
-    # SCHEDULE_TEMPLATE = (
-    #     "https://statsapi.web.nhl.com/api/v1/schedule"
-    #     "?sportId={sport_id}&startDate={start}&endDate={end}"
-    #     "&gameType={game_type}&gamePk={game_id}"
-    #     "&teamId={team_id}"
-    #     "&expand=schedule.game.content.media.milestones"
-    #     "&expand=schedule.game.content.media.epg"
-    #     "&expand=schedule.game.content.highlights.all"
-    #     # "&expand=schedule.venue"
-    #     "&expand=schedule.status"
-    #     "&expand=schedule.teams"
-    #     "&expand=schedule.linescore"
-    #     "&expand=schedule.broadcasts.all"
-    #     # "&expand=schedule.ticket"
-    #     "&expand=schedule.radioBroadcasts"
-    #     # "&expand=schedule.game.seriesSummary"
-    #     # "&expand=seriesSummary.series"
-    #     # "&hydrate=linescore,team,game(content(summary,media(epg)),tickets)"
-    #     # "&expand=schedule.game.content.media.milestones"
-    # )
-
     SCHEDULE_TEMPLATE = (
         "https://statsapi.web.nhl.com/api/v1/schedule"
         "?sportId={sport_id}&startDate={start}&endDate={end}"
         "&gameType={game_type}&gamePk={game_id}"
         "&teamId={team_id}"
-        "&hydrate=linescore,team,game(content(summary,media(epg),"
-        "highlights(gamecenter(items))))"
+        "&hydrate=linescore,team,game(teams,content(summary,media(epg),"
+        "editorial(preview,recap),highlights(gamecenter(items))))"
     )
 
     # DATA_TABLE_CLASS = NHLLineScoreDataTable
@@ -361,6 +346,8 @@ class NHLProvider(BAMProviderMixin,
     MEDIA_ID_FIELD = "mediaPlaybackId"
 
     DETAIL_BOX_CLASS = NHLDetailBox
+
+    URL_ROOT = "http://www.nhl.com"
 
     @classproperty
     def NAME(cls):
