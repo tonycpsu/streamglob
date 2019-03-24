@@ -16,7 +16,9 @@ pony
 stevedore
 atoma
 youtube_dl
-instagram_private_api
 git+https://github.com/ping/instagram_private_api
 git+https://github.com/tonycpsu/PyPeri
 python-twitch-client
+tonyc_utils
+mistune
+html2text
