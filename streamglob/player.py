@@ -115,8 +115,8 @@ class Program(abc.ABC):
         else:
             self.args = args
         self.exclude_types = set(exclude_types) if exclude_types else set()
-        # self.no_progress = no_progress
-        self.no_progress=True
+        self.no_progress = no_progress
+        # self.no_progress=True
 
         self.extra_args_pre = []
         self.extra_args_post = []
