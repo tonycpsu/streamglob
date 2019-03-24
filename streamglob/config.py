@@ -14,10 +14,6 @@ from orderedattrdict.yamlutils import AttrDictYAMLLoader
 import distutils.spawn
 import tzlocal
 
-from prompt_toolkit import prompt
-from prompt_toolkit.validation import Validator, ValidationError
-from prompt_toolkit.shortcuts import confirm
-from prompt_toolkit.shortcuts import prompt
 import getpass
 
 PACKAGE_NAME="streamglob"
