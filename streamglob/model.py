@@ -16,7 +16,7 @@ from pony.orm.core import EntityMeta
 
 # monkey-patch
 from marshmallow import fields as mm_fields
-dataclasses_json.mm._type_to_cons.update({
+dataclasses_json.mm.TYPES.update({
     typing.Any: mm_fields.Raw
 })
 
