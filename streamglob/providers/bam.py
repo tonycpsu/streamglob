@@ -700,7 +700,7 @@ class BAMMediaListing(model.MediaListing):
         losses = getattr(self, f"{side}_record")[1]
         pct = wins/(wins+losses) if (wins+losses) else 0.0
 
-        attrcfg = self.provider.config.listings.colors
+        attrcfg = self.provider.config.listings.teams.colors
         if isinstance(attrcfg, list):
             if len(attrcfg) > 2:
                 attr1, attr2, attr3 = attrcfg
