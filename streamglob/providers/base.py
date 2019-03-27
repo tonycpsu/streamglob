@@ -66,7 +66,7 @@ class SimpleProviderView(BaseProviderView):
     #     # self.table.refresh()
     #     # self.table.reset()
 
-    def cycle_filter(self, widget, n, step):
+    def cycle_filter(self, n, step):
         self.toolbar.cycle_filter(n, step)
 
     def refresh(self):
@@ -76,7 +76,27 @@ class SimpleProviderView(BaseProviderView):
         logger.info("reset")
         self.table.reset()
 
+    def keypress(self, size, key):
 
+        key = super().keypress(size, key)
+        if key == "ctrl r":
+            self.reset()
+            # state.asyncio_loop.create_task(self.provider.refresh())
+        # elif key == "d":
+        #     self.download(self.table.selection.data)
+        elif key in ["[", "]", "meta left", "meta right"]:
+            self.cycle_filter(0, -1 if key in ["[", "meta left"] else 1)
+        elif key in ["{", "}", "shift left", "shift right"]:
+            self.cycle_filter(1, -1 if key in ["{", "shift left"] else 1)
+        elif key in ["-", "=", "ctrl left", "ctrl right"]:
+            self.cycle_filter(2, -1 if key in ["-", "ctrl left"] else 1)
+        elif key in ["_", "+", "shift meta left", "shift meta right"]:
+            self.cycle_filter(3, -1 if key in ["_", "shift meta left"] else 1)
+        else:
+            return key
+
+    def selectable(self):
+        return True
     # def update(self):
     #     self.refresh()
 

@@ -78,16 +78,8 @@ class ProviderDataTable(BaseDataTable):
         if key == "ctrl r":
             self.provider.reset()
             # state.asyncio_loop.create_task(self.provider.refresh())
-        elif key == "d":
-            self.provider.download(self.selection.data)
-        elif key in ["[", "]", "meta left", "meta right"]:
-            self._emit(f"cycle_filter", 0, -1 if key in ["[", "meta left"] else 1)
-        elif key in ["{", "}", "shift left", "shift right"]:
-            self._emit(f"cycle_filter", 1, -1 if key in ["{", "shift left"] else 1)
-        elif key in ["-", "=", "ctrl left", "ctrl right"]:
-            self._emit(f"cycle_filter", 2, -1 if key in ["-", "ctrl left"] else 1)
-        elif key in ["_", "+", "shift meta left", "shift meta right"]:
-            self._emit(f"cycle_filter", 3, -1 if key in ["_", "shift meta left"] else 1)
+        # elif key == "d":
+        #     self.provider.download(self.selection.data)
         else:
             return key
 

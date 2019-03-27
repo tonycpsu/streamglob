@@ -396,38 +396,50 @@ class BAMDetailBox(Observable, urwid.WidgetWrap):
         self.listing = listing
         self.game = self.listing.game_data
 
-        try:
-            highlights = sorted([
-                AttrDict(dict(
-                    media_id = h.get("guid", h.get("id")),
-                    title = h["title"],
-                    description = h["description"],
-                    duration = DURATION_RE.search(h["duration"]).groups()[0],
-                    url = get_playback_url(h["playbacks"]),
-                    attrs = self.get_highlight_attrs(h, self.listing),
-                    _details = {"open": True, "disabled": True}
-                )) for h in self.game["content"]["highlights"][self.HIGHLIGHT_ATTR]["items"]
-            ], key = lambda h: (h.attrs.timestamp is None, h.attrs.timestamp, h.attrs.event_type == "Other"))
-        except KeyError:
-            highlights = []
-        except StopIteration:
-            import pprint
-            raise Exception(self.game.get("gamePk"), pprint.pformat(self.game["content"]["highlights"]))
+        # FIXME: add option to reveal spoilers
+        if not self.listing.hide_spoilers:
 
-        self.preview = self.get_editorial("preview")
-        self.recap = self.get_editorial("recap")
+            try:
+                highlights = sorted([
+                    AttrDict(dict(
+                        media_id = h.get("guid", h.get("id")),
+                        title = h["title"],
+                        description = h["description"],
+                        duration = DURATION_RE.search(h["duration"]).groups()[0],
+                        url = get_playback_url(h["playbacks"]),
+                        attrs = self.get_highlight_attrs(h, self.listing),
+                        _details = {"open": True, "disabled": True}
+                    )) for h in self.game["content"]["highlights"][self.HIGHLIGHT_ATTR]["items"]
+                ], key = lambda h: (h.attrs.timestamp is None, h.attrs.timestamp, h.attrs.event_type == "Other"))
+            except KeyError:
+                highlights = []
+            except StopIteration:
+                import pprint
+                raise Exception(self.game.get("gamePk"), pprint.pformat(self.game["content"]["highlights"]))
 
-        if self.recap:
-            self.editorial = self.recap
-        elif self.preview:
-            self.editorial = self.preview
+            self.preview = self.get_editorial("preview")
+            self.recap = self.get_editorial("recap")
+
+            if self.recap:
+                self.editorial = self.recap
+            elif self.preview:
+                self.editorial = self.preview
+            else:
+                self.editorial = None
+
         else:
+
             self.editorial = None
+            highlights = []
 
         self.pile = urwid.Pile([])
 
         if not (self.editorial or len(highlights)):
-            super().__init__(urwid.Text(""))
+            # super().__init__(urwid.Text(""))
+            self.pile.contents.append(
+                (urwid.Text("[spoilers hidden]"), self.pile.options("pack"))
+            )
+            super().__init__(self.pile)
             return
 
         if self.editorial:
@@ -1248,7 +1260,7 @@ class WatchDialog(BasePopUp):
         def download(s):
             media_id = self.feed_dropdown.selected_value
             self.provider.download(
-                selection.data,
+                selection,
                 # media = selected_media,
                 media_id = media_id,
                 offset=self.offset_dropdown.selected_value,
@@ -1356,6 +1368,10 @@ class BAMProviderDataTable(ProviderDataTable):
     detail_hanging_indent = "away_team_box"
 
     @property
+    def empty_message(self):
+        return f"(no games on {self.provider.filters.date.value})"
+
+    @property
     def detail_fn(self):
         return self.provider.get_details
 
@@ -1370,10 +1386,6 @@ class BAMProviderDataTable(ProviderDataTable):
                 self.selection.details_disabled = True
             else:
                 return key
-        elif key in ["meta left", "meta right"]:
-            self._emit(f"cycle_filter", 0,("w", -1 if key == "meta left" else 1))
-        elif key in ["ctrl left", "ctrl right"]:
-            self._emit(f"cycle_filter", 0, ("m", -1 if key == "ctrl left" else 1))
         elif key == "t":
             self.provider.filters.date.value = datetime.today()
         elif key == "meta enter":
@@ -1451,8 +1463,11 @@ class BAMProviderMixin(abc.ABC):
 
     def on_date_change(self, date):
         schedule = self.schedule(start=date, end=date)
-        games = sorted(schedule["dates"][-1]["games"],
-                       key= lambda g: g["gameDate"])
+        try:
+            games = sorted(schedule["dates"][-1]["games"],
+                           key= lambda g: g["gameDate"])
+        except IndexError:
+            games = []
 
         self.game_map.clear()
         for game in games:
