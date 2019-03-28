@@ -436,8 +436,12 @@ class BAMDetailBox(Observable, urwid.WidgetWrap):
 
         if not (self.editorial or len(highlights)):
             # super().__init__(urwid.Text(""))
+            if self.listing.hide_spoilers:
+                message = "[spoilers hidden]"
+            else:
+                message = "[no content]"
             self.pile.contents.append(
-                (urwid.Text("[spoilers hidden]"), self.pile.options("pack"))
+                (urwid.Text(message), self.pile.options("pack"))
             )
             super().__init__(self.pile)
             return
