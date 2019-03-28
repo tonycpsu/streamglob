@@ -275,6 +275,8 @@ class Program(abc.ABC):
         for ptype in [Player, Helper, Downloader]:
             cfgkey = ptype.__name__.lower() + "s"
             for name, cfg in config.settings.profile[cfgkey].items():
+                if not cfg:
+                    cfg = AttrDict()
                 path = cfg.pop("path", None) or cfg.get(
                     "command",
                     distutils.spawn.find_executable(name)
@@ -287,7 +289,7 @@ class Program(abc.ABC):
                     )
                 except StopIteration:
                     klass = ptype
-                if cfg.disabled == True:
+                if cfg.get("disabled") == True:
                     logger.info(f"player {name} is disabled")
                     continue
                 PROGRAMS[ptype][name] = ProgramDef(
