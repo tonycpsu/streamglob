@@ -1,33 +1,235 @@
 profiles:
     default:
         providers:
-            mlb: # MLB.tv
-                username: change@me.com
-                password: changeme
-            nhl: # NHL.tv
-                username: change@me2.com
-                password: changeme2
+            mlb:
+                credentials:
+                    username: change@me.com
+                    password: CHANGEME
+                output:
+                    path: .
+                    template: "mlb.{start_date_time}.{away_abbrev}@{home_abbrev}.{ext}"
+                # if you'd like to hide scores, etc. for certain teams
+                # hide_spoiler_teams:
+                #     - PHI
+                listings:
+                    teams:
+                        # here, "colors" can be set to
+                        #    false: no color
+                        #    one of the following strings:
+                        #        primary: fg = team's primary color
+                        #        alternate: fg = team's alternate color
+                        #        full: bg = primary color, fg = alternate color
+                        #        inverse; bg = alternate color, fg = primary
+                        #        color
+                        #    a list with three elements, each of which is a
+                        #    string as above.  The first item applies to the
+                        #    team box background, the 2nd to the city name, and
+                        #    the third to the team name
+                        colors: [full, full, inverse]
+                        # colors: standard
+                        # colors: false
+                    line:
+                        style: standard
+                        # style: "compact"
+                        # see above for description of the values allowed here
+                        colors: "full"
+                        # colors: standard
+                        # colors: false
+                attributes:
+                    teams:
+                        none: {fg: '#333333', bg: '#aaaaaa'}
+                        ari: {fg: '#e3d4ad', bg: '#a71930'}
+                        atl: {fg: '#1a366f', bg: '#ce1141'}
+                        bal: {fg: '#000000', bg: '#df4601'}
+                        bos: {fg: '#123460', bg: '#bd3039'}
+                        chc: {fg: '#cc3433', bg: '#0e3386'}
+                        cin: {fg: '#ffffff', bg: '#c6011f'}
+                        cle: {fg: '#123460', bg: '#e31937'}
+                        col: {fg: '#c4ced4', bg: '#41008f'}
+                        cws: {fg: '#474338', bg: '#c4ced4'}
+                        det: {fg: '#123460', bg: '#fa4616'}
+                        hou: {fg: '#eb6e1f', bg: '#003b82'}
+                        kc: {fg: '#bd9b60', bg: '#004687'}
+                        laa: {fg: '#004283', bg: '#ba0021'}
+                        lad: {fg: '#ffffff', bg: '#005a9c'}
+                        mia: {fg: '#00a3e0', bg: '#ef3340'}
+                        mil: {fg: '#b6922e', bg: '#0d3071'}
+                        min: {fg: '#00397c', bg: '#d31145'}
+                        nym: {fg: '#ff5910', bg: '#003992'}
+                        nyy: {fg: '#1b3468', bg: '#c4ced3'}
+                        oak: {fg: '#00584d', bg: '#efb21e'}
+                        phi: {fg: '#003992', bg: '#e81828'}
+                        pit: {fg: '#474338', bg: '#fdb827'}
+                        sd: {fg: '#a0aab2', bg: '#003b82'}
+                        sea: {fg: '#103c76', bg: '#005c5c'}
+                        sf: {fg: '#474338', bg: '#fd5a1e'}
+                        stl: {fg: '#123460', bg: '#c41e3a'}
+                        tb: {fg: '#0c3b7c', bg: '#8fbce6'}
+                        tex: {fg: '#c0111f', bg: '#003f98'}
+                        tor: {fg: '#e8291c', bg: '#134a8e'}
+                        wsh: {fg: '#1b2e7a', bg: '#ab0003'}
+                        
+            nhl:
+                credentials:
+                    username: changeme
+                    password: CHANGEME
+                attributes:
+                    teams:
+                        none: {fg: '#333333', bg: '#aaaaaa'}                        
+                        ana: {fg: '#c4ced4', bg: '#f47a38'}
+                        ari: {fg: '#e2d6b5', bg: '#8c2633'}
+                        bos: {fg: '#000000', bg: '#ffb81c'}
+                        buf: {fg: '#003474', bg: '#fcb514'}
+                        car: {fg: '#313131', bg: '#cc0000'}
+                        cbj: {fg: '#003474', bg: '#c8102e'}
+                        cgy: {fg: '#f1be48', bg: '#c8102e'}
+                        chi: {fg: '#ff671b', bg: '#cf0a2c'}
+                        col: {fg: '#236192', bg: '#6f263d'}
+                        dal: {fg: '#8f8f8c', bg: '#006847'}
+                        det: {fg: '#ffffff', bg: '#ce1126'}
+                        edm: {fg: '#052c62', bg: '#ff4c00'}
+                        fla: {fg: '#052c62', bg: '#c8102e'}
+                        lak: {fg: '#313131', bg: '#a2aaad'}
+                        min: {fg: '#eaaa00', bg: '#a6192e'}
+                        mtl: {fg: '#202b88', bg: '#af1e2d'}
+                        njd: {fg: '#000000', bg: '#ce1126'}
+                        nsh: {fg: '#052c62', bg: '#ffb81c'}
+                        nyi: {fg: '#f47d30', bg: '#00539b'}
+                        nyr: {fg: '#ce1126', bg: '#0038a8'}
+                        ott: {fg: '#cba044', bg: '#e31837'}
+                        phi: {fg: '#000000', bg: '#f74902'}
+                        pit: {fg: '#000000', bg: '#cfc493'}
+                        sjs: {fg: '#ea7200', bg: '#006272'}
+                        stl: {fg: '#fcb514', bg: '#002f87'}
+                        tbl: {fg: '#ffffff', bg: '#003488'}
+                        tor: {fg: '#ffffff', bg: '#004d9e'}
+                        van: {fg: '#00297b', bg: '#00843d'}
+                        vgk: {fg: '#4b5d62', bg: '#b4975a'}
+                        wpg: {fg: '#052c62', bg: '#004c97'}
+                        wsh: {fg: '#052c62', bg: '#c8102e'}
+                    
+                listings:
+                    teams:
+                        colors: [full, full, inverse]
+                    line:
+                        style: "standard"
+                        colors: primary                        
+                        
+            youtube:
+                # feeds in name: url format
+                feeds:
+                    MLB: https://www.youtube.com/mlb
+                    NHL: https://www.youtube.com/nhl
+                limit: 25
+                output:
+                    template: "%(title)s.%(upload_date)s.%(resolution)s.%(channel_id)s.%(id)s.%(ext)s"
+                    format: 22
+            instagram:
+                # list of users
+                feeds:
+                    - "@mlb"
+                    - "@nhl"
+                output:
+                    template: "{feed_name}.{title}.{timestamp}{index}.{ext}"
+            rss:
+                # feeds in name:url format
+                feeds:
+                    MLB.com Cut4cast: http://mlb.mlb.com/feed/podcast/cut4_podcast_rss.xml
+                rules:
+                    label:
+                        baseball: medium
+                output:
+                    template: "{feed_name}.{title}.{timestamp}.{ext}"
+            periscope:
+                # feeds in name:url format                
+                feeds:
+                    - mlb
+                    - nhl
+                helpers:
+                    null: youtube-dl
+                    mpv: null
+            twitch:
+                # list of usernames
+                channels:
+                    - sporer
 
-        player: /usr/local/bin/mpv -no-border --osd-level=0
-            --force-seekable --hr-seek=yes --hr-seek-framedrop=yes
-            --keep-open=yes --keep-open-pause=no --no-window-dragging
-            --cache=2048 --cache-backbuffer=8192 --demuxer-seekable-cache=yes
-        streamlink_args: --hls-audio-select *
+        players:
+            feh:
+                # path: feh
+                args:
+                    -d -Z -F -z --draw-tinted
+            mpv:
+                # disabled: true
+                # path: /usr/local/bin/mpv
+                args: >
+                    --no-border --osd-level=0 --force-window=yes
+                    --force-seekable --hr-seek=yes --hr-seek-framedrop=yes
+                    --keep-open=yes --keep-open-pause=no --no-window-dragging
+                    --cache=2048 --cache-backbuffer=8192
+                    --demuxer-seekable-cache=yes
+                    --image-display-duration=inf
+                # exclude_types:
+                #     - image
+            vlc:
+                # path: /usr/local/bin/vlc
+                # exclude_types:
+                #     - image
+        helpers:
+            youtube-dl:
+                path: youtube-dl
+            streamlink:
+                path: streamlink
+                no_progress: True
+                # args: --hls-audio-select *
+        rules:
+            label:
+                pitch: high
+                game: low
+            # download:
+            #     - high
+            
+        labels:
+            high: red
+            medium: yellow
+            low: blue
+                
+        attributes:
+            normal:
+                light gray
+            anchor:
+                white,bold
+            link:
+                white,bold
+            bold:
+                white,bold
+            title:
+                white,bold
+            highlight:
+                yellow
+            dim:
+                {"lo": "dark gray", "hi": "g23"}
+            yellow:
+                yellow
+            red:
+                light red
+            blue:
+                light blue
+
+        output:
+            path: .
+            strip_emoji: true
+        tables:
+            limit: 25
+        cache:
+            min_items: 10
+            max_items: 500
+            max_age: 90
         time_zone: America/New_York
         default_resolution: 720p_alt
-        hide_spoiler_teams: false #true to hide all, or list, e.g.
-            # - PHI
-            # - PIT
-
+        
     540p:
         default_resolution: 540p
-        streamlink_args:
-    proxy:
-        proxies:
-            http: http://10.0.0.1:4123
-            https: http://10.0.0.1:4123
 
-#profile_map:
-    # use certain profiles for games involving certain teams,e.g.
-    # team:
-    #    - pit: proxy
+tasks:
+    max: 10
+
