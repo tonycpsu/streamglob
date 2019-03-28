@@ -15,10 +15,28 @@ feeds, among others.
 Installation
 ------------
 
+Right now, the install process is a bit complicated due to some upstream
+dependencies that need to be updated.  Furthermore, Python 3.7 is the minimum
+supported version at this time.
+
+If you're running Python 3.7 the following should work:
+
     $ git clone https://github.com/tonycpsu/streamglob
     $ cd streamglob
     $ pip install -r requirements.txt
     $ pip install .
+    $ mkdir -p ~/.config/streamglob
+    $ cp doc/config.yaml.sample ~/.config/streamglob/config.yaml
+    $ vim ~/.config/streamglob/config.yaml
+
+You should then be able to edit `~/.config/streamglob/config.yaml` with your
+MLB.tv/NHL.tv credentials, then run `streamglob`.
+
+Example of playing a single MLB game from the command-line:
+
+    $ streamglob mlb/2019-03-25.phi
+
+Run with `-v` if you run into issues.
 
 Configuration
 -------------
