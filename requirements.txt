@@ -19,6 +19,6 @@ youtube_dl
 git+https://github.com/ping/instagram_private_api
 git+https://github.com/tonycpsu/PyPeri
 python-twitch-client
-https://github.com/tonycpsu/tonyc_utils
+git+https://github.com/tonycpsu/tonyc_utils
 mistune
 html2text
