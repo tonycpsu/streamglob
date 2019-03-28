@@ -1639,7 +1639,7 @@ class BAMProviderMixin(abc.ABC):
         game_date = None
         team = None
 
-        game_date = datetime.now().date()
+        game_date = datetime.now().date().strftime("%Y-%m-%d")
 
         if isinstance(identifier, int):
             game_id = identifier
