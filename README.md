@@ -40,18 +40,9 @@ PyPI.
 Configuration
 -------------
 
-**FIXME: THIS IS BROKEN -- MUST EDIT CONFIG FILE MANUALLY FOR NOW**
-
-The first thing you'll need to do is configure your MLB.tv username, password,
-etc. To do that, run:
-
-    sgplay --init-config
-
-The program should ask you for your username and password, then try to find your
-media player (it just looks for mpv or vlc right now.). If it doesn't find it,
-you can enter the full path to whatever you're using. If your player worked with
-mlbviewer, it should work with streamglob. It'll also ask you for your time
-zone so that game times are displayed properly.
+A sample configuration file is available in doc/config.yaml.sample.  Copy it to
+`~/.config/streamglob/config.yaml` and modify it as needed.  A more
+novice-friendly configuration mechanism is under development.
 
 Using `streamglob`
 ------------------
