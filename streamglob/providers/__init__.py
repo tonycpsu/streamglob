@@ -26,14 +26,14 @@ def get(provider, *args, **kwargs):
     except TypeError:
         raise Exception(provider, PROVIDERS)
 
-MEDIA_SPEC_RE=re.compile(r"([^:/]*)(?:/([^:]+))?(?::(.*))?")
+MEDIA_SPEC_RE=re.compile(r"(?:(\w+)://)?([^:/]*)(?:/([^:]+))?(?::(.*))?")
 
 def parse_spec(spec):
 
     if not spec:
         spec = DEFAULT_PROVIDER
 
-    (provider, identifier, options) = MEDIA_SPEC_RE.search(spec).groups()
+    (action, provider, identifier, options) = MEDIA_SPEC_RE.search(spec).groups()
 
     if not provider:
         provider = DEFAULT_PROVIDER
@@ -46,13 +46,16 @@ def parse_spec(spec):
     options = p.parse_options(options)
     for k, v in options.items():
         if k in p.filters:
+            print(k, v)
             p.filters[k].value = v
 
     try:
         selection = p.parse_identifier(identifier)
     except SGIncompleteIdentifier as e:
-        return (p, None, options)
-    return (p, selection, options)
+        return (action, p, None, options)
+    if selection and not action:
+        action = "play"
+    return (action, p, selection, options)
 
 def load_config():
 

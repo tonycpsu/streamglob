@@ -645,7 +645,6 @@ class BAMMediaListing(model.MediaListing):
 
     @classmethod
     def from_json(cls, provider, g):
-
         game_pk = g["gamePk"]
         game_type = g["gameType"]
         status = g["status"]["statusCode"]
@@ -874,6 +873,7 @@ class BAMMediaListing(model.MediaListing):
     @property
     def game_data(self):
         return self.provider.game_data(self.game_id)
+
         # schedule = self.provider.schedule(game_id=self.game_id)
         # try:
         #     # Get last date for games that have been rescheduled to a later date
@@ -1180,13 +1180,13 @@ class WatchDialog(BasePopUp):
         away_attr = provider.team_color_attr(
             selection.away_abbrev.lower(),
             provider.config.listings.line.colors,
-            "standard"
+            "primary"
         )
 
         home_attr = provider.team_color_attr(
             selection.home_abbrev.lower(),
             provider.config.listings.line.colors,
-            "standard"
+            "primary"
         )
 
         self.title = urwid.Text([
@@ -1443,7 +1443,7 @@ class BAMProviderMixin(abc.ABC):
     def init_config(self):
         # set alternate team color attributes
         for teamname, attr in self.config.attributes.teams.items():
-            self.config.attributes.teams_standard[teamname] = {"fg": attr["bg"]}
+            self.config.attributes.teams_primary[teamname] = {"fg": attr["bg"]}
             self.config.attributes.teams_alternate[teamname] = {"fg": attr["fg"]}
             self.config.attributes.teams_full[teamname] = attr
             self.config.attributes.teams_inverse[teamname] = {"fg": attr["bg"], "bg": attr["fg"]}
@@ -1648,7 +1648,7 @@ class BAMProviderMixin(abc.ABC):
                     (game_date, team) = identifier.split(".")
                 except ValueError:
                     try:
-                        game_date = dateutil.parser.parse(identifier).date()
+                        game_date = identifier
                     except ValueError:
                         # assume it's a team code with today's date
                         team = identifier
@@ -1657,6 +1657,7 @@ class BAMProviderMixin(abc.ABC):
             except AttributeError:
                 pass
 
+            game_date = dateutil.parser.parse(game_date).date()
             self.filters["date"].value = game_date
 
             if not team:
@@ -1686,16 +1687,31 @@ class BAMProviderMixin(abc.ABC):
             try:
                 date = schedule["dates"][-1]
                 game = date["games"][game_number-1]
-                game_id = game["gamePk"]
-                away_team = game["teams"]["away"]["team"]["teamName"]
-                home_team = game["teams"]["home"]["team"]["teamName"]
+                # raise Exception(pprint.pformat(game))
+                # print(game)
+                g = self.LISTING_CLASS.from_json(self.IDENTIFIER, game)
+                # raise Exception(self.game_map[568145])
+                return g
+                # print (g.game_data)
+                # raise Exception(g.game_data)
+                # game_id = game["gamePk"]
+                # away_team = game["teams"]["away"]["team"]["teamName"]
+                # home_team = game["teams"]["home"]["team"]["teamName"]
+                # away_abbrev = game["teams"]["away"]["team"]["abbreviation"]
+                # home_abbrev = game["teams"]["home"]["team"]["abbreviation"]
 
             except IndexError:
                 raise SGException("No game %d found for %s on %s" %(
                     game_number, team, game_date)
                 )
 
-        return self.new_listing(game_id=game_id, title=f"{away_team}@{home_team}")
+        # return self.new_listing(
+        #     game_id = game_id,
+        #     away_team = away_team,
+        #     home_team = home_team,
+        #     away_abbrev = away_abbrev,
+        #     home_abbrev = home_abbrev
+        # )
 
     def on_select(self, widget, selection):
         self.open_watch_dialog(selection)
@@ -1812,7 +1828,7 @@ class BAMProviderMixin(abc.ABC):
 
         if cfg is False:
             return "bold"
-        color_cfg = "teams_" + (style or cfg or "standard")
+        color_cfg = "teams_" + (style or cfg or "primary")
         if team.lower() in self.config.attributes[color_cfg]:
             key = team.lower()
         else:

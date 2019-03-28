@@ -1,5 +1,6 @@
 import logging
 # logger = logging.getLogger(__name__)
+import sys
 import os
 from datetime import datetime, timedelta
 from collections import namedtuple
@@ -485,7 +486,7 @@ def reload_config():
     state.screen.register_palette(state.palette)
 
 
-def run_gui(provider, **kwargs):
+def run_gui(action, provider, **kwargs):
 
     state.palette = load_palette()
     state.screen = urwid.raw_display.Screen()
@@ -551,15 +552,29 @@ def run_gui(provider, **kwargs):
     state.loop.set_alarm_in(0, activate_view)
     state.loop.run()
 
-def run_cli(provider, selection, **kwargs):
+def run_cli(action, provider, selection, **kwargs):
 
 
     # raise Exception(selection)
     # provider.play(selection)
     sources, kwargs = provider.play_args(selection, **kwargs)
 
-    provider.play(selection, **kwargs)
-    task = state.asyncio_loop.create_task(state.task_manager.join())
+    if action == "play":
+        task = provider.play(
+            selection,
+            no_task_manager=True,
+            no_progress=True,
+            stdout=sys.stdout, stderr=sys.stderr, **kwargs
+        )
+    elif action == "download":
+        task = provider.download(
+            selection,
+            no_task_manager=True, no_progress=True,
+            tdout=sys.stdout, stderr=sys.stderr, **kwargs
+        )
+    else:
+        raise Exception(f"unknown action: {action}")
+    # task = state.asyncio_loop.create_task(state.task_manager.join())
     state.asyncio_loop.run_until_complete(task)
 
     # while True:
@@ -619,8 +634,7 @@ def main():
     sh = logging.StreamHandler()
     state.logger = setup_logging(options.verbose - options.quiet, quiet_stdout=False)
     logger.debug(f"{PACKAGE_NAME} starting")
-    provider, selection, opts = providers.parse_spec(options.spec)
-
+    action, provider, selection, opts = providers.parse_spec(options.spec)
     state.asyncio_loop = asyncio.get_event_loop()
     state.task_manager = tasks.TaskManager()
 
@@ -631,9 +645,9 @@ def main():
     add_log_handler(fh)
 
     if selection:
-        run_cli(provider, selection, **opts)
+        run_cli(action, provider, selection, **opts)
     else:
-        run_gui(provider, **opts)
+        run_gui(action, provider, **opts)
 
 
 if __name__ == "__main__":

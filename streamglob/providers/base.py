@@ -363,7 +363,7 @@ class BaseProvider(abc.ABC):
                   + [ (f, self.filters[f].value)
                       for f in self.filters
                       if f not in kwargs]}
-        return ( source, kwargs)
+        return (source, kwargs)
 
     def play(self, selection, **kwargs):
 
@@ -405,15 +405,14 @@ class BaseProvider(abc.ABC):
         )
 
         if not state.options.debug_console:
-            state.task_manager.play(task, player_spec, helper_spec, **kwargs)
+            return state.task_manager.play(task, player_spec, helper_spec, **kwargs)
         else:
-            asyncio.create_task(Player.play(task, player_spec, helper_spec, **kwargs))
+            return asyncio.create_task(Player.play(task, player_spec, helper_spec, **kwargs))
 
 
-    def download(self, selection, **kwargs):
+    def download(self, selection, no_task_manager=False, **kwargs):
 
         sources, kwargs = self.play_args(selection, **kwargs)
-
         # filename = selection.download_filename
 
         if not isinstance(sources, list):
@@ -443,10 +442,10 @@ class BaseProvider(abc.ABC):
             # s.title = selection.title
             # s.dest = filename
 
-            if not state.options.debug_console:
-                state.task_manager.download(task, filename, helper_spec, **kwargs)
+            if not (no_task_manager or state.options.debug_console):
+                return state.task_manager.download(task, filename, helper_spec, **kwargs)
             else:
-                asyncio.create_task(Downloader.download(task, filename, helper_spec, **kwargs))
+                return asyncio.create_task(Downloader.download(task, filename, helper_spec, **kwargs))
 
     def on_select(self, widget, selection):
         self.play(selection)

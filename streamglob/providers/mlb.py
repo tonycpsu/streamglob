@@ -224,7 +224,7 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
             # print(res.content)
             raise SGStreamSessionException("Couldn't get ipid / fingerprint")
 
-        logger.info("logged in: %s" %(self.ipid))
+        logger.debug("logged in: %s" %(self.ipid))
         self.save()
 
     @property
@@ -392,7 +392,7 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
             "origin": "https://www.mlb.com"
         }
         stream_url = self.STREAM_URL_TEMPLATE.format(media_id=media.media_id)
-        logger.info("getting stream %s" %(stream_url))
+        logger.debug("getting stream %s" %(stream_url))
         stream = self.get(
             stream_url,
             headers=headers
@@ -608,50 +608,3 @@ class MLBProvider(BAMProviderMixin,
                  if m["milestoneType"] == "INNING_START"
         ]))
         return timestamps
-
-
-
-
-    # def get_highlights(self, selection):
-
-    #     game_id = selection.game_id
-    #     game = self.game_data(game_id)
-
-        return [ AttrDict(dict(
-            media_id = h["guid"],
-            title = h["title"],
-            url = next(p for p in h["playbacks"] if p["name"] == "HTTP_CLOUD_WIRED_60"),
-            h=h
-        )) for h in j["highlights"]["highlights"]["items"] ]
-
-
-
-    # def get_stream(self, media):
-
-    #     media_id = media.get("mediaId", media.get("guid"))
-
-    #     headers={
-    #         "Authorization": self.session.access_token,
-    #         # "User-agent": USER_AGENT,
-    #         "Accept": "application/vnd.media-service+json; version=1",
-    #         "x-bamsdk-version": "3.0",
-    #         "x-bamsdk-platform": self.PLATFORM,
-    #         "origin": "https://www.mlb.com"
-    #     }
-    #     stream_url = self.STREAM_URL_TEMPLATE.format(media_id=media_id)
-    #     logger.info("getting stream %s" %(stream_url))
-    #     stream = self.get(
-    #         stream_url,
-    #         headers=headers
-    #     ).json()
-    #     logger.debug("stream response: %s" %(stream))
-    #     if "errors" in stream and len(stream["errors"]):
-    #         return None
-    #     stream = Stream(stream)
-    #     stream.url = stream["stream"]["complete"]
-    #     return stream
-
-
-
-
-# register_provider(MLBProvider)

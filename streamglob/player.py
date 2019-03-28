@@ -108,7 +108,9 @@ class Program(abc.ABC):
     )
 
     def __init__(self, path, args=[],
-                 exclude_types=None, no_progress=False, **kwargs):
+                 exclude_types=None, no_progress=False,
+                 stdin=None, stdout=None, stderr=None,
+                 **kwargs):
         self.path = path
         if isinstance(args, str):
             self.args = args.split()
@@ -116,18 +118,17 @@ class Program(abc.ABC):
             self.args = args
         self.exclude_types = set(exclude_types) if exclude_types else set()
         self.no_progress = no_progress
-        # self.no_progress=True
 
         self.extra_args_pre = []
         self.extra_args_post = []
 
         self.source = None
-        self.stdin = None
+        self.stdin = stdin
         if not self.no_progress:
             self.stdout = subprocess.PIPE
         else:
-            self.stdout = None
-        self.stderr = None
+            self.stdout = stdout
+        self.stderr = stderr
         self.proc = None
 
         self.progress = ProgressStats()
@@ -464,7 +465,7 @@ class Player(Program):
 class Helper(Program):
 
     @classmethod
-    def get(cls, spec, url=None):
+    def get(cls, spec, url=None, **kwargs):
 
         if not spec:
             return None
@@ -472,14 +473,14 @@ class Helper(Program):
         try:
             return next(iter(
                 sorted((
-                    h for h in super().get(spec)
+                    h for h in super().get(spec, **kwargs)
                     if h.supports_url(url)),
                     key = lambda h: spec.index(h.cmd)
                        if h.cmd in spec else len(spec)+1
                 )
             ))
         except (TypeError, StopIteration):
-            return next(iter(super().get(spec)))
+            return next(iter(super().get(spec, **kwargs)))
 
 
 
@@ -493,10 +494,10 @@ class Downloader(Program):
         source = task.sources[0]
 
         if isinstance(helper_spec, MutableMapping):
-            helper_spec = helper_spec.get(None, helper_spec)
+            helper_spec = helper_spec.get(None, helper_spec, **kwargs)
 
         try:
-            downloader = Helper.get(helper_spec, source.locator)
+            downloader = Helper.get(helper_spec, source.locator, **kwargs)
         except SGStreamNotFound as e:
             logger.warn(e)
             return
@@ -622,8 +623,8 @@ class StreamlinkHelper(Helper, Downloader):
         r"Written (\d+.\d+ \S+) \((\d+\S+) @ (\d+.\d+ \S+)\)"
     )
 
-    def __init__(self, path, no_progress=False, *args, **kwargs):
-        super().__init__(path, *args, **kwargs)
+    # def __init__(self, path, no_progress=False, *args, **kwargs):
+    #     super().__init__(path, *args, **kwargs)
 
 
     def integrate_player(self, dst):
@@ -760,6 +761,7 @@ def main():
     parser = argparse.ArgumentParser()
     options, args = parser.parse_known_args()
 
+    p = Helper.get("streamlink")
 
     state.asyncio_loop.create_task(go())
     state.asyncio_loop.run_forever()

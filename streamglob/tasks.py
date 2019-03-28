@@ -52,23 +52,9 @@ class TaskManager(Observable):
         # task.action = "play"
         task.args = (player_spec, helper_spec)
         task.kwargs = kwargs
-        # task._details_open = (len(task.sources) > 1)
+        task.result = asyncio.Future()
         self.to_play.append(task)
-        # self.playing.append(AttrDict(
-        #     title="foo",
-        #     sources=[model.MediaSource("a")],
-        #     action="play",
-        #     task_id=self.current_task_id,
-        #     program = player.Player("mpv"),
-        #     proc = None,
-        #     pid = None,
-        #     started=None,
-        #     elapsed=None,
-        #     args = (player_spec, helper_spec),
-        #     kwargs = kwargs,
-        #     _details_open = True
-
-        # ))
+        return task.result
 
     def download(self, task, filename, helper_spec, **kwargs):
         self.current_task_id +=1
@@ -76,10 +62,12 @@ class TaskManager(Observable):
         # task.action = "download"
         task.args = (filename, helper_spec)
         task.kwargs = kwargs
+        task.result = asyncio.Future()
         self.to_download.append(task)
+        return task.result
 
     async def start(self):
-        logger.info("task_manager starting")
+        logger.debug("task_manager starting")
         self.worker_task = state.asyncio_loop.create_task(self.worker())
         self.poller_task = state.asyncio_loop.create_task(self.poller())
         self.started.notify_all()
@@ -124,6 +112,7 @@ class TaskManager(Observable):
                 program = await Player.play(task, *task.args, **task.kwargs)
             elif isinstance(task, model.DownloadMediaTask):
                 try:
+                    logger.info(f"kwargs: {task.kwargs}")
                     program = await Downloader.download(task, *task.args, **task.kwargs)
                 except SGFileExists as e:
                     logger.warn(e)
@@ -156,14 +145,24 @@ class TaskManager(Observable):
                 lambda t: t.proc.returncode is None,
                 self.playing)
 
+            playing_done = TaskList(playing_done)
+
+            for t in playing_done:
+                t.result.set_result(t.proc.returncode)
+
             self.playing = TaskList(playing)
 
             (done, active) = utils.partition(
                 lambda t: t.proc.returncode is None,
                 self.active)
 
-            self.done += TaskList(done)
-            self.active = TaskList(active)
+            done_list = TaskList(done)
+            active_list = TaskList(active)
+
+            for t in done_list:
+                t.result.set_result(t.proc.returncode)
+            self.done += done_list
+            self.active = active_list
 
             for s in self.playing + self.active:
 
@@ -173,7 +172,8 @@ class TaskManager(Observable):
                 if hasattr(s.program.source, "update_progress"):
                     await s.program.source.update_progress()
 
-            state.tasks_view.refresh()
+            if state.get("tasks_view"):
+                state.tasks_view.refresh()
             await asyncio.sleep(self.QUEUE_INTERVAL)
 
 
