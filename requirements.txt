@@ -9,9 +9,9 @@ pyyaml
 py-dateutil
 streamlink>=0.11.0
 bitmath
-urwid
+git+https://github.com/tonycpsu/urwid
 urwid_utils>=0.1.2
-panwid>=0.2.5
+git+https://github.com/tonycpsu/panwid@v0.3.0.dev1
 pony
 stevedore
 atoma
@@ -19,6 +19,6 @@ youtube_dl
 git+https://github.com/ping/instagram_private_api
 git+https://github.com/tonycpsu/PyPeri
 python-twitch-client
-tonyc_utils
+https://github.com/tonycpsu/tonyc_utils
 mistune
 html2text
