@@ -15,7 +15,10 @@ feeds, among others.
 Installation
 ------------
 
-    $ pip install git+https://github.com/tonycpsu/streamglob
+    $ git clone https://github.com/tonycpsu/streamglob
+    $ cd streamglob
+    $ pip install -r requirements.txt
+    $ pip install .
 
 Configuration
 -------------
