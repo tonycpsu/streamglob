@@ -42,7 +42,10 @@ class YouTubeMediaSource(model.MediaSource):
         ])
 
 class SearchResult(AttrDict):
-    pass
+
+    @property
+    def content(self):
+        return AttrDict(url=self.url, media_type="video")
 
 class YouTubeSession(session.StreamSession):
 
@@ -234,10 +237,16 @@ class YouTubeProvider(PaginatedProviderMixin,
             if self.filters.feed.search:
                 query = f"ytsearch{offset+self.view.table.limit}:{self.filters.feed.search}"
                 return [
-                    SearchResult(r)
+                    # SearchResult(r)
+                    AttrDict(
+                        title = r.title,
+                        guid = r.guid,
+                        content=self.new_media_source(r.url, media_type="video")
+                    )
                     for r in self.session.youtube_dl_query(query, offset, limit)
                 ]
             else:
+                logger.info("no search")
                 return AttrDict()
         else:
             return super().listings(
