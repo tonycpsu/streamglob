@@ -378,15 +378,23 @@ class BAMEditorial:
 
 def get_playback_url(playbacks):
     # FIXME: make configurable
-    for name in [ "hlsCloud", "HTTP_CLOUD_WIRED_60", "mp4Avc"]:
+    for name in [
+            "hlsCloud",
+            "HTTP_CLOUD_WIRED_60",
+            "mp4Avc",
+            "FLASH_1200K_640X360",
+            "FLASH_300K_320X180"
+    ]:
         try:
             return next(
                 p["url"] for p in playbacks
                 if p["name"] == name
             )
         except StopIteration:
-            continue
-    raise StopIteration
+            # give up and return the first one
+            return next(
+                p["url"] for p in playbacks
+            )
 
 class BAMDetailBox(Observable, urwid.WidgetWrap):
 
@@ -414,8 +422,7 @@ class BAMDetailBox(Observable, urwid.WidgetWrap):
             except KeyError:
                 highlights = []
             except StopIteration:
-                import pprint
-                raise Exception(self.game.get("gamePk"), pprint.pformat(self.game["content"]["highlights"]))
+                raise Exception(self.game.get("gamePk"))
 
             self.preview = self.get_editorial("preview")
             self.recap = self.get_editorial("recap")
