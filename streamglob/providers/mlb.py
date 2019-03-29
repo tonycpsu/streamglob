@@ -8,6 +8,8 @@ from panwid.datatable import *
 from pony.orm import *
 import requests
 import dateutil.parser
+import random
+import string
 
 from .. import session
 
@@ -18,6 +20,13 @@ from .filters import *
 from .. import model
 from ..exceptions import *
 from ..state import *
+
+def gen_random_string(n):
+    return ''.join(
+        random.choice(
+            string.ascii_uppercase + string.digits
+        ) for _ in range(64)
+    )
 
 class MLBLineScoreDataTable(BAMLineScoreDataTable):
 
@@ -145,24 +154,32 @@ class MLBBAMProviderData(BAMProviderData):
 class MLBStreamSession(session.AuthenticatedStreamSession):
 
     PLATFORM = "macintosh"
-    BAM_SDK_VERSION = "3.0"
 
-    API_KEY_URL = "https://www.mlb.com/tv/g490865/"
+    BAM_SDK_VERSION = "3.4"
+
+    MLB_API_KEY_URL = "https://www.mlb.com/tv/g490865/"
 
     API_KEY_RE = re.compile(r'"apiKey":"([^"]+)"')
 
     CLIENT_API_KEY_RE = re.compile(r'"clientApiKey":"([^"]+)"')
 
-    TOKEN_URL_TEMPLATE = (
-        "https://media-entitlement.mlb.com/jwt"
-        "?ipid={ipid}&fingerprint={fingerprint}==&os={platform}&appname=mlbtv_web"
-    )
+    OKTA_CLIENT_ID_RE = re.compile("""production:{clientId:"([^"]+)",""")
+
+    MLB_OKTA_URL = "https://www.mlbstatic.com/mlb.com/vendor/mlb-okta/mlb-okta.js"
+
+    AUTHZ_URL = "https://ids.mlb.com/oauth2/aus1m088yK07noBfh356/v1/authorize"
+
+    BAM_DEVICES_URL = "https://us.edge.bamgrid.com/devices"
+
+    BAM_SESSION_URL = "https://us.edge.bamgrid.com/session"
+
+    BAM_TOKEN_URL = "https://us.edge.bamgrid.com/token"
+
+    BAM_ENTITLEMENT_URL = "https://media-entitlement.mlb.com/api/v3/jwt"
 
     GAME_CONTENT_URL_TEMPLATE="http://statsapi.mlb.com/api/v1/game/{game_id}/content"
 
-    ACCESS_TOKEN_URL = "https://edge.bamgrid.com/token"
-
-    STREAM_URL_TEMPLATE="https://edge.svcs.mlb.com/media/{media_id}/scenarios/browser"
+    STREAM_URL_TEMPLATE="https://edge.svcs.mlb.com/media/{media_id}/scenarios/browser~csai"
 
     AIRINGS_URL_TEMPLATE=(
         "https://search-api-mlbtv.mlb.com/svc/search/v2/graphql/persisted/query/"
@@ -175,7 +192,9 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
             username, password,
             api_key=None,
             client_api_key=None,
-            token=None,
+            okta_client_id=None,
+
+            session_token=None,
             access_token=None,
             access_token_expiry=None,
             *args, **kwargs
@@ -187,7 +206,11 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
         )
         self._state.api_key = api_key
         self._state.client_api_key = client_api_key
-        self._state.token = token
+        self._state.okta_client_id = okta_client_id
+
+        self._state.session_token = session_token
+
+        self._state.session_token = session_token
         self._state.access_token = access_token
         self._state.access_token_expiry = access_token_expiry
 
@@ -198,33 +221,19 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
             logger.debug("already logged in")
             return
 
-        # logger.debug("checking for existing log in")
-
-        initial_url = ("https://secure.mlb.com/enterworkflow.do"
-                       "?flowId=registration.wizard&c_id=mlb")
-
-        data = {
-            "uri": "/account/login_register.jsp",
-            "registrationAction": "identify",
-            "emailAddress": self.username,
+        AUTHN_URL = "https://ids.mlb.com/api/v1/authn"
+        AUTHN_PARAMS = {
+            "username": self.username,
             "password": self.password,
-            "submitButton": ""
+            "options": {
+                "multiOptionalFactorEnroll": False,
+                "warnBeforePasswordExpired": True
+            }
         }
-        logger.debug("attempting new log in")
+        authn_response = self.post(AUTHN_URL, json=AUTHN_PARAMS).json()
+        self.session_token = authn_response["sessionToken"]
 
-        login_url = "https://securea.mlb.com/authenticate.do"
-
-        res = self.post(
-            login_url,
-            data=data,
-            headers={"Referer": (initial_url)}
-        )
-
-        if not (self.ipid and self.fingerprint):
-            # print(res.content)
-            raise SGStreamSessionException("Couldn't get ipid / fingerprint")
-
-        logger.debug("logged in: %s" %(self.ipid))
+        # logger.debug("logged in: %s" %(self.ipid))
         self.save()
 
     @property
@@ -247,12 +256,21 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
 
 
     @property
-    def ipid(self):
-        return self.get_cookie("ipid")
+    def session_token(self):
+        return self._state.session_token
 
-    @property
-    def fingerprint(self):
-        return self.get_cookie("fprt")
+    @session_token.setter
+    def session_token(self, value):
+        self._state.session_token = value
+
+
+    # @property
+    # def ipid(self):
+    #     return self.get_cookie("ipid")
+
+    # @property
+    # def fingerprint(self):
+    #     return self.get_cookie("fprt")
 
     @property
     def api_key(self):
@@ -268,10 +286,17 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
             self.update_api_keys()
         return self._state.client_api_key
 
+    @property
+    def okta_client_id(self):
+
+        if not self._state.get("okta_client_id"):
+            self.update_api_keys()
+        return self._state.okta_client_id
+
     def update_api_keys(self):
 
-        logger.debug("updating api keys")
-        content = self.get("https://www.mlb.com/tv/g490865/").text
+        logger.debug("updating MLB api keys")
+        content = self.get(self.MLB_API_KEY_URL).text
         parser = lxml.etree.HTMLParser()
         data = lxml.etree.parse(StringIO(content), parser)
 
@@ -281,27 +306,34 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
                 self._state.api_key = self.API_KEY_RE.search(script.text).groups()[0]
             if script.text and "clientApiKey" in script.text:
                 self._state.client_api_key = self.CLIENT_API_KEY_RE.search(script.text).groups()[0]
+
+        logger.debug("updating Okta api keys")
+        content = self.get(self.MLB_OKTA_URL).text
+        self._state.okta_client_id = self.OKTA_CLIENT_ID_RE.search(content).groups()[0]
         self.save()
 
     @property
-    def token(self):
-        if not self._state.token:
-            logger.debug("getting token")
-            headers = {"x-api-key": self.api_key}
+    def session_token(self):
+        if not self._state.session_token:
+            self.login()
+            # logger.debug("getting session token")
+            # headers = {"x-api-key": self.api_key}
 
-            response = self.get(
-                self.TOKEN_URL_TEMPLATE.format(
-                    ipid=self.ipid, fingerprint=self.fingerprint,
-                    platform=self.PLATFORM
-                ),
-                headers=headers
-            )
-            self._state.token = response.text
-        return self._state.token
+            # response = self.get(
+            #     self.TOKEN_URL_TEMPLATE.format(
+            #         ipid=self.ipid, fingerprint=self.fingerprint,
+            #         platform=self.PLATFORM
+            #     ),
+            #     headers=headers
+            # )
+            # self._state.session_token = response.text
+        if not self._state.session_token:
+            raise Exception("no session token")
+        return self._state.session_token
 
-    @token.setter
-    def token(self, value):
-        self._state.token = value
+    @session_token.setter
+    def session_token(self, value):
+        self._state.session_token = value
 
     @property
     def access_token_expiry(self):
@@ -313,6 +345,7 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
     def access_token_expiry(self, val):
         if val:
             self._state.access_token_expiry = val.isoformat()
+
 
     @property
     def access_token(self):
@@ -327,15 +360,130 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
         logger.debug("access_token: %s" %(self._state.access_token))
         return self._state.access_token
 
+
     def refresh_access_token(self, clear_token=False):
-        if not self.logged_in:
-            self.login()
         logger.debug("refreshing access token")
+
         if clear_token:
-            self.token = None
+            self.session_token = None
+
+        # ----------------------------------------------------------------------
+        # Okta authentication -- used to get media entitlement later
+        # ----------------------------------------------------------------------
+        STATE = gen_random_string(64)
+        NONCE = gen_random_string(64)
+
+        AUTHZ_PARAMS = {
+            "client_id": self.okta_client_id,
+            "redirect_uri": "https://www.mlb.com/login",
+            "response_type": "id_token token",
+            "response_mode": "okta_post_message",
+            "state": STATE,
+            "nonce": NONCE,
+            "prompt": "none",
+            "sessionToken": self.session_token,
+            "scope": "openid email"
+        }
+        authz_response = self.get(self.AUTHZ_URL, params=AUTHZ_PARAMS)
+        authz_content = authz_response.text
+
+        for line in authz_content.split("\n"):
+            if "data.access_token" in line:
+                OKTA_ACCESS_TOKEN = line.split("'")[1].encode('utf-8').decode('unicode_escape')
+
+
+        # ----------------------------------------------------------------------
+        # Get device assertion - used to get device token
+        # ----------------------------------------------------------------------
+        DEVICES_HEADERS = {
+            "Authorization": "Bearer %s" % (self.client_api_key),
+            "Origin": "https://www.mlb.com",
+        }
+
+        DEVICES_PARAMS = {
+            "applicationRuntime": "firefox",
+            "attributes": {},
+            "deviceFamily": "browser",
+            "deviceProfile": "macosx"
+        }
+
+        devices_response = self.post(
+            self.BAM_DEVICES_URL,
+            headers=DEVICES_HEADERS, json=DEVICES_PARAMS
+        ).json()
+
+        DEVICES_ASSERTION=devices_response["assertion"]
+
+        # ----------------------------------------------------------------------
+        # Get device token
+        # ----------------------------------------------------------------------
+
+        TOKEN_PARAMS = {
+            "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
+            "latitude": "0",
+            "longitude": "0",
+            "platform": "browser",
+            "subject_token": DEVICES_ASSERTION,
+            "subject_token_type": "urn:bamtech:params:oauth:token-type:device"
+        }
+        token_response = self.post(
+            self.BAM_TOKEN_URL, headers=DEVICES_HEADERS, data=TOKEN_PARAMS
+        ).json()
+
+
+        DEVICE_ACCESS_TOKEN = token_response["access_token"]
+        DEVICE_REFRESH_TOKEN = token_response["refresh_token"]
+
+        # ----------------------------------------------------------------------
+        # Create session -- needed for device ID, which is used for entitlement
+        # ----------------------------------------------------------------------
+        SESSION_HEADERS = {
+            "Authorization": DEVICE_ACCESS_TOKEN,
+            "User-agent": session.USER_AGENT,
+            "Origin": "https://www.mlb.com",
+            "Accept": "application/vnd.session-service+json; version=1",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Accept-Language": "en-US,en;q=0.5",
+            "x-bamsdk-version": self.BAM_SDK_VERSION,
+            "x-bamsdk-platform": self.PLATFORM,
+            "Content-type": "application/json",
+            "TE": "Trailers"
+        }
+        session_response = self.get(
+            self.BAM_SESSION_URL,
+            headers=SESSION_HEADERS
+        ).json()
+        DEVICE_ID = session_response["device"]["id"]
+
+        # ----------------------------------------------------------------------
+        # Get entitlement token
+        # ----------------------------------------------------------------------
+        ENTITLEMENT_PARAMS={
+            "os": self.PLATFORM,
+            "did": DEVICE_ID,
+            "appname": "mlbtv_web"
+        }
+
+        ENTITLEMENT_HEADERS = {
+            "Authorization": "Bearer %s" % (OKTA_ACCESS_TOKEN),
+            "Origin": "https://www.mlb.com",
+            "x-api-key": self.api_key
+
+        }
+        entitlement_response = self.get(
+            self.BAM_ENTITLEMENT_URL,
+            headers=ENTITLEMENT_HEADERS,
+            params=ENTITLEMENT_PARAMS
+        )
+
+        ENTITLEMENT_TOKEN = entitlement_response.content
+
+        # ----------------------------------------------------------------------
+        # Finally (whew!) get access token using entitlement token
+        # ----------------------------------------------------------------------
         headers = {
             "Authorization": "Bearer %s" % (self.client_api_key),
-            "User-agent": USER_AGENT,
+            "User-agent": session.USER_AGENT,
             "Accept": "application/vnd.media-service+json; version=1",
             "x-bamsdk-version": self.BAM_SDK_VERSION,
             "x-bamsdk-platform": self.PLATFORM,
@@ -344,12 +492,11 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
         data = {
             "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
             "platform": "browser",
-            "setCookie": "false",
-            "subject_token": self.token,
-            "subject_token_type": "urn:ietf:params:oauth:token-type:jwt"
+            "subject_token": ENTITLEMENT_TOKEN,
+            "subject_token_type": "urn:bamtech:params:oauth:token-type:account"
         }
         response = self.post(
-            self.ACCESS_TOKEN_URL,
+            self.BAM_TOKEN_URL,
             data=data,
             headers=headers
         )
@@ -380,14 +527,11 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
 
     def get_stream(self, media):
 
-        # media_id = media.get("mediaId", media.get("guid"))
-        # logger.info(media_id)
-
         headers={
             "Authorization": self.access_token,
-            "User-agent": USER_AGENT,
+            "User-agent": session.USER_AGENT,
             "Accept": "application/vnd.media-service+json; version=1",
-            "x-bamsdk-version": "3.0",
+            "x-bamsdk-version": self.BAM_SDK_VERSION,
             "x-bamsdk-platform": self.PLATFORM,
             "origin": "https://www.mlb.com"
         }
