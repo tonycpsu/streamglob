@@ -288,6 +288,8 @@ class ListingFilter(WidgetFilter, abc.ABC):
     WIDGET_CLASS = BaseDropdown
     # WIDGET_CLASS = panwid.Dropdown
 
+    CYCLE_REVERSE = False
+
     @property
     def widget_args(self):
         return [self.values]
@@ -323,7 +325,7 @@ class ListingFilter(WidgetFilter, abc.ABC):
     #             raise SGInvalidFilterValue(f"Filter value {value} not valid")
 
     def cycle(self, step=1):
-        self.widget.cycle(step)
+        self.widget.cycle(step if not self.CYCLE_REVERSE else -step)
 
     @property
     def auto_refresh(self):
@@ -386,6 +388,8 @@ def with_filters(*filters):
     return outer
 
 class ResolutionFilter(ListingFilter):
+
+    CYCLE_REVERSE=True
 
     @property
     def default(self):
