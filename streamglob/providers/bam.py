@@ -1405,7 +1405,7 @@ class BAMProviderDataTable(ProviderDataTable):
             else:
                 return key
         elif key == "t":
-            self.provider.filters.date.value = datetime.today()
+            self.provider.filters.date.value = self.provider.current_game_day()
         elif key == "meta enter":
             self.provider.play(self.selection.data)
         # elif key == ".":
@@ -1662,6 +1662,8 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
     def start_date(self):
         pass
 
+    def current_game_day(self):
+        return (datetime.now() - timedelta(hours=8)).date()
 
     def parse_identifier(self, identifier):
 
@@ -1669,7 +1671,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         game_date = None
         team = None
 
-        game_date = datetime.now().date().strftime("%Y-%m-%d")
+        game_date = self.current_game_day().strftime("%Y/%m/%d")
 
         if isinstance(identifier, int):
             game_id = identifier
