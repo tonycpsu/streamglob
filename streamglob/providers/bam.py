@@ -1383,6 +1383,7 @@ class BAMProviderDataTable(ProviderDataTable):
     sort_icons = False
     detail_selectable = True
     detail_hanging_indent = "away_team_box"
+    # no_load_on_init = True
 
     @property
     def empty_message(self):
@@ -1422,11 +1423,18 @@ class BAMProviderView(SimpleProviderView):
     PROVIDER_DATA_TABLE_CLASS = BAMProviderDataTable
 
 @with_view(BAMProviderView)
-class BAMProviderMixin(abc.ABC):
+class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
     """
     Mixin class for use by BAMTech Media stream providers, which currently
     includes MLB.tv and NHL.tv
     """
+
+    UPDATE_INTERVAL = 60
+
+    TASKS = [
+        ("update", UPDATE_INTERVAL, [], {})
+    ]
+
     sport_id = 1 # FIXME
 
     FILTERS_BROWSE = AttrDict([
@@ -1479,17 +1487,26 @@ class BAMProviderMixin(abc.ABC):
         )
 
     def on_date_change(self, date):
+        self.update_games()
+
+    async def update(self):
+        self.update_games()
+
+    def update_games(self):
+        date = self.filters.date.value
         schedule = self.schedule(start=date, end=date)
         try:
-            games = sorted(schedule["dates"][-1]["games"],
-                           key= lambda g: g["gameDate"])
+            games = sorted(
+                schedule["dates"][-1]["games"],
+                key= lambda g: (g["status"]["detailedState"] == "Final", g["gameDate"])
+            )
         except IndexError:
             games = []
 
         self.game_map.clear()
         for game in games:
             self.game_map[game["gamePk"]] = AttrDict(game)
-        self.view.table.reset()
+        self.view.table.refresh()
 
     def game_data(self, game_id):
 
@@ -1733,9 +1750,10 @@ class BAMProviderMixin(abc.ABC):
     def on_select(self, widget, selection):
         self.open_watch_dialog(selection)
 
-    def on_activate(self):
+    # def on_activate(self):
+    #     super().on_activate()
         # logger.info(f"activate: {self.filters.date.value}")
-        self.filters.date.changed()
+        # self.filters.date.changed()
         # self.refresh()
         # if not self.filters.date.value:
         #     raise Exception

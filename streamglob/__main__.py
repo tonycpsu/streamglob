@@ -611,7 +611,6 @@ def main():
     parser.add_argument("spec", metavar="SPECIFIER",
                         help="media specifier", nargs="?")
 
-
     options, args = parser.parse_known_args(args)
 
     state.options = AttrDict(vars(options))
@@ -643,6 +642,7 @@ def main():
     log_file = os.path.join(config.CONFIG_DIR, f"{PACKAGE_NAME}.log")
     fh = logging.FileHandler(log_file)
     add_log_handler(fh)
+    logging.getLogger("panwid").setLevel(logging.INFO)
 
     if selection:
         run_cli(action, provider, selection, **opts)
