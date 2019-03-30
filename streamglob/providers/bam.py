@@ -1168,7 +1168,8 @@ class OffsetDropdown(urwid.WidgetWrap):
     def selected_value(self):
         return self.dropdown.selected_value
 
-
+    def cycle(self, *args, **kwargs):
+        self.dropdown.cycle(*args, **kwargs)
 
 
 class WatchDialog(BasePopUp):
@@ -1259,11 +1260,16 @@ class WatchDialog(BasePopUp):
 
         def play(s):
             media_id = self.feed_dropdown.selected_value
+            offset = (
+                self.offset_dropdown.selected_value
+                if self.offset_dropdown
+                else None
+            )
             self.provider.play(
                 selection,
                 # media = selected_media,
                 media_id = media_id,
-                offset=self.offset_dropdown.selected_value,
+                offset=offset,
                 resolution=self.resolution_dropdown.selected_value
             )
             self._emit("close_popup")
