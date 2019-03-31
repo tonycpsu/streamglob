@@ -55,9 +55,16 @@ Credits
 
 Tony Cebzanov (<tonycpsu@gmail.com>) is the primary author and maintainer of
 `streamglob`, but significant contributions have been made by others, as
-detailed [here](https://github.com/tonycpsu/mlbstreamer/graphs/contributors).
+detailed [here](https://github.com/tonycpsu/streamglob/graphs/contributors).
 
 `streamglob` is a successor to
 [mlbstreamer](https://github.com/tonycpsu/mlbstreamer), which was in turn
 modeled after the `mlbviewer` project developed by Matthew (daftcat) of the
 LinuxQuestions forums.
+
+If you like this application and wish to support its continued development,
+you can do so here:
+
+<a href="https://www.patreon.com/tonycpsu">
+<img src="https://c5.patreon.com/external/logo/become_a_patron_button@2x.png" width="100"/>
+</a>
