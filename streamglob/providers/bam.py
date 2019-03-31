@@ -1452,7 +1452,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         home_team_box = {"label": "home", "width": 16},
         line = {"pack": True},
         media_available = {"label": "media", "width": 10},
-        game_id = {"width": 10},
+        # game_id = {"width": 10},
     )
 
     HELPER = "streamlink"
