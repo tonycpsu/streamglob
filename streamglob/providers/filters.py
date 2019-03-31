@@ -148,6 +148,9 @@ class BooleanFilter(WidgetFilter, abc.ABC):
     def widget_kwargs(self):
         return {"state": True}
 
+    def cycle(self, step=1):
+        self.widget.value = not self.widget.value
+
 
 class TextFilter(WidgetFilter):
 
