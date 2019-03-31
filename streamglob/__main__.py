@@ -11,6 +11,7 @@ import time
 import re
 import asyncio
 import functools
+import signal
 
 import urwid
 import urwid.raw_display
@@ -560,22 +561,33 @@ def run_cli(action, provider, selection, **kwargs):
     sources, kwargs = provider.play_args(selection, **kwargs)
 
     if action == "play":
-        task = provider.play(
-            selection,
-            no_task_manager=True,
-            no_progress=True,
-            stdout=sys.stdout, stderr=sys.stderr, **kwargs
+        program = state.asyncio_loop.run_until_complete(
+            provider.play(
+                selection,
+                no_task_manager=True,
+                no_progress=True,
+                stdout=sys.stdout, stderr=sys.stderr, **kwargs
+            )
         )
     elif action == "download":
-        task = provider.download(
-            selection,
-            no_task_manager=True, no_progress=True,
-            tdout=sys.stdout, stderr=sys.stderr, **kwargs
+        program = state.asyncio_loop.run_until_complete(
+            provider.download(
+                selection,
+                no_task_manager=True,
+                no_progress=True,
+                tdout=sys.stdout, stderr=sys.stderr, **kwargs
+            )
         )
     else:
         raise Exception(f"unknown action: {action}")
-    # task = state.asyncio_loop.create_task(state.task_manager.join())
-    state.asyncio_loop.run_until_complete(task)
+
+    try:
+        state.asyncio_loop.run_until_complete(
+            program.proc.wait()
+        )
+    except KeyboardInterrupt:
+        logger.info("Exiting on keyboard interrupt")
+        program.proc.send_signal(signal.SIGHUP)
 
     # while True:
     #     state.procs = [p for p in state.procs if p.poll() is None]
