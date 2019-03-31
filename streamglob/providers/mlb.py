@@ -167,6 +167,8 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
 
     MLB_OKTA_URL = "https://www.mlbstatic.com/mlb.com/vendor/mlb-okta/mlb-okta.js"
 
+    AUTHN_URL = "https://ids.mlb.com/api/v1/authn"
+
     AUTHZ_URL = "https://ids.mlb.com/oauth2/aus1m088yK07noBfh356/v1/authorize"
 
     BAM_DEVICES_URL = "https://us.edge.bamgrid.com/devices"
@@ -221,7 +223,6 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
             logger.debug("already logged in")
             return
 
-        AUTHN_URL = "https://ids.mlb.com/api/v1/authn"
         AUTHN_PARAMS = {
             "username": self.username,
             "password": self.password,
@@ -230,7 +231,7 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
                 "warnBeforePasswordExpired": True
             }
         }
-        authn_response = self.post(AUTHN_URL, json=AUTHN_PARAMS).json()
+        authn_response = self.post(self.AUTHN_URL, json=AUTHN_PARAMS).json()
         self.session_token = authn_response["sessionToken"]
 
         # logger.debug("logged in: %s" %(self.ipid))
@@ -316,17 +317,6 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
     def session_token(self):
         if not self._state.session_token:
             self.login()
-            # logger.debug("getting session token")
-            # headers = {"x-api-key": self.api_key}
-
-            # response = self.get(
-            #     self.TOKEN_URL_TEMPLATE.format(
-            #         ipid=self.ipid, fingerprint=self.fingerprint,
-            #         platform=self.PLATFORM
-            #     ),
-            #     headers=headers
-            # )
-            # self._state.session_token = response.text
         if not self._state.session_token:
             raise Exception("no session token")
         return self._state.session_token

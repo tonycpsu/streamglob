@@ -1459,6 +1459,12 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
 
     REQUIRED_CONFIG = {"credentials": ["username", "password"]}
 
+    GAME_STATUS_ORDER = [
+        "Pre-Game",
+        "Final",
+        "Postponed",
+    ]
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.filters["date"].connect("changed", self.on_date_change)
@@ -1498,7 +1504,12 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         try:
             games = sorted(
                 schedule["dates"][-1]["games"],
-                key= lambda g: (g["status"]["detailedState"] == "Final", g["gameDate"])
+                key= lambda g: (
+                    self.GAME_STATUS_ORDER.index(g["status"]["detailedState"])
+                    if g["status"]["detailedState"] in self.GAME_STATUS_ORDER
+                    else 0,
+                    g["gameDate"]
+                )
             )
         except IndexError:
             games = []
@@ -1683,13 +1694,10 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
                 try:
                     (game_date, team) = identifier.split(".")
                 except ValueError:
-                    try:
-                        game_date = identifier
-                    except ValueError:
-                        # assume it's a team code with today's date
+                    if identifier.isalpha():
                         team = identifier
-                    # raise SGIncompleteIdentifier
-
+                    else:
+                        game_date = identifier
             except AttributeError:
                 pass
 
