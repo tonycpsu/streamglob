@@ -782,14 +782,30 @@ class BAMMediaListing(model.MediaListing):
 
     @property
     def hide_spoilers(self):
-        hide_spoiler_teams = self.provider.config.get("hide_spoiler_teams", [])
+        hide_spoiler_teams = self.provider.config.teams.get("hide_spoilers", [])
         if isinstance(hide_spoiler_teams, bool):
             return hide_spoiler_teams
-        else:
-            return len(set(
-                [self.away_abbrev, self.home_abbrev]).intersection(
-                    set(hide_spoiler_teams)
-                )) > 0
+
+        if hide_spoiler_teams == "favorite":
+            hide_spoiler_teams = self.provider.config.teams.get("favorite", [])
+
+        return len(set(
+            [self.away_abbrev, self.home_abbrev]).intersection(
+                set(hide_spoiler_teams)
+            )) > 0
+
+    @property
+    def is_favorite(self):
+        favorites = self.provider.config.teams.get("favorite", [])
+        return len(
+            set(favorites).intersection(
+                set([self.away_abbrev, self.home_abbrev])
+            )
+        ) > 0
+
+    @property
+    def state(self):
+        return self.game_data["status"]["detailedState"]
 
     @property
     def media_types(self):
@@ -1262,8 +1278,6 @@ class WatchDialog(BasePopUp):
             media_id = self.feed_dropdown.selected_value
             offset = (
                 self.offset_dropdown.selected_value
-                if self.offset_dropdown
-                else None
             )
             self.provider.play(
                 selection,
@@ -1411,8 +1425,11 @@ class BAMProviderDataTable(ProviderDataTable):
         # elif key == ".":
         #     self.selection.toggle_details()
         elif key == "ctrl k":
-            self.selection.details_disabled = not self.selection.details_disabled
-            logger.info(f"{self.selection.details_disabled}")
+            # self.pack_columns()
+            # self.sort_by_column(self.initial_sort)
+            self.refresh()
+            # self.selection.details_disabled = not self.selection.details_disabled
+            # logger.info(f"{self.selection.details_disabled}")
         else:
             return key
 
@@ -1492,9 +1509,6 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
             self.HELPER in list(player.PROGRAMS[Helper].keys())
         )
 
-    def on_date_change(self, date):
-        self.update_games()
-
     async def update(self):
         self.update_games()
 
@@ -1502,15 +1516,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         date = self.filters.date.value
         schedule = self.schedule(start=date, end=date)
         try:
-            games = sorted(
-                schedule["dates"][-1]["games"],
-                key= lambda g: (
-                    self.GAME_STATUS_ORDER.index(g["status"]["detailedState"])
-                    if g["status"]["detailedState"] in self.GAME_STATUS_ORDER
-                    else 0,
-                    g["gameDate"]
-                )
-            )
+            games = schedule["dates"][-1]["games"]
         except IndexError:
             games = []
 
@@ -1518,6 +1524,9 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         for game in games:
             self.game_map[game["gamePk"]] = AttrDict(game)
         self.view.table.refresh()
+
+    def on_date_change(self, date):
+        self.update_games()
 
     def game_data(self, game_id):
 
@@ -1577,9 +1586,22 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
 
     def listings(self, offset=None, limit=None, *args, **kwargs):
 
-        return iter(self.LISTING_CLASS.from_json(self.IDENTIFIER, g)
-                         # for g in list(self.game_map.values())[:2])
-                         for g in self.game_map.values())
+        return iter(
+            sorted(
+                (
+                    self.LISTING_CLASS.from_json(self.IDENTIFIER, g)
+                    for g in self.game_map.values()
+                ),
+                key = lambda l:
+                (
+                    not l.is_favorite,
+                    self.GAME_STATUS_ORDER.index(l.state)
+                    if l.state in self.GAME_STATUS_ORDER
+                    else 0,
+                    l.start_time
+                )
+            )
+        )
 
     def get_url(self, game_id,
                 media = None,

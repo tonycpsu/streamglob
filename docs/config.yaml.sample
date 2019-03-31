@@ -9,6 +9,10 @@ profiles:
                     path: .
                     template: "mlb.{start_date_time}.{away_abbrev}@{home_abbrev}.{ext}"
                 # if you'd like to hide scores, etc. for certain teams
+                teams:
+                    favorite:
+                        - PHI
+                    hide_spoilers: favorite
                 # hide_spoiler_teams:
                 #     - PHI
                 listings:
