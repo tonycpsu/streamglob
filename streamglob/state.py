@@ -13,6 +13,11 @@ class State(AttrDict):
         self.__exclude_keys__ |= {
             "_procs", "procs",# "task_manager", "task_manager_task"
         }
+        self._store = {}
+        self._memo = Memoizer(self._store)
+        self._memo.regions['short'] = {'max_age': 60}
+        self._memo.regions['medium'] = {'max_age': 60*5}
+        self._memo.regions['long'] = {'max_age': 60*60}
         # self.task_manager = TaskManager()
 
     @property
@@ -28,23 +33,16 @@ class State(AttrDict):
 
     def stop_task_manager(self):
         self.asyncio_loop.create_task(self.task_manager.stop())
-        # self.task_manager_task.cancel()
 
-
-    # def spawn_play_process(self, player, **kwargs):
-        # raise Exception(kwargs)
-        # self.procs.append(player.play(**kwargs))
-        # raise Exception(self.procs)
-
+    @property
+    def memo(self):
+        return self._memo
 
 
 state = State()
-store = {}
-memo = Memoizer(store)
-memo.regions['short'] = {'max_age': 60}
-memo.regions['medium'] = {'max_age': 60*5}
-memo.regions['long'] = {'max_age': 60*60}
 
+def memo(*args, **kwargs):
+    return state.memo(*args, **kwargs)
 
 # def set_provider(p, **kwargs):
 
