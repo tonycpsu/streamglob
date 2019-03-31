@@ -782,6 +782,8 @@ class BAMMediaListing(model.MediaListing):
 
     @property
     def hide_spoilers(self):
+        if not self.provider.filters.hide_spoilers.value:
+            return False
         hide_spoiler_teams = self.provider.config.teams.get("hide_spoilers", [])
         if isinstance(hide_spoiler_teams, bool):
             return hide_spoiler_teams
@@ -1459,6 +1461,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
     ])
 
     FILTERS_OPTIONS = AttrDict([
+        ("hide_spoilers", BooleanFilter),
         ("resolution", ResolutionFilter),
         ("live_stream", LiveStreamFilter),
     ])
@@ -1485,6 +1488,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.filters["date"].connect("changed", self.on_date_change)
+        self.filters["hide_spoilers"].connect("changed", self.on_hide_spoilers_change)
         self.game_map = AttrDict()
 
 
@@ -1527,6 +1531,9 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
 
     def on_date_change(self, date):
         self.update_games()
+
+    def on_hide_spoilers_change(self, value):
+        self.reset()
 
     def game_data(self, game_id):
 

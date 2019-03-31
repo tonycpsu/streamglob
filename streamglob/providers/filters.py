@@ -34,7 +34,6 @@ class Filter(Observable):
         # self.widget.set_value(value)
         self.widget.value = value
         if changed and self.provider.is_active:
-        # if changed
             self.changed()
 
 
@@ -118,6 +117,36 @@ class WidgetFilter(Filter):
     def cycle(self, step=1):
         raise Exception
 
+
+class BooleanFilterWidget(urwid.CheckBox):
+
+    @property
+    def value(self):
+        return self.get_state()
+
+    @value.setter
+    def value(self, value):
+        self.set_state(value)
+
+
+class BooleanFilter(WidgetFilter, abc.ABC):
+
+    WIDGET_CLASS = BooleanFilterWidget
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        urwid.connect_signal(
+            self.widget, 'postchange',
+            lambda w, v: self.changed()
+        )
+
+    @property
+    def widget_args(self):
+        return ("",)
+
+    @property
+    def widget_kwargs(self):
+        return {"state": True}
 
 
 class TextFilter(WidgetFilter):
