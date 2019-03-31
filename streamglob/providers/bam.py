@@ -405,45 +405,44 @@ class BAMDetailBox(Observable, urwid.WidgetWrap):
         self.game = self.listing.game_data
 
         # FIXME: add option to reveal spoilers
-        if not self.listing.hide_spoilers:
-
-            try:
-                highlights = sorted([
-                    AttrDict(dict(
-                        media_id = h.get("guid", h.get("id")),
-                        title = h["title"],
-                        description = h["description"],
-                        duration = DURATION_RE.search(h["duration"]).groups()[0],
-                        url = get_playback_url(h["playbacks"]),
-                        attrs = self.get_highlight_attrs(h, self.listing),
-                        _details = {"open": True, "disabled": True}
-                    )) for h in self.game["content"]["highlights"][self.HIGHLIGHT_ATTR]["items"]
-                ], key = lambda h: (h.attrs.timestamp is None, h.attrs.timestamp, h.attrs.event_type == "Other"))
-            except KeyError:
-                highlights = []
-            except StopIteration:
-                raise Exception(self.game.get("gamePk"))
-
-            self.preview = self.get_editorial("preview")
-            self.recap = self.get_editorial("recap")
-
-            if self.recap:
-                self.editorial = self.recap
-            elif self.preview:
-                self.editorial = self.preview
-            else:
-                self.editorial = None
-
-        else:
-
-            self.editorial = None
+        try:
+            highlights = sorted([
+                AttrDict(dict(
+                    media_id = h.get("guid", h.get("id")),
+                    title = h["title"],
+                    description = h["description"],
+                    duration = DURATION_RE.search(h["duration"]).groups()[0],
+                    url = get_playback_url(h["playbacks"]),
+                    attrs = self.get_highlight_attrs(h, self.listing),
+                    _details = {"open": True, "disabled": True}
+                )) for h in self.game["content"]["highlights"][self.HIGHLIGHT_ATTR]["items"]
+            ], key = lambda h: (h.attrs.timestamp is None, h.attrs.timestamp, h.attrs.event_type == "Other"))
+        except KeyError:
             highlights = []
+        except StopIteration:
+            raise Exception(self.game.get("gamePk"))
+
+        self.preview = self.get_editorial("preview")
+        self.recap = self.get_editorial("recap")
+
+        if self.recap and not self.listing.hide_spoilers:
+            self.editorial = self.recap
+        elif self.preview:
+            self.editorial = self.preview
+        else:
+            self.editorial = None
+
+        if not self.listing.hide_spoilers:
+            self.highlights = highlights
+        else:
+            self.highlights = []
 
         self.pile = urwid.Pile([])
 
-        if not (self.editorial or len(highlights)):
+        if not (self.editorial or len(self.highlights)):
             # super().__init__(urwid.Text(""))
-            if self.listing.hide_spoilers:
+            if (self.listing.hide_spoilers
+                and self.editorial and self.editorial == self.recap):
                 message = "[spoilers hidden]"
             else:
                 message = "[no content]"
@@ -529,10 +528,10 @@ class BAMDetailBox(Observable, urwid.WidgetWrap):
                 (self.editorial_anchor, self.pile.options("pack"))
             )
 
-        if len(highlights):
+        if len(self.highlights):
 
             self.table = self.HIGHLIGHT_TABLE_CLASS(
-                data = highlights
+                data = self.highlights
             )
 
             self.table_attr = urwid.AttrMap(
@@ -549,7 +548,7 @@ class BAMDetailBox(Observable, urwid.WidgetWrap):
 
             self.table.connect("play", play)
             self.table_box = urwid.BoxAdapter(
-                self.table_attr, min(2*len(highlights), 10) + 1
+                self.table_attr, min(2*len(self.highlights), 10) + 1
             )
 
             self.table_anchor = ExpandableAnchor(
@@ -1427,6 +1426,7 @@ class BAMProviderDataTable(ProviderDataTable):
         # elif key == ".":
         #     self.selection.toggle_details()
         elif key == "ctrl k":
+            logger.info(self.selection.data.game_id)
             # self.pack_columns()
             # self.sort_by_column(self.initial_sort)
             self.refresh()
@@ -1461,9 +1461,9 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
     ])
 
     FILTERS_OPTIONS = AttrDict([
-        ("hide_spoilers", BooleanFilter),
         ("resolution", ResolutionFilter),
         ("live_stream", LiveStreamFilter),
+        ("hide_spoilers", BooleanFilter),
     ])
 
     ATTRIBUTES = AttrDict(
