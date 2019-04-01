@@ -431,7 +431,7 @@ class ResolutionFilter(ListingFilter):
 
     @property
     def default(self):
-        return config.settings.profile.default_resolutionr
+        return self.provider.config.defaults.resolution
 
     @property
     def values(self):

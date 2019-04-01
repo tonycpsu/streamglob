@@ -13,8 +13,9 @@ profiles:
                     favorite:
                         - PHI
                     hide_spoilers: favorite
-                # hide_spoiler_teams:
-                #     - PHI
+                defaults:
+                    resolution: 720p
+                    media: video
                 listings:
                     teams:
                         # here, "colors" can be set to
@@ -232,7 +233,9 @@ profiles:
         default_resolution: 720p_alt
         
     540p:
-        default_resolution: 540p
+        mlb:
+            defaults:
+                resolution: 540p
 
 tasks:
     max: 10
