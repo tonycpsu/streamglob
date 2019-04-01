@@ -1540,6 +1540,12 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
 
     def game_data(self, game_id):
 
+        try:
+            return self.game_map[game_id]
+        except:
+            schedule = self.schedule(game_id=game_id)
+            game = schedule["dates"][-1]["games"][0]
+            self.game_map[game_id] = AttrDict(game)
         return self.game_map[game_id]
         # schedule = self.schedule(game_id=game_id)
         # try:
@@ -1717,8 +1723,8 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
 
         game_date = self.current_game_day().strftime("%Y/%m/%d")
 
-        if isinstance(identifier, int):
-            game_id = identifier
+        if identifier and identifier.isdigit():
+            game_id = int(identifier)
             schedule = self.schedule(
                 game_id = game_id
             )
@@ -1741,7 +1747,6 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
 
             if not team:
                 raise SGIncompleteIdentifier
-
 
             if "-" in team:
                 (sport_code, team) = team.split("-")
@@ -1766,12 +1771,18 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         try:
             date = schedule["dates"][-1]
             game = date["games"][game_number-1]
+            game_date = dateutil.parser.parse(game["gameDate"]).date()
 
         except IndexError:
             raise SGException("No game %d found for %s on %s" %(
                 game_number, team, game_date)
             )
+
+
         g = self.LISTING_CLASS.from_json(self.IDENTIFIER, game)
+
+        if team is None:
+            team = game["teams"]["home"]["team"]["abbreviation"].lower()
 
         if team.lower() == g.away_abbrev.lower():
             feed_type = "away"
