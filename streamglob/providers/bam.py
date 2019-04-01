@@ -1713,12 +1713,15 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         game_number = 1
         game_date = None
         team = None
+        feed_type = "home"
 
         game_date = self.current_game_day().strftime("%Y/%m/%d")
 
         if isinstance(identifier, int):
             game_id = identifier
-
+            schedule = self.schedule(
+                game_id = game_id
+            )
         else:
             try:
                 (game_date, team, game_number) = identifier.split(".")
@@ -1739,6 +1742,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
             if not team:
                 raise SGIncompleteIdentifier
 
+
             if "-" in team:
                 (sport_code, team) = team.split("-")
 
@@ -1758,29 +1762,25 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
                 # sport_id = sport["id"],
                 team_id = team_id
             )
-            # raise Exception(schedule)
 
-            try:
-                date = schedule["dates"][-1]
-                game = date["games"][game_number-1]
-                # raise Exception(pprint.pformat(game))
-                # print(game)
-                g = self.LISTING_CLASS.from_json(self.IDENTIFIER, game)
-                # raise Exception(self.game_map[568145])
-                return g
-                # print (g.game_data)
-                # raise Exception(g.game_data)
-                # game_id = game["gamePk"]
-                # away_team = game["teams"]["away"]["team"]["teamName"]
-                # home_team = game["teams"]["home"]["team"]["teamName"]
-                # away_abbrev = game["teams"]["away"]["team"]["abbreviation"]
-                # home_abbrev = game["teams"]["home"]["team"]["abbreviation"]
+        try:
+            date = schedule["dates"][-1]
+            game = date["games"][game_number-1]
 
-            except IndexError:
-                raise SGException("No game %d found for %s on %s" %(
-                    game_number, team, game_date)
-                )
+        except IndexError:
+            raise SGException("No game %d found for %s on %s" %(
+                game_number, team, game_date)
+            )
+        g = self.LISTING_CLASS.from_json(self.IDENTIFIER, game)
 
+        if team.lower() == g.away_abbrev.lower():
+            feed_type = "away"
+        elif team.lower() == g.home_abbrev.lower():
+            feed_type = "home"
+        else:
+            raise Exception(team, g.away_abbrev)
+
+        return (g, dict(feed_type=feed_type))
         # return self.new_listing(
         #     game_id = game_id,
         #     away_team = away_team,
@@ -1846,11 +1846,16 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         box.connect("play", play_highlight)
         return box
 
-    def get_source(self, selection, media_id=None, **kwargs):
+    def get_source(self, selection, media_id=None, feed_type=None, **kwargs):
         try:
-            selected_media = next(m for m in selection.media if m.media_id == media_id)
+            selected_media = next(
+                m for m in selection.media
+                if (not media_id or m.media_id == media_id)
+                and (not feed_type or m.feed_type.lower() == feed_type.lower())
+            )
         except StopIteration:
             selected_media = selection.media[0]
+
         return selected_media
 
     def play_args(self, selection, **kwargs):
@@ -1898,7 +1903,6 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
 
         kwargs["headers"] = self.session.headers
         kwargs["cookies"] = self.session.cookies
-
         return (source, kwargs)
 
     def team_color_attr(self, team, cfg, style=None):

@@ -46,11 +46,12 @@ def parse_spec(spec):
     options = p.parse_options(options)
     for k, v in options.items():
         if k in p.filters:
-            print(k, v)
+            logger.info(f"option: {k}={v}")
             p.filters[k].value = v
 
     try:
-        selection = p.parse_identifier(identifier)
+        selection, identifier_opts = p.parse_identifier(identifier)
+        options.update(identifier_opts)
     except SGIncompleteIdentifier as e:
         return (action, p, None, options)
     if selection and not action:
