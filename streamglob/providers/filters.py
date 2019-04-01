@@ -68,7 +68,6 @@ class WidgetFilter(Filter):
             else:
                 self.label = f"{self.name.replace('_', ' ').title()}"
 
-        logger.warn(f"label: {self.label}")
         self.hidden = hidden
         self._placeholder = None
         self._widget = None
