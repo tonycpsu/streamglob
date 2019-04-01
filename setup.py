@@ -51,8 +51,7 @@ setup(name=name,
       test_suite="test",
       entry_points = {
           "console_scripts": [
-              "streamglob=streamglob.__main__:main",
-              "sgplay=streamglob.play:main"
+              "streamglob=streamglob.__main__:main"
           ],
           "streamglob.providers": [
               "instagram = streamglob.providers.instagram:InstagramProvider",
