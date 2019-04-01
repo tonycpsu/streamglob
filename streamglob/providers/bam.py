@@ -141,6 +141,9 @@ class BAMLineScoreDataTable(DataTable):
 
                 for i, playing_period in enumerate(line_score[cls.PLAYING_PERIOD_ATTR]):
                     # continue
+                    if hide_spoilers and i == cls.NUM_PLAYING_PERIODS:
+                        break
+
                     if not s:
                         columns.append(
                             DataTableColumn(
