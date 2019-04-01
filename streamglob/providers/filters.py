@@ -19,9 +19,10 @@ from ..exceptions import *
 
 class Filter(Observable):
 
-    def __init__(self, provider, *args, **kwargs):
+    def __init__(self, provider, name, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.provider = provider
+        self.name = name
 
     @property
     def value(self):
@@ -44,8 +45,7 @@ class MaybeLabeledWidget(urwid.WidgetWrap):
 
         self.innerwidget = self.widget
         if label:
-            label_text = f"{label.replace('_', ' ').title()}: "
-            self._text = urwid.Text(label_text)
+            self._text = urwid.Text(f"{label}: ")
             self._columns = urwid.Columns([
                 ("pack", self._text),
             ], dividechars=1)
@@ -60,12 +60,18 @@ class MaybeLabeledWidget(urwid.WidgetWrap):
 
 class WidgetFilter(Filter):
 
-    def __init__(self, provider, label=None,  hidden=False, *args, **kwargs):
-        if label is not None: self._label = label
+    def __init__(self, provider, name, label=None, hidden=False, *args, **kwargs):
+        super().__init__(provider, name)
+        if not hasattr(self, "label"):
+            if label is not None:
+                self.label = label
+            else:
+                self.label = f"{self.name.replace('_', ' ').title()}"
+
+        logger.warn(f"label: {self.label}")
         self.hidden = hidden
         self._placeholder = None
         self._widget = None
-        super().__init__(provider)
 
     @property
     def widget(self):
@@ -82,7 +88,7 @@ class WidgetFilter(Filter):
     def placeholder(self):
         if not self._placeholder:
             self.innerwidget = MaybeLabeledWidget(
-                self.widget, self._label, sizing=self.widget_sizing(self.widget)
+                self.widget, self.label , sizing=self.widget_sizing(self.widget)
             )
             self._placeholder = urwid.WidgetPlaceholder(self.innerwidget)
             if self.hidden:
@@ -335,11 +341,11 @@ class ListingFilter(WidgetFilter, abc.ABC):
         return None
 
     @property
-    def label(self):
+    def selected_label(self):
         return self.widget.selected_label
 
-    @label.setter
-    def label(self, value):
+    @selected_label.setter
+    def selected_label(self, value):
         self.widget.select_label(value)
 
     # @property

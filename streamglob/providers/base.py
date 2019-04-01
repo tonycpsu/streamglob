@@ -127,7 +127,7 @@ class BaseProvider(abc.ABC):
         self._view = None
         self._session = None
         self._active = False
-        self._filters = AttrDict({n: f(provider=self, label=n)
+        self._filters = AttrDict({n: f(provider=self, name=n)
                                   for n, f in self.FILTERS.items() })
 
         rules = AttrDict(

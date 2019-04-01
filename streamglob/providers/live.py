@@ -72,7 +72,7 @@ class LiveStreamProvider(BackgroundTasksMixin, BaseProvider):
     def parse_identifier(self, identifier):
         if identifier:
             # print(self.view) # FIXME
-            self.filters.channel.label = identifier
+            self.filters.channel.selected_label = identifier
         raise SGIncompleteIdentifier
 
 

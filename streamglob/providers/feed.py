@@ -216,7 +216,7 @@ class FeedProvider(BaseProvider):
 
     @property
     def selected_feed_label(self):
-        return self.filters.feed.label
+        return self.filters.feed.selected_label
 
     @property
     def selected_feed(self):
@@ -225,7 +225,7 @@ class FeedProvider(BaseProvider):
     def parse_identifier(self, identifier):
         if identifier:
             # print(self.view) # FIXME
-            self.filters.feed.label = identifier
+            self.filters.feed.selected_label = identifier
         raise SGIncompleteIdentifier
 
 
