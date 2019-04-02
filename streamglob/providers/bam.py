@@ -1524,6 +1524,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
 
     GAME_STATUS_ORDER = [
         "Pre-Game",
+        "Game Over",
         "Final",
         "Postponed",
     ]
