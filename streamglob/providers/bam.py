@@ -476,7 +476,11 @@ class BAMDetailBox(Observable, urwid.WidgetWrap):
 
                 body_markup = utils.html_to_urwid_text_markup(
                     self.editorial.body,
-                    excludes = [lambda item: item[0] == "link" and item[1][0].startswith("Video:")]
+                    excludes = [lambda item: len(item) > 1
+                                and len(item[1])
+                                and item[0] == "link"
+                                and item[1][0].startswith("Video:")
+                    ]
 
                 )
 
