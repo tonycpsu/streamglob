@@ -1463,6 +1463,8 @@ class BAMProviderDataTable(ProviderDataTable):
                 return key
         elif key == "t":
             self.provider.filters.date.value = self.provider.current_game_day()
+        elif key == "h":
+            self.provider.filters.hide_spoilers.cycle()
         elif key == "meta enter":
             self.provider.play(self.selection.data)
         # elif key == ".":
