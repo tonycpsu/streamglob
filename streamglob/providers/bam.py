@@ -413,7 +413,7 @@ class BAMDetailBox(Observable, urwid.WidgetWrap):
                 AttrDict(dict(
                     media_id = h.get("guid", h.get("id")),
                     title = h["title"],
-                    description = h["description"],
+                    description = h.get("description"),
                     duration = DURATION_RE.search(h["duration"]).groups()[0],
                     url = get_playback_url(h["playbacks"]),
                     attrs = self.get_highlight_attrs(h, self.listing),
