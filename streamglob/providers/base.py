@@ -407,7 +407,10 @@ class BaseProvider(abc.ABC):
         if not (no_task_manager or state.options.debug_console):
             return state.task_manager.play(task, player_spec, helper_spec, **kwargs)
         else:
-            return Player.play(task, player_spec, helper_spec, **kwargs)
+            return state.asyncio_loop.create_task(
+                Player.play(task, player_spec, helper_spec, **kwargs)
+            )
+
 
 
     def download(self, selection, no_task_manager=False, **kwargs):
@@ -445,7 +448,9 @@ class BaseProvider(abc.ABC):
             if not (no_task_manager or state.options.debug_console):
                 return state.task_manager.download(task, filename, helper_spec, **kwargs)
             else:
-                return Downloader.download(task, filename, helper_spec, **kwargs)
+                return state.asyncio_loop.create_task(
+                    Downloader.download(task, filename, helper_spec, **kwargs)
+                )
 
     def on_select(self, widget, selection):
         self.play(selection)
