@@ -414,11 +414,12 @@ class BAMDetailBox(Observable, urwid.WidgetWrap):
                     media_id = h.get("guid", h.get("id")),
                     title = h["title"],
                     description = h.get("description"),
-                    duration = DURATION_RE.search(h["duration"]).groups()[0],
+                    duration = DURATION_RE.search(h.get("duration", "")).groups()[0],
                     url = get_playback_url(h["playbacks"]),
                     attrs = self.get_highlight_attrs(h, self.listing),
                     _details = {"open": True, "disabled": True}
                 )) for h in self.game["content"]["highlights"][self.HIGHLIGHT_ATTR]["items"]
+                if h.get("playbacks", None)
             ], key = lambda h: (h.attrs.timestamp is None, h.attrs.timestamp, h.attrs.event_type == "Other"))
         except KeyError:
             highlights = []
