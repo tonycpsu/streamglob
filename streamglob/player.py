@@ -641,10 +641,11 @@ class StreamlinkHelper(Helper, Downloader):
         offset = kwargs.pop("offset", None)
 
         if (offset is not False and offset is not None):
-            offset_delta = timedelta(seconds=offset)
-            offset_timestamp = str(offset_delta)
-            logger.info("starting at time offset %s" %(offset))
-            self.extra_args_pre += ["--hls-start-offset", offset_timestamp]
+            # offset_delta = timedelta(seconds=offset)
+            # offset_timestamp = str(offset_delta)
+            offset_seconds = int(offset.total_seconds())
+            logger.info("starting at time offset %s" %(offset_seconds))
+            self.extra_args_pre += ["--hls-start-offset", str(offset_seconds)]
 
         headers = kwargs.pop("headers", None)
         if headers:

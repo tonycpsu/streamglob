@@ -1075,6 +1075,10 @@ class BAMMediaSource(model.MediaSource):
         return "streamlink"
 
     @property
+    def milestones(self):
+        raise NotImplementedError
+
+    @property
     @memo(region="long")
     def locator(self):
 
@@ -1166,22 +1170,20 @@ class BAMDateFilter(DateFilter):
 
 class OffsetDropdown(urwid.WidgetWrap):
 
+    def __init__(self, media, live=False, default=None):
 
-    def __init__(self, timestamps, live=False, default=None):
-
+        timestamps = {k: v for k, v in media.milestones.items() }
         if "S" in timestamps: del timestamps["S"]
-        timestamp_map = AttrDict(
-
-            ( "Start" if k == "SO" else k, v ) for k, v in timestamps.items()
-        )
-        if live:
-            timestamp_map["Live"] = False
 
         self.dropdown = Dropdown(
-            timestamp_map, label="Begin playback",
-            default = timestamp_map.get(default, None)
+            timestamps, label="Begin playback",
+            default = timestamps.get(default, None)
         )
         super().__init__(self.dropdown)
+
+    @property
+    def selected_label(self):
+        return self.dropdown.selected_label
 
     @property
     def selected_value(self):
@@ -1236,11 +1238,11 @@ class WatchDialog(BasePopUp):
 
         feed_map = [
             (
-                (f"""{e.media_type.title()}: {e.get("feed_type", "").title()} """
-                 f"""({e.get("call_letters", "")}{"/"+e.get("language") if e.get("language") else ""})"""),
-                e["media_id"].lower()
+                (f"""{m.media_type.title()}: {m.get("feed_type", "").title()} """
+                 f"""({m.get("call_letters", "")}{"/"+m.get("language") if m.get("language") else ""})"""),
+                m
             )
-            for e in media
+            for m in media
         ]
 
         faves = [s.lower() for s in self.provider.config.teams.favorite ]
@@ -1299,14 +1301,11 @@ class WatchDialog(BasePopUp):
 
         def play(s):
             media_id = self.feed_dropdown.selected_value
-            offset = (
-                self.offset_dropdown.selected_value
-            )
             self.provider.play(
                 selection,
                 # media = selected_media,
                 media_id = media_id,
-                offset=offset,
+                offset=self.offset_dropdown.selected_label,
                 resolution=self.resolution_dropdown.selected_value
             )
             self._emit("close_popup")
@@ -1317,7 +1316,7 @@ class WatchDialog(BasePopUp):
                 selection,
                 # media = selected_media,
                 media_id = media_id,
-                offset=self.offset_dropdown.selected_value,
+                offset=self.offset_dropdown.selected_label,
                 resolution=self.resolution_dropdown.selected_value
             )
             self._emit("close_popup")
@@ -1374,10 +1373,11 @@ class WatchDialog(BasePopUp):
         pile.contents[3][0].focus_position = 2
 
 
-    def update_offset_dropdown(self, media_id):
+    def update_offset_dropdown(self, media):
         # raise Exception(self.provider.media_timestamps(self.game_id, media_id))
         self.offset_dropdown = OffsetDropdown(
-            self.provider.media_timestamps(self.game_id, media_id),
+            media,
+            # self.provider.media_timestamps(self.game_id, media_id),
             live = self.live_stream,
             default = "Live" if self.watch_live and self.live_stream else "Start"
         )
@@ -1925,6 +1925,16 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
             kwargs["resolution"] = "best"
         offset = kwargs.pop("offset", None)
         if offset:
+            try:
+                offset = int(offset)
+            except ValueError:
+                try:
+                    offset = next(
+                        v for k, v in source.milestones.items()
+                        if offset.lower() == k.lower()
+                    )
+                except StopIteration:
+                    raise Exception(f"Offset {offset} not valid: {source.milestones}")
             # raise Exception(selection)
             if (source.state == "live"): # live stream
                 logger.debug("live stream")
@@ -1934,8 +1944,8 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
                 start_time = selection.start
                 # start_time = selection.start
                 offset_delta = (
-                    datetime.now(pytz.utc)
-                    - start_time.astimezone(pytz.utc)
+                    # datetime.now(pytz.utc)
+                    # - start_time.astimezone(pytz.utc)
                     - (timedelta(seconds=offset))
                 )
                 # offset_delta = (timedelta(seconds=-offset))
@@ -1955,7 +1965,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
                 offset_delta = timedelta(seconds=offset)
 
             # offset_seconds = offset_delta.seconds
-            kwargs["offset"] = offset_delta.seconds
+            kwargs["offset"] = offset_delta#.total_seconds()
 
         kwargs["headers"] = self.session.headers
         kwargs["cookies"] = self.session.cookies

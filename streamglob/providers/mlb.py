@@ -146,6 +146,90 @@ class MLBMediaListing(BAMMediaListing):
         )
         return BAMLineScoreBox(table, style)
 
+@dataclass
+class MLBMediaSource(BAMMediaSource):
+
+    @property
+    def milestones(self):
+
+        try:
+            # try to get the precise timestamps for this stream
+            airing = next(a for a in self.provider.session.airings(self.game_id)
+                          if len(a["milestones"])
+                          and a["mediaId"] == self.media_id)
+        except StopIteration:
+            # welp, no timestamps -- try to get them from whatever feed has them
+            try:
+                airing = next(a for a in self.provider.session.airings(self.game_id)
+                            if len(a["milestones"]))
+            except StopIteration:
+                logger.warning(SGStreamSessionException(
+                    "No airing for media %s" %(self.media_id))
+                )
+                return AttrDict([("Start", 0)])
+
+        start_timestamps = []
+        try:
+            start_time = next(
+                    t["startDatetime"] for t in
+                    next(m for m in airing["milestones"]
+                     if m["milestoneType"] == "BROADCAST_START"
+                    )["milestoneTime"]
+                if t["type"] == "absolute"
+                )
+
+        except StopIteration:
+            # Some streams don't have a "BROADCAST_START" milestone.  We need
+            # something, so we use the scheduled game start time, which is
+            # probably wrong.
+            start_time = airing["startDate"]
+
+        # start_timestamps.append(
+        #     ("Start", start_time)
+        # )
+
+        try:
+            start_offset = next(
+                t["start"] for t in
+                next(m for m in airing["milestones"]
+                     if m["milestoneType"] == "BROADCAST_START"
+                )["milestoneTime"]
+                if t["type"] == "offset"
+            )
+        except StopIteration:
+            # Same as above.  Missing BROADCAST_START milestone means we
+            # probably don't get accurate offsets for inning milestones.
+            start_offset = 0
+
+        start_timestamps.append(
+            ("Start", start_offset)
+        )
+
+        timestamps = AttrDict(start_timestamps)
+        timestamps.update(AttrDict([
+            (
+            "%s%s" %(
+                "T"
+                if next(
+                        k for k in m["keywords"]
+                        if k["type"] == "top"
+                )["value"] == "true"
+                else "B",
+                int(
+                    next(
+                        k for k in m["keywords"] if k["type"] == "inning"
+                    )["value"]
+                )),
+            next(t["start"]
+                      for t in m["milestoneTime"]
+                      if t["type"] == "offset"
+                 )
+            )
+                 for m in airing["milestones"]
+                 if m["milestoneType"] == "INNING_START"
+        ]))
+        return timestamps
+
 
 class MLBBAMProviderData(BAMProviderData):
     pass
@@ -346,7 +430,7 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
                 # Clear token and then try to get a new access_token
                 self.refresh_access_token(clear_token=True)
 
-        logger.debug("access_token: %s" %(self._state.access_token))
+        logger.trace("access_token: %s" %(self._state.access_token))
         return self._state.access_token
 
 
@@ -660,84 +744,3 @@ class MLBProvider(BAMProviderMixin,
             return end.date()
         else:
             return now.date()
-
-
-    def media_timestamps(self, game_id, media_id):
-
-        try:
-            # try to get the precise timestamps for this stream
-            airing = next(a for a in self.session.airings(game_id)
-                          if len(a["milestones"])
-                          and a["mediaId"] == media_id)
-        except StopIteration:
-            # welp, no timestamps -- try to get them from whatever feed has them
-            try:
-                airing = next(a for a in self.session.airings(game_id)
-                            if len(a["milestones"]))
-            except StopIteration:
-                logger.warning(SGStreamSessionException(
-                    "No airing for media %s" %(media_id))
-                )
-                return AttrDict([("Start", 0)])
-
-        start_timestamps = []
-        try:
-            start_time = next(
-                    t["startDatetime"] for t in
-                    next(m for m in airing["milestones"]
-                     if m["milestoneType"] == "BROADCAST_START"
-                    )["milestoneTime"]
-                if t["type"] == "absolute"
-                )
-
-        except StopIteration:
-            # Some streams don't have a "BROADCAST_START" milestone.  We need
-            # something, so we use the scheduled game start time, which is
-            # probably wrong.
-            start_time = airing["startDate"]
-
-        start_timestamps.append(
-            ("S", start_time)
-        )
-
-        try:
-            start_offset = next(
-                t["start"] for t in
-                next(m for m in airing["milestones"]
-                     if m["milestoneType"] == "BROADCAST_START"
-                )["milestoneTime"]
-                if t["type"] == "offset"
-            )
-        except StopIteration:
-            # Same as above.  Missing BROADCAST_START milestone means we
-            # probably don't get accurate offsets for inning milestones.
-            start_offset = 0
-
-        start_timestamps.append(
-            ("SO", start_offset)
-        )
-
-        timestamps = AttrDict(start_timestamps)
-        timestamps.update(AttrDict([
-            (
-            "%s%s" %(
-                "T"
-                if next(
-                        k for k in m["keywords"]
-                        if k["type"] == "top"
-                )["value"] == "true"
-                else "B",
-                int(
-                    next(
-                        k for k in m["keywords"] if k["type"] == "inning"
-                    )["value"]
-                )),
-            next(t["start"]
-                      for t in m["milestoneTime"]
-                      if t["type"] == "offset"
-                 )
-            )
-                 for m in airing["milestones"]
-                 if m["milestoneType"] == "INNING_START"
-        ]))
-        return timestamps

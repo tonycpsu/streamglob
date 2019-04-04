@@ -111,6 +111,45 @@ class NHLMediaSource(BAMMediaSource):
 
     event_id: str = None
 
+    @property
+    def milestones(self):
+
+        j =  self.provider.schedule(game_id=self.game_id)
+        try:
+            milestones = j["dates"][0]["games"][0]["content"]["media"]["milestones"]
+        except:
+            raise
+            return AttrDict()
+
+        start_timestamps = []
+
+        start_time = next(
+            m["timeAbsolute"]
+            for m in milestones["items"]
+            if m["type"] == "BROADCAST_START"
+        )
+        # start_timestamps.append(
+        #     ("S", start_time)
+        # )
+
+        start_offset = next(
+            m["timeOffset"]
+            for m in milestones["items"]
+            if m["type"] == "BROADCAST_START"
+        )
+        start_timestamps.append(
+            ("Start", int(start_offset))
+        )
+
+        timestamps = AttrDict(start_timestamps)
+        timestamps.update(AttrDict([
+            ( f"P{m['ordinalNum'][0]}" if int(m["period"]) <= 3 else m['ordinalNum'],  int(m["timeOffset"]))
+            for m in milestones["items"]
+            if m["type"] == "PERIOD_START"
+        ]))
+        # raise Exception(timestamps)
+        return timestamps
+
 class NHLMediaListing(BAMMediaListing):
 
     @property
@@ -329,7 +368,7 @@ class NHLProvider(BAMProviderMixin,
         "?sportId={sport_id}&startDate={start}&endDate={end}"
         "&gameType={game_type}&gamePk={game_id}"
         "&teamId={team_id}"
-        "&hydrate=linescore,team,game(teams,content(summary,media(epg),"
+        "&hydrate=linescore,team,game(teams,content(summary,media(epg,milestones),"
         "editorial(preview,recap),highlights(gamecenter(items))))"
     )
 
@@ -403,40 +442,3 @@ class NHLProvider(BAMProviderMixin,
             return end.date()
         else:
             return now.date()
-
-
-    def media_timestamps(self, game_id, media_id):
-        j =  self.schedule(game_id=game_id)
-        try:
-            milestones = j["dates"][0]["games"][0]["content"]["media"]["milestones"]
-        except:
-            return AttrDict()
-
-        start_timestamps = []
-
-        start_time = next(
-            m["timeAbsolute"]
-            for m in milestones["items"]
-            if m["type"] == "BROADCAST_START"
-        )
-        start_timestamps.append(
-            ("S", start_time)
-        )
-
-        start_offset = next(
-            m["timeOffset"]
-            for m in milestones["items"]
-            if m["type"] == "BROADCAST_START"
-        )
-        start_timestamps.append(
-            ("SO", int(start_offset))
-        )
-
-        timestamps = AttrDict(start_timestamps)
-        timestamps.update(AttrDict([
-            (m["period"] if int(m["period"]) <= 3 else "O", int(m["timeOffset"]))
-            for m in milestones["items"]
-            if m["type"] == "PERIOD_START"
-        ]))
-        # raise Exception(timestamps)
-        return timestamps

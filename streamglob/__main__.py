@@ -555,11 +555,6 @@ def run_gui(action, provider, **kwargs):
 
 def run_cli(action, provider, selection, **kwargs):
 
-
-    # raise Exception(selection)
-    # provider.play(selection)
-    sources, kwargs = provider.play_args(selection, **kwargs)
-
     if action == "play":
         program = state.asyncio_loop.run_until_complete(
             provider.play(
