@@ -123,7 +123,7 @@ class StreamSession(object):
             os.remove(cls.SESSION_FILE)
 
     @classmethod
-    def load(cls, **kwargs):
+    def load(cls, provider_id, **kwargs):
         state = yaml.load(open(cls._SESSION_FILE()), Loader=AttrDictYAMLLoader)
         logger.trace(f"load: {cls.__name__}, {state}")
         return cls(provider_id, **dict(kwargs, **state))
