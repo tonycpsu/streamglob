@@ -443,27 +443,40 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
         # ----------------------------------------------------------------------
         # Okta authentication -- used to get media entitlement later
         # ----------------------------------------------------------------------
-        STATE = gen_random_string(64)
-        NONCE = gen_random_string(64)
 
-        AUTHZ_PARAMS = {
-            "client_id": self.okta_client_id,
-            "redirect_uri": "https://www.mlb.com/login",
-            "response_type": "id_token token",
-            "response_mode": "okta_post_message",
-            "state": STATE,
-            "nonce": NONCE,
-            "prompt": "none",
-            "sessionToken": self.session_token,
-            "scope": "openid email"
-        }
-        authz_response = self.get(self.AUTHZ_URL, params=AUTHZ_PARAMS)
-        authz_content = authz_response.text
+        def get_okta_token():
 
-        for line in authz_content.split("\n"):
-            if "data.access_token" in line:
-                OKTA_ACCESS_TOKEN = line.split("'")[1].encode('utf-8').decode('unicode_escape')
+            STATE = gen_random_string(64)
+            NONCE = gen_random_string(64)
 
+            AUTHZ_PARAMS = {
+                "client_id": self.okta_client_id,
+                "redirect_uri": "https://www.mlb.com/login",
+                "response_type": "id_token token",
+                "response_mode": "okta_post_message",
+                "state": STATE,
+                "nonce": NONCE,
+                "prompt": "none",
+                "sessionToken": self.session_token,
+                "scope": "openid email"
+            }
+            authz_response = self.get(self.AUTHZ_URL, params=AUTHZ_PARAMS)
+            authz_content = authz_response.text
+            for line in authz_content.split("\n"):
+                if "data.access_token" in line:
+                    return line.split("'")[1].encode('utf-8').decode('unicode_escape')
+                elif "data.error = 'login_required'" in line:
+                    raise SGProviderLoginException
+            raise Exception("could not authenticate: {authz_contet}")
+
+        try:
+            self.OKTA_ACCESS_TOKEN = get_okta_token()
+        except SGProviderLoginException:
+            # not logged in -- get session token and try again
+            self.login()
+            self.OKTA_ACCESS_TOKEN = get_okta_token()
+
+        assert self.OKTA_ACCESS_TOKEN is not None
 
         # ----------------------------------------------------------------------
         # Get device assertion - used to get device token
@@ -538,7 +551,7 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
         }
 
         ENTITLEMENT_HEADERS = {
-            "Authorization": "Bearer %s" % (OKTA_ACCESS_TOKEN),
+            "Authorization": "Bearer %s" % (self.OKTA_ACCESS_TOKEN),
             "Origin": "https://www.mlb.com",
             "x-api-key": self.api_key
 

@@ -4,6 +4,9 @@ class SGException(Exception):
 class SGPlayInvalidArgumentError(SGException):
     pass
 
+class SGProviderLoginException(SGException):
+    pass
+
 class SGStreamSessionException(SGException):
     pass
 
