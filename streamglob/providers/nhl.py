@@ -381,8 +381,6 @@ class NHLProvider(BAMProviderMixin,
 
     MEDIA_TITLE = "NHLTV"
 
-    MEDIA_ID_FIELD = "mediaPlaybackId"
-
     DETAIL_BOX_CLASS = NHLDetailBox
 
     URL_ROOT = "http://www.nhl.com"

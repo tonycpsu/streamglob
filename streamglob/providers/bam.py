@@ -953,7 +953,7 @@ class BAMMediaListing(model.MediaListing):
             if feed_type is None:
                 return title or "..."
 
-            return feed_type.title()
+            return feed_type
 
 
         logger.debug(f"geting media for game {self.game_id}")
@@ -972,26 +972,31 @@ class BAMMediaListing(model.MediaListing):
         if not isinstance(epgs, list):
             epgs = [epgs]
 
+        def media_state(item):
+            STATE_MAP = {
+                "A": "archive",
+                "MEDIA_ARCHIVE": "archive",
+                "MEDIA_ON": "live",
+                "MEDIA_OFF": "off",
+                "MEDIA_DONE": "done"
+            }
+            state = item.get("mediaState") or item.get("state")
+            return STATE_MAP.get(state, "unknown")
+
         items = sorted(
             [ self.provider.new_media_source(
                 # mediaId and guid fields are both used to identify streams
                 # provider_id = self.provider_id,
                 game_id = self.game_id,
-                media_id = item.get(self.provider.MEDIA_ID_FIELD,
-                                    item.get("guid", "")),
+                media_id = item.get(
+                    "mediaPlaybackId",
+                    item.get("mediaId",
+                             item.get("guid", "")
+                    )
+                ),
                 title = item.get("title", ""),
                 description = item.get("description", ""),
-                state = (
-                    "live" if (item.get("mediaState") == "MEDIA_ON")
-                    else
-                    "archive" if (item.get("mediaState") == "MEDIA_ARCHIVE")
-                    else
-                    "off" if (item.get("mediaState") == "MEDIA_OFF")
-                    else
-                    "done" if (item.get("mediaState") == "MEDIA_DONE")
-                    else
-                    "unknown"
-                ),
+                state = media_state(item),
                 call_letters = item.get("callLetters", ""),
                 # epg_title=epg["title"],
                 language=item.get("language", "").lower(),
@@ -1017,7 +1022,6 @@ class BAMMediaListing(model.MediaListing):
                 i.get("language", ""),
             )
         )
-
         items = [
             i for i in items
             if i.media_id
@@ -1080,6 +1084,23 @@ class BAMMediaSource(model.MediaSource):
 
     @property
     @memo(region="long")
+    def requires_auth(self):
+        return self.playback_url is None
+
+
+    @property
+    def playback_url(self):
+        try:
+            return get_playback_url(self.playbacks)
+        except StopIteration:
+            return None
+
+    @property
+    def is_complete(self):
+        return self.feed_type not in ["condensed", "recap"]
+
+    @property
+    @memo(region="short")
     def locator(self):
 
         # # FIXME: borked
@@ -1099,19 +1120,10 @@ class BAMMediaSource(model.MediaSource):
         #         # self.session.refresh_access_token(clear_token=True)
         #         self.session.proxies = old_proxies
 
-        if len(self.playbacks):
-            playback = next(p for p in self.playbacks
-                            if p["name"] == "HTTP_CLOUD_WIRED_60")
-
-            try:
-                media_url = playback["url"]
-            except:
-                from pprint import pformat
-                raise Exception(pformat(media))
-        else:
+        media_url = self.playback_url
+        if not media_url:
             try:
                 stream = self.provider.session.get_stream(self)
-                # media_url = stream["stream"]["complete"]
                 media_url = stream.url
             except (TypeError, AttributeError):
                 raise SGException("no stream URL for game %d, %s" %(self.game_id))
@@ -1166,8 +1178,6 @@ class BAMDateFilter(DateFilter):
     def widget_kwargs(self):
         return {"initial_date": self.provider.start_date}
 
-
-
 class OffsetDropdown(urwid.WidgetWrap):
 
     def __init__(self, media, live=False, default=None):
@@ -1180,6 +1190,9 @@ class OffsetDropdown(urwid.WidgetWrap):
             default = timestamps.get(default, None)
         )
         super().__init__(self.dropdown)
+
+    def __len__(self):
+        return len(self.dropdown)
 
     @property
     def selected_label(self):
@@ -1300,23 +1313,28 @@ class WatchDialog(BasePopUp):
         self.update_offset_dropdown(self.feed_dropdown.selected_value)
 
         def play(s):
-            media_id = self.feed_dropdown.selected_value
+            media = self.feed_dropdown.selected_value
+            offset = (self.offset_dropdown.selected_label
+                      if media.is_complete
+                      else None)
+
             self.provider.play(
                 selection,
-                # media = selected_media,
-                media_id = media_id,
-                offset=self.offset_dropdown.selected_label,
+                media_id = media.media_id,
+                offset=offset,
                 resolution=self.resolution_dropdown.selected_value
             )
             self._emit("close_popup")
 
         def download(s):
-            media_id = self.feed_dropdown.selected_value
+            media = self.feed_dropdown.selected_value
+            offset = (self.offset_dropdown.selected_label
+                      if media.is_complete
+                      else None)
             self.provider.download(
                 selection,
-                # media = selected_media,
-                media_id = media_id,
-                offset=self.offset_dropdown.selected_label,
+                media_id = media.media_id,
+                offset=offset,
                 resolution=self.resolution_dropdown.selected_value
             )
             self._emit("close_popup")
@@ -1372,16 +1390,23 @@ class WatchDialog(BasePopUp):
         super(WatchDialog, self).__init__(pile)
         pile.contents[3][0].focus_position = 2
 
+    def show_offset_dropdown(self):
+        self.offset_dropdown_placeholder.original_widget = self.offset_dropdown
+
+    def hide_offset_dropdown(self):
+        self.offset_dropdown_placeholder.original_widget = urwid.Text("")
 
     def update_offset_dropdown(self, media):
-        # raise Exception(self.provider.media_timestamps(self.game_id, media_id))
+        if not media.is_complete:
+            # hide offset dropdown for recaps / condensed games
+            self.hide_offset_dropdown()
+            return
         self.offset_dropdown = OffsetDropdown(
             media,
-            # self.provider.media_timestamps(self.game_id, media_id),
             live = self.live_stream,
             default = "Live" if self.watch_live and self.live_stream else "Start"
         )
-        self.offset_dropdown_placeholder.original_widget = self.offset_dropdown
+        self.show_offset_dropdown()
 
 
     def keypress(self, size, key):
@@ -1944,31 +1969,17 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
                 start_time = selection.start
                 # start_time = selection.start
                 offset_delta = (
-                    # datetime.now(pytz.utc)
-                    # - start_time.astimezone(pytz.utc)
                     - (timedelta(seconds=offset))
                 )
-                # offset_delta = (timedelta(seconds=-offset))
-                # raise Exception(
-                #     start_time,
-                #     start_time.astimezone(pytz.utc),
-                #     datetime.now(pytz.utc),
-                #     datetime.now(pytz.utc) - start_time.astimezone(pytz.utc),
-                #     (timedelta(seconds=-offset)),
-                #     offset,
-                #     offset_delta,
-                #     offset_delta.seconds,
-                # )
             else:
-                # raise Exception
                 logger.debug("recorded stream")
                 offset_delta = timedelta(seconds=offset)
 
-            # offset_seconds = offset_delta.seconds
-            kwargs["offset"] = offset_delta#.total_seconds()
+            kwargs["offset"] = offset_delta
 
-        kwargs["headers"] = self.session.headers
-        kwargs["cookies"] = self.session.cookies
+        if source.requires_auth:
+            kwargs["headers"] = self.session.headers
+            kwargs["cookies"] = self.session.cookies
         return (source, kwargs)
 
     def team_color_attr(self, team, cfg, style=None):
