@@ -442,19 +442,6 @@ class BAMDetailBox(Observable, urwid.WidgetWrap):
 
         self.pile = urwid.Pile([])
 
-        if not (self.editorial or len(self.highlights)):
-            # super().__init__(urwid.Text(""))
-            if (self.listing.hide_spoilers
-                and self.editorial and self.editorial == self.recap):
-                message = "[spoilers hidden]"
-            else:
-                message = "[no content]"
-            self.pile.contents.append(
-                (urwid.Text(message), self.pile.options("pack"))
-            )
-            super().__init__(self.pile)
-            return
-
         if self.editorial:
 
             self.editorial_blurb_pile = urwid.Pile([
@@ -567,6 +554,14 @@ class BAMDetailBox(Observable, urwid.WidgetWrap):
                 (self.table_anchor, self.pile.options("pack"))
             )
 
+        if not (len(self.pile.contents)):
+            if self.listing.hide_spoilers:
+                message = "[spoilers hidden]"
+            else:
+                message = "[no content]"
+            self.pile.contents.append(
+                (urwid.Text(message), self.pile.options("pack"))
+            )
         self.pile.focus_position = 0
         super().__init__(self.pile)
 
