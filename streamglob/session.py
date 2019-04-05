@@ -10,11 +10,9 @@ import pickle
 import functools
 from contextlib import contextmanager
 
-import six
-from six.moves.http_cookiejar import LWPCookieJar, Cookie
-from six import StringIO
+from http.cookiejar import LWPCookieJar, Cookie
+from io import StringIO
 import requests
-# from requests_toolbelt.utils import dump
 import lxml
 import lxml, lxml.etree
 import yaml
