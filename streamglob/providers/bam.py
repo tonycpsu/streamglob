@@ -443,6 +443,38 @@ class BAMDetailBox(Observable, urwid.WidgetWrap):
 
         self.pile = urwid.Pile([])
 
+        if len(self.highlights):
+
+            self.table = self.HIGHLIGHT_TABLE_CLASS(
+                data = self.highlights
+            )
+
+            self.table_attr = urwid.AttrMap(
+                self.table,
+                attr_map = {},
+                focus_map = {
+                    None: "highlight",
+                    "table_row_body focused": "highlight",
+                    "title focused": "highlight"
+                },
+            )
+
+            def play(h): self.notify("play", h)
+
+            self.table.connect("play", play)
+            self.table_box = urwid.BoxAdapter(
+                self.table_attr, min(2*len(self.highlights), 10) + 1
+            )
+
+            self.table_anchor = ExpandableAnchor(
+                "Highlights",
+                self.table_box
+            )
+
+            self.pile.contents.append(
+                (self.table_anchor, self.pile.options("pack"))
+            )
+
         if self.editorial:
 
             self.editorial_blurb_pile = urwid.Pile([
@@ -521,38 +553,6 @@ class BAMDetailBox(Observable, urwid.WidgetWrap):
             )
             self.pile.contents.append(
                 (self.editorial_anchor, self.pile.options("pack"))
-            )
-
-        if len(self.highlights):
-
-            self.table = self.HIGHLIGHT_TABLE_CLASS(
-                data = self.highlights
-            )
-
-            self.table_attr = urwid.AttrMap(
-                self.table,
-                attr_map = {},
-                focus_map = {
-                    None: "highlight",
-                    "table_row_body focused": "highlight",
-                    "title focused": "highlight"
-                },
-            )
-
-            def play(h): self.notify("play", h)
-
-            self.table.connect("play", play)
-            self.table_box = urwid.BoxAdapter(
-                self.table_attr, min(2*len(self.highlights), 10) + 1
-            )
-
-            self.table_anchor = ExpandableAnchor(
-                "Highlights",
-                self.table_box
-            )
-
-            self.pile.contents.append(
-                (self.table_anchor, self.pile.options("pack"))
             )
 
         if not (len(self.pile.contents)):
