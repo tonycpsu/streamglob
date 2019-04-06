@@ -60,25 +60,41 @@ class MLBDetailBox(BAMDetailBox):
         baserunning="R"
     )
 
+    def get_editorial_item(self, editorial):
+        return editorial.get("mlb", None)
+
+    def __repr__(self):
+        return ""
+
+@dataclass
+class MLBMediaListing(BAMMediaListing):
+
+    @property
+    def line(self):
+        style = self.provider.config.listings.line.style
+        table = MLBLineScoreDataTable.for_game(
+            self.provider, self.game_data, self.hide_spoilers,
+            # style = style
+        )
+        return BAMLineScoreBox(table, style)
+
     @property
     def HIGHLIGHT_ATTR(self):
         return "highlights"
 
-    def get_editorial_item(self, editorial):
-        return editorial.get("mlb", None)
 
-    def get_highlight_attrs(self, highlight, listing):
+    def get_highlight_attrs(self, highlight):
 
         timestamp = None
         running_time = None
         event_type = None
         inning = None
 
-        plays = listing.plays
+        plays = self.plays
         keywords = highlight.get("keywordsAll", None)
 
         game_start = dateutil.parser.parse(
-            listing.game_data["gameDate"]
+            self.game_data["gameDate"]
         )
 
         try:
@@ -131,20 +147,6 @@ class MLBDetailBox(BAMDetailBox):
             # description = play["result"].get("description", None),
         )
 
-    def __repr__(self):
-        return ""
-
-@dataclass
-class MLBMediaListing(BAMMediaListing):
-
-    @property
-    def line(self):
-        style = self.provider.config.listings.line.style
-        table = MLBLineScoreDataTable.for_game(
-            self.provider, self.game_data, self.hide_spoilers,
-            # style = style
-        )
-        return BAMLineScoreBox(table, style)
 
 @dataclass
 class MLBMediaSource(BAMMediaSource):

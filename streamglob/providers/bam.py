@@ -407,25 +407,6 @@ class BAMDetailBox(Observable, urwid.WidgetWrap):
         self.listing = listing
         self.game = self.listing.game_data
 
-        # FIXME: add option to reveal spoilers
-        try:
-            highlights = sorted([
-                AttrDict(dict(
-                    media_id = h.get("guid", h.get("id")),
-                    title = h["title"],
-                    description = h.get("description"),
-                    duration = DURATION_RE.search(h.get("duration", "")).groups()[0],
-                    url = get_playback_url(h["playbacks"]),
-                    attrs = self.get_highlight_attrs(h, self.listing),
-                    _details = {"open": True, "disabled": True}
-                )) for h in self.game["content"]["highlights"][self.HIGHLIGHT_ATTR]["items"]
-                if h.get("playbacks", None)
-            ], key = lambda h: (h.attrs.timestamp is None, h.attrs.timestamp, h.attrs.event_type == "Other"))
-        except KeyError:
-            highlights = []
-        except StopIteration:
-            raise Exception(self.game.get("gamePk"))
-
         self.preview = self.get_editorial("preview")
         self.recap = self.get_editorial("recap")
 
@@ -437,7 +418,7 @@ class BAMDetailBox(Observable, urwid.WidgetWrap):
             self.editorial = None
 
         if not self.listing.hide_spoilers:
-            self.highlights = highlights
+            self.highlights = listing.highlights
         else:
             self.highlights = []
 
@@ -589,13 +570,6 @@ class BAMDetailBox(Observable, urwid.WidgetWrap):
             )
         except (AttributeError, KeyError, IndexError):
             return None
-
-    @property
-    def HIGHLIGHT_ATTR(self):
-        raise NotImplementedError
-
-    def get_highlight_attrs(self, highlight):
-        raise NotImplementedError
 
     def selectable(self):
         return True
@@ -927,6 +901,36 @@ class BAMMediaListing(model.MediaListing):
     def plays(self):
         return (p for p in self.game_feed_data["liveData"]["plays"]["allPlays"])
 
+    @property
+    def HIGHLIGHT_ATTR(self):
+        raise NotImplementedError
+
+    def get_highlight_attrs(self, highlight):
+        raise NotImplementedError
+
+    @property
+    def highlights(self):
+        try:
+            highlights = sorted([
+                AttrDict(dict(
+                    media_id = h.get("guid", h.get("id")),
+                    title = h["title"],
+                    description = h.get("description"),
+                    duration = DURATION_RE.search(h.get("duration", "")).groups()[0],
+                    url = get_playback_url(h["playbacks"]),
+                    attrs = self.get_highlight_attrs(h),
+                    _details = {"open": True, "disabled": True}
+                )) for h in self.game_data["content"]["highlights"][self.HIGHLIGHT_ATTR]["items"]
+                if h.get("playbacks", None)
+            ], key = lambda h: (h.attrs.timestamp is None, h.attrs.timestamp, h.attrs.event_type == "Other"))
+        except KeyError:
+            highlights = []
+        except AttributeError:
+            raise Exception(self.game_data["content"]["highlights"][self.HIGHLIGHT_ATTR]["items"])
+        except StopIteration:
+            raise Exception(self.game._dataget("gamePk"))
+
+        return highlights
 
     @property
     @memo(region="short")

@@ -42,69 +42,12 @@ class NHLDetailBox(BAMDetailBox):
 
     HIGHLIGHT_TABLE_CLASS = NHLHighlightsDataTable
 
-    @property
-    def HIGHLIGHT_ATTR(self):
-        return "gameCenter"
-
     def get_editorial_item(self, editorial):
         try:
             return editorial.get("items", [])[0]
         except IndexError:
             return None
 
-    def get_highlight_attrs(self, highlight, listing):
-
-        timestamp = None
-        running_time = None
-        event_type = None
-        period = None
-        period_time = None
-        period_remaining = None
-        strength = None
-
-        plays = listing.plays
-        keywords = highlight.get("keywords", None)
-
-        game_start = dateutil.parser.parse(
-            listing.game_data["gameDate"]
-        )
-
-        try:
-            play_id = int(next(k["value"] for k in keywords if k["type"] == "statsEventId"))
-        except StopIteration:
-            play_id = None
-
-        try:
-            play = next( p for p in plays
-                        if p["about"].get("eventId", None) == play_id)
-        except StopIteration:
-            play = None
-
-        if play:
-            event_type = play["result"].get("event", None)
-
-            timestamp = dateutil.parser.parse(play["about"].get(
-                "dateTime", None)
-            ).astimezone(
-                pytz.timezone(config.settings.profile.time_zone)
-            )
-
-            running_time = timestamp - game_start
-            period = play["about"]["ordinalNum"]
-            period_time = play["about"]["periodTime"]
-            period_remaining = play["about"]["periodTimeRemaining"]
-            strength = play["result"].get("strength", {}).get("name", None)
-
-        return AttrDict(
-            timestamp = timestamp,
-            running_time = running_time,
-            # description = play["result"].get("description", None),
-            event_type = event_type,
-            period = period,
-            period_time = period_time,
-            period_remaining = period_remaining,
-            strength = strength,
-        )
 
 @dataclass
 class NHLMediaSource(BAMMediaSource):
@@ -160,6 +103,65 @@ class NHLMediaListing(BAMMediaListing):
             # style = style
         )
         return BAMLineScoreBox(table, style)
+
+
+    @property
+    def HIGHLIGHT_ATTR(self):
+        return "gameCenter"
+
+    def get_highlight_attrs(self, highlight):
+
+        timestamp = None
+        running_time = None
+        event_type = None
+        period = None
+        period_time = None
+        period_remaining = None
+        strength = None
+
+        plays = self.plays
+        keywords = highlight.get("keywords", None)
+
+        game_start = dateutil.parser.parse(
+            self.game_data["gameDate"]
+        )
+
+        try:
+            play_id = int(next(k["value"] for k in keywords if k["type"] == "statsEventId"))
+        except StopIteration:
+            play_id = None
+
+        try:
+            play = next( p for p in plays
+                        if p["about"].get("eventId", None) == play_id)
+        except StopIteration:
+            play = None
+
+        if play:
+            event_type = play["result"].get("event", None)
+
+            timestamp = dateutil.parser.parse(play["about"].get(
+                "dateTime", None)
+            ).astimezone(
+                pytz.timezone(config.settings.profile.time_zone)
+            )
+
+            running_time = timestamp - game_start
+            period = play["about"]["ordinalNum"]
+            period_time = play["about"]["periodTime"]
+            period_remaining = play["about"]["periodTimeRemaining"]
+            strength = play["result"].get("strength", {}).get("name", None)
+
+        return AttrDict(
+            timestamp = timestamp,
+            running_time = running_time,
+            # description = play["result"].get("description", None),
+            event_type = event_type,
+            period = period,
+            period_time = period_time,
+            period_remaining = period_remaining,
+            strength = strength,
+        )
 
     def extra_media_attributes(self, item):
         return {
