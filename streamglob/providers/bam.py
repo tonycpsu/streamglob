@@ -909,12 +909,12 @@ class BAMMediaListing(model.MediaListing):
                     attrs = self.get_highlight_attrs(h),
                     _details = {"open": True, "disabled": True}
                 )) for h in self.game_data["content"]["highlights"][self.HIGHLIGHT_ATTR]["items"]
-                if h.get("playbacks", None)
+                if h is not None and h.get("playbacks", None)
             ], key = lambda h: (h.attrs.timestamp is None, h.attrs.timestamp, h.attrs.event_type == "Other"))
         except KeyError:
             highlights = []
         except AttributeError:
-            raise Exception(self.game_data["content"]["highlights"][self.HIGHLIGHT_ATTR]["items"])
+            raise Exception(self.game_id, self.game_data["content"]["highlights"][self.HIGHLIGHT_ATTR]["items"])
         except StopIteration:
             raise Exception(self.game._dataget("gamePk"))
 
