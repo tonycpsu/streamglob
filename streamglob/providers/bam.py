@@ -35,8 +35,9 @@ LINE_STYLES = {
 }
 
 DEFAULT_PLAYBACK_FORMATS = [
-    "hlsCloud",
-    "mp4Avc"
+    "hlsCloud", # MLB
+    "mp4Avc",   # MLB
+    "HTTP_CLOUD_WIRED_60" # NHL
 ]
 
 class BAMLineScoreBox(urwid.WidgetWrap):
@@ -1919,10 +1920,11 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
                     if p["name"] == name
                 )
             except StopIteration:
+                continue
                 # give up and return the first one
-                return next(
-                    p["url"] for p in playbacks
-                )
+        return next(
+            p["url"] for p in playbacks
+        )
 
     def get_details(self, listing):
 

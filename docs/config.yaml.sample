@@ -20,9 +20,11 @@ profiles:
                     streams:
                         - hlsCloud
                         - mp4Avc
+                        - HTTP_CLOUD_WIRED_60
                     highlights:
                         - mp4Avc
                         - hlsCloud
+                        - HTTP_CLOUD_WIRED_60
                 listings:
                     teams:
                         # here, "colors" can be set to
