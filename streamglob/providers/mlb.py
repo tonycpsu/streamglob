@@ -737,25 +737,25 @@ class MLBProvider(BAMProviderMixin,
 
         r = MLBBAMProviderData.get(season_year=season_year)
         if r:
-            start = r.start.date()
-            end = r.end.date()
+            start = r.start
+            end = r.end
         else:
             schedule = self.schedule(
                 start=datetime(year, 1, 1),
                 end=datetime(year, 12, 31),
                 brief=True
             )
-            start = dateutil.parser.parse(schedule["dates"][0]["date"]).date()
-            end = dateutil.parser.parse(schedule["dates"][-1]["date"]).date()
+            start = dateutil.parser.parse(schedule["dates"][0]["date"])
+            end = dateutil.parser.parse(schedule["dates"][-1]["date"])
             r = MLBBAMProviderData(
                 season_year=season_year,
                 start = start,
                 end = end
             )
 
-        if now < start:
-            return start
-        elif now > end:
-            return end
+        if now < start.date():
+            return start.date()
+        elif now > end.date():
+            return end.date()
         else:
             return now
