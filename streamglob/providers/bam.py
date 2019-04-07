@@ -1480,8 +1480,30 @@ class BAMProviderDataTable(ProviderDataTable):
                 return key
         elif key == "t":
             self.provider.filters.date.value = self.provider.current_game_day()
-        elif key == "h":
+        elif key == "S":
             self.provider.filters.hide_spoilers.cycle()
+        elif key == "h":
+            if not len(self.selection.data.highlights):
+                logger.info("no highlights available")
+                return
+            task = model.PlayMediaTask(
+                provider=self.provider.NAME,
+                title=self.selection.data.title,
+                sources = [
+                    model.MediaSource(
+                        provider_id=self.provider.IDENTIFIER,
+                        url = h.url,
+                        media_type = "video"
+                    )
+                    for h in self.selection.data.highlights
+                ]
+            )
+            logger.info(f"task: {task}")
+            player_spec = {"media_types": {"video"}}
+            helper_spec = None
+            # asyncio.create_task(Player.play(task, player_spec, helper_spec))
+            state.task_manager.play(task, player_spec, helper_spec)
+
         elif key == "meta enter":
             self.provider.play(self.selection.data)
         # elif key == ".":
