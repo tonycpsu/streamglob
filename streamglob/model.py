@@ -191,6 +191,10 @@ class MediaSource(BaseDataClass):
         return None
 
     @property
+    def download_helper(self):
+        return None
+
+    @property
     def locator(self):
         return self.url
 

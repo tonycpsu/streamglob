@@ -1069,7 +1069,11 @@ class BAMMediaSource(model.MediaSource):
 
     @property
     def helper(self):
-        return "streamlink" if self.requires_helper else None
+        return self.download_helper if self.requires_helper else None
+
+    @property
+    def download_helper(self):
+        return "streamlink"
 
     @property
     def milestones(self):
