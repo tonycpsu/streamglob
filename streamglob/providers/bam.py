@@ -105,8 +105,9 @@ class BAMLineScoreDataTable(DataTable):
         elif status == "Scheduled":
             start_time = dateutil.parser.parse(game["gameDate"]).astimezone(
                 pytz.timezone(config.settings.profile.time_zone)
-            ).strftime("%I:%M%p").lower()
-            status = start_time[1:] if start_time.startswith("0") else start_time
+            )
+            start_time = format_datetime(start_time, config.settings.profile.time_format or "12h")
+            status = start_time
         elif status == "In Progress" and line_score:
             status = cls.PLAYING_PERIOD_DESC(line_score)
 
@@ -1157,12 +1158,6 @@ class MediaAttributes(AttrDict):
     def __len__(self):
         return len(str(self))
 
-def format_start_time(d):
-    s = datetime.strftime(d, "%I:%M%p").lower()[:-1]
-    if s[0] == "0":
-        s = s[1:]
-    return s
-
 class BasePopUp(urwid.WidgetWrap):
 
     signals = ["close_popup"]
@@ -1552,7 +1547,10 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
     ])
 
     ATTRIBUTES = AttrDict(
-        start = {"width": 6, "format_fn": format_start_time},
+        start = {"width": 6,
+                 "format_fn": functools.partial(
+                     utils.format_datetime,
+                     fmt=config.settings.profile.time_format or "12h")},
         away_team_box = {"label": "away", "width": 16},
         home_team_box = {"label": "home", "width": 16},
         line = {"pack": True},

@@ -4,6 +4,17 @@ import mistune
 import html2text
 import html.parser
 
+FORMAT_DATETIME_12H_RE = re.compile("0*(\d+?:\d+\w)")
+def format_datetime_12h(dt):
+    s = dt.strftime("%I:%M%p").lower()
+    return FORMAT_DATETIME_12H_RE.search(s).group(1)
+
+TIME_FORMATS = {
+    None: lambda dt: dt.strfitme("%Y-%m-%d %H:%M:%S"),
+    "12h": format_datetime_12h,
+    "24h": lambda dt: dt.strftime("%H:%M"),
+}
+
 def pairwise(iterable):
     "s -> (s0,s1), (s1,s2), (s2, s3), ..."
     a, b = itertools.tee(iterable)
@@ -62,8 +73,10 @@ def valid_date(s):
         msg = "Not a valid date: '{0}'.".format(s)
         raise argparse.ArgumentTypeError(msg)
 
-def format_datetime(t):
-    return t.strftime("%Y-%m-%d %H:%M:%S") if t is not None else ""
+def format_datetime(t, fmt=None):
+    return TIME_FORMATS.get(
+        fmt, lambda dt: dt.strftime(fmt)
+    )(t) if t is not None else ""
 
 def format_timedelta(td):
     if td is None:
