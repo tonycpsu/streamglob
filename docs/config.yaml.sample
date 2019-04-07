@@ -16,6 +16,13 @@ profiles:
                 defaults:
                     resolution: 720p
                     media: video
+                formats:
+                    streams:
+                        - hlsCloud
+                        - mp4Avc
+                    highlights:
+                        - mp4Avc
+                        - hlsCloud
                 listings:
                     teams:
                         # here, "colors" can be set to

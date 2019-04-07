@@ -34,6 +34,11 @@ LINE_STYLES = {
     "compact": {"height": 3, "boxed": False},
 }
 
+DEFAULT_PLAYBACK_FORMATS = [
+    "hlsCloud",
+    "mp4Avc"
+]
+
 class BAMLineScoreBox(urwid.WidgetWrap):
 
     def __init__(self, table, style=None):
@@ -379,25 +384,6 @@ class BAMEditorial:
             headline = f"{headline}{self.HEADLINE_SEPARATOR}{self.subhead}"
         return headline
 
-def get_playback_url(playbacks):
-    # FIXME: make configurable
-    for name in [
-            "hlsCloud",
-            "HTTP_CLOUD_WIRED_60",
-            "mp4Avc",
-            "FLASH_1200K_640X360",
-            "FLASH_300K_320X180"
-    ]:
-        try:
-            return next(
-                p["url"] for p in playbacks
-                if p["name"] == name
-            )
-        except StopIteration:
-            # give up and return the first one
-            return next(
-                p["url"] for p in playbacks
-            )
 
 class BAMDetailBox(Observable, urwid.WidgetWrap):
 
@@ -917,7 +903,7 @@ class BAMMediaListing(model.MediaListing):
                     title = h["title"],
                     description = h.get("description"),
                     duration = DURATION_RE.search(h.get("duration", "")).groups()[0],
-                    url = get_playback_url(h["playbacks"]),
+                    url = self.provider.get_playback_url(h["playbacks"], self.provider.config.formats.highlights),
                     attrs = self.get_highlight_attrs(h),
                     _details = {"open": True, "disabled": True}
                 )) for h in self.game_data["content"]["highlights"][self.HIGHLIGHT_ATTR]["items"]
@@ -1081,7 +1067,7 @@ class BAMMediaSource(model.MediaSource):
 
     @property
     def helper(self):
-        return "streamlink"
+        return "streamlink" if self.requires_helper else None
 
     @property
     def milestones(self):
@@ -1092,11 +1078,17 @@ class BAMMediaSource(model.MediaSource):
     def requires_auth(self):
         return self.playback_url is None
 
+    @property
+    def requires_helper(self):
+        return self.requires_auth
 
     @property
     def playback_url(self):
         try:
-            return get_playback_url(self.playbacks)
+            return self.provider.get_playback_url(
+                self.playbacks, self.provider.config.formats.streams
+            )
+            # return get_playback_url(self.playbacks)
         except StopIteration:
             return None
 
@@ -1895,7 +1887,20 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
             logger.warn(f"no stream found for game {selection['game_id']}")
 
 
-        # self.play(selection)
+    def get_playback_url(self, playbacks, formats=None):
+        if not formats:
+            formats = DEFAULT_PLAYBACK_FORMATS
+        for name in formats:
+            try:
+                return next(
+                    p["url"] for p in playbacks
+                    if p["name"] == name
+                )
+            except StopIteration:
+                # give up and return the first one
+                return next(
+                    p["url"] for p in playbacks
+                )
 
     def get_details(self, listing):
 
