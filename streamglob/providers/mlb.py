@@ -731,22 +731,22 @@ class MLBProvider(BAMProviderMixin,
     @db_session
     def start_date(self):
 
-        now = datetime.now()
+        now = self.current_game_day
         year = now.year
         season_year = (now - relativedelta(months=2)).year
 
         r = MLBBAMProviderData.get(season_year=season_year)
         if r:
-            start = r.start
-            end = r.end
+            start = r.start.date()
+            end = r.end.date()
         else:
             schedule = self.schedule(
                 start=datetime(year, 1, 1),
                 end=datetime(year, 12, 31),
                 brief=True
             )
-            start = dateutil.parser.parse(schedule["dates"][0]["date"])
-            end = dateutil.parser.parse(schedule["dates"][-1]["date"])
+            start = dateutil.parser.parse(schedule["dates"][0]["date"]).date()
+            end = dateutil.parser.parse(schedule["dates"][-1]["date"]).date()
             r = MLBBAMProviderData(
                 season_year=season_year,
                 start = start,
@@ -754,8 +754,8 @@ class MLBProvider(BAMProviderMixin,
             )
 
         if now < start:
-            return start.date()
+            return start
         elif now > end:
-            return end.date()
+            return end
         else:
-            return now.date()
+            return now

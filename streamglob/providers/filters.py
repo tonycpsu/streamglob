@@ -295,8 +295,8 @@ class DateFilter(WidgetFilter):
     #     self.start_date = start_date
 
     @property
-    def widget_kwargs(self):
-        return {"initial_date": datetime.now().date()}
+    def initial_date(self):
+        return datetime.now().date()
 
     @property
     def auto_refresh(self):

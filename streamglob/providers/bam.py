@@ -1479,7 +1479,7 @@ class BAMProviderDataTable(ProviderDataTable):
             else:
                 return key
         elif key == "t":
-            self.provider.filters.date.value = self.provider.current_game_day()
+            self.provider.filters.date.value = self.provider.current_game_day
         elif key == "S":
             self.provider.filters.hide_spoilers.cycle()
         elif key == "h":
@@ -1796,6 +1796,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
     def start_date(self):
         pass
 
+    @property
     def current_game_day(self):
         return (datetime.now() - timedelta(hours=8)).date()
 
@@ -1806,7 +1807,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         team = None
         feed_type = "home"
 
-        game_date = self.current_game_day().strftime("%Y/%m/%d")
+        game_date = self.current_game_day.strftime("%Y/%m/%d")
 
         if identifier and identifier.isdigit():
             game_id = int(identifier)
