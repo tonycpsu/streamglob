@@ -28,7 +28,7 @@ setup(name=name,
       install_requires = [
           "urwid @ git+https://github.com/tonycpsu/urwid",
           "urwid_utils==0.1.3.dev0",
-          "panwid==0.3.0.dev10",
+          "panwid>=0.3.0.dev13",
           "requests",
           "lxml",
           "pytz",

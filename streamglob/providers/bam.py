@@ -1179,12 +1179,16 @@ class OffsetDropdown(urwid.WidgetWrap):
 
     def __init__(self, media, live=False, default=None):
 
-        timestamps = {k: v for k, v in media.milestones.items() }
+        timestamps = AttrDict(
+            [(k,  v) for k, v in list(media.milestones.items())]
+        )
+        if live:
+             timestamps.update([("Live", None)])
         if "S" in timestamps: del timestamps["S"]
 
         self.dropdown = Dropdown(
             timestamps, label="Begin playback",
-            default = timestamps.get(default, None)
+            default = default
         )
         super().__init__(self.dropdown)
 
