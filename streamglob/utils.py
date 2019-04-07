@@ -10,7 +10,7 @@ def format_datetime_12h(dt):
     return FORMAT_DATETIME_12H_RE.search(s).group(1)
 
 TIME_FORMATS = {
-    None: lambda dt: dt.strfitme("%Y-%m-%d %H:%M:%S"),
+    None: lambda dt: dt.strftime("%Y-%m-%d %H:%M:%S"),
     "12h": format_datetime_12h,
     "24h": lambda dt: dt.strftime("%H:%M"),
 }
