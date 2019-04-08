@@ -956,6 +956,9 @@ class BAMMediaListing(model.MediaListing):
         try:
             epgs = (game["content"]["media"]["epg"]
                     + game["content"]["media"].get("epgAlternate", []))
+        except TypeError:
+            # FIXME: epgAlternate is a dict for MiLB, but maybe not always?
+            epgs = game["content"]["media"]["epg"]
         except KeyError:
             return []
             # raise SGStreamNotFound("no matching media for game %d" %(self.game_id))
@@ -1541,8 +1544,6 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         ("update", UPDATE_INTERVAL, [], {})
     ]
 
-    sport_id = 1 # FIXME
-
     FILTERS_BROWSE = AttrDict([
         ("date", BAMDateFilter)
     ])
@@ -1610,7 +1611,10 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
 
     def update_games(self):
         date = self.filters.date.value
-        schedule = self.schedule(start=date, end=date)
+        schedule = self.schedule(
+            sport_id = self.sport_id,
+            start=date, end=date
+        )
         try:
             games = schedule["dates"][-1]["games"]
         except IndexError:
@@ -1644,11 +1648,14 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         #     raise SGException("no game data")
         # return game
 
+    @property
+    def sport_id(self):
+        raise NotImplementedError
 
     @memo(region="short")
     def schedule(
             self,
-            # sport_id=None,
+            sport_id=None,
             season=None, # season only works for NHL
             start=None,
             end=None,
@@ -1660,7 +1667,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
 
         logger.debug(
             "getting schedule: %s, %s, %s, %s, %s, %s, %s" %(
-                self.sport_id,
+                sport_id,
                 season,
                 start,
                 end,
@@ -1675,7 +1682,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
             template = self.SCHEDULE_TEMPLATE
 
         url = template.format(
-            sport_id = self.sport_id,
+            sport_id = sport_id if sport_id else "",
             season = season if season else "",
             start = start.strftime("%Y-%m-%d") if start else "",
             end = end.strftime("%Y-%m-%d") if end else "",
@@ -1816,6 +1823,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         if identifier and identifier.isdigit():
             game_id = int(identifier)
             schedule = self.schedule(
+                sport_id = self.sport_id,
                 game_id = game_id
             )
         else:
@@ -1852,9 +1860,9 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
                 raise argparse.ArgumentTypeError(msg)
 
             schedule = self.schedule(
+                sport_id = self.sport_id,
                 start = game_date,
                 end = game_date,
-                # sport_id = sport["id"],
                 team_id = team_id
             )
 

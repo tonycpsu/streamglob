@@ -391,6 +391,10 @@ class NHLProvider(BAMProviderMixin,
     def NAME(cls):
         return "NHL.tv"
 
+    @property
+    def sport_id(self):
+        return 1
+
     def teams(self, season=None):
 
         teams_url = (

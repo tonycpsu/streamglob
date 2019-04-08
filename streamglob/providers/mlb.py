@@ -636,6 +636,20 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
         stream.url = stream["stream"]["complete"]
         return stream
 
+class MLBLevelFilter(ListingFilter):
+
+    @property
+    def values(self):
+        return AttrDict([
+            ("MLB", 1),
+            ("AAA", 11),
+            ("AA", 12),
+            ("A+", 13),
+            ("A", 14),
+            ("A-", 15),
+            ("R", 16),
+            ("OFF", 17),
+        ])
 
 class MLBProvider(BAMProviderMixin,
                   BaseProvider):
@@ -674,6 +688,11 @@ class MLBProvider(BAMProviderMixin,
         "http://statsapi.mlb.com/api/v1.1/game/{game_id}/feed/live"
     )
 
+
+    FILTERS_BROWSE = AttrDict(BAMProviderMixin.FILTERS_BROWSE, **AttrDict([
+        ("level", MLBLevelFilter)
+    ]))
+
     # DATA_TABLE_CLASS = MLBLineScoreDataTable
 
     MEDIA_TITLE = "MLBTV"
@@ -684,6 +703,15 @@ class MLBProvider(BAMProviderMixin,
 
     URL_ROOT = "http://www.mlb.com"
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.filters["level"].connect("changed", self.on_level_change)
+        self.game_map = AttrDict()
+
+    def on_level_change(self, value):
+        self.update_games()
+        self.reset()
+
     @classproperty
     def NAME(cls):
         return "MLB.tv"
@@ -692,6 +720,9 @@ class MLBProvider(BAMProviderMixin,
     # def config_is_valid(cls, cfg):
     #     return all(c
 
+    @property
+    def sport_id(self):
+        return self.filters.level.value
 
     def teams(self, sport_code="mlb", season=None):
 
@@ -741,6 +772,7 @@ class MLBProvider(BAMProviderMixin,
             end = r.end
         else:
             schedule = self.schedule(
+                sport_id = self.sport_id,
                 start=datetime(year, 1, 1),
                 end=datetime(year, 12, 31),
                 brief=True
