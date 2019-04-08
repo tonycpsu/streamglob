@@ -26,7 +26,7 @@ setup(name=name,
       ],
       include_package_data=True,
       install_requires = [
-          "urwid @ git+https://github.com/tonycpsu/urwid",
+          "urwid @ git+https://github.com/urwid/urwid",
           "urwid_utils==0.1.3.dev0",
           "panwid>=0.3.0.dev13",
           "requests",
