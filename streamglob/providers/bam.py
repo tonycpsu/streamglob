@@ -1442,7 +1442,7 @@ class MediaTypeFilter(ListingFilter):
 
     @property
     def default(self):
-        return self.provider.config.defaults.media
+        return self.provider.config.defaults.media or "Video"
 
 class LiveStreamFilter(ListingFilter):
 
