@@ -91,6 +91,7 @@ class NHLMediaSource(BAMMediaSource):
             if m["type"] == "PERIOD_START"
         ]))
         # raise Exception(timestamps)
+        timestamps.update([("Live", None)])
         return timestamps
 
 class NHLMediaListing(BAMMediaListing):

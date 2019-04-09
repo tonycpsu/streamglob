@@ -230,6 +230,9 @@ class MLBMediaSource(BAMMediaSource):
                  for m in airing["milestones"]
                  if m["milestoneType"] == "INNING_START"
         ]))
+
+        timestamps.update([("Live", None)])
+
         return timestamps
 
 
