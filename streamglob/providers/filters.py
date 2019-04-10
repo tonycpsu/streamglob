@@ -203,23 +203,8 @@ class DateFilterWidget(Observable, urwid.WidgetWrap):
     def __init__(self, initial_date=None, date_format=None):
 
         self.initial_date = initial_date
-        # self.date_picker = DatePicker(
-        #     initial_date=initial_date,
-        #     space_between = 0,
-        #     columns=(DatePicker.PICKER.YEAR, DatePicker.PICKER.MONTH, DatePicker.PICKER.DAY),
-        #     return_unused_navigation_input = True,
-        #     day_format = (DatePicker.DAY_FORMAT.DAY_OF_MONTH, DatePicker.DAY_FORMAT.WEEKDAY),
-        #     highlight_prop=("dp_highlight_focus", "dp_highlight_offFocus")
-        # )
         self.date_picker = DateDisplay(self.initial_date, selectable=True)
-        # self.button = urwid.Button("OK", on_press=lambda w: self.date_changed())
-        self.columns = urwid.Columns([
-            # (6, urwid.Padding(urwid.Text(""))),
-            (40, self.date_picker),
-            # (10, urwid.BoxAdapter(urwid.Filler(self.button), 3))
-        ])
-        # self.columns.focus_position = 1
-        super(DateFilterWidget, self).__init__(self.columns)
+        super(DateFilterWidget, self).__init__(self.date_picker)
 
     def selectable(self):
         return True
