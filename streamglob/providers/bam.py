@@ -643,7 +643,10 @@ class BAMMediaListing(model.MediaListing):
              for x in ["wins", "losses"]]
         )
         start_time = dateutil.parser.parse(g["gameDate"])
-        venue = g["venue"]["name"]
+        try:
+            venue = g["venue"]["name"]
+        except KeyError:
+            venue = "unknown"
 
         if config.settings.profile.time_zone:
             start_time = start_time.astimezone(
