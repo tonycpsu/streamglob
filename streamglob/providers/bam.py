@@ -643,7 +643,10 @@ class BAMMediaListing(model.MediaListing):
              for x in ["wins", "losses"]]
         )
         start_time = dateutil.parser.parse(g["gameDate"])
-        venue = g["venue"]["name"]
+        try:
+            venue = g["venue"]["name"]
+        except KeyError:
+            venue = "unknown"
 
         if config.settings.profile.time_zone:
             start_time = start_time.astimezone(
@@ -1185,8 +1188,7 @@ class OffsetDropdown(urwid.WidgetWrap):
         timestamps = AttrDict(
             [(k,  v) for k, v in list(media.milestones.items())]
         )
-        if live:
-             timestamps.update([("Live", None)])
+
         if "S" in timestamps: del timestamps["S"]
 
         self.dropdown = Dropdown(
@@ -2009,7 +2011,8 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
                     )
                 except StopIteration:
                     raise Exception(f"Offset {offset} not valid: {source.milestones}")
-            # raise Exception(selection)
+
+        if offset is not None:
             if (source.state == "live"): # live stream
                 logger.debug("live stream")
                 # calculate HLS offset, which is negative from end of stream
