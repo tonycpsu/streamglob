@@ -63,6 +63,14 @@ def load_config():
     for p in PROVIDERS.values():
         p.init_config()
 
+
+    if len(config.settings.profile.providers):
+        # first listed in config
+        DEFAULT_PROVIDER = list(config.settings.profile.providers.keys())[0]
+    else:
+        # first loaded
+        DEFAULT_PROVIDER = list(PROVIDERS.keys())[0]
+
 def log_plugin_exception(manager, entrypoint, exception):
     logger.error('Failed to load %s: %s' % (entrypoint, exception))
 
@@ -78,11 +86,4 @@ def load():
         for x in mgr
     )
 
-    load_config()
-
-    if len(config.settings.profile.providers):
-        # first listed in config
-        DEFAULT_PROVIDER = list(config.settings.profile.providers.keys())[0]
-    else:
-        # first loaded
-        DEFAULT_PROVIDER = list(PROVIDERS.keys())[0]
+    # load_config()

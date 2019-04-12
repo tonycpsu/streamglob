@@ -94,6 +94,10 @@ class NHLMediaSource(BAMMediaSource):
         timestamps.update([("Live", None)])
         return timestamps
 
+class NHLBAMTeamData(BAMTeamData):
+
+    TEAM_URL_TEMPLATE = "http://statsapi.web.nhl.com/api/v1/teams/{team_id}"
+
 class NHLMediaListing(BAMMediaListing):
 
     @property
@@ -171,7 +175,7 @@ class NHLMediaListing(BAMMediaListing):
 
 
 
-class NHLBAMProviderData(BAMProviderData):
+class NHLBAMProviderSettings(BAMProviderSettings):
     pass
 
 class NHLStreamSession(session.AuthenticatedStreamSession):
@@ -381,6 +385,11 @@ class NHLProvider(BAMProviderMixin,
         "https://statsapi.web.nhl.com/api/v1/game/{game_id}/feed/live"
     )
 
+    TEAMS_URL_TEMPLATE = (
+        "http://statsapi.web.nhl.com/api/v1/teams"
+        "?{season}"
+    )
+
 
     MEDIA_TITLE = "NHLTV"
 
@@ -396,24 +405,24 @@ class NHLProvider(BAMProviderMixin,
     def sport_id(self):
         return 1
 
-    def teams(self, season=None):
+    def update_teams(self, season=None):
 
         teams_url = (
-            "https://statsapi.web.nhl.com/api/v1/teams"
-            "?{season}".format(
+            self.TEAMS_URL_TEMPLATE.format(
                 season=season if season else ""
             )
         )
 
-        # FIXME
+        j = self.session.get(teams_url).json()
         with self.session.cache_responses_long():
-            teams = AttrDict(
-                (team["abbreviation"].lower(), team["id"])
-                for team in sorted(self.session.get(teams_url).json()["teams"],
-                               key=lambda t: t["abbreviation"])
-            )
-
-        return teams
+            for team in sorted(
+                    j["teams"],
+                    key=lambda t: t["abbreviation"]
+            ):
+                t = self.TEAM_DATA_CLASS.from_json(
+                    self.IDENTIFIER, team,
+                    sport_id=1
+                )
 
 
     @property
@@ -424,7 +433,7 @@ class NHLProvider(BAMProviderMixin,
         year = datetime.now().year
         season_year = (now - relativedelta(months=8)).year
 
-        r = NHLBAMProviderData.get(season_year=season_year)
+        r = NHLBAMProviderSettings.get(season_year=season_year)
         if r:
             start = r.start
             end = r.end

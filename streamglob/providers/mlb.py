@@ -66,6 +66,11 @@ class MLBDetailBox(BAMDetailBox):
     def __repr__(self):
         return ""
 
+class MLBBAMTeamData(BAMTeamData):
+
+    TEAM_URL_TEMPLATE = "http://statsapi.mlb.com/api/v1/teams/{team_id}"
+
+
 @dataclass
 class MLBMediaListing(BAMMediaListing):
 
@@ -236,7 +241,7 @@ class MLBMediaSource(BAMMediaSource):
         return timestamps
 
 
-class MLBBAMProviderData(BAMProviderData):
+class MLBBAMProviderSettings(BAMProviderSettings):
     pass
 
 class MLBStreamSession(session.AuthenticatedStreamSession):
@@ -642,7 +647,7 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
 class MLBLevelFilter(ListingFilter):
 
     @property
-    def values(self):
+    def items(self):
         return AttrDict([
             ("MLB", 1),
             ("AAA", 11),
@@ -691,6 +696,12 @@ class MLBProvider(BAMProviderMixin,
         "http://statsapi.mlb.com/api/v1.1/game/{game_id}/feed/live"
     )
 
+    TEAMS_URL_TEMPLATE = (
+        "http://statsapi.mlb.com/api/v1/teams"
+        "?sportId={sport}&{season}"
+    )
+
+
 
     FILTERS_BROWSE = AttrDict(BAMProviderMixin.FILTERS_BROWSE, **AttrDict([
         ("level", MLBLevelFilter)
@@ -727,39 +738,28 @@ class MLBProvider(BAMProviderMixin,
     def sport_id(self):
         return self.filters.level.value
 
-    def teams(self, sport_code="mlb", season=None):
+    @db_session
+    def update_teams(self, season=None):
 
-        if sport_code != "mlb":
-            media_title = "MiLBTV"
-            raise SGException("Sorry, MiLB.tv streams are not yet supported")
-
-        sports_url = (
-            "http://statsapi.mlb.com/api/v1/sports"
-        )
-        with self.session.cache_responses_long():
-            sports = self.session.get(sports_url).json()
-
-        sport = next(s for s in sports["sports"] if s["code"] == sport_code)
-
-        # season = game_date.year
-        teams_url = (
-            "http://statsapi.mlb.com/api/v1/teams"
-            "?sportId={sport}&{season}".format(
-                sport=sport["id"],
-                season=season if season else ""
-            )
-        )
-
-        # raise Exception(state.session.get(teams_url).json())
-
-        with self.session.cache_responses_long():
-            teams = AttrDict(
-                (team["abbreviation"].lower(), team["id"])
-                for team in sorted(self.session.get(teams_url).json()["teams"],
-                                   key=lambda t: t["fileCode"])
+        for sport_id in self.filters["level"].items.values():
+            teams_url = (
+                self.TEAMS_URL_TEMPLATE.format(
+                    sport=sport_id,
+                    season=season if season else ""
+                )
             )
 
-        return teams
+            j = self.session.get(teams_url).json()
+            with self.session.cache_responses_long():
+                for team in sorted(
+                        j["teams"],
+                        key=lambda t: t["abbreviation"]
+                ):
+                    t = self.TEAM_DATA_CLASS.from_json(
+                        self.IDENTIFIER, team,
+                        sport_id = sport_id
+                    )
+
 
     @property
     @db_session
@@ -769,7 +769,7 @@ class MLBProvider(BAMProviderMixin,
         year = now.year
         season_year = (now - relativedelta(months=2)).year
 
-        r = MLBBAMProviderData.get(season_year=season_year)
+        r = MLBBAMProviderSettings.get(season_year=season_year)
         if r:
             start = r.start
             end = r.end
@@ -782,7 +782,7 @@ class MLBProvider(BAMProviderMixin,
             )
             start = dateutil.parser.parse(schedule["dates"][0]["date"])
             end = dateutil.parser.parse(schedule["dates"][-1]["date"])
-            r = MLBBAMProviderData(
+            r = MLBBAMProviderSettings(
                 season_year=season_year,
                 start = start,
                 end = end
