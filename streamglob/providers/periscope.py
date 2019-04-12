@@ -74,7 +74,7 @@ class PeriscopeFeed(model.MediaFeed):
 
 class PeriscopeLiveStreamFilter(ListingFilter):
 
-    values = AttrDict([
+    items = AttrDict([
         (s, s.lower())
         for s in ["Any", "Live", "Archived"]
     ])

@@ -197,7 +197,7 @@ class FeedsFilter(ConfigFilter):
 
 class ItemStatusFilter(ListingFilter):
 
-    values = AttrDict([
+    items = AttrDict([
         (s, s.lower().replace(" ", "_"))
         for s in ["All", "Unread", "Not Downloaded"]
     ])
