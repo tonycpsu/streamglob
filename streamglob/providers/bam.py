@@ -1298,7 +1298,7 @@ class WatchDialog(BasePopUp):
         self.feed_dropdown = Dropdown(
             feed_map,
             label="Feed",
-            default=preferred_feed["media_id"],
+            default=preferred_feed,
             max_height=8
         )
         urwid.connect_signal(
