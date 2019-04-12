@@ -1025,6 +1025,94 @@ class BAMMediaListing(model.MediaListing):
         ]
         return items
 
+    @property
+    def away_overrides(self):
+
+        try:
+            return next(
+                list(p.values())[0] for p in self.provider.config.teams.overrides
+                if list(p.keys())[0].lower() == self.away_abbrev.lower()
+            )
+        except StopIteration:
+            return {}
+
+    @property
+    def home_overrides(self):
+
+        try:
+            return next(
+                list(p.values())[0] for p in self.provider.config.teams.overrides
+                if list(p.keys())[0].lower() == self.home_abbrev.lower()
+            )
+        except StopIteration:
+            return {}
+
+
+    @property
+    def media_params(self):
+
+        media_type = self.provider.config.defaults.media
+
+        feed_type = "away" if (
+            (self.away_overrides.get("feed_type", "").lower() == "local")
+            or
+            (self.home_overrides.get("feed_type", "").lower() == "remote")
+        ) else "home" if (
+            (self.home_overrides.get("feed_type", "").lower() == "local")
+            or
+            (self.away_overrides.get("feed_type", "").lower() == "remote")
+        ) else None
+
+        resolution = self.home_overrides.get(
+            "resolution",
+            self.away_overrides.get(
+                "resolution"
+            )
+        )
+
+        return AttrDict([
+            ("media_type", media_type),
+            ("feed_type", feed_type),
+            ("resolution", resolution),
+            # ("live_stream", live_stream)
+        ])
+
+    def select_media(self, media_type=None, feed_type = None):
+
+        media_type = self.media_params.media_type or media_type
+        feed_type = self.media_params.feed_type or feed_type
+
+        # First, try to match the streams for the preferred media type, or
+        # all streams if none match
+        preferred_media = [
+            m for m in self.media
+            if m.media_type.lower().startswith(media_type)
+        ]
+
+        if not len(preferred_media):
+            preferred_media = self.media
+
+        faves = [s.lower() for s in self.provider.config.teams.favorite ]
+        try:
+            return next(
+                m for m in preferred_media
+                if (
+                        (self.away_abbrev.lower() in faves
+                         and m["feed_type"].lower() == "away")
+                        or
+                        (self.home_abbrev in faves
+                         and m["feed_type"].lower() == "home")
+                        or
+                        (feed_type and feed_type.lower() == m["feed_type"].lower())
+                        or
+                        m["feed_type"].lower() == "home"
+                )
+           )
+
+        except StopIteration:
+            return preferred_media[0]
+
+
     def extra_media_attributes(self, item):
         return {}
 
@@ -1261,44 +1349,30 @@ class WatchDialog(BasePopUp):
             for m in media
         ]
 
-        faves = [s.lower() for s in self.provider.config.teams.favorite ]
-        try:
-            # First, try to match the streams for the preferred media type, or
-            # all streams if none match
-            preferred_media = [
-                m for m in media
-                if (m.media_type[0].lower() ==
-                    self.provider.filters.media_type.value)
-            ]
-            if not len(preferred_media):
-                preferred_media = media
+        media_type = (
+            selection.media_params.media_type
+            or
+            self.provider.filters.media_type.value
+        )
 
-            # Next, get either the feed for the team in the user's favorite
-            # teams list, or the home team if there's no match.
-            #
-            # TODO: list of preferred non-fave feeds, e.g. the "I can't stand
-            # listening to Michael McKay feature"
-            preferred_feed = next(
-                m for m in preferred_media
-                if (
-                        (selection.away_abbrev.lower() in faves
-                         and m["feed_type"].lower() == "away")
-                        or
-                        (selection.home_abbrev in faves
-                         and m["feed_type"].lower() == "home")
-                        or
-                        m["feed_type"].lower() == "home"
-                )
-            )
+        feed_type = selection.media_params.feed_type
 
-        except StopIteration:
-            preferred_feed = preferred_media[0]
+        resolution = (
+            selection.media_params.resolution
+            or
+            self.provider.filters.resolution.value
+        )
 
-        self.live_stream = (preferred_feed.get("state") == "live")
+        preferred_media = selection.select_media(
+            media_type = media_type
+        )
+
+        self.live_stream = (preferred_media.get("state") == "live")
+
         self.feed_dropdown = Dropdown(
             feed_map,
             label="Feed",
-            default=preferred_feed,
+            default=preferred_media,
             max_height=8
         )
         urwid.connect_signal(
@@ -1308,7 +1382,7 @@ class WatchDialog(BasePopUp):
         )
 
         self.resolution_dropdown = Dropdown(
-            self.provider.RESOLUTIONS, default=self.default_resolution,
+            self.provider.RESOLUTIONS, default=resolution,
             label="Resolution"
         )
 
@@ -1965,22 +2039,18 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
 
     def get_source(
             self, selection,
-            media_id=None,
+            # media_id=None,
             media_type=None,
             feed_type=None,
             **kwargs
     ):
-        try:
-            selected_media = next(
-                m for m in selection.media
-                if (not media_id or m.media_id == media_id)
-                and (not media_type or m.media_type.lower()[0] == media_type.lower()[0])
-                and (not feed_type or m.feed_type.lower() == feed_type.lower())
-            )
-        except StopIteration:
-            selected_media = selection.media[0]
+        media = selection.select_media(
+            media_type = media_type,
+            feed_type = feed_type
+        )
 
-        return selected_media
+        raise Exception(feed_type, media.feed_type, media.call_letters)
+        return media
 
     def play_args(self, selection, **kwargs):
 

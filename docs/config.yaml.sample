@@ -12,6 +12,13 @@ profiles:
                 teams:
                     favorite:
                         - PHI
+                    overrides:
+                        - LAD:
+                            feed_type: local
+                            resolution: 540p
+                        - NYY:
+                            feed_type: remote
+                            resolution: 360p
                     hide_spoilers: favorite
                 defaults:
                     resolution: 720p
