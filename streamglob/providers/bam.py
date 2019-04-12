@@ -1436,7 +1436,7 @@ class MediaTypeFilter(ListingFilter):
     label = "Default Media"
 
     @property
-    def values(self):
+    def items(self):
         return [
             ("Video", "v"),
             ("Audio", "a")
@@ -1449,7 +1449,7 @@ class MediaTypeFilter(ListingFilter):
 class LiveStreamFilter(ListingFilter):
 
     @property
-    def values(self):
+    def items(self):
         return AttrDict([
             ("Live", "live"),
             ("From Start", "start"),

@@ -314,7 +314,7 @@ class ListingFilter(WidgetFilter, abc.ABC):
 
     @property
     def widget_args(self):
-        return [self.values]
+        return [self.items]
 
     @property
     def widget_kwargs(self):
@@ -355,7 +355,7 @@ class ListingFilter(WidgetFilter, abc.ABC):
 
     @property
     @abc.abstractmethod
-    def values(self):
+    def items(self):
         pass
 
     def __getitem__(self, key):
@@ -374,7 +374,7 @@ class ConfigFilter(ListingFilter, abc.ABC):
         return False
 
     @property
-    def values(self):
+    def items(self):
         cfg = getattr(self.provider.config, self.key)
 
         if self.with_all:
@@ -418,5 +418,5 @@ class ResolutionFilter(ListingFilter):
         return self.provider.config.defaults.resolution or None
 
     @property
-    def values(self):
+    def items(self):
         return self.provider.RESOLUTIONS

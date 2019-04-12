@@ -149,7 +149,7 @@ class YouTubeChannelsFilter(FeedsFilter):
     WIDGET_CLASS = YouTubeChannelsDropdown
 
     @property
-    def values(self):
+    def items(self):
         # channels = [("Search", "search")]
         # channels += list(state.provider_config.feeds.items())
         # return channels
