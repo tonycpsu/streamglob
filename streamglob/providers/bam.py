@@ -2049,7 +2049,6 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
             feed_type = feed_type
         )
 
-        raise Exception(feed_type, media.feed_type, media.call_letters)
         return media
 
     def play_args(self, selection, **kwargs):
