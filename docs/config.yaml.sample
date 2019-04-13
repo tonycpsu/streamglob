@@ -13,11 +13,13 @@ profiles:
                     favorite:
                         - PHI
                     overrides:
+                        # when watching LAD games
                         - LAD:
-                            feed_type: local
+                            feed_type: local # prefer LAD stream
                             resolution: 540p
+                        # when watching NYY games
                         - NYY:
-                            feed_type: remote
+                            feed_type: remote # prefer opponent's stream
                             resolution: 360p
                     hide_spoilers: favorite
                 defaults:
