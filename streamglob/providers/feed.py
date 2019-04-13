@@ -113,7 +113,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     @db_session
     def mark_item_unread(self, position):
-        if not isinstance(self[position].data, MediaListing):
+        if not isinstance(self[position].data, model.MediaListing):
             return
         item = self.item_at_position(position)
         if not item:
@@ -125,7 +125,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     @db_session
     def toggle_item_read(self, position):
-        if not isinstance(self[position].data, MediaListing):
+        if not isinstance(self[position].data, model.MediaListing):
             return
         logger.info(self.get_value(position, "read"))
         if self.get_value(position, "read") is not None:

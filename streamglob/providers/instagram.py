@@ -9,7 +9,7 @@ from .. import session
 from .filters import *
 
 from orderedattrdict import DefaultAttrDict
-from instagram_web_api import Client, ClientCompatPatch, ClientError
+from instagram_web_api import Client, ClientCompatPatch, ClientConnectionError
 from pony.orm import *
 
 @dataclass
@@ -69,7 +69,7 @@ class InstagramSession(session.StreamSession):
                 self.user_name_to_id(user_name), count=self.BATCH_COUNT,
                 end_cursor = self.end_cursors[user_name]
             )
-        except instagram_web_api.errors.ClientConnectionError as e:
+        except ClientConnectionError as e:
             logger.warn(f"connection error: {e}")
 
 
