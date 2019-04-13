@@ -1949,8 +1949,13 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
                 (sport_code, team) = team.split("-")
 
             game_number = int(game_number)
-            teams =  self.teams(season=game_date.year)
-            team_id = teams.get(team)
+
+            with db_session:
+                team_id = self.TEAM_DATA_CLASS.get(
+                    provider_id = self.IDENTIFIER,
+                    bam_sport_id=1, # FIXME
+                    abbreviation=team.upper()
+                ).bam_team_id
 
             if not team:
                 msg = "'%s' not a valid team code, must be one of:\n%s" %(
