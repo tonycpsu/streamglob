@@ -751,6 +751,10 @@ class BAMMediaListing(model.MediaListing):
     def hide_spoilers(self):
         if not self.provider.filters.hide_spoilers.value:
             return False
+        if datetime.now().astimezone(
+                pytz.timezone(config.settings.profile.time_zone)
+            ) < self.start:
+            return False
         hide_spoiler_teams = self.provider.config.teams.get("hide_spoilers", [])
         if isinstance(hide_spoiler_teams, bool):
             return hide_spoiler_teams
