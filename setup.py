@@ -25,6 +25,9 @@ setup(name=name,
           ('share/doc/%s' % name, ["docs/config.yaml.sample"]),
       ],
       include_package_data=True,
+      package_data = {
+          "streamglob": ["data/*"]
+      },
       install_requires = [
           "urwid @ git+https://github.com/urwid/urwid",
           "urwid_utils==0.1.3.dev0",

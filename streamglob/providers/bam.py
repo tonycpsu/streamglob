@@ -86,8 +86,9 @@ class BAMLineScoreDataTable(DataTable):
     OVERTIME_LABEL = None
 
     @classmethod
-    def for_game(cls, provider, game, hide_spoilers=False):
+    def for_game(cls, provider, listing, hide_spoilers=False):
 
+        game = listing.game_data
         # style = style or "standard"
 
         # if not style in ["standard", "boxed", "compact"]:
@@ -109,10 +110,11 @@ class BAMLineScoreDataTable(DataTable):
             start_time = format_datetime(start_time, config.settings.profile.time_format or "12h")
             status = start_time
         elif status == "In Progress" and line_score:
-            status = cls.PLAYING_PERIOD_DESC(line_score)
+            status = cls.PLAYING_PERIOD_DESC(listing)
 
         columns = [
-            DataTableColumn("team", width=min(12, max(10, len(status))), min_width=10, label=status, align="right"),
+            DataTableColumn("team", width=min(20, max(14, len(status))),
+                            min_width=10, label=status, align="right"),
             DataTableDivider("\N{BOX DRAWINGS DOUBLE VERTICAL}", in_header=False),
         ]
 
@@ -613,6 +615,15 @@ class BAMMediaListing(model.MediaListing):
     start: datetime = None
     venue: str = None
     # attrs: str = None
+
+    @property
+    def line(self):
+        style = self.provider.config.listings.line.style
+        table = self.LINE_SCORE_DATA_TABLE_CLASS.for_game(
+            self.provider, self, self.hide_spoilers,
+            # style = style
+        )
+        return BAMLineScoreBox(table, style)
 
     @property
     def style(self):

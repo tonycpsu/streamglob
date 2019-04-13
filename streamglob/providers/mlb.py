@@ -10,6 +10,8 @@ import requests
 import dateutil.parser
 import random
 import string
+import pkgutil
+import json
 
 from .. import session
 
@@ -20,6 +22,27 @@ from .filters import *
 from .. import model
 from ..exceptions import *
 from ..state import *
+
+# damn you, JSON...
+LEVERAGE_MAP ={
+    int(k1): {
+        k2: {
+            int(k3): {
+                k4: {
+                    int(k5): v5
+                    for k5, v5 in v4.items()
+                }
+                for k4, v4 in v3.items()
+            }
+            for k3, v3 in v2.items()
+        }
+        for k2, v2 in v1.items()
+    }
+    for k1, v1 in
+    json.loads(
+        pkgutil.get_data("streamglob", "data/leverage_index.json")
+    ).items()
+}
 
 def gen_random_string(n):
     return ''.join(
@@ -35,8 +58,12 @@ class MLBLineScoreDataTable(BAMLineScoreDataTable):
     NUM_PLAYING_PERIODS = 9
 
     @classmethod
-    def PLAYING_PERIOD_DESC(cls, line_score):
-        return f"""{line_score.get("inningHalf")[:3]} {line_score.get("currentInningOrdinal")}"""
+    def PLAYING_PERIOD_DESC(cls, listing):
+        return (
+            f"""{listing.inning_half[:3]} """
+            f"""{listing.game_data["linescore"].get("currentInningOrdinal")} """
+            f"({listing.leverage_index})"
+        )
 
 class MLBHighlightsDataTable(HighlightsDataTable):
 
@@ -69,14 +96,16 @@ class MLBDetailBox(BAMDetailBox):
 @dataclass
 class MLBMediaListing(BAMMediaListing):
 
-    @property
-    def line(self):
-        style = self.provider.config.listings.line.style
-        table = MLBLineScoreDataTable.for_game(
-            self.provider, self.game_data, self.hide_spoilers,
-            # style = style
-        )
-        return BAMLineScoreBox(table, style)
+    LINE_SCORE_DATA_TABLE_CLASS = MLBLineScoreDataTable
+
+    # @property
+    # def line(self):
+    #     style = self.provider.config.listings.line.style
+    #     table = MLBLineScoreDataTable.for_game(
+    #         self.provider, self.game_data, self.hide_spoilers,
+    #         # style = style
+    #     )
+    #     return BAMLineScoreBox(table, style)
 
     @property
     def HIGHLIGHT_ATTR(self):
@@ -118,6 +147,7 @@ class MLBMediaListing(BAMMediaListing):
                 pytz.timezone(config.settings.profile.time_zone)
             )
 
+
             running_time = timestamp - game_start
             inning = f"{play['about']['halfInning'][:3].title()} {play['about']['inning']}"
 
@@ -146,6 +176,34 @@ class MLBMediaListing(BAMMediaListing):
             # description = play["result"].get("description", None),
         )
 
+    @property
+    def inning(self):
+        return self.game_data["linescore"].get("currentInning")
+
+    @property
+    def inning_half(self):
+        return "Top" if self.game_data["linescore"].get("isTopInning") else "Bottom"
+
+    @property
+    def outs(self):
+        return self.game_data["linescore"].get("outs")
+
+    @property
+    def baserunners(self):
+        return "".join([str(i+1)
+                if x in self.game_feed_data["liveData"]["linescore"]["offense"]
+                else "_"
+                for i, x in enumerate(["first", "second", "third"])])
+    @property
+    def leverage_index(self):
+        try:
+            rundiff = (
+                self.game_data["linescore"]["teams"]["away"]["runs"]
+                - self.game_data["linescore"]["teams"]["home"]["runs"]
+            )
+            return LEVERAGE_MAP[self.inning][self.inning_half[0]][self.outs][self.baserunners][rundiff]
+        except KeyError:
+            return 0.0
 
 @dataclass
 class MLBMediaSource(BAMMediaSource):

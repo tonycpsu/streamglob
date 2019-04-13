@@ -94,16 +94,19 @@ class NHLMediaSource(BAMMediaSource):
         timestamps.update([("Live", None)])
         return timestamps
 
+@dataclass
 class NHLMediaListing(BAMMediaListing):
 
-    @property
-    def line(self):
-        style = self.provider.config.listings.line.style
-        table = NHLLineScoreDataTable.for_game(
-            self.provider, self.game_data, self.hide_spoilers,
-            # style = style
-        )
-        return BAMLineScoreBox(table, style)
+    LINE_SCORE_DATA_TABLE_CLASS = NHLLineScoreDataTable
+
+    # @property
+    # def line(self):
+    #     style = self.provider.config.listings.line.style
+    #     table = NHLLineScoreDataTable.for_game(
+    #         self.provider, self.game_data, self.hide_spoilers,
+    #         # style = style
+    #     )
+    #     return BAMLineScoreBox(table, style)
 
 
     @property
