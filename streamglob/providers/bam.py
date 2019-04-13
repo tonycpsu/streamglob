@@ -1068,7 +1068,7 @@ class BAMMediaListing(model.MediaListing):
             self.away_overrides.get(
                 "resolution"
             )
-        )
+        ) or self.provider.config.defaults.resolution
 
         return AttrDict([
             ("media_type", media_type),
@@ -2061,6 +2061,8 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         # don't use video resolution for audio feeds
         if media_type == "audio":
             kwargs["resolution"] = "best"
+        else:
+            kwargs["resolution"] = self.RESOLUTIONS.get(selection.media_params.resolution)
         offset = kwargs.pop("offset", None)
         if offset:
             try:
