@@ -97,15 +97,14 @@ class MLBMediaListing(BAMMediaListing):
             self.game_data["gameDate"]
         )
 
-        try:
-            event_id = next(k["value"] for k in keywords if k["type"] == "sv_id")
-        except StopIteration:
-            event_id = None
+        guid = highlight.get("guid")
 
         try:
-            play, event = next( (p, pe) for p in plays
-                        for pe in p["playEvents"]
-                        if event_id and pe.get("playId", None) == event_id)
+            play, event = next(
+                (p, pe) for p in plays
+                for pe in p["playEvents"]
+                if guid and pe.get("playId", None) == guid
+            )
         except StopIteration:
             play = None
             event = None
