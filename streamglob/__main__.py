@@ -628,6 +628,11 @@ def main():
 
     model.init()
 
+    sh = logging.StreamHandler()
+    state.logger = setup_logging(options.verbose - options.quiet, quiet_stdout=False)
+
+    providers.load_config()
+
     with db_session(optimistic=False):
         model.MediaFeed.purge_all(
             min_items = config.settings.profile.cache.min_items,
@@ -637,8 +642,6 @@ def main():
 
     spec = None
 
-    sh = logging.StreamHandler()
-    state.logger = setup_logging(options.verbose - options.quiet, quiet_stdout=False)
     logger.debug(f"{PACKAGE_NAME} starting")
     action, provider, selection, opts = providers.parse_spec(options.spec)
     state.asyncio_loop = asyncio.get_event_loop()

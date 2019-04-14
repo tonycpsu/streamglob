@@ -573,19 +573,93 @@ class BAMDetailBox(Observable, urwid.WidgetWrap):
             return key
 
 
-def get_team_city_and_name(team):
-    # They don't make this very easy...
-    try:
-        city = team["locationName"]
-    except:
-        return (None, team.get("teamName", "?"))
-    name = team["teamName"]
-    if team["teamName"] in team["name"]:
-        city = team["name"].replace(name, "").strip()
-    elif team["shortName"] in team["name"]:
-        name = team["name"].replace(team["shortName"], "").strip()
-        city = team["name"].replace(name, "").strip()
-    return (city, name)
+
+class BAMTeamData(model.db.Entity):
+
+    team_id = PrimaryKey(int, auto=True)
+    provider_id = Required(str)
+    bam_team_id = Required(int)
+    bam_sport_id = Required(int)
+    abbreviation = Required(str)
+    location = Required(str)
+    name = Required(str)
+    parent_team = Optional(lambda: BAMTeamData)
+    affiliates = Set(lambda: BAMTeamData)
+    # record = Optional(Json)
+    composite_key(provider_id, bam_team_id)
+
+    @property
+    def provider(self):
+        return
+
+    @classmethod
+    @db_session
+    def for_id(cls, provider_id, team_id):
+        provider = providers.get(provider_id)
+        t = cls.get(
+            provider_id = provider_id,
+            bam_team_id = team_id
+        )
+        if t:
+            return t
+        url = cls.TEAM_URL_TEMPLATE.format(
+            team_id = team_id
+        )
+
+        j = provider.session.get(url).json()["teams"][0]
+        return cls.from_json(provider_id, j)
+
+    @classmethod
+    @db_session
+    def from_json(cls, provider_id, tm, sport_id=None):
+
+        try:
+            team = tm["team"]
+            # record =  tuple(
+            #     [tm["leagueRecord"][x]
+            #      for x in ["wins", "losses"]]
+            # )
+
+        except KeyError:
+            team = tm
+            # record = (None, None)
+
+        t = cls.get(
+            bam_team_id = team["id"]
+        )
+
+        if t:
+            return t
+
+
+        location = None
+        name = team["teamName"]
+        if team["teamName"] in team["name"]:
+            location = team["name"].replace(name, "").strip()
+        elif team["shortName"] in team["name"]:
+            name = team["name"].replace(team["shortName"], "").strip()
+            location = team["name"].replace(name, "").strip()
+        if not location:
+            location = team.get("locationName")
+
+        parent_team = None
+        parent_id = team.get("parentOrgId")
+        if parent_id:
+            parent_team = cls.get(
+                provider_id = provider_id,
+                bam_team_id = parent_id
+            )
+
+        return cls(
+            provider_id = provider_id,
+            bam_team_id = team["id"],
+            bam_sport_id = sport_id,
+            abbreviation = team["abbreviation"],
+            location = location,
+            name = name,
+            parent_team = parent_team
+            # record = record
+        )
 
 @dataclass
 class BAMMediaListing(model.MediaListing):
@@ -604,12 +678,10 @@ class BAMMediaListing(model.MediaListing):
 
     game_id: int = None
     game_type: str = None
-    away_team: int = None
-    home_team: int = None
-    away_city: str = None
-    home_city: str = None
-    away_abbrev: str = None
-    home_abbrev: str = None
+    # away_team: BAMTeamData = None
+    # home_team: BAMTeamData = None
+    away_team_id: int = None
+    home_team_id: int = None
     away_record: tuple = None
     home_record: tuple = None
     start: datetime = None
@@ -634,25 +706,11 @@ class BAMMediaListing(model.MediaListing):
         game_pk = g["gamePk"]
         game_type = g["gameType"]
         status = g["status"]["statusCode"]
-        away_city_name = get_team_city_and_name(g["teams"]["away"]["team"])
-        (away_city, away_team) = away_city_name
-        # away_team = g["teams"]["away"]["team"]["teamName"]
-        # away_city = g["teams"]["away"]["team"]["name"].replace(away_team, "").strip()
-        home_city_name = get_team_city_and_name(g["teams"]["home"]["team"])
-        # home_team = g["teams"]["home"]["team"]["teamName"]
-        # home_city = g["teams"]["home"]["team"]["name"].replace(home_team, "").strip()
-        (home_city, home_team) = home_city_name
 
-        away_abbrev = g["teams"]["away"]["team"]["abbreviation"]
-        home_abbrev = g["teams"]["home"]["team"]["abbreviation"]
-        away_record = tuple(
-            [g["teams"]["away"]["leagueRecord"][x]
-             for x in ["wins", "losses"]]
-        )
-        home_record = tuple(
-            [g["teams"]["home"]["leagueRecord"][x]
-             for x in ["wins", "losses"]]
-        )
+        # with db_session:
+        #     away_team = BAMTeamData.from_json(provider, g["teams"]["away"])
+        #     home_team = BAMTeamData.from_json(provider, g["teams"]["home"])
+
         start_time = dateutil.parser.parse(g["gameDate"])
         try:
             venue = g["venue"]["name"]
@@ -668,24 +726,38 @@ class BAMMediaListing(model.MediaListing):
             provider_id = provider,
             game_id = game_pk,
             game_type = game_type,
-            away_team = away_team,
-            home_team = home_team,
-            away_abbrev = away_abbrev,
-            home_abbrev = home_abbrev,
-            away_city = away_city,
-            home_city = home_city,
-            away_record = away_record,
-            home_record = home_record,
+            away_team_id = g["teams"]["away"]["team"]["id"],
+            away_record = [g["teams"]["away"]["leagueRecord"][x] for x in ["wins", "losses"]],
+            home_team_id = g["teams"]["home"]["team"]["id"],
+            home_record = [g["teams"]["home"]["leagueRecord"][x] for x in ["wins", "losses"]],
             start = start_time,
             venue = venue
             # attrs = attrs,
         )
 
 
-    def team_box(self, side):
+    @property
+    @db_session
+    def away_team(self):
+        return self.provider.TEAM_DATA_CLASS.get(
+            provider_id=self.provider.IDENTIFIER,
+            bam_team_id=self.away_team_id
+        )
 
-        wins = getattr(self, f"{side}_record")[0]
-        losses = getattr(self, f"{side}_record")[1]
+    @property
+    @db_session
+    def home_team(self):
+        return self.provider.TEAM_DATA_CLASS.get(
+            provider_id=self.provider.IDENTIFIER,
+            bam_team_id=self.home_team_id
+        )
+
+    @db_session
+    def team_box(self, team_id):
+
+        team = self.provider.TEAM_DATA_CLASS.for_id(self.provider.IDENTIFIER, team_id)
+        side = "away" if team_id == self.away_team_id else "home"
+        (wins, losses) = getattr(self, f"{side}_record")
         pct = wins/(wins+losses) if (wins+losses) else 0.0
 
         attrcfg = self.provider.config.listings.teams.colors
@@ -698,15 +770,20 @@ class BAMMediaListing(model.MediaListing):
         else:
             attr1 = attr2 = attr3 = attrcfg
 
-        attr1 = self.provider.team_color_attr(getattr(self, f"{side}_abbrev"),
+        if team.parent_team:
+            org_abbrev = team.parent_team.abbreviation.lower()
+        else:
+            org_abbrev = team.abbreviation.lower()
+
+        attr1 = self.provider.team_color_attr(org_abbrev,
                                               self.provider.config.listings.colors,
                                               style=attr1)
 
-        attr2 = self.provider.team_color_attr(getattr(self, f"{side}_abbrev"),
+        attr2 = self.provider.team_color_attr(org_abbrev,
                                               self.provider.config.listings.colors,
                                               style=attr2)
 
-        attr3 = self.provider.team_color_attr(getattr(self, f"{side}_abbrev"),
+        attr3 = self.provider.team_color_attr(org_abbrev,
                                               self.provider.config.listings.colors,
                                               style=attr3)
 
@@ -718,7 +795,7 @@ class BAMMediaListing(model.MediaListing):
 
         pile = urwid.Pile([
             ( "pack", urwid.Padding(
-                urwid.Text( ((attr3), getattr(self, f"{side}_team"))),
+                urwid.Text( ((attr3), team.name)),
                 width="pack", align="center"),
             ),
             ("pack", urwid.Padding(
@@ -728,11 +805,11 @@ class BAMMediaListing(model.MediaListing):
             )
         ])
 
-        if getattr(self, f"{side}_city"):
+        if team.location:
             pile.contents.insert(
                 0,
                 (urwid.Padding(
-                    urwid.Text(((attr2), getattr(self, f"{side}_city"))),
+                    urwid.Text(((attr2), team.location)),
                     width="pack", align="center"
                 ), pile.options("pack"))
             )
@@ -752,11 +829,11 @@ class BAMMediaListing(model.MediaListing):
 
     @property
     def away_team_box(self):
-        return self.team_box("away")
+        return self.team_box(self.away_team_id)
 
     @property
     def home_team_box(self):
-        return self.team_box("home")
+        return self.team_box(self.home_team_id)
 
     @property
     def hide_spoilers(self):
@@ -774,7 +851,7 @@ class BAMMediaListing(model.MediaListing):
             hide_spoiler_teams = self.provider.config.teams.get("favorite", [])
 
         return len(set(
-            [self.away_abbrev, self.home_abbrev]).intersection(
+            [self.away_team.abbreviation, self.home_team.abbreviation]).intersection(
                 set(hide_spoiler_teams)
             )) > 0
 
@@ -783,7 +860,7 @@ class BAMMediaListing(model.MediaListing):
         favorites = self.provider.config.teams.get("favorite", [])
         return len(
             set(favorites).intersection(
-                set([self.away_abbrev, self.home_abbrev])
+                set([self.away_team.abbreviation, self.home_team.abbreviation])
             )
         ) > 0
 
@@ -879,7 +956,7 @@ class BAMMediaListing(model.MediaListing):
 
     @property
     def title(self):
-        return f"{self.away_abbrev}@{self.home_abbrev}"
+        return f"{self.away_team.abbreviation}@{self.home_team.abbreviation}"
 
     @property
     def game_data(self):
@@ -974,6 +1051,9 @@ class BAMMediaListing(model.MediaListing):
         try:
             epgs = (game["content"]["media"]["epg"]
                     + game["content"]["media"].get("epgAlternate", []))
+        except TypeError:
+            # FIXME: epgAlternate is a dict for MiLB, but maybe not always?
+            epgs = game["content"]["media"]["epg"]
         except KeyError:
             return []
             # raise SGStreamNotFound("no matching media for game %d" %(self.game_id))
@@ -1239,8 +1319,10 @@ class BAMMediaSource(model.MediaSource):
         return media_url
 
 
-
 class BAMProviderData(model.ProviderData):
+    pass
+
+class BAMProviderSettings(BAMProviderData):
 
     season_year = Required(int)
     start = Required(datetime)
@@ -1330,21 +1412,21 @@ class WatchDialog(BasePopUp):
         self.watch_live = watch_live
 
         away_attr = provider.team_color_attr(
-            selection.away_abbrev.lower(),
+            selection.away_team.abbreviation.lower(),
             provider.config.listings.line.colors,
             "primary"
         )
 
         home_attr = provider.team_color_attr(
-            selection.home_abbrev.lower(),
+            selection.home_team.abbreviation.lower(),
             provider.config.listings.line.colors,
             "primary"
         )
 
         self.title = urwid.Text([
-            (away_attr ,f"{selection.away_city} {selection.away_team}"),
+            (away_attr ,f"{selection.away_team.location} {selection.away_team.name}"),
             ("bold", " @ "),
-            (home_attr, f"{selection.home_city} {selection.home_team}")
+            (home_attr, f"{selection.home_team.location} {selection.home_team.name}")
         ])
 
         try:
@@ -1632,8 +1714,6 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         ("update", UPDATE_INTERVAL, [], {})
     ]
 
-    sport_id = 1 # FIXME
-
     FILTERS_BROWSE = AttrDict([
         ("date", BAMDateFilter)
     ])
@@ -1683,6 +1763,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
             self.config.attributes.teams_full[teamname] = attr
             self.config.attributes.teams_inverse[teamname] = {"fg": attr["bg"], "bg": attr["fg"]}
             # del self.config.attributes.teams[teamname]
+        self.update_teams()
 
     @property
     def session_params(self):
@@ -1696,12 +1777,29 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
             self.HELPER in list(player.PROGRAMS[Helper].keys())
         )
 
+    @property
+    def TEAM_DATA_CLASS(self):
+        for cls in [self.__class__] + list(self.__class__.__bases__):
+            pkg = sys.modules.get(cls.__module__)
+            pkgname =  pkg.__name__.split(".")[-1]
+            try:
+                return next(
+                    v for k, v in pkg.__dict__.items()
+                    if pkgname in k.lower() and k.endswith("TeamData")
+                )
+            except StopIteration:
+                continue
+        return BAMTeamData
+
     async def update(self):
         self.update_games()
 
     def update_games(self):
         date = self.filters.date.value
-        schedule = self.schedule(start=date, end=date)
+        schedule = self.schedule(
+            sport_id = self.sport_id,
+            start=date, end=date
+        )
         try:
             games = schedule["dates"][-1]["games"]
         except IndexError:
@@ -1735,11 +1833,14 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         #     raise SGException("no game data")
         # return game
 
+    @property
+    def sport_id(self):
+        raise NotImplementedError
 
     @memo(region="short")
     def schedule(
             self,
-            # sport_id=None,
+            sport_id=None,
             season=None, # season only works for NHL
             start=None,
             end=None,
@@ -1751,7 +1852,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
 
         logger.debug(
             "getting schedule: %s, %s, %s, %s, %s, %s, %s" %(
-                self.sport_id,
+                sport_id,
                 season,
                 start,
                 end,
@@ -1760,13 +1861,16 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
                 game_id
             )
         )
+
+        # # FIXME
+        # self.teams(sport_id=sport_id)
         if brief:
             template = self.SCHEDULE_TEMPLATE_BRIEF
         else:
             template = self.SCHEDULE_TEMPLATE
 
         url = template.format(
-            sport_id = self.sport_id,
+            sport_id = sport_id if sport_id else "",
             season = season if season else "",
             start = start.strftime("%Y-%m-%d") if start else "",
             end = end.strftime("%Y-%m-%d") if end else "",
@@ -1883,7 +1987,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         return media_url
 
     @abc.abstractmethod
-    def teams(self, season=None):
+    def update_teams(self, season=None):
         pass
 
     @property
@@ -1907,6 +2011,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         if identifier and identifier.isdigit():
             game_id = int(identifier)
             schedule = self.schedule(
+                sport_id = self.sport_id,
                 game_id = game_id
             )
         else:
@@ -1933,8 +2038,13 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
                 (sport_code, team) = team.split("-")
 
             game_number = int(game_number)
-            teams =  self.teams(season=game_date.year)
-            team_id = teams.get(team)
+
+            with db_session:
+                team_id = self.TEAM_DATA_CLASS.get(
+                    provider_id = self.IDENTIFIER,
+                    bam_sport_id=1, # FIXME
+                    abbreviation=team.upper()
+                ).bam_team_id
 
             if not team:
                 msg = "'%s' not a valid team code, must be one of:\n%s" %(
@@ -1943,9 +2053,9 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
                 raise argparse.ArgumentTypeError(msg)
 
             schedule = self.schedule(
+                sport_id = self.sport_id,
                 start = game_date,
                 end = game_date,
-                # sport_id = sport["id"],
                 team_id = team_id
             )
 
@@ -1965,21 +2075,14 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         if team is None:
             team = game["teams"]["home"]["team"]["abbreviation"].lower()
 
-        if team.lower() == g.away_abbrev.lower():
+        if team.lower() == g.away_team.abbreviation.lower():
             feed_type = "away"
-        elif team.lower() == g.home_abbrev.lower():
+        elif team.lower() == g.home_team.abbreviation.lower():
             feed_type = "home"
         else:
-            raise Exception(team, g.away_abbrev)
+            raise Exception(team, g.away_team.abbreviation)
 
         return (g, dict(feed_type=feed_type))
-        # return self.new_listing(
-        #     game_id = game_id,
-        #     away_team = away_team,
-        #     home_team = home_team,
-        #     away_abbrev = away_abbrev,
-        #     home_abbrev = home_abbrev
-        # )
 
     def on_select(self, widget, selection):
         self.open_watch_dialog(selection)
