@@ -198,8 +198,8 @@ class MLBMediaListing(BAMMediaListing):
     def leverage_index(self):
         try:
             rundiff = (
-                self.game_data["linescore"]["teams"]["away"]["runs"]
-                - self.game_data["linescore"]["teams"]["home"]["runs"]
+                self.game_data["linescore"]["teams"]["home"]["runs"]
+                - self.game_data["linescore"]["teams"]["away"]["runs"]
             )
             return LEVERAGE_MAP[self.inning][self.inning_half[0]][self.outs][self.baserunners][rundiff]
         except KeyError:
