@@ -446,7 +446,7 @@ class NHLProvider(BAMProviderMixin,
             j = self.session.get(url).json()
             start = dateutil.parser.parse(j["seasons"][0]["regularSeasonStartDate"])
             end = dateutil.parser.parse(j["seasons"][0]["seasonEndDate"])
-            r = NHLBAMProviderData(
+            r = NHLBAMProviderSettings(
                 season_year=season_year,
                 start = start,
                 end = end
