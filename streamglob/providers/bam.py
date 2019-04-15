@@ -1186,12 +1186,13 @@ class BAMMediaListing(model.MediaListing):
                 if m.media_type.lower().startswith(media_type)
             ]
         else:
-            preferred_media = self.media[0]
+            preferred_media = [self.media[0]]
 
         if not len(preferred_media):
             preferred_media = self.media
 
         faves = [s.lower() for s in self.provider.config.teams.favorite ]
+
         try:
             return next(
                 m for m in preferred_media
@@ -2180,10 +2181,11 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         # kwargs["resolution"] = self.filters.resolution.value
         media_type = source.media_type
         # don't use video resolution for audio feeds
-        if media_type == "audio":
+        if media_type == "audio" or not selection.media_params.resolution:
             kwargs["resolution"] = "best"
         else:
             kwargs["resolution"] = self.RESOLUTIONS.get(selection.media_params.resolution)
+
         offset = kwargs.pop("offset", None)
         if offset:
             try:
