@@ -1126,7 +1126,7 @@ class BAMMediaListing(model.MediaListing):
         try:
             return next(
                 list(p.values())[0] for p in self.provider.config.teams.overrides
-                if list(p.keys())[0].lower() == self.away_abbrev.lower()
+                if list(p.keys())[0].lower() == self.away_team.abbreviation.lower()
             )
         except StopIteration:
             return {}
@@ -1137,7 +1137,7 @@ class BAMMediaListing(model.MediaListing):
         try:
             return next(
                 list(p.values())[0] for p in self.provider.config.teams.overrides
-                if list(p.keys())[0].lower() == self.home_abbrev.lower()
+                if list(p.keys())[0].lower() == self.home_team.abbreviation.lower()
             )
         except StopIteration:
             return {}
@@ -1179,10 +1179,14 @@ class BAMMediaListing(model.MediaListing):
 
         # First, try to match the streams for the preferred media type, or
         # all streams if none match
-        preferred_media = [
-            m for m in self.media
-            if m.media_type.lower().startswith(media_type)
-        ]
+
+        if media_type:
+            preferred_media = [
+                m for m in self.media
+                if m.media_type.lower().startswith(media_type)
+            ]
+        else:
+            preferred_media = self.media[0]
 
         if not len(preferred_media):
             preferred_media = self.media
@@ -1192,10 +1196,10 @@ class BAMMediaListing(model.MediaListing):
             return next(
                 m for m in preferred_media
                 if (
-                        (self.away_abbrev.lower() in faves
+                        (self.away_team.abbreviation.lower() in faves
                          and m["feed_type"].lower() == "away")
                         or
-                        (self.home_abbrev in faves
+                        (self.home_team.abbreviation in faves
                          and m["feed_type"].lower() == "home")
                         or
                         (feed_type and feed_type.lower() == m["feed_type"].lower())
@@ -1297,8 +1301,8 @@ class BAMMediaSource(model.MediaSource):
         # profiles = tuple([ list(d.values())[0]
         #              for d in config.settings.profile_map.get("team", {})
         #              if list(d.keys())[0] in [
-        #                      self.listing.away_abbrev,
-        #                      self.listing.home_abbrev
+        #                      self.listing.away_team.abbreviation,
+        #                      self.listing.home_team.abbreviation
         #              ] ])
 
         # if len(profiles):
