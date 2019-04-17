@@ -512,7 +512,7 @@ class BackgroundTasksMixin(object):
                 # state.asyncio_loop.run_in_executor(None, lambda: fn(*args, **kwargs))
 
                 # state.loop.event_loop.enter_idle(lambda: fn(*args, **kwargs))
-                logger.info(f"sleeping for {interval}")
+                logger.debug(f"sleeping for {interval}")
                 await asyncio.sleep(interval)
 
         self._tasks[fn.__name__] = state.asyncio_loop.create_task(run())
