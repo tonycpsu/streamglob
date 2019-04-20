@@ -1146,7 +1146,7 @@ class BAMMediaListing(model.MediaListing):
     @property
     def media_params(self):
 
-        media_type = self.provider.config.defaults.media
+        # media_type = self.provider.config.defaults.media
 
         feed_type = "away" if (
             (self.away_overrides.get("feed_type", "").lower() == "local")
@@ -1163,18 +1163,20 @@ class BAMMediaListing(model.MediaListing):
             self.away_overrides.get(
                 "resolution"
             )
-        ) or self.provider.config.defaults.resolution
+        )# or self.provider.config.defaults.resolution
 
         return AttrDict([
-            ("media_type", media_type),
+            # ("media_type", media_type),
             ("feed_type", feed_type),
             ("resolution", resolution),
             # ("live_stream", live_stream)
         ])
 
-    def select_media(self, media_type=None, feed_type = None):
+    def select_media(self, media_type=None, feed_type=None):
 
-        media_type = self.media_params.media_type or media_type
+        if not media_type:
+            media_type = "video"
+
         feed_type = self.media_params.feed_type or feed_type
 
         # First, try to match the streams for the preferred media type, or
@@ -1204,8 +1206,6 @@ class BAMMediaListing(model.MediaListing):
                          and m["feed_type"].lower() == "home")
                         or
                         (feed_type and feed_type.lower() == m["feed_type"].lower())
-                        or
-                        m["feed_type"].lower() == "home"
                 )
            )
 
@@ -1451,11 +1451,7 @@ class WatchDialog(BasePopUp):
             for m in media
         ]
 
-        media_type = (
-            selection.media_params.media_type
-            or
-            self.provider.filters.media_type.value
-        )
+        media_type = self.provider.filters.media_type.value
 
         feed_type = selection.media_params.feed_type
 
@@ -1501,7 +1497,7 @@ class WatchDialog(BasePopUp):
                 selection,
                 media_id = media.media_id,
                 offset=offset,
-                resolution=self.resolution_dropdown.selected_value
+                resolution=self.resolution_dropdown.selected_label
             )
             self._emit("close_popup")
 
@@ -1514,7 +1510,7 @@ class WatchDialog(BasePopUp):
                 selection,
                 media_id = media.media_id,
                 offset=offset,
-                resolution=self.resolution_dropdown.selected_value
+                resolution=self.resolution_dropdown.selected_label
             )
             self._emit("close_popup")
 
@@ -2178,13 +2174,38 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
 
         source, kwargs = super().play_args(selection, **kwargs)
 
-        # kwargs["resolution"] = self.filters.resolution.value
         media_type = source.media_type
         # don't use video resolution for audio feeds
-        if media_type == "audio" or not selection.media_params.resolution:
-            kwargs["resolution"] = "best"
+
+        # raise Exception(selection.media_params.resolution,
+        #                 kwargs.get("resolution"),
+        #                 self.config.defaults.resolution)
+        if media_type == "video":
+            kwargs["resolution"] = (
+                selection.media_params.resolution
+                or kwargs.get("resolution")
+                or self.config.defaults.resolution
+                or "best"
+            )
+
+                # and selection.media_params.resolution:
+                # kwargs["resolution"] = self.RESOLUTIONS.get(
+                #     selection.media_params.resolution
+                # )
+            # elif self.config.defaults.resolution:
+            #     kwargs["resolution"] = self.RESOLUTIONS.get(
+            #         self.config.defaults.resolution,
+            #     )
+            # else:
+            #     kwargs["resolution"] = self.RESOLUTIONS.get(
+            #         next(k for k in self.RESOLUTIONS.keys())
+            #     )
+            kwargs["resolution"] = self.RESOLUTIONS.get(
+                kwargs["resolution"],
+            )
         else:
-            kwargs["resolution"] = self.RESOLUTIONS.get(selection.media_params.resolution)
+            kwargs["resolution"] = "best"
+
 
         offset = kwargs.pop("offset", None)
         if offset:

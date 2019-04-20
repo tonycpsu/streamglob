@@ -184,15 +184,6 @@ class NHLStreamSession(session.AuthenticatedStreamSession):
 
     AUTH = b"web_nhl-v1.0.0:2d1d846ea3b194a18ef40ac9fbce97e3"
 
-    RESOLUTIONS = AttrDict([
-        ("720p", "720p"),
-        ("540p", "540p"),
-        ("504p", "504p"),
-        ("360p", "360p"),
-        ("288p", "288p"),
-        ("216p", "216p")
-    ])
-
     def __init__(
             self,
             provider_id,
@@ -293,7 +284,7 @@ class NHLStreamSession(session.AuthenticatedStreamSession):
             params = {
                 "eventId": media.event_id,
                 "format": "json",
-                "platform": "WEB_MEDIAPLAYER",
+                "platform": "IPHONE",
                 "subject": "NHLTV",
                 "_": int(datetime.now().timestamp())*1000
             }
@@ -315,10 +306,10 @@ class NHLStreamSession(session.AuthenticatedStreamSession):
         params = {
             # "contentId": media["mediaPlaybackId"],
             "contentId": media.media_id,
-            "playbackScenario": "HTTP_CLOUD_WIRED_WEB",
+            "playbackScenario": "HTTP_CLOUD_TABLET_60",
             "sessionKey": self.session_key,
             "auth": "response",
-            "platform": "WEB_MEDIAPLAYER",
+            "platform": "IPHONE",
             "_": "1538708097285"
         }
         res = self.get(
@@ -364,7 +355,8 @@ class NHLProvider(BAMProviderMixin,
     MEDIA_TYPES = {"video"}
 
     RESOLUTIONS = AttrDict([
-        ("720p", "720p"),
+        ("720p", "720p_alt"),
+        ("720p@30", "720p"),
         ("540p", "540p"),
         ("504p", "504p"),
         ("360p", "360p"),

@@ -643,7 +643,6 @@ def main():
     spec = None
 
     logger.debug(f"{PACKAGE_NAME} starting")
-    action, provider, selection, opts = providers.parse_spec(options.spec)
     state.asyncio_loop = asyncio.get_event_loop()
     state.task_manager = tasks.TaskManager()
 
@@ -653,6 +652,8 @@ def main():
     fh = logging.FileHandler(log_file)
     add_log_handler(fh)
     logging.getLogger("panwid").setLevel(logging.INFO)
+
+    action, provider, selection, opts = providers.parse_spec(options.spec)
 
     if selection:
         run_cli(action, provider, selection, **opts)

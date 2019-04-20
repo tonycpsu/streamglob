@@ -46,8 +46,11 @@ def parse_spec(spec):
     options = p.parse_options(options)
     for k, v in options.items():
         if k in p.filters:
-            logger.info(f"option: {k}={v}")
-            p.filters[k].value = v
+            logger.debug(f"option: {k}={v}")
+            try:
+                p.filters[k].value = v
+            except StopIteration:
+                raise SGException("invalid value for %s: %s" %(k, v))
 
     try:
         selection, identifier_opts = p.parse_identifier(identifier)
