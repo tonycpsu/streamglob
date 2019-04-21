@@ -2184,9 +2184,9 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         #                 kwargs.get("resolution"),
         #                 self.config.defaults.resolution)
         if media_type == "video":
-            kwargs["resolution"] = (
+            kwargs["resolution"] = kwargs.get("resolution") or (
                 selection.media_params.resolution
-                or kwargs.get("resolution")
+                # or kwargs.get("resolution")
                 or self.config.defaults.resolution
                 or "best"
             )
