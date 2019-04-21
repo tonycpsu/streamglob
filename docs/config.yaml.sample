@@ -25,6 +25,7 @@ profiles:
                 defaults:
                     resolution: 720p
                     media: video
+                    live_from_start: False # True to watch live streams from beginning
                 formats:
                     streams:
                         - hlsCloud

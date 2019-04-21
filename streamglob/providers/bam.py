@@ -1627,6 +1627,9 @@ class LiveStreamFilter(ListingFilter):
             ("From Start", "start"),
         ])
 
+    @property
+    def default(self):
+        return "start" if self.provider.config.defaults.live_from_start else "live"
 
 class BAMProviderDataTable(ProviderDataTable):
 
