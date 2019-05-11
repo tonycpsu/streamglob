@@ -369,10 +369,6 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
 
     def login(self):
 
-        if self.logged_in:
-            logger.debug("already logged in")
-            return
-
         AUTHN_PARAMS = {
             "username": self.username,
             "password": self.password,
@@ -386,17 +382,6 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
 
         # logger.debug("logged in: %s" %(self.ipid))
         self.save()
-
-    @property
-    def logged_in(self):
-
-        logged_in_url = ("https://web-secure.mlb.com/enterworkflow.do"
-                         "?flowId=registration.newsletter&c_id=mlb")
-        content = self.get(logged_in_url).text
-        parser = lxml.etree.HTMLParser()
-        data = lxml.etree.parse(StringIO(content), parser)
-        if "Login/Register" in data.xpath(".//title")[0].text:
-            return False
 
     @property
     def headers(self):
