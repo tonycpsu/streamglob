@@ -2170,41 +2170,21 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
             media_type = media_type,
             feed_type = feed_type
         )
-
         return media
 
     def play_args(self, selection, **kwargs):
 
         source, kwargs = super().play_args(selection, **kwargs)
+        # filter_args = self.filter_args()
 
         media_type = source.media_type
-        # don't use video resolution for audio feeds
 
-        # raise Exception(selection.media_params.resolution,
-        #                 kwargs.get("resolution"),
-        #                 self.config.defaults.resolution)
         if media_type == "video":
-            kwargs["resolution"] = kwargs.get("resolution") or (
-                selection.media_params.resolution
-                # or kwargs.get("resolution")
-                or self.config.defaults.resolution
-                or "best"
-            )
+            if not "resolution" in kwargs and selection.media_params.resolution:
+                kwargs["resolution"] = selection.media_params.resolution
 
-                # and selection.media_params.resolution:
-                # kwargs["resolution"] = self.RESOLUTIONS.get(
-                #     selection.media_params.resolution
-                # )
-            # elif self.config.defaults.resolution:
-            #     kwargs["resolution"] = self.RESOLUTIONS.get(
-            #         self.config.defaults.resolution,
-            #     )
-            # else:
-            #     kwargs["resolution"] = self.RESOLUTIONS.get(
-            #         next(k for k in self.RESOLUTIONS.keys())
-            #     )
             kwargs["resolution"] = self.RESOLUTIONS.get(
-                kwargs["resolution"],
+                kwargs.get("resolution") or self.config.defaults.resolution,
             )
         else:
             kwargs["resolution"] = "best"

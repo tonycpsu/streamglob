@@ -358,21 +358,23 @@ class BaseProvider(abc.ABC):
 
     def play_args(self, selection, **kwargs):
         source = self.get_source(selection, **kwargs)
-        kwargs = {k: v
-                  for k, v in list(kwargs.items())
-                  + [ (f, self.filters[f].value)
-                      for f in self.filters
-                      if f not in kwargs]}
         return (source, kwargs)
+
+    def filter_args(self):
+        return {f: self.filters[f].value for f in self.filters}
 
     def play(self, selection, no_task_manager=False, **kwargs):
 
         try:
             sources, kwargs = self.play_args(selection, **kwargs)
+            kwargs.update({
+                k: v
+                for k, v in self.filter_args().items()
+                if k not in kwargs
+            })
         except SGStreamNotFound as e:
             logger.error(f"stream not found: {e}")
             return
-        # media_type = kwargs.pop("media_type", None)
 
         # FIXME: For now, we just throw playlists of media items at the default
         # player program and hope it can handle all of them.
