@@ -63,9 +63,10 @@ def parse_spec(spec):
 
 def load_config():
 
+    global DEFAULT_PROVIDER
+
     for p in PROVIDERS.values():
         p.init_config()
-
 
     if len(config.settings.profile.providers):
         # first listed in config
