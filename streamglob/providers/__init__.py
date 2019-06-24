@@ -54,7 +54,8 @@ def parse_spec(spec):
 
     try:
         selection, identifier_opts = p.parse_identifier(identifier)
-        options.update(identifier_opts)
+        options.update({k: v for k, v in identifier_opts.items() if k not in options})
+        # options.update(identifier_opts)
     except SGIncompleteIdentifier as e:
         return (action, p, None, options)
     if selection and not action:
