@@ -19,14 +19,13 @@ Right now, the install process is a bit complicated due to some upstream
 dependencies that need to be updated.  Furthermore, Python 3.7 is the minimum
 supported version at this time.
 
-If you're running Python 3.7 the following should work:
+If you're running Python 3.6+ the following should work:
 
     $ git clone https://github.com/tonycpsu/streamglob
     $ cd streamglob
-    $ pip install -r requirements.txt
     $ pip install .
     $ mkdir -p ~/.config/streamglob
-    $ cp doc/config.yaml.sample ~/.config/streamglob/config.yaml
+    $ cp docs/config.yaml.sample ~/.config/streamglob/config.yaml
     $ vim ~/.config/streamglob/config.yaml
 
 You should then be able to edit `~/.config/streamglob/config.yaml` with your
