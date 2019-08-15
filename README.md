@@ -16,7 +16,7 @@ Installation
 ------------
 
 Right now, the install process is a bit complicated due to some upstream
-dependencies that need to be updated.  Furthermore, Python 3.7 is the minimum
+dependencies that need to be updated.  Furthermore, Python 3.6 is the minimum
 supported version at this time.
 
 If you're running Python 3.6+ the following should work:
