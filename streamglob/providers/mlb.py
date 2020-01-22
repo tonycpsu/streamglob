@@ -293,6 +293,11 @@ class MLBMediaSource(BAMMediaSource):
                  if m["milestoneType"] == "INNING_START"
         ]))
 
+        # If we didn't get a BROADCAST_START timestamp but did get a timestamp
+        # for the first inning, just use something reasonable (1st inning start
+        # minus 15 minutes.)
+        if timestamps.get("Start") == 0 and "T1" in timestamps:
+            timestamps["Start"] = timestamps["T1"] - 900
         timestamps.update([("Live", None)])
 
         return timestamps
