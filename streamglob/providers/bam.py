@@ -640,7 +640,7 @@ class BAMTeamData(model.db.Entity):
             name = team["name"].replace(team["shortName"], "").strip()
             location = team["name"].replace(name, "").strip()
         if not location:
-            location = team.get("locationName")
+            location = team.get("locationName") or team.get("shortName")
 
         parent_team = None
         parent_id = team.get("parentOrgId")
