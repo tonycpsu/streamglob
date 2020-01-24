@@ -944,7 +944,7 @@ class BAMMediaListing(model.MediaListing):
 
     @property
     def start_time(self):
-        return self.start.strftime("%H:%M:%S")
+        return self.start.strftime("%H%M%S")
 
     @property
     def start_date_time(self):
