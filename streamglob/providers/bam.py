@@ -631,7 +631,6 @@ class BAMTeamData(model.db.Entity):
         if t:
             return t
 
-
         location = None
         name = team["teamName"]
         if team["teamName"] in team["name"]:
@@ -649,6 +648,7 @@ class BAMTeamData(model.db.Entity):
                 provider_id = provider_id,
                 bam_team_id = parent_id
             )
+
 
         return cls(
             provider_id = provider_id,
@@ -1147,7 +1147,6 @@ class BAMMediaListing(model.MediaListing):
     def media_params(self):
 
         # media_type = self.provider.config.defaults.media
-
         feed_type = "away" if (
             (self.away_overrides.get("feed_type", "").lower() == "local")
             or
@@ -1182,16 +1181,14 @@ class BAMMediaListing(model.MediaListing):
         # First, try to match the streams for the preferred media type, or
         # all streams if none match
 
-        if media_type:
-            preferred_media = [
-                m for m in self.media
-                if m.media_type.lower().startswith(media_type)
-            ]
-        else:
-            preferred_media = [self.media[0]]
+        preferred_media = [
+            m for m in self.media
+            if m.media_type.lower().startswith(media_type)
+        ]
 
         if not len(preferred_media):
             preferred_media = self.media
+
 
         faves = [s.lower() for s in self.provider.config.teams.favorite ]
 
@@ -2170,6 +2167,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
             media_type = media_type,
             feed_type = feed_type
         )
+        # raise Exception(media)
         return media
 
     def play_args(self, selection, **kwargs):
@@ -2195,13 +2193,15 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
             try:
                 offset = int(offset)
             except ValueError:
+                milestones = source.milestones
+                logger.debug(f"milestones: {milestones}")
                 try:
                     offset = next(
-                        v for k, v in source.milestones.items()
+                        v for k, v in milestones.items()
                         if offset.lower() == k.lower()
                     )
                 except StopIteration:
-                    raise Exception(f"Offset {offset} not valid: {source.milestones}")
+                    raise Exception(f"Offset {offset} not valid: {milestones}")
 
         if offset is not None:
             if (source.state == "live"): # live stream
