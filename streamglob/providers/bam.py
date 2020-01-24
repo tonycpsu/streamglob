@@ -1648,7 +1648,7 @@ class BAMProviderDataTable(ProviderDataTable):
     def keypress(self, size, key):
         key = super().keypress(size, key)
         if key in ["right", "space"]:
-            if self.selection.details_disabled:
+            if self.selection and self.selection.details_disabled:
                 self.selection.details_disabled = False
                 self.selection.details_focused = True
         elif key in ["left", "esc", "q"]:
