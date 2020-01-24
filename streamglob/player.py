@@ -15,10 +15,11 @@ import re
 from dataclasses import *
 import typing
 from collections.abc import MutableMapping
-import pty
 import select
 import signal
-import termios, fcntl, struct
+import platform
+if platform.system() != "Windows":
+    import termios, fcntl, struct, pty
 
 from orderedattrdict import AttrDict, Tree
 import bitmath
@@ -117,7 +118,11 @@ class Program(abc.ABC):
         else:
             self.args = args
         self.exclude_types = set(exclude_types) if exclude_types else set()
-        self.no_progress = no_progress
+        # FIXME: Windows doesn't have necessary modules (pty, termios, fnctl,
+        # etc. to get output from the child process for progress display.  Until
+        # we have a cross-platform solution, force no_progress to False if
+        # running on Windows
+        self.no_progress = True if platform.system() == "Windows" else no_progress
 
         self.extra_args_pre = []
         self.extra_args_post = []
@@ -630,11 +635,13 @@ class StreamlinkHelper(Helper, Downloader):
 
 
     def integrate_player(self, dst):
+        logger.debug(f"dst: {dst}")
         self.extra_args_pre += ["--player"] + [" ".join(dst.command)]
 
     def process_kwargs(self, kwargs):
 
         resolution = kwargs.pop("resolution", "best")
+        logger.info("resolution: %s" %(resolution))
         # if resolution:
         self.extra_args_post.insert(0, resolution)
 
@@ -644,7 +651,7 @@ class StreamlinkHelper(Helper, Downloader):
             # offset_delta = timedelta(seconds=offset)
             # offset_timestamp = str(offset_delta)
             offset_seconds = int(offset.total_seconds())
-            logger.info("starting at time offset %s" %(offset_seconds))
+            logger.info("time offset: %s" %(offset_seconds))
             self.extra_args_pre += ["--hls-start-offset", str(offset_seconds)]
 
         headers = kwargs.pop("headers", None)
