@@ -653,7 +653,7 @@ class BAMTeamData(model.db.Entity):
         return cls(
             provider_id = provider_id,
             bam_team_id = team["id"],
-            bam_sport_id = sport_id,
+            bam_sport_id = sport_id or team.get("sport").get("id"),
             abbreviation = team["abbreviation"],
             location = location,
             name = name,
