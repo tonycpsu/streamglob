@@ -632,8 +632,8 @@ class BAMTeamData(model.db.Entity):
             return t
 
         location = None
-        name = team["teamName"]
-        if team["teamName"] in team["name"]:
+        name = team.get("teamName", team.get("name"))
+        if name in team["name"]:
             location = team["name"].replace(name, "").strip()
         elif team["shortName"] in team["name"]:
             name = team["name"].replace(team["shortName"], "").strip()
