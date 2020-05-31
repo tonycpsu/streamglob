@@ -119,6 +119,7 @@ class InstagramSession(session.StreamSession):
                         else None
                         for m in post["node"]["carousel_media"]
                     ]
+                    title = f"[{len(content)}] {title} "
                 else:
                     post_type = "image"
                     # content = InstagramMediaSource(post["node"]["images"]["standard_resolution"]["url"], media_type="image")
