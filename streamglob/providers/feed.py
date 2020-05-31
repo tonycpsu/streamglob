@@ -237,10 +237,11 @@ class CachedFeedProviderView(SimpleProviderView):
 @with_view(CachedFeedProviderView)
 class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
 
-    UPDATE_INTERVAL = 300
+    UPDATE_INTERVAL = 900
 
     TASKS = [
-        ("update", UPDATE_INTERVAL, [], {"force": True})
+        # ("update", UPDATE_INTERVAL, [], {"force": True})
+        ("update", UPDATE_INTERVAL, [])
     ]
 
     def __init__(self, *args, **kwargs):
