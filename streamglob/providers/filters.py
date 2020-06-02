@@ -385,7 +385,11 @@ class ConfigFilter(ListingFilter, abc.ABC):
         if isinstance(cfg, dict):
             return AttrDict(items, **cfg)
         elif isinstance(cfg, list):
-            return AttrDict(items, **AttrDict([ (i, i) for i in cfg ]))
+            return AttrDict(items, **AttrDict(
+                # [ (i, i) for i in cfg ])
+                [reversed(list(i.items())[0]) if isinstance(i, dict) else (i, i)
+                for i in cfg]
+            ))
 
     # @property
     # def widget_kwargs(self):

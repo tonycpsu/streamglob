@@ -71,6 +71,7 @@ class InstagramSession(session.StreamSession):
             )
         except ClientConnectionError as e:
             logger.warn(f"connection error: {e}")
+            raise
 
 
         for post in feed:
@@ -153,9 +154,9 @@ class InstagramFeed(model.MediaFeed):
     ITEM_CLASS = InstagramItem
 
     def update(self, limit = None):
-
+        logger.info(self.locator)
         if self.locator.startswith("@"):
-            user_name = self.name[1:]
+            user_name = self.locator[1:]
         else:
             raise NotImplementedError
 
