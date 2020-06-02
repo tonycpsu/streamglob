@@ -1,6 +1,9 @@
 from datetime import datetime
 from dataclasses import *
 import typing
+from itertools import chain
+import tempfile
+import pipes
 
 from orderedattrdict import AttrDict
 from panwid.dialog import *
@@ -143,11 +146,70 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     #     self.update_c ount = True
     #     self.provider.update_query()
     #     super().reset(*args, **kwargs)
+    async def play_all(self, playlist=False):
+
+        ITEM_TEMPLATE="""#EXTINF:1,{title}
+{url}
+"""
+        # items = list(chain.from_iterable(
+        #     item.data
+        #     for item in self
+        # ))
+        items = [
+            AttrDict(
+                title=row.data.title,
+                feed=row.data.feed.name,
+                locator=row.data.feed.locator,
+                content=url
+            )
+            for row in self for url in row.data.content
+        ]
+        # raise Exception(items)
+        if playlist:
+            with tempfile.NamedTemporaryFile(suffix=".m3u", delete=False) as m3u:
+                for item in items:
+                    m3u.write(ITEM_TEMPLATE.format(
+                        # mpv OSC crashes on emoji in title
+                        title=pipes.quote(
+                            f"{item.feed}: {item.locator} "
+                            f"{datetime.now().isoformat().split('.')[0]} "
+                            f"{utils.format_str_truncated(80, utils.strip_emoji(item.title).strip())}"
+                        ),
+                        url=item.content.url
+                    ).encode("utf-8"))
+                logger.info(m3u.name)
+                listing = self.provider.new_listing(
+                    title=f"{self.provider.NAME} playlist" + (
+                        f" ({self.provider.feed.name}/"
+                        if self.provider.feed
+                        else " ("
+                    ) + f"{self.provider.status})",
+                    content=self.provider.new_media_source(
+                        f"file://{m3u.name}",
+                        media_type = "video"
+                    )
+                )
+                self.provider.play(listing)
+
+
+        else:
+            listing = self.provider.new_listing(
+                title = f"{self.provider.NAME} playlist" + (
+                    f" ({self.provider.feed.name}/"
+                    if self.provider.feed
+                    else " ("
+                ) + f"{self.provider.status})",
+                content = [ item.url for item in items ]
+            )
+            self.provider.play(listing)
+        # logger.info(urls)
 
     def keypress(self, size, key):
 
         if key == "meta r":
             asyncio.create_task(self.provider.update(force=True))
+        elif key == "meta p":
+            asyncio.create_task(self.play_all(playlist=True))
         elif key == "n":
             try:
                 idx = next(
@@ -182,6 +244,11 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 else:
                     self.provider.FEED_CLASS.mark_all_feeds_read()
             self.reset()
+        elif key == "ctrl a":
+            for n, item in enumerate(self):
+                self.mark_item_read(n)
+            self.reset()
+
         elif key == "u":
             self.toggle_item_read(self.focus_position)
             self.ignore_blur = True
@@ -225,7 +292,7 @@ class FeedProvider(BaseProvider):
     def parse_identifier(self, identifier):
         if identifier:
             # print(self.view) # FIXME
-            self.filters.feed.selected_label = identifier
+            self.filters.feed.selected_value = identifier
         raise SGIncompleteIdentifier
 
 
@@ -266,6 +333,10 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         )
 
     @property
+    def status(self):
+        return self.filters["status"].value
+
+    @property
     def feed(self):
 
         if not self.selected_feed:
@@ -283,7 +354,8 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
             return self.config.feeds
         else:
             return AttrDict([
-                (f, f) for f in self.config.feeds
+                reversed(list(f.items())[0]) if isinstance(f, dict) else (f, f)
+                for f in self.config.feeds
             ])
 
     @db_session
