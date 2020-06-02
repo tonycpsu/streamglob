@@ -12,6 +12,17 @@ from orderedattrdict import DefaultAttrDict
 from instagram_web_api import Client, ClientCompatPatch, ClientConnectionError
 from pony.orm import *
 
+
+class InstagramProviderData(model.ProviderData):
+    pass
+
+class InstagramProviderUserMap(InstagramProviderData):
+
+    user_name = Required(str)
+    user_id = Required(int, size=64)
+
+    composite_key(model.ProviderData.classtype, user_name)
+
 @dataclass
 class InstagramMediaSource(model.MediaSource):
 
@@ -54,10 +65,17 @@ class InstagramSession(session.StreamSession):
             )
         self.end_cursors = DefaultAttrDict(lambda: None)
 
-    @memo(region="long")
+    # @memo(region="long")
+    @db_session
     def user_name_to_id(self, user_name):
         try:
-            user_id = self.web_api.user_info2(user_name)["id"]
+            m = InstagramProviderUserMap.get(user_name=user_name)
+            if m:
+                user_id = m.user_id
+            else:
+                user_id = self.web_api.user_info2(user_name)["id"]
+                m = InstagramProviderUserMap(user_name = user_name, user_id=user_id)
+                commit()
         except:
             raise SGException(f"user id for {user_name} not found")
         return user_id
