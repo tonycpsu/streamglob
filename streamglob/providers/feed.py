@@ -7,6 +7,7 @@ import pipes
 
 from orderedattrdict import AttrDict
 from panwid.dialog import *
+from limiter import get_limiter, limit
 
 from .. import model
 from .. import utils
@@ -306,6 +307,9 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
 
     UPDATE_INTERVAL = 900
 
+    RATE_LIMIT = 2
+    BURST_LIMIT = 5
+
     TASKS = [
         # ("update", UPDATE_INTERVAL, [], {"force": True})
         ("update", UPDATE_INTERVAL, [])
@@ -317,6 +321,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         self.filters["feed"].connect("changed", self.on_feed_change)
         self.filters["status"].connect("changed", self.on_status_change)
         self.game_map = AttrDict()
+        self.limiter = get_limiter(rate=self.RATE_LIMIT, capacity=self.BURST_LIMIT)
 
     @property
     def ITEM_CLASS(self):
@@ -390,21 +395,22 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
                 datetime.now() - f.updated
                 > timedelta(seconds=f.update_interval)
             ):
-                logger.info(f"update {f}")
-                for item in f.update():
-                    # listing = self.item_to_listing(item)
-                    # print(item)
-                    listing = self.new_listing(
-                        # feed = f.to_dict(),
-                        **item.to_dict(
-                            exclude=["media_item_id", "feed", "classtype"],
-                            related_objects=True
+                with limit(self.limiter):
+                    logger.info(f"update {f}")
+                    for item in f.update():
+                        # listing = self.item_to_listing(item)
+                        # print(item)
+                        listing = self.new_listing(
+                            # feed = f.to_dict(),
+                            **item.to_dict(
+                                exclude=["media_item_id", "feed", "classtype"],
+                                related_objects=True
+                            )
                         )
-                    )
-                    listing.content = self.MEDIA_SOURCE_CLASS.schema().loads(listing["content"], many=True)
-                    self.on_new_listing(listing)
-                    # raise Exception(listing)
-                f.updated = datetime.now()
+                        listing.content = self.MEDIA_SOURCE_CLASS.schema().loads(listing["content"], many=True)
+                        self.on_new_listing(listing)
+                        # raise Exception(listing)
+                    f.updated = datetime.now()
 
     @property
     def feed_filters(self):
