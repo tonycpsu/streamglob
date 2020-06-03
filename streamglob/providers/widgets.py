@@ -86,11 +86,13 @@ class ProviderDataTable(BaseDataTable):
     def decorate(self, row, column, value):
 
         if column.name == "title":
-            return urwid.Text([
+            markup = [
                 ( next(v for k, v in self.provider.highlight_map.items()
                        if k.search(x)), x)
                 if self.provider.highlight_re.search(x)
                 else x for x in self.provider.highlight_re.split(value) if x
-            ])
-        else:
-            return super().decorate(row, column, value)
+            ]
+            if len(markup):
+                return urwid.Text(markup)
+
+        return super().decorate(row, column, value)
