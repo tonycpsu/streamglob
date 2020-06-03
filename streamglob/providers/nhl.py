@@ -177,8 +177,8 @@ class NHLMediaListing(BAMMediaListing):
 
 
 
-class NHLBAMProviderSettings(BAMProviderSettings):
-    pass
+# class NHLBAMProviderSettings(BAMProviderSettings):
+#     pass
 
 class NHLStreamSession(session.AuthenticatedStreamSession):
 
@@ -427,22 +427,26 @@ class NHLProvider(BAMProviderMixin,
         year = datetime.now().year
         season_year = (now - relativedelta(months=8)).year
 
-        r = NHLBAMProviderSettings.get(season_year=season_year)
-        if r:
-            start = r.start
-            end = r.end
-        else:
-            season = f"{season_year}{season_year+1}"
+        # r = NHLBAMProviderSettings.get(season_year=season_year)
+        # if r:
+        #     start = r.start
+        #     end = r.end
+        # else:
+        #     season = f"{season_year}{season_year+1}"
 
-            url = f"https://statsapi.web.nhl.com/api/v1/seasons/{season}"
-            j = self.session.get(url).json()
-            start = dateutil.parser.parse(j["seasons"][0]["regularSeasonStartDate"])
-            end = dateutil.parser.parse(j["seasons"][0]["seasonEndDate"])
-            r = NHLBAMProviderSettings(
-                season_year=season_year,
-                start = start,
-                end = end
-            )
+        #     url = f"https://statsapi.web.nhl.com/api/v1/seasons/{season}"
+        #     j = self.session.get(url).json()
+        #     start = dateutil.parser.parse(j["seasons"][0]["regularSeasonStartDate"])
+        #     end = dateutil.parser.parse(j["seasons"][0]["seasonEndDate"])
+        #     r = NHLBAMProviderSettings(
+        #         season_year=season_year,
+        #         start = start,
+        #         end = end
+        #     )
+
+        self.provider_data["seasons"][season_year].start = start
+        self.provider_data["seasons"][season_year].end = end
+        self.save_provider_data()
 
         if now < start:
             return start.date()

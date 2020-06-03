@@ -1321,18 +1321,6 @@ class BAMMediaSource(model.MediaSource):
         return media_url
 
 
-class BAMProviderData(model.ProviderData):
-    pass
-
-class BAMProviderSettings(BAMProviderData):
-
-    season_year = Required(int)
-    start = Required(datetime)
-    end = Required(datetime)
-
-    composite_key(model.ProviderData.classtype, season_year)
-
-
 def parse_int(n):
     try:
         return int(n)
@@ -1755,8 +1743,8 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         self.filters["hide_spoilers"].connect("changed", self.on_hide_spoilers_change)
         self.game_map = AttrDict()
 
-
     def init_config(self):
+        super().init_config()
         # set alternate team color attributes
         for teamname, attr in self.config.attributes.teams.items():
             self.config.attributes.teams_primary[teamname] = {"fg": attr["bg"]}
@@ -1764,7 +1752,13 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
             self.config.attributes.teams_full[teamname] = attr
             self.config.attributes.teams_inverse[teamname] = {"fg": attr["bg"], "bg": attr["fg"]}
             # del self.config.attributes.teams[teamname]
-        self.update_teams()
+        if not "last_team_update" in self.provider_data:
+            self.provider_data["last_team_update"] = None
+        if (self.provider_data["last_team_update"]is None
+            or (dateutil.parser.parse(self.provider_data["last_team_update"]) - datetime.now()).days >= 7):
+            self.update_teams()
+            self.provider_data["last_team_update"] = datetime.now().isoformat()
+            self.save_provider_data()
 
     @property
     def session_params(self):

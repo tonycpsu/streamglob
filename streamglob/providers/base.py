@@ -5,10 +5,11 @@ import os
 import abc
 import asyncio
 import dataclasses
+import re
+from itertools import chain
 
 from orderedattrdict import AttrDict, defaultdict
-from itertools import chain
-import re
+from pony.orm import *
 
 from .widgets import *
 from panwid.dialog import BaseView
@@ -159,7 +160,16 @@ class BaseProvider(abc.ABC):
         )
 
     def init_config(self):
-        pass
+        with db_session:
+            try:
+                self.provider_data = model.ProviderData.get(name=self.IDENTIFIER).settings
+            except AttributeError:
+                self.provider_data = model.ProviderData(name=self.IDENTIFIER).settings
+
+    @db_session
+    def save_provider_data(self):
+        model.ProviderData.get(name=self.IDENTIFIER).settings = self.provider_data
+        commit()
 
     @property
     def LISTING_CLASS(self):

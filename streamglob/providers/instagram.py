@@ -13,16 +13,6 @@ from instagram_web_api import Client, ClientCompatPatch, ClientConnectionError
 from pony.orm import *
 
 
-class InstagramProviderData(model.ProviderData):
-    pass
-
-class InstagramProviderUserMap(InstagramProviderData):
-
-    user_name = Required(str)
-    user_id = Required(int, size=64)
-
-    composite_key(model.ProviderData.classtype, user_name)
-
 @dataclass
 class InstagramMediaSource(model.MediaSource):
 
@@ -69,13 +59,11 @@ class InstagramSession(session.StreamSession):
     @db_session
     def user_name_to_id(self, user_name):
         try:
-            m = InstagramProviderUserMap.get(user_name=user_name)
-            if m:
-                user_id = m.user_id
-            else:
-                user_id = self.web_api.user_info2(user_name)["id"]
-                m = InstagramProviderUserMap(user_name = user_name, user_id=user_id)
-                commit()
+            user_id = self.provider.provider_data["user_map"][user_name]
+        except KeyError:
+            user_id = self.web_api.user_info2(user_name)["id"]
+            self.provider.provider_data["user_map"][user_name] = user_id
+            self.provider.save_provider_data()
         except:
             raise SGException(f"user id for {user_name} not found")
         return user_id
@@ -252,6 +240,13 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
             ]
             + attrs[idx:]
         )
+
+    def init_config(self):
+        super().init_config()
+        if not "user_map" in self.provider_data:
+            self.provider_data["user_map"] = {}
+            self.save_provider_data()
+
 
     def play_args(self, selection, **kwargs):
 

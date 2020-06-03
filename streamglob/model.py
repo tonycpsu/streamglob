@@ -375,11 +375,18 @@ class MediaItem(db.Entity):
     #     return d
 
 
+# class ProviderData(db.Entity):
+#     # Providers inherit from this to define their own fields
+#     classtype = Discriminator(str)
+
+
 class ProviderData(db.Entity):
-    # Providers inherit from this to define their own fields
-    classtype = Discriminator(str)
-
-
+    """
+    Providers can use this entity to cache data that doesn't belong in the
+    configuration file or deserve a separate entity in the data model
+    """
+    name = Required(str, unique=True)
+    settings = Required(Json, default={})
 
 
 def init(*args, **kwargs):

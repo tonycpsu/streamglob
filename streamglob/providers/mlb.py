@@ -303,7 +303,7 @@ class MLBMediaSource(BAMMediaSource):
         return timestamps
 
 
-class MLBBAMProviderSettings(BAMProviderSettings):
+class MLBBAMProviderData(BAMProviderData):
     pass
 
 class MLBStreamSession(session.AuthenticatedStreamSession):
@@ -815,11 +815,33 @@ class MLBProvider(BAMProviderMixin,
         now = self.current_game_day
         year = now.year
         season_year = (now - relativedelta(months=2)).year
+        s = str(season_year)
 
-        r = MLBBAMProviderSettings.get(season_year=season_year)
-        if r:
-            start = r.start
-            end = r.end
+        if not "seasons" in self.provider_data:
+            self.provider_data["seasons"] = {}
+
+        # r = MLBBAMProviderSettings.get(season_year=season_year)
+        # if r:
+        #     start = r.start
+        #     end = r.end
+        # else:
+        #     schedule = self.schedule(
+        #         sport_id = self.sport_id,
+        #         start=datetime(year, 1, 1),
+        #         end=datetime(year, 12, 31),
+        #         brief=True
+        #     )
+        #     start = dateutil.parser.parse(schedule["dates"][0]["date"])
+        #     end = dateutil.parser.parse(schedule["dates"][-1]["date"])
+        #     r = MLBBAMProviderSettings(
+        #         season_year=season_year,
+        #         start = start,
+        #         end = end
+        #     )
+
+        if s in self.provider_data["seasons"]:
+            start = dateutil.parser.parse(self.provider_data["seasons"][s]["start"])
+            end = dateutil.parser.parse(self.provider_data["seasons"][s]["end"])
         else:
             schedule = self.schedule(
                 sport_id = self.sport_id,
@@ -829,11 +851,11 @@ class MLBProvider(BAMProviderMixin,
             )
             start = dateutil.parser.parse(schedule["dates"][0]["date"])
             end = dateutil.parser.parse(schedule["dates"][-1]["date"])
-            r = MLBBAMProviderSettings(
-                season_year=season_year,
-                start = start,
-                end = end
-            )
+
+            self.provider_data["seasons"][s] = {}
+            self.provider_data["seasons"][s]["start"] = start.isoformat()
+            self.provider_data["seasons"][s]["end"] = end.isoformat()
+            self.save_provider_data()
 
         if now < start.date():
             return start.date()
