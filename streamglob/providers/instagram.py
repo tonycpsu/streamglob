@@ -41,12 +41,14 @@ class InstagramMediaListing(FeedMediaListing):
 
 class InstagramSession(session.StreamSession):
 
-    BATCH_COUNT = 25
+    MAX_BATCH_COUNT = 50
+    DEFAULT_BATCH_COUNT = 50
 
     def __init__(self, *args, **kwargs):
         super().__init__(
             *args, **kwargs
         )
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             self.web_api = Client(
@@ -68,17 +70,18 @@ class InstagramSession(session.StreamSession):
             raise SGException(f"user id for {user_name} not found")
         return user_id
 
-    def get_feed_items(self, user_name, count=BATCH_COUNT):
+    def get_feed_items(self, user_name, count=DEFAULT_BATCH_COUNT):
 
+        if count > self.MAX_BATCH_COUNT:
+            count = self.MAX_BATCH_COUNT
         try:
             feed = self.web_api.user_feed(
-                self.user_name_to_id(user_name), count=self.BATCH_COUNT,
+                self.user_name_to_id(user_name), count=count,
                 end_cursor = self.end_cursors[user_name]
             )
         except ClientConnectionError as e:
             logger.warn(f"connection error: {e}")
             raise
-
 
         for post in feed:
             try:
@@ -102,8 +105,6 @@ class InstagramSession(session.StreamSession):
             media_type = post["node"]["type"]
             if media_type == "video":
                 post_type = "video"
-                # content = InstagramMediaSource(post["node"]["link"], media_type="video")
-                # content = InstagramMediaSource(post["node"]["videos"]["standard_resolution"]["url"], media_type="video")
                 content = self.provider.new_media_source(
                     post["node"]["videos"]["standard_resolution"]["url"], media_type="video"
                 )
@@ -159,16 +160,15 @@ class InstagramFeed(model.MediaFeed):
 
     ITEM_CLASS = InstagramItem
 
-    def update(self, limit = None):
+    def update(self):
         logger.info(self.locator)
         if self.locator.startswith("@"):
             user_name = self.locator[1:]
         else:
             raise NotImplementedError
 
-        if not limit:
-            limit = self.DEFAULT_ITEM_LIMIT
-
+        limit = self.provider.config.get("limit", self.DEFAULT_ITEM_LIMIT)
+        logger.info(f"limit: {limit}")
         last_count = 0
         count = 0
         while(count < limit):
@@ -196,10 +196,12 @@ class InstagramFeed(model.MediaFeed):
                         )
                         count += 1
                         yield i
+                if count >= limit:
+                    break
 
-                if count == last_count:
-                    logger.info(f"breaking after {count}")
-                    return
+                # if count == last_count:
+                #     logger.info(f"breaking after {count}")
+                #     return
                 last_count = count
 
 
