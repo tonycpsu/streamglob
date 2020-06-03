@@ -153,8 +153,9 @@ class YouTubeChannelsFilter(FeedsFilter):
         # channels = [("Search", "search")]
         # channels += list(state.provider_config.feeds.items())
         # return channels
-        return AttrDict(list(super().values.items()) + [("Search", "search")])
-        return list(super().values.items())
+        # raise Exception(list(super().items.items()))
+        return AttrDict(super().items, **{"Search": "search"})
+        # return list(super().items)
 
     @property
     def value(self):
