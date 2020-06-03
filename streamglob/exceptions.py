@@ -27,3 +27,6 @@ class SGFileExists(SGException):
 
 class SGInvalidFilenameTemplate(SGException):
     pass
+
+class SGClientThrottled(SGException):
+    pass

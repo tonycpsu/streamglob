@@ -11,6 +11,7 @@ from .filters import *
 from orderedattrdict import DefaultAttrDict
 from instagram_web_api import Client, ClientCompatPatch, ClientConnectionError
 from pony.orm import *
+from limiter import get_limiter, limit
 
 
 @dataclass
@@ -44,10 +45,15 @@ class InstagramSession(session.StreamSession):
     MAX_BATCH_COUNT = 50
     DEFAULT_BATCH_COUNT = 50
 
+    RATE_LIMIT = 1
+    BURST_LIMIT = 10
+
     def __init__(self, *args, **kwargs):
         super().__init__(
             *args, **kwargs
         )
+
+        self.limiter = get_limiter(rate=self.RATE_LIMIT, capacity=self.BURST_LIMIT)
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
@@ -75,13 +81,17 @@ class InstagramSession(session.StreamSession):
         if count > self.MAX_BATCH_COUNT:
             count = self.MAX_BATCH_COUNT
         try:
-            feed = self.web_api.user_feed(
-                self.user_name_to_id(user_name), count=count,
-                end_cursor = self.end_cursors[user_name]
-            )
+            with limit(self.limiter, consume=5):
+                feed = self.web_api.user_feed(
+                    self.user_name_to_id(user_name), count=count,
+                    end_cursor = self.end_cursors[user_name]
+                )
         except ClientConnectionError as e:
             logger.warn(f"connection error: {e}")
             raise
+        except ClientThrottledError:
+            logger.info("throttled")
+            raise SGClientThrottled
 
         for post in feed:
             try:
@@ -168,7 +178,7 @@ class InstagramFeed(model.MediaFeed):
             raise NotImplementedError
 
         limit = self.provider.config.get("limit", self.DEFAULT_ITEM_LIMIT)
-        logger.info(f"limit: {limit}")
+        logger.info(f"uodate: {self}")
         last_count = 0
         count = 0
         while(count < limit):
@@ -177,28 +187,37 @@ class InstagramFeed(model.MediaFeed):
             # we just get a batch of them at a time and break the loop after
             # we've gotten the desired number of posts, or after a batch
             # entirely comprised of duplicates
-            for post in self.session.get_feed_items(user_name):
-                with db_session:
-                    i = self.items.select(lambda i: i.guid == post.guid).first()
-                    if not i:
-                        i = self.ITEM_CLASS(
-                            feed = self,
-                            guid = post.guid,
-                            title = post.title,
-                            created = post.created,
-                            post_type = post.post_type,
-                            content =  InstagramMediaSource.schema().dumps(
-                                post.content
-                                if isinstance(post.content, list)
-                                else [post.content],
-                                many=True
+            logger.info("get batch")
+            new_seen = False
+            try:
+                for post in self.session.get_feed_items(user_name):
+                    with db_session:
+                        i = self.items.select(lambda i: i.guid == post.guid).first()
+                        if not i:
+                            logger.info(f"new: {post.created}")
+                            new_seen = True
+                            i = self.ITEM_CLASS(
+                                feed = self,
+                                guid = post.guid,
+                                title = post.title,
+                                created = post.created,
+                                post_type = post.post_type,
+                                content =  InstagramMediaSource.schema().dumps(
+                                    post.content
+                                    if isinstance(post.content, list)
+                                    else [post.content],
+                                    many=True
+                                )
                             )
-                        )
-                        count += 1
-                        yield i
-                if count >= limit:
-                    break
+                            count += 1
+                            yield i
+                    if count >= limit:
+                        return
+            except SGClientThrottled:
+                return
 
+            if not new_seen:
+                return
                 # if count == last_count:
                 #     logger.info(f"breaking after {count}")
                 #     return
