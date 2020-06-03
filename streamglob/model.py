@@ -8,6 +8,7 @@ import typing
 import re
 import dataclasses_json
 from dataclasses_json import dataclass_json
+import dateutil.parser
 
 from orderedattrdict import AttrDict
 from pony.orm import *
@@ -132,6 +133,10 @@ class MediaListing(BaseDataClass):
 
 
     def download_filename(self, index=None, feed=None, **kwargs):
+
+        if "outfile" in kwargs:
+            return kwargs.get("outfile")
+
         outpath = (
             self.provider.config.get_path("output.path")
             or
@@ -323,12 +328,12 @@ class MediaFeed(MediaChannel):
         """
         for n, i in enumerate(
                 self.items.select().order_by(
-                    lambda i: desc(i.created)
+                    lambda i: desc(i.fetched)
                 )[min_items:]
         ):
             if (min_items + n >= max_items
                 or
-                i.age >= timedelta(days=max_age)):
+                i.time_since_fetched >= timedelta(days=max_age)):
                 i.delete()
         commit()
 
@@ -345,6 +350,7 @@ class MediaItem(db.Entity):
     title = Required(str)
     content = Required(Json)
     created = Required(datetime, default=datetime.now)
+    fetched = Required(datetime, default=datetime.now)
     read = Optional(datetime)
     watched = Optional(datetime)
     downloaded = Optional(datetime)
@@ -364,6 +370,11 @@ class MediaItem(db.Entity):
     @property
     def age(self):
         return datetime.now() - self.created
+
+    @property
+    def time_since_fetched(self):
+        # return datetime.now() - dateutil.parser.parse(self.fetched)
+        return datetime.now() - self.fetched
 
     @property
     def locator(self):

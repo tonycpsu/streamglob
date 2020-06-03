@@ -25,6 +25,7 @@ class FeedMediaListing(model.ContentMediaListing):
     media_type: str = None
     feed: model.MediaFeed = None
     read: bool = False
+    fetched: bool = False
     downloaded: bool = False
     watched: bool = False
 
@@ -159,6 +160,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         items = [
             AttrDict(
                 title=row.data.title,
+                created=row.data.created,
                 feed=row.data.feed.name,
                 locator=row.data.feed.locator,
                 content=url
@@ -173,7 +175,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                         # mpv OSC crashes on emoji in title
                         title=pipes.quote(
                             f"{item.feed}: {item.locator} "
-                            f"{datetime.now().isoformat().split('.')[0]} "
+                            f"{item.created.isoformat().split('.')[0]} "
                             f"{utils.format_str_truncated(80, utils.strip_emoji(item.title).strip())}"
                         ),
                         url=item.content.url
@@ -309,7 +311,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
 
     UPDATE_INTERVAL = 900
 
-    RATE_LIMIT = 2
+    RATE_LIMIT = 5
     BURST_LIMIT = 5
 
     TASKS = [
@@ -410,9 +412,11 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
                             )
                         )
                         listing.content = self.MEDIA_SOURCE_CLASS.schema().loads(listing["content"], many=True)
+
                         self.on_new_listing(listing)
                         # raise Exception(listing)
                     f.updated = datetime.now()
+            commit()
 
     @property
     def feed_filters(self):
