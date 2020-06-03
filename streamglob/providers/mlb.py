@@ -303,9 +303,6 @@ class MLBMediaSource(BAMMediaSource):
         return timestamps
 
 
-class MLBBAMProviderData(BAMProviderData):
-    pass
-
 class MLBStreamSession(session.AuthenticatedStreamSession):
 
     PLATFORM = "macintosh"
