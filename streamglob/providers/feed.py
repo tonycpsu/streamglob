@@ -292,8 +292,10 @@ class FeedProvider(BaseProvider):
 
     def parse_identifier(self, identifier):
         if identifier:
-            # print(self.view) # FIXME
-            self.filters.feed.selected_value = identifier
+            try:
+                self.filters.feed.selected_label = identifier
+            except StopIteration:
+                self.filters.feed.value = identifier
         raise SGIncompleteIdentifier
 
 
