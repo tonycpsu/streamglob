@@ -38,10 +38,10 @@ class PeriscopeFeed(model.MediaFeed):
 
     ITEM_CLASS = PeriscopeItem
 
-    def update(self, limit=None):
+    def fetch(self, limit=None):
 
         if not limit:
-            limit = self.DEFAULT_ITEM_LIMIT
+            limit = self.DEFAULT_FETCH_LIMIT
 
         try:
             for item in self.session.peri.get_user_broadcast_history(

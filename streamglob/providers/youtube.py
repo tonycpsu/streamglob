@@ -183,10 +183,10 @@ class YouTubeFeed(model.MediaFeed):
 
     ITEM_CLASS = YouTubeItem
 
-    def update(self, limit = None):
+    def fetch(self, limit = None):
 
         if not limit:
-            limit = self.DEFAULT_ITEM_LIMIT
+            limit = self.DEFAULT_FETCH_LIMIT
 
         for item in self.session.youtube_dl_query(self.locator, limit=limit):
             with db_session:

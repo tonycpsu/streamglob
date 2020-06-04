@@ -412,22 +412,23 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
                 > timedelta(seconds=f.update_interval)
             ):
                 with limit(self.limiter):
-                    logger.info(f"update {f}")
-                    for item in f.update():
-                        # listing = self.item_to_listing(item)
-                        # print(item)
-                        listing = self.new_listing(
-                            # feed = f.to_dict(),
-                            **item.to_dict(
-                                exclude=["media_item_id", "feed", "classtype"],
-                                related_objects=True
-                            )
-                        )
-                        listing.content = self.MEDIA_SOURCE_CLASS.schema().loads(listing["content"], many=True)
+                    f.update()
+                    # logger.info(f"update {f}")
+                    # for item in f.update():
+                    #     # listing = self.item_to_listing(item)
+                    #     # print(item)
+                    #     listing = self.new_listing(
+                    #         # feed = f.to_dict(),
+                    #         **item.to_dict(
+                    #             exclude=["media_item_id", "feed", "classtype"],
+                    #             related_objects=True
+                    #         )
+                    #     )
+                    #     listing.content = self.MEDIA_SOURCE_CLASS.schema().loads(listing["content"], many=True)
 
-                        self.on_new_listing(listing)
-                        # raise Exception(listing)
-                    f.updated = datetime.now()
+                    #     self.on_new_listing(listing)
+                    #     # raise Exception(listing)
+                    # f.updated = datetime.now()
             commit()
 
     @property
@@ -538,6 +539,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
 
         if not offset:
             offset = 0
+
         if not limit:
             limit = self.limit
 

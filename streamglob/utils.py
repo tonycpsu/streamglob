@@ -88,6 +88,7 @@ def format_timedelta(td):
             f"{hours:02}:{minutes:02}:{seconds:02}")
 
 def format_str_truncated(n, s):
+    # FIXME: make non-unicode safe
     return s[:n-1] + u"\u2026" if len(s) >= n else s
 
 

@@ -147,7 +147,7 @@ profiles:
                 feeds:
                     MLB: https://www.youtube.com/mlb
                     NHL: https://www.youtube.com/nhl
-                limit: 25
+                page_size: 25
                 output:
                     template: "%(title)s.%(upload_date)s.%(resolution)s.%(channel_id)s.%(id)s.%(ext)s"
                     format: 22
@@ -246,7 +246,7 @@ profiles:
             path: .
             strip_emoji: true
         tables:
-            limit: 25
+            page_size: 25
         cache:
             min_items: 10
             max_items: 500

@@ -50,10 +50,10 @@ class RSSFeed(model.MediaFeed):
     ITEM_CLASS = RSSItem
 
     # @db_session
-    def update(self, limit = None):
+    def fetch(self, limit = None):
 
         if not limit:
-            limit = self.DEFAULT_ITEM_LIMIT
+            limit = self.DEFAULT_FETCH_LIMIT
 
         try:
             for item in self.session.parse(self.locator).items:
@@ -92,19 +92,3 @@ class RSSProvider(PaginatedProviderMixin,
     FEED_CLASS = RSSFeed
 
     SESSION_CLASS = RSSSession
-
-    # def __init__(self, *args, **kwargs):
-    #     super().__init__(*args, **kwargs)
-    #     self._update_alarm = None
-    #     self.set_update_alarm()
-
-    # def set_update_alarm(self):
-    #     def update(loop, user_data):
-    #         self.update()
-    #         self._update_alarm = None
-    #         self.set_update_alarm()
-
-    #     if not self._update_alarm:
-    #         self._update_alarm = state.loop.set_alarm_in(
-    #             self.UPDATE_INTERVAL, update
-    #         )

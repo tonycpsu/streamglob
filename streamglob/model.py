@@ -9,6 +9,7 @@ import re
 import dataclasses_json
 from dataclasses_json import dataclass_json
 import dateutil.parser
+import abc
 
 from orderedattrdict import AttrDict
 from pony.orm import *
@@ -268,6 +269,7 @@ class MediaChannel(db.Entity):
     updated = Required(datetime, default=datetime.now)
     last_seen = Optional(datetime)
     update_interval = Required(int, default=DEFAULT_UPDATE_INTERVAL)
+    attrs = Required(Json, default={})
 
     @property
     def provider(self):
@@ -282,15 +284,36 @@ class MediaFeed(MediaChannel):
     """
     A subclass of MediaChannel for providers that can distinguish between
     individual broadcasts / episodes / events, perhaps with the abilit to watch
-    on demand.  Providers using MediaFeed
+    on demand.
     """
 
-    DEFAULT_ITEM_LIMIT = 100
+    # FIXME: move to feed.py?
+
+    DEFAULT_FETCH_LIMIT = 100
+
     DEFAULT_MIN_ITEMS=10
     DEFAULT_MAX_ITEMS=500
     DEFAULT_MAX_AGE=90
 
     items = Set(lambda: MediaItem)
+
+    @abc.abstractmethod
+    def fetch(self):
+        pass
+
+    def update(self, *args, **kwargs):
+        for item in self.fetch(*args, **kwargs):
+            listing = self.provider.new_listing(
+                # feed = f.to_dict(),
+                **item.to_dict(
+                    exclude=["media_item_id", "feed", "classtype"],
+                    related_objects=True
+                )
+            )
+            listing.content = self.provider.MEDIA_SOURCE_CLASS.schema().loads(listing["content"], many=True)
+
+            self.provider.on_new_listing(listing)
+            self.updated = datetime.now()
 
     @db_session
     def mark_all_items_read(self):

@@ -98,8 +98,7 @@ class SimpleProviderView(BaseProviderView):
 
     def selectable(self):
         return True
-    # def update(self):
-    #     self.refresh()
+
 
 
 def with_view(view):
@@ -485,12 +484,15 @@ class BaseProvider(abc.ABC):
 
 class PaginatedProviderMixin(object):
 
+    DEFAULT_PAGE_SIZE = 50
+
     @property
     def limit(self):
         if getattr(self, "_limit", None) is not None:
             return self._limit
-        return (self.config.get("limit") or
-                config.settings.profile.tables.get("limit"))
+        return (self.config.get("page_size") or
+                config.settings.profile.tables.get("page_size")
+                or DEFAULT_PAGE_SIZE)
 
     @limit.setter
     def limit(self, value):

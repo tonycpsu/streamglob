@@ -78,7 +78,7 @@ class InstagramSession(session.StreamSession):
         return user_id
 
 
-    def get_feed_items(self, user_name, count=DEFAULT_BATCH_COUNT):
+    def get_feed_items(self, user_name, cursor=None, count=DEFAULT_BATCH_COUNT):
 
         # number of times to retry bad URLs before giving up
         RETRIES = 10
@@ -116,7 +116,7 @@ class InstagramSession(session.StreamSession):
             with limit(self.limiter, consume = self.CONSUME):
                 feed = self.web_api.user_feed(
                     self.user_name_to_id(user_name), count=count,
-                    end_cursor = self.end_cursors[user_name]
+                    end_cursor = cursor
                 )
         except ClientConnectionError as e:
             logger.warn(f"connection error: {e}")
@@ -131,11 +131,13 @@ class InstagramSession(session.StreamSession):
                 cursor = (
                     post["node"]["edge_media_to_comment"]
                     ["page_info"]["end_cursor"]
-                )
-                if cursor:
-                    self.end_cursors[user_name] = cursor
+                ) or cursor
+                # if cursor:
+                #     self.end_cursors[user_name] = cursor
             except KeyError:
                 pass
+
+            logger.info(f"cursor: {cursor}")
 
             post_type = None
             post_id = node["id"]
@@ -231,15 +233,16 @@ class InstagramSession(session.StreamSession):
                     logger.warn(f"no content for post {post_id}")
                     continue
 
+            created = datetime.fromtimestamp(int(node["created_time"]))
+            logger.info(f"post: {post_id}, {created.date()}, {cursor}")
             yield(
                 AttrDict(
                     guid = post_id,
                     title = title.strip(),
                     post_type = post_type,
-                    created = datetime.fromtimestamp(
-                        int(node["created_time"])
-                    ),
-                    content = content
+                    created = created,
+                    content = content,
+                    cursor = cursor
                 )
             )
 
@@ -252,14 +255,15 @@ class InstagramFeed(model.MediaFeed):
 
     ITEM_CLASS = InstagramItem
 
-    def update(self):
+    def fetch(self, cursor=None):
         logger.info(self.locator)
+        logger.info(f"feed cursor: {cursor}")
         if self.locator.startswith("@"):
             user_name = self.locator[1:]
         else:
             raise NotImplementedError
 
-        limit = self.provider.config.get("limit", self.DEFAULT_ITEM_LIMIT)
+        limit = self.provider.config.get("fetch_limit", self.DEFAULT_FETCH_LIMIT)
         logger.info(f"uodate: {self}")
         last_count = 0
         count = 0
@@ -271,8 +275,12 @@ class InstagramFeed(model.MediaFeed):
             # entirely comprised of duplicates
             new_seen = False
             try:
-                for post in self.session.get_feed_items(user_name):
+                for post in self.session.get_feed_items(user_name, cursor):
+                    logger.info(post.cursor)
                     with db_session:
+                        if post.cursor:
+                            cursor = post.cursor
+                            self.attrs["cursor"] = cursor
                         i = self.items.select(lambda i: i.guid == post.guid).first()
                         if not i:
                             logger.info(f"new: {post.created}")
@@ -304,16 +312,34 @@ class InstagramFeed(model.MediaFeed):
                 #     return
                 last_count = count
 
-
         # logger.info(self.end_cursor)
 
+class InstagramDataTable(CachedFeedProviderDataTable):
 
-# class InstagramProviderView(SimpleProviderView):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        urwid.connect_signal(
+            self, "end",
+            self.on_end
+        )
 
-#     PROVIDER_DATA_TABLE_CLASS = CachedFeedProviderDataTable
+    @db_session
+    def on_end(self, source, count):
+        feed = self.provider.feed
+        logger.info(f"end: {count}")
+        if feed is None:
+            return
+        logger.info(feed)
+        logger.info(feed.attrs.get("cursor", None))
+        feed.update(cursor=feed.attrs.get("cursor", None))
 
 
-# @with_view(InstagramProviderView)
+class InstagramProviderView(SimpleProviderView):
+
+    PROVIDER_DATA_TABLE_CLASS = InstagramDataTable
+
+
+@with_view(InstagramProviderView)
 class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
 
     FEED_CLASS = InstagramFeed
