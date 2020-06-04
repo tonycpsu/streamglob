@@ -43,9 +43,9 @@ class InstagramMediaListing(FeedMediaListing):
 class InstagramSession(session.StreamSession):
 
     MAX_BATCH_COUNT = 50
-    DEFAULT_BATCH_COUNT = 50
+    DEFAULT_BATCH_COUNT = 10
 
-    RATE = 10
+    RATE = 25
     CACPACITY = 100
     CONSUME = 50
 
