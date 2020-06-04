@@ -45,15 +45,16 @@ class InstagramSession(session.StreamSession):
     MAX_BATCH_COUNT = 50
     DEFAULT_BATCH_COUNT = 50
 
-    RATE_LIMIT = 1
-    BURST_LIMIT = 10
+    RATE = 10
+    CACPACITY = 100
+    CONSUME = 50
 
     def __init__(self, *args, **kwargs):
         super().__init__(
             *args, **kwargs
         )
 
-        self.limiter = get_limiter(rate=self.RATE_LIMIT, capacity=self.BURST_LIMIT)
+        self.limiter = get_limiter(rate=self.RATE, capacity=self.CACPACITY)
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
@@ -76,12 +77,43 @@ class InstagramSession(session.StreamSession):
             raise SGException(f"user id for {user_name} not found")
         return user_id
 
+
     def get_feed_items(self, user_name, count=DEFAULT_BATCH_COUNT):
+
+        # number of times to retry bad URLs before giving up
+        RETRIES = 10
+
+        def get_nested(d, keys):
+            v = d
+            for k in keys:
+                v = v.get(k, None)
+                if v is None:
+                    return None
+            return v
+
+        def get_url_workaround(node, keys):
+            # URLs seem to get corrupted somewhat randomly by the API
+            # so we try to get it using a different endpoint as a workaround,
+            # retrying until we get a valid URL.
+
+            retries = 0
+            limiter = get_limiter(rate=1, capacity=10)
+            d = node
+            while retries < RETRIES:
+                url = get_nested(d, keys)
+                #   The string 0_0_0 seems to always appear in corrupted URLs
+                if not "0_0_0" in url:
+                    return url
+                logger.info("oops")
+                with limit(limiter, consume=5):
+                    d = self.web_api.media_info2(node["shortcode"])
+                retries += 1
+
 
         if count > self.MAX_BATCH_COUNT:
             count = self.MAX_BATCH_COUNT
         try:
-            with limit(self.limiter, consume=5):
+            with limit(self.limiter, consume = self.CONSUME):
                 feed = self.web_api.user_feed(
                     self.user_name_to_id(user_name), count=count,
                     end_cursor = self.end_cursors[user_name]
@@ -94,6 +126,7 @@ class InstagramSession(session.StreamSession):
             raise SGClientThrottled
 
         for post in feed:
+            node = post["node"]
             try:
                 cursor = (
                     post["node"]["edge_media_to_comment"]
@@ -105,49 +138,98 @@ class InstagramSession(session.StreamSession):
                 pass
 
             post_type = None
-            post_id = post["node"]["id"]
+            post_id = node["id"]
 
             try:
-                title = post["node"]["caption"]["text"].replace("\n", "")
+                title = node["caption"]["text"].replace("\n", "")
             except TypeError:
                 title = "(no caption)"
 
-            media_type = post["node"]["type"]
+            media_type = node["type"]
+
             if media_type == "video":
                 post_type = "video"
+
+                url = get_url_workaround(node, ["videos", "standard_resolution", "url"])
                 content = self.provider.new_media_source(
-                    post["node"]["videos"]["standard_resolution"]["url"], media_type="video"
+                    url, media_type="video"
                 )
 
-            elif media_type == "image":
-                if "carousel_media" in post["node"]:
-                    post_type = "story"
-                    content = [
-                        # InstagramMediaSource(m["images"]["standard_resolution"]["url"], media_type="image")
-                        self.provider.new_media_source(
-                            m["images"]["standard_resolution"]["url"], media_type="image"
-                        )
-                        if m["type"] == "image"
-                        else
-                        # InstagramMediaSource(m["video_url"], media_type="video")
-                        self.provider.new_media_source(
-                            m["video_url"], media_type="video"
-                        )
-                        if m["type"] == "video"
-                        else None
-                        for m in post["node"]["carousel_media"]
-                    ]
-                    title = f"[{len(content)}] {title} "
-                else:
-                    post_type = "image"
-                    # content = InstagramMediaSource(post["node"]["images"]["standard_resolution"]["url"], media_type="image")
-                    content = self.provider.new_media_source(
-                        post["node"]["images"]["standard_resolution"]["url"], media_type="image"
-                    )
-                    # raise Exception
             else:
-                logger.warn(f"no content for post {post_id}")
-                continue
+                if "carousel_media" in node:
+                    post_type = "story"
+
+                    # content = [
+                    #     self.provider.new_media_source(
+                    #         m["images"]["standard_resolution"]["url"], media_type="image"
+                    #     )
+                    #     if m["type"] == "image"
+                    #     else
+                    #     self.provider.new_media_source(
+                    #         m["video_url"], media_type="video"
+                    #     )
+                    #     if m["type"] == "video"
+                    #     else None
+                    #     for m in node["carousel_media"]
+                    # ]
+
+                    retries = 0
+                    limiter = get_limiter(rate=1, capacity=10)
+                    d = node
+                    while retries < RETRIES:
+                        urls = [
+                            (m["type"],
+                             m["images"]["standard_resolution"]["url"]
+                             if m["type"] == "image"
+                             else m["video_url"]
+                            )
+                            for m in d["carousel_media"]
+                        ]
+                        #   The string 0_0_0 seems to always appear in corrupted URLs
+                        if not any([ "0_0_0" in u for (t, u) in urls]):
+                            break
+                        logger.info("oops story")
+                        with limit(limiter, consume=5):
+                            d = self.web_api.media_info2(node["shortcode"])
+                        retries += 1
+
+                    content = [
+                        self.provider.new_media_source(
+                            u, media_type=t
+                        )
+                        for t, u in urls
+                    ]
+
+                    title = f"[{len(content)}] {title} "
+
+                elif media_type == "image":
+
+                        # if any([ "0_0_0" in u for (t, u) in urls]):
+                        #     limiter = get_limiter(rate=self.RATE, capacity=self.CACPACITY)
+                        #     retries = 0
+                        #     while retries < 5:
+                        #         with limit(limiter, consume=5):
+                        #             media = self.web_api.media_info2(node["shortcode"])
+
+                        #             url = get_nested(media, keys)
+                        #             if not "0_0_0" in url:
+                        #                 break
+                        #             logger.info("oops")
+                        #         retries += 1
+
+
+                    post_type = "image"
+
+                    url = get_url_workaround(node, ["images", "standard_resolution", "url"])
+
+                    content = self.provider.new_media_source(
+                        url, media_type="image"
+                    )
+                    urls = [ ("video", url) ]
+
+                else:
+                    logger.warn(f"no content for post {post_id}")
+                    continue
 
             yield(
                 AttrDict(
@@ -155,7 +237,7 @@ class InstagramSession(session.StreamSession):
                     title = title.strip(),
                     post_type = post_type,
                     created = datetime.fromtimestamp(
-                        int(post["node"]["created_time"])
+                        int(node["created_time"])
                     ),
                     content = content
                 )
@@ -187,7 +269,6 @@ class InstagramFeed(model.MediaFeed):
             # we just get a batch of them at a time and break the loop after
             # we've gotten the desired number of posts, or after a batch
             # entirely comprised of duplicates
-            logger.info("get batch")
             new_seen = False
             try:
                 for post in self.session.get_feed_items(user_name):
