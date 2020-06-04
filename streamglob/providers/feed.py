@@ -61,6 +61,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.ignore_blur = False
+        self.mark_read_on_focus = False
         self.mark_read_task = None
         self.update_count = True
         urwid.connect_signal(
@@ -87,12 +88,14 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     @db_session
     def on_focus(self, source, position):
-        if self.mark_read_task:
-            self.mark_read_task.cancel()
-        self.mark_read_task = state.asyncio_loop.call_later(
-            self.HOVER_DELAY,
-            lambda: self.mark_item_read(position)
-        )
+        if self.mark_read_on_focus:
+            self.mark_read_on_focus = False
+            if self.mark_read_task:
+                self.mark_read_task.cancel()
+            self.mark_read_task = state.asyncio_loop.call_later(
+                self.HOVER_DELAY,
+                lambda: self.mark_item_read(position)
+            )
 
     @db_session
     def on_blur(self, source, position):
@@ -169,7 +172,8 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         ]
         # raise Exception(items)
         if playlist:
-            with tempfile.NamedTemporaryFile(suffix=".m3u", delete=False) as m3u:
+            with tempfile.NamedTemporaryFile(suffix=".m3u8", delete=False) as m3u:
+                m3u.write(f"#EXTM3U\n".encode("utf-8"))
                 for item in items:
                     m3u.write(ITEM_TEMPLATE.format(
                         # mpv OSC crashes on emoji in title
@@ -214,6 +218,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         elif key == "meta p":
             asyncio.create_task(self.play_all(playlist=True))
         elif key == "n":
+            self.mark_item_read(self.focus_position)
             try:
                 idx = next(
                     r.data.media_item_id
@@ -227,8 +232,10 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 return
             pos = self.index_to_position(idx)
             self.focus_position = pos
+            self.mark_read_on_focus = True
             self._modified()
         elif key == "p":
+            self.mark_item_read(self.focus_position)
             try:
                 idx = next(
                     r.data.media_item_id
@@ -239,6 +246,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 return
             pos = self.index_to_position(idx)
             self.focus_position = pos
+            self.mark_read_on_focus = True
             self._modified()
         elif key == "A":
             with db_session:
@@ -255,6 +263,9 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         elif key == "u":
             self.toggle_item_read(self.focus_position)
             self.ignore_blur = True
+        elif key in ["up", "down"]:
+            self.mark_item_read(self.focus_position)
+            return super().keypress(size, key)
         else:
             return super().keypress(size, key)
         return key
