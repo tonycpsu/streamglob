@@ -97,12 +97,12 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 lambda: self.mark_item_read(position)
             )
 
-    @db_session
-    def on_blur(self, source, position):
-        if self.ignore_blur:
-            self.ignore_blur = False
-            return
-        self.mark_item_read(position)
+    # @db_session
+    # def on_blur(self, source, position):
+    #     if self.ignore_blur:
+    #         self.ignore_blur = False
+    #         return
+    #     self.mark_item_read(position)
 
     @db_session
     def mark_item_read(self, position):
@@ -264,7 +264,8 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             self.toggle_item_read(self.focus_position)
             self.ignore_blur = True
         elif key in ["up", "down"]:
-            self.mark_item_read(self.focus_position)
+            # self.ignore_blur = True
+            # self.mark_read_on_focus = True
             return super().keypress(size, key)
         else:
             return super().keypress(size, key)
