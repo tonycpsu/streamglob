@@ -426,27 +426,31 @@ class NHLProvider(BAMProviderMixin,
         now = datetime.now()
         year = datetime.now().year
         season_year = (now - relativedelta(months=8)).year
+        s = str(season_year)
 
         # r = NHLBAMProviderSettings.get(season_year=season_year)
         # if r:
         #     start = r.start
         #     end = r.end
         # else:
-        #     season = f"{season_year}{season_year+1}"
 
-        #     url = f"https://statsapi.web.nhl.com/api/v1/seasons/{season}"
-        #     j = self.session.get(url).json()
-        #     start = dateutil.parser.parse(j["seasons"][0]["regularSeasonStartDate"])
-        #     end = dateutil.parser.parse(j["seasons"][0]["seasonEndDate"])
-        #     r = NHLBAMProviderSettings(
-        #         season_year=season_year,
-        #         start = start,
-        #         end = end
-        #     )
+        if not "seasons" in self.provider_data:
+            self.provider_data["seasons"] = {}
 
-        self.provider_data["seasons"][season_year].start = start
-        self.provider_data["seasons"][season_year].end = end
-        self.save_provider_data()
+        if s in self.provider_data["seasons"]:
+            start = dateutil.parser.parse(self.provider_data["seasons"][s]["start"])
+            end = dateutil.parser.parse(self.provider_data["seasons"][s]["end"])
+        else:
+            season = f"{season_year}{season_year+1}"
+
+            url = f"https://statsapi.web.nhl.com/api/v1/seasons/{season}"
+            j = self.session.get(url).json()
+            start = dateutil.parser.parse(j["seasons"][0]["regularSeasonStartDate"])
+            end = dateutil.parser.parse(j["seasons"][0]["seasonEndDate"])
+            self.provider_data["seasons"][s] = {}
+            self.provider_data["seasons"][s]["start"] = start.isoformat()
+            self.provider_data["seasons"][s]["end"] = end.isoformat()
+            self.save_provider_data()
 
         if now < start:
             return start.date()

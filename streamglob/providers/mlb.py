@@ -817,25 +817,6 @@ class MLBProvider(BAMProviderMixin,
         if not "seasons" in self.provider_data:
             self.provider_data["seasons"] = {}
 
-        # r = MLBBAMProviderSettings.get(season_year=season_year)
-        # if r:
-        #     start = r.start
-        #     end = r.end
-        # else:
-        #     schedule = self.schedule(
-        #         sport_id = self.sport_id,
-        #         start=datetime(year, 1, 1),
-        #         end=datetime(year, 12, 31),
-        #         brief=True
-        #     )
-        #     start = dateutil.parser.parse(schedule["dates"][0]["date"])
-        #     end = dateutil.parser.parse(schedule["dates"][-1]["date"])
-        #     r = MLBBAMProviderSettings(
-        #         season_year=season_year,
-        #         start = start,
-        #         end = end
-        #     )
-
         if s in self.provider_data["seasons"]:
             start = dateutil.parser.parse(self.provider_data["seasons"][s]["start"])
             end = dateutil.parser.parse(self.provider_data["seasons"][s]["end"])
