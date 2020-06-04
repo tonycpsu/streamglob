@@ -25,8 +25,6 @@ from . import config
 from . import providers
 from .exceptions import *
 
-DB_FILE=os.path.join(config.CONFIG_DIR, "streamglob.sqlite")
-
 CACHE_DURATION_SHORT = 60 # 60 seconds
 CACHE_DURATION_MEDIUM = 60*60*24 # 1 day
 CACHE_DURATION_LONG = 60*60*24*30  # 30 days
@@ -400,9 +398,11 @@ class ProviderData(db.Entity):
     settings = Required(Json, default={})
 
 
-def init(*args, **kwargs):
+def init(filename=None, *args, **kwargs):
 
-    db.bind("sqlite", create_db=True, filename=DB_FILE, *args, **kwargs)
+    if not filename:
+        filename = os.path.join(config.settings.CONFIG_DIR, f"{config.PACKAGE_NAME}.sqlite")
+    db.bind("sqlite", filename, create_db=True, *args, **kwargs)
     db.generate_mapping(create_tables=True)
     CacheEntry.purge()
 

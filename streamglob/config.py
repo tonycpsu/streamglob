@@ -17,9 +17,6 @@ import tzlocal
 import getpass
 
 PACKAGE_NAME="streamglob"
-CONFIG_DIR=os.path.expanduser(f"~/.config/{PACKAGE_NAME}")
-CONFIG_FILE=os.path.join(CONFIG_DIR, "config.yaml")
-LOG_FILE=os.path.join(CONFIG_DIR, f"{PACKAGE_NAME}.log")
 
 KNOWN_PLAYERS = ["mpv", "vlc"]
 
@@ -131,14 +128,32 @@ class Config(ConfigTree):
 
     DEFAULT_PROFILE = "default"
 
-    def __init__(self, config_file, merge_default = False, *args, **kwargs):
-        super(Config, self).__init__(*args, **kwargs)
-        self.__exclude_keys__ |= {"_config_file", "set_profile", "_profile_tree"}
-        self._config_file = config_file
-        self.load()
-        self._profile_tree = ProfileTree(**self.profiles,
-                                         merge_default=merge_default)
+    DEFAULT_CONFIG_DIR = os.path.expanduser(f"~/.config/{PACKAGE_NAME}")
+    CONFIG_FILE_NAME = "config.yaml"
 
+    def __init__(self, config_dir=None,
+                 merge_default = False, *args, **kwargs):
+        super(Config, self).__init__(*args, **kwargs)
+        self.__exclude_keys__ |= {"_config_dir", "set_profile", "_profile_tree"}
+        # self._config_file = config_file
+        self._config_dir = config_dir or self.DEFAULT_CONFIG_DIR
+        self.load()
+        self._profile_tree = ProfileTree(
+            **self.profiles,
+            merge_default=merge_default
+        )
+
+    @property
+    def config_file(self):
+        return os.path.join(self.CONFIG_DIR, self.CONFIG_FILE_NAME)
+
+    @property
+    def CONFIG_DIR(self):
+        return self._config_dir
+
+    @property
+    def LOG_FILE(self):
+        return os.path.join(self.CONFIG_DIR, f"{PACKAGE_NAME}.log")
 
     @property
     def profile(self):
@@ -156,9 +171,9 @@ class Config(ConfigTree):
         self._profile_tree.set_profile(profile)
 
     def load(self):
-        if not os.path.exists(self._config_file):
-            raise Exception(f"config file {self._config_file} not found")
-        config = yaml.load(open(self._config_file), Loader=yaml_loader(ConfigTree))
+        if not os.path.exists(self.config_file):
+            raise Exception(f"config file {self.config_file} not found")
+        config = yaml.load(open(self.config_file), Loader=yaml_loader(ConfigTree))
         self.update(config.items())
 
     def save(self):
@@ -169,9 +184,9 @@ class Config(ConfigTree):
             yaml.dump(d, outfile, default_flow_style=False, indent=4)
 
 
-def load(merge_default=False):
+def load(config_dir=None, merge_default=False):
     global settings
-    settings = Config(CONFIG_FILE, merge_default=merge_default)
+    settings = Config(config_dir, merge_default=merge_default)
 
 # settings = Config(CONFIG_FILE, merge_default=True)
 

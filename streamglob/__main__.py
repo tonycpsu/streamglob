@@ -477,7 +477,7 @@ def reload_config():
 
     logger.info("reload config")
     profile = config.settings.profile_name
-    config.load(merge_default=True)
+    config.load(options.config_dir, merge_default=True)
     providers.load_config()
     if profile:
         config.settings.set_profile(profile)
@@ -598,10 +598,11 @@ def main():
     today = datetime.now(pytz.timezone('US/Eastern')).date()
 
     init_parser = argparse.ArgumentParser()
+    init_parser.add_argument("-c", "--config-dir", help="use alternate config directory")
     init_parser.add_argument("-p", "--profile", help="use alternate config profile")
     options, args = init_parser.parse_known_args()
 
-    config.load(merge_default=True)
+    config.load(options.config_dir, merge_default=True)
     if options.profile:
         config.settings.set_profile(options.profile)
     player.Player.load()
@@ -648,7 +649,7 @@ def main():
 
     state.task_manager_task = state.asyncio_loop.create_task(state.task_manager.start())
 
-    log_file = os.path.join(config.CONFIG_DIR, f"{PACKAGE_NAME}.log")
+    log_file = os.path.join(config.settings.CONFIG_DIR, f"{PACKAGE_NAME}.log")
     fh = logging.FileHandler(log_file)
     add_log_handler(fh)
     logging.getLogger("panwid").setLevel(logging.INFO)

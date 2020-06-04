@@ -43,8 +43,6 @@ class StreamSession(object):
     and implementing methods for login flow, getting streams, etc.
     """
 
-    # SESSION_FILE=os.path.join(config.CONFIG_DIR, "session")
-
     HEADERS = {
         "User-agent": USER_AGENT
     }
@@ -83,7 +81,7 @@ class StreamSession(object):
 
     @classmethod
     def _COOKIES_FILE(cls):
-        return os.path.join(config.CONFIG_DIR, f"{cls.session_type()}.cookies")
+        return os.path.join(config.settings.CONFIG_DIR, f"{cls.session_type()}.cookies")
 
     @property
     def COOKIES_FILE(self):
@@ -91,7 +89,7 @@ class StreamSession(object):
 
     @classmethod
     def _SESSION_FILE(cls):
-        return os.path.join(config.CONFIG_DIR, f"{cls.session_type()}.session")
+        return os.path.join(config.settings.CONFIG_DIR, f"{cls.session_type()}.session")
 
     @property
     def SESSION_FILE(self):
