@@ -211,6 +211,53 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             self.provider.play(listing)
         # logger.info(urls)
 
+
+    def mark_all_read(self):
+            with db_session:
+                if self.provider.feed:
+                    self.provider.feed.mark_all_items_read()
+                else:
+                    self.provider.FEED_CLASS.mark_all_feeds_read()
+            self.reset()
+
+    def mark_visible_read(self):
+            for n, item in enumerate(self):
+                self.mark_item_read(n)
+            self.reset()
+
+    def next_unread(self):
+        self.mark_item_read(self.focus_position)
+        try:
+            idx = next(
+                r.data.media_item_id
+                for r in self[self.focus_position+1:]
+                if not r.data.read
+            )
+        except StopIteration:
+            self.focus_position = len(self)-1
+            self.load_more(self.focus_position)
+            self.focus_position += 1
+            return
+        pos = self.index_to_position(idx)
+        self.focus_position = pos
+        self.mark_read_on_focus = True
+        self._modified()
+
+    def prev_unread(self):
+        self.mark_item_read(self.focus_position)
+        try:
+            idx = next(
+                r.data.media_item_id
+                for r in self[self.focus_position-1::-1]
+                if not r.data.read
+            )
+        except StopIteration:
+            return
+        pos = self.index_to_position(idx)
+        self.focus_position = pos
+        self.mark_read_on_focus = True
+        self._modified()
+
     def keypress(self, size, key):
 
         if key == "meta r":
@@ -218,55 +265,16 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         elif key == "meta p":
             asyncio.create_task(self.play_all(playlist=True))
         elif key == "n":
-            self.mark_item_read(self.focus_position)
-            try:
-                idx = next(
-                    r.data.media_item_id
-                    for r in self[self.focus_position+1:]
-                    if not r.data.read
-                )
-            except StopIteration:
-                self.focus_position = len(self)-1
-                self.load_more(self.focus_position)
-                self.focus_position += 1
-                return
-            pos = self.index_to_position(idx)
-            self.focus_position = pos
-            self.mark_read_on_focus = True
-            self._modified()
+            self.next_unread()
         elif key == "p":
-            self.mark_item_read(self.focus_position)
-            try:
-                idx = next(
-                    r.data.media_item_id
-                    for r in self[self.focus_position-1::-1]
-                    if not r.data.read
-                )
-            except StopIteration:
-                return
-            pos = self.index_to_position(idx)
-            self.focus_position = pos
-            self.mark_read_on_focus = True
-            self._modified()
+            self.prev_unread()
         elif key == "A":
-            with db_session:
-                if self.provider.feed:
-                    self.provider.feed.mark_all_items_read()
-                else:
-                    self.provider.FEED_CLASS.mark_all_feeds_read()
-            self.reset()
+            self.mark_all_read()
         elif key == "ctrl a":
-            for n, item in enumerate(self):
-                self.mark_item_read(n)
-            self.reset()
-
+            self.mark_visible_read()
         elif key == "u":
             self.toggle_item_read(self.focus_position)
             self.ignore_blur = True
-        elif key in ["up", "down"]:
-            # self.ignore_blur = True
-            # self.mark_read_on_focus = True
-            return super().keypress(size, key)
         else:
             return super().keypress(size, key)
         return key
