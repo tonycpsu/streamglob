@@ -220,10 +220,15 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                     self.provider.FEED_CLASS.mark_all_feeds_read()
             self.reset()
 
-    def mark_visible_read(self):
+    def mark_visible_read(self, direction=None):
             for n, item in enumerate(self):
+                if direction and (
+                        direction < 0 and n > self.focus_position
+                        or direction> 0 and n < self.focus_position
+                ):
+                    continue
                 self.mark_item_read(n)
-            self.reset()
+            self.refresh()
 
     def next_unread(self):
         self.mark_item_read(self.focus_position)
@@ -272,7 +277,11 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             self.mark_all_read()
         elif key == "ctrl a":
             self.mark_visible_read()
-        elif key == "u":
+        elif key == "meta a":
+            self.mark_visible_read(direction=-1)
+        elif key == "meta A":
+            self.mark_visible_read(direction=1)
+        elif key == "m":
             self.toggle_item_read(self.focus_position)
             self.ignore_blur = True
         else:
