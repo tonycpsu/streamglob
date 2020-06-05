@@ -7,11 +7,14 @@ import re
 import urwid
 import panwid
 from pony.orm import *
+from googletransx import Translator
 
+from . import config
 from ..exceptions import *
 from ..widgets import *
 from ..state import *
 from .. import model
+from .. import utils
 
 class FilterToolbar(urwid.WidgetWrap):
 
@@ -52,7 +55,8 @@ class ProviderDataTable(BaseDataTable):
         self.provider = provider
         self.columns = [ panwid.DataTableColumn(k, **v if v else {})
                          for k, v in self.provider.ATTRIBUTES.items() ]
-
+        self.translate = False
+        self._translator = None
         super(ProviderDataTable,  self).__init__(*args, **kwargs)
 
     @property
@@ -72,20 +76,54 @@ class ProviderDataTable(BaseDataTable):
             logger.exception(e)
             return []
 
+    @property
+    def translator(self):
+        if not self._translator:
+            self._translator = Translator()
+        return self._translator
+
+    def toggle_translation(self):
+        self.translate = not self.translate
+        if self.translate:
+            texts = [
+                (row.index, row.get("title"))
+                for row in self
+                if not isinstance(row.get("_title_translated"), str)
+                and isinstance(row.get("title"), str)
+                and len(row.get("title"))
+            ]
+            translations = self.translator.translate(
+                [ t[1] for t in texts ],
+                dest=config.settings.profile.translate
+            )
+            logger.info(len(translations))
+            for (i, _), t in zip(texts, translations):
+                self.df.set(i, "_title_translated", utils.strip_emoji(t.text))
+        self.invalidate_rows(
+            [ row.index for row in self if row.get("_title_translated") ]
+        )
+
     def keypress(self, size, key):
 
         key = super().keypress(size, key)
         if key == "ctrl r":
             self.provider.reset()
-            # state.asyncio_loop.create_task(self.provider.refresh())
-        # elif key == "d":
-        #     self.provider.download(self.selection.data)
+        if key == "ctrl t":
+            self.toggle_translation()
         else:
             return key
+
+    def reset(self):
+        self.translate = False
+        super().reset()
 
     def decorate(self, row, column, value):
 
         if column.name == "title":
+
+            if self.translate and row.get("_title_translated"):
+                value = row.get("_title_translated")
+
             markup = [
                 ( next(v for k, v in self.provider.highlight_map.items()
                        if k.search(x)), x)
