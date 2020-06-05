@@ -9,7 +9,7 @@ from .. import session
 from .filters import *
 
 from orderedattrdict import DefaultAttrDict
-from instagram_web_api import Client, ClientCompatPatch, ClientConnectionError
+from instagram_web_api import Client, ClientCompatPatch, ClientConnectionError, ClientThrottledError
 from pony.orm import *
 from limiter import get_limiter, limit
 
@@ -80,6 +80,7 @@ class InstagramSession(session.StreamSession):
 
     def get_feed_items(self, user_name, cursor=None, count=DEFAULT_BATCH_COUNT):
 
+        logger.info(f"get_feed_items cursor: {cursor}")
         # number of times to retry bad URLs before giving up
         RETRIES = 10
 
@@ -116,8 +117,17 @@ class InstagramSession(session.StreamSession):
             with limit(self.limiter, consume = self.CONSUME):
                 feed = self.web_api.user_feed(
                     self.user_name_to_id(user_name), count=count,
-                    end_cursor = cursor
+                    end_cursor = cursor,
+                    extract = False
                 )
+                end_cursor = feed.get('data', {}).get('user', {}).get(
+                    'edge_owner_to_timeline_media', {}).get('page_info', {}).get('end_cursor')
+                posts = feed.get('data', {}).get('user', {}).get(
+                    'edge_owner_to_timeline_media', {}).get('edges', [])
+                # posts = self.web_api.user_feed(
+                #     self.user_name_to_id(user_name), count=count,
+                #     end_cursor = cursor
+                # )
         except ClientConnectionError as e:
             logger.warn(f"connection error: {e}")
             raise
@@ -125,19 +135,17 @@ class InstagramSession(session.StreamSession):
             logger.info("throttled")
             raise SGClientThrottled
 
-        for post in feed:
+        for post in posts:
             node = post["node"]
-            try:
-                cursor = (
-                    post["node"]["edge_media_to_comment"]
-                    ["page_info"]["end_cursor"]
-                ) or cursor
-                # if cursor:
-                #     self.end_cursors[user_name] = cursor
-            except KeyError:
-                pass
-
-            logger.info(f"cursor: {cursor}")
+            # try:
+            #     cursor = (
+            #         post["node"]["edge_media_to_comment"]
+            #         ["page_info"]["end_cursor"]
+            #     ) or cursor
+            #     # if cursor:
+            #     #     self.end_cursors[user_name] = cursor
+            # except KeyError:
+            #     pass
 
             post_type = None
             post_id = node["id"]
@@ -234,7 +242,7 @@ class InstagramSession(session.StreamSession):
                     continue
 
             created = datetime.fromtimestamp(int(node["created_time"]))
-            logger.info(f"post: {post_id}, {created.date()}, {cursor}")
+            # logger.info(f"post: {post_id}, {created.date()}, {end_cursor}")
             yield(
                 AttrDict(
                     guid = post_id,
@@ -242,7 +250,7 @@ class InstagramSession(session.StreamSession):
                     post_type = post_type,
                     created = created,
                     content = content,
-                    cursor = cursor
+                    cursor = end_cursor
                 )
             )
 
@@ -256,15 +264,15 @@ class InstagramFeed(model.MediaFeed):
     ITEM_CLASS = InstagramItem
 
     def fetch(self, cursor=None):
-        logger.info(self.locator)
-        logger.info(f"feed cursor: {cursor}")
+        # logger.info(self.locator)
+        # logger.info(f"feed cursor: {cursor}")
         if self.locator.startswith("@"):
             user_name = self.locator[1:]
         else:
             raise NotImplementedError
 
         limit = self.provider.config.get("fetch_limit", self.DEFAULT_FETCH_LIMIT)
-        logger.info(f"uodate: {self}")
+        # logger.info(f"uodate: {self}")
         last_count = 0
         count = 0
         while(count < limit):
@@ -276,7 +284,7 @@ class InstagramFeed(model.MediaFeed):
             new_seen = False
             try:
                 for post in self.session.get_feed_items(user_name, cursor):
-                    logger.info(post.cursor)
+                    # logger.info(post.cursor)
                     with db_session:
                         if post.cursor:
                             cursor = post.cursor
@@ -307,12 +315,8 @@ class InstagramFeed(model.MediaFeed):
 
             if not new_seen:
                 return
-                # if count == last_count:
-                #     logger.info(f"breaking after {count}")
-                #     return
                 last_count = count
 
-        # logger.info(self.end_cursor)
 
 class InstagramDataTable(CachedFeedProviderDataTable):
 
@@ -329,10 +333,9 @@ class InstagramDataTable(CachedFeedProviderDataTable):
         logger.info(f"end: {count}")
         if feed is None:
             return
-        logger.info(feed)
-        logger.info(feed.attrs.get("cursor", None))
         feed.update(cursor=feed.attrs.get("cursor", None))
-
+        self.provider.update_query()
+        self.refresh()
 
 class InstagramProviderView(SimpleProviderView):
 

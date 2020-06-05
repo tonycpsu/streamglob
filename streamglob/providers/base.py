@@ -492,7 +492,7 @@ class PaginatedProviderMixin(object):
             return self._limit
         return (self.config.get("page_size") or
                 config.settings.profile.tables.get("page_size")
-                or DEFAULT_PAGE_SIZE)
+                or self.DEFAULT_PAGE_SIZE)
 
     @limit.setter
     def limit(self, value):
