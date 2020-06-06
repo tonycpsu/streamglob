@@ -180,7 +180,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                         title=pipes.quote(
                             f"{item.feed}: {item.locator} "
                             f"{item.created.isoformat().split('.')[0]} "
-                            f"{utils.format_str_truncated(80, utils.strip_emoji(item.title).strip())}"
+                            f"{utils.strip_emoji(item.title).strip()}"
                         ),
                         url=item.content.url
                     ).encode("utf-8"))
