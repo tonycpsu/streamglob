@@ -9,7 +9,7 @@ from .. import session
 from .filters import *
 
 from orderedattrdict import DefaultAttrDict
-from instagram_web_api import Client, ClientCompatPatch, ClientConnectionError, ClientThrottledError
+from instagram_web_api import Client, ClientCompatPatch, ClientError, ClientConnectionError, ClientThrottledError
 from pony.orm import *
 from limiter import get_limiter, limit
 
@@ -45,7 +45,7 @@ class InstagramSession(session.StreamSession):
     MAX_BATCH_COUNT = 50
     DEFAULT_BATCH_COUNT = 10
 
-    RATE = 10
+    RATE = 25
     CACPACITY = 100
     CONSUME = 50
 
@@ -82,7 +82,7 @@ class InstagramSession(session.StreamSession):
 
         logger.info(f"get_feed_items cursor: {cursor}")
         # number of times to retry bad URLs before giving up
-        RETRIES = 10
+        RETRIES = 3
 
         def get_nested(d, keys):
             v = d
@@ -98,17 +98,20 @@ class InstagramSession(session.StreamSession):
             # retrying until we get a valid URL.
 
             retries = 0
-            limiter = get_limiter(rate=1, capacity=10)
+            limiter = get_limiter(rate=1, capacity=2)
             d = node
-            while retries < RETRIES:
+            while retries <= RETRIES:
+                retries += 1
                 url = get_nested(d, keys)
                 #   The string 0_0_0 seems to always appear in corrupted URLs
                 if not "0_0_0" in url:
                     return url
                 logger.info("oops")
-                with limit(limiter, consume=5):
-                    d = self.web_api.media_info2(node["shortcode"])
-                retries += 1
+                with limit(limiter, consume=2):
+                    try:
+                        d = self.web_api.media_info2(node["shortcode"])
+                    except ClientError:
+                        continue
 
 
         if count > self.MAX_BATCH_COUNT:
@@ -161,6 +164,9 @@ class InstagramSession(session.StreamSession):
                 post_type = "video"
 
                 url = get_url_workaround(node, ["videos", "standard_resolution", "url"])
+                if not url:
+                    logger.warn(f"couldn't get URL for {node['shortcode']}")
+                    continue
                 content = self.provider.new_media_source(
                     url, media_type="video"
                 )
@@ -184,9 +190,10 @@ class InstagramSession(session.StreamSession):
                     # ]
 
                     retries = 0
-                    limiter = get_limiter(rate=1, capacity=10)
+                    limiter = get_limiter(rate=1, capacity=2)
                     d = node
-                    while retries < RETRIES:
+                    while retries <= RETRIES:
+                        retries += 1
                         urls = [
                             (m["type"],
                              m["images"]["standard_resolution"]["url"]
@@ -199,9 +206,15 @@ class InstagramSession(session.StreamSession):
                         if not any([ "0_0_0" in u for (t, u) in urls]):
                             break
                         logger.info("oops story")
-                        with limit(limiter, consume=5):
-                            d = self.web_api.media_info2(node["shortcode"])
-                        retries += 1
+                        with limit(limiter, consume=2):
+                            try:
+                                d = self.web_api.media_info2(node["shortcode"])
+                            except ClientError:
+                                continue
+
+                    else:
+                        logger.warn(f"couldn't get URL(s) for {node['shortcode']}")
+                        continue
 
                     content = [
                         self.provider.new_media_source(
@@ -231,6 +244,9 @@ class InstagramSession(session.StreamSession):
                     post_type = "image"
 
                     url = get_url_workaround(node, ["images", "standard_resolution", "url"])
+                    if not url:
+                        logger.warn(f"couldn't get URL for {node['shortcode']}")
+                        continue
 
                     content = self.provider.new_media_source(
                         url, media_type="image"
