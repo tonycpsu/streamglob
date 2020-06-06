@@ -263,6 +263,14 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         self.mark_read_on_focus = True
         self._modified()
 
+    def kill_all(self):
+        if not self.provider.feed:
+            return
+        with db_session:
+            delete(i for i in self.provider.feed.items)
+            commit()
+            self.reset()
+
     def keypress(self, size, key):
 
         if key == "meta r":
@@ -284,6 +292,9 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         elif key == "m":
             self.toggle_item_read(self.focus_position)
             self.ignore_blur = True
+        elif key == "meta ctrl d":
+            self.kill_all()
+            self.mark_visible_read(direction=-1)
         else:
             return super().keypress(size, key)
         return key
