@@ -108,8 +108,8 @@ class ProviderDataTable(BaseDataTable):
     def keypress(self, size, key):
 
         key = super().keypress(size, key)
-        if key == "ctrl r":
-            self.provider.reset()
+        # if key == "ctrl r":
+        #     self.provider.reset()
         if key == "ctrl t":
             self.toggle_translation()
         else:
