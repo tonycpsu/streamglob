@@ -145,8 +145,8 @@ profiles:
             youtube:
                 # feeds in name: url format
                 feeds:
-                    MLB: https://www.youtube.com/mlb
-                    NHL: https://www.youtube.com/nhl
+                    "https://www.youtube.com/mlb": MLB
+                    "https://www.youtube.com/nhl": NHL
                 page_size: 25
                 output:
                     template: "%(title)s.%(upload_date)s.%(resolution)s.%(channel_id)s.%(id)s.%(ext)s"
@@ -154,14 +154,14 @@ profiles:
             instagram:
                 # list of users
                 feeds:
-                    - "@mlb"
-                    - "@nhl"
+                    "@mlb": Major League Baseball
+                    "@nhl": National Hockey League
                 output:
                     template: "{feed_name}.{title}.{timestamp}{index}.{ext}"
             rss:
                 # feeds in name:url format
                 feeds:
-                    MLB.com Cut4cast: http://mlb.mlb.com/feed/podcast/cut4_podcast_rss.xml
+                    "http://mlb.mlb.com/feed/podcast/cut4_podcast_rss.xml": MLB.com Cut4cast
                 rules:
                     label:
                         baseball: medium
@@ -170,15 +170,15 @@ profiles:
             periscope:
                 # feeds in name:url format                
                 feeds:
-                    - mlb
-                    - nhl
+                    mlb:
+                    nhl:
                 helpers:
                     null: youtube-dl
                     mpv: null
             twitch:
                 # list of usernames
                 channels:
-                    - sporer
+                    sporer:
 
         players:
             feh:

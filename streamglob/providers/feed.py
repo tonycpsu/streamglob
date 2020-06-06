@@ -382,29 +382,35 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         with db_session:
             feed = self.FEED_CLASS.get(
                 provider_id = self.IDENTIFIER,
-                name = self.selected_feed_label
+                locator = self.selected_feed.locator
             )
         return feed
 
     @property
     def feeds(self):
-        if isinstance(self.config.feeds, dict):
-            return self.config.feeds
-        else:
-            return AttrDict([
-                reversed(list(f.items())[0]) if isinstance(f, dict) else (f, f)
-                for f in self.config.feeds
-            ])
+        return AttrDict([
+            FeedConfig.from_kv(k, v)
+            for k, v in self.config.feeds.items()
+        ])
+        # return self.filters.feed.items
+
+        # if isinstance(self.config.feeds, dict):
+        #     return self.config.feeds
+        # else:
+        #     return AttrDict([
+        #         reversed(list(f.items())[0]) if isinstance(f, dict) else (f, f)
+        #         for f in self.config.feeds
+        #     ])
 
     @db_session
     def create_feeds(self):
-        for name, locator in self.feeds.items():
-            feed = self.FEED_CLASS.get(locator=locator)
+        for n, f in self.feeds.items():
+            feed = self.FEED_CLASS.get(locator=f.locator)
             if not feed:
                 feed = self.FEED_CLASS(
                     provider_id = self.IDENTIFIER,
-                    name = name,
-                    locator=self.filters.feed[name]
+                    name = n,
+                    locator= f.locator
                     # **self.feed_attrs(name)
                 )
                 commit()
@@ -414,7 +420,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
 
     @db_session
     def update_feeds(self, force=False):
-        logger.info("update_feeds")
+        logger.info(f"update_feeds: {force}")
         if not self.feed:
             feeds = self.FEED_CLASS.select()
         else:
@@ -425,11 +431,13 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
                 or
                 f.updated is None
                 or
-                datetime.now() - f.updated
-                > timedelta(seconds=f.update_interval)
+                datetime.now() - f.updated > timedelta(seconds=f.update_interval)
             ):
+                logger.info(f"updating {f.locator}")
                 with limit(self.limiter):
                     f.update()
+                    f.updated = datetime.now()
+                    commit()
                     # logger.info(f"update {f}")
                     # for item in f.update():
                     #     # listing = self.item_to_listing(item)
@@ -445,8 +453,6 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
 
                     #     self.on_new_listing(listing)
                     #     # raise Exception(listing)
-                    # f.updated = datetime.now()
-            commit()
 
     @property
     def feed_filters(self):
