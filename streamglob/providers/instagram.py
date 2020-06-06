@@ -45,7 +45,7 @@ class InstagramSession(session.StreamSession):
     MAX_BATCH_COUNT = 50
     DEFAULT_BATCH_COUNT = 10
 
-    RATE = 25
+    RATE = 10
     CACPACITY = 100
     CONSUME = 50
 
@@ -264,12 +264,13 @@ class InstagramFeed(model.MediaFeed):
     ITEM_CLASS = InstagramItem
 
     def fetch(self, cursor=None):
-        # logger.info(self.locator)
-        # logger.info(f"feed cursor: {cursor}")
         if self.locator.startswith("@"):
             user_name = self.locator[1:]
         else:
+            logger.error(self.locator)
             raise NotImplementedError
+
+        logger.info(f"fetching {self.locator}")
 
         limit = self.provider.config.get("fetch_limit", self.DEFAULT_FETCH_LIMIT)
         # logger.info(f"uodate: {self}")
