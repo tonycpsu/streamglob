@@ -459,8 +459,8 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         return None
 
     def on_feed_change(self, *args):
+        self.view.table.translate_src = getattr(args[0], "translate", None)
         self.reset()
-        # state.asyncio_loop.create_task(self.refresh())
 
     def on_status_change(self, *args):
         self.reset()

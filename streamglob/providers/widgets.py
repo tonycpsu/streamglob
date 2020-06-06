@@ -10,11 +10,11 @@ from pony.orm import *
 from googletransx import Translator
 
 from . import config
+from .. import utils
 from ..exceptions import *
 from ..widgets import *
 from ..state import *
 from .. import model
-from .. import utils
 
 class FilterToolbar(urwid.WidgetWrap):
 
@@ -56,6 +56,7 @@ class ProviderDataTable(BaseDataTable):
         self.columns = [ panwid.DataTableColumn(k, **v if v else {})
                          for k, v in self.provider.ATTRIBUTES.items() ]
         self.translate = False
+        self.translate_src = None
         self._translator = None
         super(ProviderDataTable,  self).__init__(*args, **kwargs)
 
@@ -94,6 +95,7 @@ class ProviderDataTable(BaseDataTable):
             ]
             translations = self.translator.translate(
                 [ t[1] for t in texts ],
+                src=self.translate_src,
                 dest=config.settings.profile.translate
             )
             logger.info(len(translations))
