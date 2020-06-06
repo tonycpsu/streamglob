@@ -338,7 +338,7 @@ class CachedFeedProviderView(SimpleProviderView):
 @with_view(CachedFeedProviderView)
 class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
 
-    UPDATE_INTERVAL = 900
+    UPDATE_INTERVAL = (60 * 60 * 4)
 
     RATE_LIMIT = 5
     BURST_LIMIT = 5
