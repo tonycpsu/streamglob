@@ -306,10 +306,14 @@ class FeedProvider(BaseProvider):
     A provider that offers multiple feeds to select from
     """
 
-    FILTERS = AttrDict([
+    FILTERS_BROWSE = AttrDict([
         ("feed", FeedsFilter),
+    ])
+
+    FILTERS_OPTIONS = AttrDict([
         ("status", ItemStatusFilter)
     ])
+
 
     REQUIRED_CONFIG = ["feeds"]
 
