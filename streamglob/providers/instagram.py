@@ -322,7 +322,8 @@ class InstagramFeed(model.MediaFeed):
                                     if isinstance(post.content, list)
                                     else [post.content],
                                     many=True
-                                )
+                                ),
+                                attrs = dict(cursor=post.cursor)
                             )
                             count += 1
                             yield i
@@ -352,7 +353,13 @@ class InstagramDataTable(CachedFeedProviderDataTable):
         logger.info(f"end: {count}")
         if feed is None:
             return
-        feed.update(cursor=feed.attrs.get("cursor", None))
+        try:
+            cursor = feed.items.select().order_by(
+                self.provider.ITEM_CLASS.created
+            ).first().attrs.get("cursor")
+        except AttributeError:
+            cursor = None
+        feed.update(cursor=cursor)
         self.provider.update_query()
         self.refresh()
 

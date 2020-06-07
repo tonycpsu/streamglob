@@ -375,6 +375,7 @@ class MediaItem(db.Entity):
     read = Optional(datetime)
     watched = Optional(datetime)
     downloaded = Optional(datetime)
+    attrs = Required(Json, default={})
     # was_downloaded = Required(bool, default=False)
 
     @db_session

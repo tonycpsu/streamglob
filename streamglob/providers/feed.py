@@ -28,6 +28,7 @@ class FeedMediaListing(model.ContentMediaListing):
     fetched: bool = False
     downloaded: bool = False
     watched: bool = False
+    attrs: dict = field(default_factory=dict)
 
     # @property
     # def locator(self):
