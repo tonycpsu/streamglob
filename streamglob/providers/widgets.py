@@ -133,6 +133,6 @@ class ProviderDataTable(BaseDataTable):
                 else x for x in self.provider.highlight_re.split(value) if x
             ]
             if len(markup):
-                return urwid.Text(markup)
+                value = urwid.Text(markup)
 
         return super().decorate(row, column, value)

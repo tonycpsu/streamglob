@@ -223,7 +223,7 @@ class InstagramSession(session.StreamSession):
                         for t, u in urls
                     ]
 
-                    title = f"[{len(content)}] {title} "
+                    # title = f"[{len(content)}] {title} "
 
                 elif media_type == "image":
 

@@ -301,6 +301,14 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             return super().keypress(size, key)
         return key
 
+
+    def decorate(self, row, column, value):
+        if column.name == "title" and len(row.get("content")) > 1:
+            value = f"[{len(row.get('content'))}] {row.get('title')}"
+
+        return super().decorate(row, column, value)
+
+
 class FeedsFilter(ConfigFilter):
 
     key = "feeds"
