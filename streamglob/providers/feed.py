@@ -387,7 +387,6 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
     def ITEM_CLASS(self):
         return self.FEED_CLASS.ITEM_CLASS
 
-
     @property
     def ATTRIBUTES(self):
         return AttrDict(
@@ -396,6 +395,12 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
             created = {"width": 19},
             title = {"width": ("weight", 1), "format_fn": utils.strip_emoji},
         )
+
+    @property
+    def RPC_METHODS(self):
+        return [
+            ("mark_item_read", self.mark_item_read)
+        ]
 
     @property
     def status(self):
@@ -606,3 +611,14 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
                 )
                 listing.content = self.MEDIA_SOURCE_CLASS.schema().loads(listing["content"], many=True)
                 yield(listing)
+
+    @db_session
+    def mark_item_read(self, media_item_id):
+        logger.info(f"mark_item_read: {media_item_id}")
+        with db_session:
+            try:
+                self.ITEM_CLASS[media_item_id].read = datetime.now()
+                commit()
+                self.view.table.reset()
+            except pony.orm.core.ObjectNotFound:
+                logger.info(f("mark_item_read: item {media_item_id} not found"))
