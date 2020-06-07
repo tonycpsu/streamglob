@@ -168,9 +168,11 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 created=row.data.created,
                 feed=row.data.feed.name,
                 locator=row.data.feed.locator,
+                num=num+1,
+                count=len(row.data.content),
                 content=url
             )
-            for row in self for url in row.data.content
+            for row in self for num, url in enumerate(row.data.content)
         ]
         # raise Exception(items)
         if playlist:
@@ -179,9 +181,14 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 for item in items:
                     m3u.write(ITEM_TEMPLATE.format(
                         title=(
-                            f"{self.provider.IDENTIFIER.lower()}.{item.media_item_id} "
-                            f"{item.feed}: {item.locator} "
+                            f"{self.provider.IDENTIFIER.lower()}.{item.media_item_id}"
+                            " "
+                            f"{item.feed}: {item.locator}"
+                            " "
                             f"{item.created.isoformat().split('.')[0]}"
+                            "."
+                            f"{item.num:02d}_{item.count:02d}"
+                            " "
                             f"{' ' if len(item.title.strip()) else ''}"
                             f"{item.title.strip() or '(no title)'}"
                         ),
