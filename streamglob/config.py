@@ -108,14 +108,6 @@ class ProfileTree(ConfigTree):
         d = ConfigTree()
         for pn in self._profile_names:
             d = dict_merge(d, self[pn])
-            # d = dict_merge(self[pn], d)
-
-            # if (self._merge_default
-            #     and self._profile_names != self._default_profile_names):
-            #     return dict_merge(self[self._default_profile_names], p)
-            # else:
-            #     return p
-
         return d
 
     @property
@@ -147,7 +139,7 @@ class ProfileTree(ConfigTree):
             self.include_profile(profile)
 
     def reset_profiles(self):
-        pass
+        self._profile_names = [ self._default_profile_name ]
 
     def __setattr__(self, name, value):
         if not name.startswith("_"):
