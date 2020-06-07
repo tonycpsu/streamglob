@@ -259,6 +259,7 @@ class InstagramSession(session.StreamSession):
 
             created = datetime.fromtimestamp(int(node["created_time"]))
             # logger.info(f"post: {post_id}, {created.date()}, {end_cursor}")
+
             yield(
                 AttrDict(
                     guid = post_id,
@@ -331,6 +332,7 @@ class InstagramFeed(model.MediaFeed):
                 return
 
             if not new_seen:
+                logger.info("fetch done")
                 return
                 last_count = count
 
@@ -345,7 +347,7 @@ class InstagramDataTable(CachedFeedProviderDataTable):
         )
 
     @db_session
-    def on_end(self, source, count):
+    def fetch_more(self):
         feed = self.provider.feed
         logger.info(f"end: {count}")
         if feed is None:
@@ -353,6 +355,18 @@ class InstagramDataTable(CachedFeedProviderDataTable):
         feed.update(cursor=feed.attrs.get("cursor", None))
         self.provider.update_query()
         self.refresh()
+
+    @db_session
+    def on_end(self, source, count):
+        self.fetch_more()
+
+    def keypress(self, size, key):
+
+        if key == "meta f":
+            self.fetch_more()
+        else:
+            return super().keypress(size, key)
+
 
 class InstagramProviderView(SimpleProviderView):
 
