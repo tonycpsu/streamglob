@@ -399,7 +399,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
     @property
     def RPC_METHODS(self):
         return [
-            ("mark_item_read", self.mark_item_read)
+            ("mark_items_read", self.mark_items_read)
         ]
 
     @property
@@ -613,11 +613,15 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
                 yield(listing)
 
     @db_session
-    def mark_item_read(self, media_item_id):
-        logger.info(f"mark_item_read: {media_item_id}")
+    def mark_items_read(self, request):
+        media_item_ids = list(set(request.params))
+        logger.info(f"mark_items_read: {media_item_ids}")
         with db_session:
             try:
-                self.ITEM_CLASS[media_item_id].read = datetime.now()
+                for item in self.ITEM_CLASS.select(
+                    lambda i: i.media_item_id in media_item_ids
+                ):
+                    item.read = datetime.now()
                 commit()
                 self.view.table.reset()
             except pony.orm.core.ObjectNotFound:
