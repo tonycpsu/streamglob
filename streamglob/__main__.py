@@ -206,9 +206,14 @@ class BrowserView(BaseView):
             self.toolbar, "provider_change",
             lambda w, p: self.set_provider(p)
         )
+
+        def profile_change(p):
+            config.settings.toggle_profile(p)
+            player.Player.load()
+
         urwid.connect_signal(
             self.toolbar, "profile_change",
-            lambda w, p: config.settings.set_profile(p)
+            lambda w, p: profile_change(p)
         )
 
         self.browser_view_placeholder = urwid.WidgetPlaceholder(
@@ -476,11 +481,12 @@ def load_palette():
 def reload_config():
 
     logger.info("reload config")
-    profile = config.settings.profile_name
+    profiles = config.settings.profile_names
     config.load(options.config_dir, merge_default=True)
     providers.load_config()
-    if profile:
-        config.settings.set_profile(profile)
+    for p in profiles:
+        config.settings.include_profile(p)
+
     for k in list(state.screen._palette.keys()):
         del state.screen._palette[k]
     state.palette = load_palette()
@@ -604,7 +610,8 @@ def main():
 
     config.load(options.config_dir, merge_default=True)
     if options.profile:
-        config.settings.set_profile(options.profile)
+        for p in options.profile.split(","):
+            config.settings.include_profile(p)
     player.Player.load()
 
     parser = argparse.ArgumentParser()

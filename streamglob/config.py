@@ -1,4 +1,5 @@
-from __future__ import unicode_literals
+import logging
+logger = logging.getLogger(__name__)
 import os
 import errno
 import pytz
@@ -17,8 +18,6 @@ import tzlocal
 import getpass
 
 PACKAGE_NAME="streamglob"
-
-KNOWN_PLAYERS = ["mpv", "vlc"]
 
 settings = None
 
@@ -49,8 +48,12 @@ def yaml_loader(node_type):
 
     def __init__(self, *args, **kwargs):
         super(cls, self).__init__(*args, **kwargs)
+        def yaml_join(loader, node):
+            seq = loader.construct_sequence(node)
+            return ' '.join([str(i) for i in seq])
         self.add_constructor(u'tag:yaml.org,2002:map', from_yaml)
         self.add_constructor(u'tag:yaml.org,2002:omap', from_yaml)
+        self.add_constructor('!join', yaml_join)
 
     d = {"__init__": __init__}
 
@@ -87,26 +90,57 @@ class ProfileTree(ConfigTree):
                  *args, **kwargs):
         self._merge_default = merge_default
         self._default_profile_name = profile
-        self.__exclude_keys__ |= {"profile_name", "foo", "_default_profile_name",
+        self._profile_names = [self._default_profile_name]
+        self.__exclude_keys__ |= {"profile_names", "foo", "_default_profile_name",
                                   "_merge_default", "profile"}
-        self.set_profile(self._default_profile_name)
+        self.include_profile(self._default_profile_name)
         super().__init__(*args, **kwargs)
 
     @property
     def profile(self):
-        p = self[self._profile_name]
-        if (self._merge_default
-            and self._profile_name != self._default_profile_name):
-            return dict_merge(self[self._default_profile_name], p)
-        else:
-            return p
+        d = ConfigTree()
+        for pn in self._profile_names:
+            d = dict_merge(d, self[pn])
+            # d = dict_merge(self[pn], d)
+
+            # if (self._merge_default
+            #     and self._profile_names != self._default_profile_names):
+            #     return dict_merge(self[self._default_profile_names], p)
+            # else:
+            #     return p
+
+        return d
 
     @property
-    def profile_name(self):
-        return self._profile_name
+    def profile_names(self):
+        return self._profile_names
 
-    def set_profile(self, profile):
-        self._profile_name = profile
+    def include_profile(self, profile):
+        if profile == self._default_profile_name:
+            return
+        logger.debug(f"include_profile: {profile}")
+        if not profile in self._profile_names:
+            self._profile_names.append(profile)
+        logger.debug(f"profiles: {self.profile_names}")
+
+    def exclude_profile(self, profile):
+        if profile == self._default_profile_name:
+            return
+        logger.debug(f"exclude_profile: {profile}")
+        try:
+            self.profile_names.remove(profile)
+        except ValueError:
+            pass
+        logger.debug(f"profiles: {self.profile_names}")
+
+    def toggle_profile(self, profile):
+        if profile in self._profile_names:
+            self.exclude_profile(profile)
+        else:
+            self.include_profile(profile)
+
+    def reset_profiles(self):
+        pass
 
     def __setattr__(self, name, value):
         if not name.startswith("_"):
@@ -134,7 +168,7 @@ class Config(ConfigTree):
     def __init__(self, config_dir=None,
                  merge_default = False, *args, **kwargs):
         super(Config, self).__init__(*args, **kwargs)
-        self.__exclude_keys__ |= {"_config_dir", "set_profile", "_profile_tree"}
+        self.__exclude_keys__ |= {"_config_dir", "include_profile", "_profile_tree"}
         # self._config_file = config_file
         self._config_dir = config_dir or self.DEFAULT_CONFIG_DIR
         self.load()
@@ -164,11 +198,17 @@ class Config(ConfigTree):
         return self._profile_tree
 
     @property
-    def profile_name(self):
-        return self._profile_tree.profile_name
+    def profile_names(self):
+        return self._profile_tree.profile_names
 
-    def set_profile(self, profile):
-        self._profile_tree.set_profile(profile)
+    def include_profile(self, profile):
+        self._profile_tree.include_profile(profile)
+
+    def exclude_profile(self, profile):
+        self._profile_tree.exclude_profile(profile)
+
+    def toggle_profile(self, profile):
+        self._profile_tree.toggle_profile(profile)
 
     def load(self):
         if not os.path.exists(self.config_file):
@@ -197,19 +237,22 @@ __all__ = [
 
 def main():
     test_settings = Config(
-        os.path.expanduser("~/.config/streamglob/config.yaml"),
+        os.path.expanduser("~/.config/streamglob.feeds"),
         merge_default=True
     )
     # print(test_settings)
     # print(list(test_settings.profile.providers.keys()))
-    # test_settings.set_profile("proxy")
-    raise Exception(test_settings.profile.providers.youtube.get_path("output.template"))
-    print(test_settings.profile.get("env"))
-    print(test_settings.profiles["default"])
-    print(test_settings.profiles[("default")].get("env"))
-    print(test_settings.profiles[("default", "540p")].get("env"))
-    print(test_settings.profiles[("default", "540p")].get("env"))
-    print(test_settings.profiles[("default", "540p", "proxy")].get("env"))
+    # test_settings.include_profile("proxy")
+    test_settings.profile_names
+    print(test_settings.profile.players)
+    test_settings.include_profile("small")
+    print(test_settings.profile_names)
+    print(test_settings.profile.players)
+    # print(test_settings.profiles["default"])
+    # print(test_settings.profiles[("default")].get("env"))
+    # print(test_settings.profiles[("default", "540p")].get("env"))
+    # print(test_settings.profiles[("default", "540p")].get("env"))
+    # print(test_settings.profiles[("default", "540p", "proxy")].get("env"))
 
 if __name__ == "__main__":
     main()
