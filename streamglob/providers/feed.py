@@ -229,7 +229,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 ):
                     continue
                 self.mark_item_read(n)
-            self.refresh()
+            self.reset()
 
     def next_unread(self):
         self.mark_item_read(self.focus_position)
