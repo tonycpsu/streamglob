@@ -177,11 +177,11 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 m3u.write(f"#EXTM3U\n".encode("utf-8"))
                 for item in items:
                     m3u.write(ITEM_TEMPLATE.format(
-                        # mpv OSC crashes on emoji in title
                         title=pipes.quote(
                             f"{item.feed}: {item.locator} "
-                            f"{item.created.isoformat().split('.')[0]} "
-                            f"{utils.strip_emoji(item.title).strip()}"
+                            f"{item.created.isoformat().split('.')[0]}"
+                            f"{' ' if len(item.title.strip()) else ''}"
+                            f"{item.title.strip() or '(no title)'}"
                         ),
                         url=item.content.url
                     ).encode("utf-8"))
