@@ -163,6 +163,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         # ))
         items = [
             AttrDict(
+                media_item_id=row.data.media_item_id,
                 title=row.data.title,
                 created=row.data.created,
                 feed=row.data.feed.name,
@@ -177,7 +178,8 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 m3u.write(f"#EXTM3U\n".encode("utf-8"))
                 for item in items:
                     m3u.write(ITEM_TEMPLATE.format(
-                        title=pipes.quote(
+                        title=(
+                            f"{self.provider.IDENTIFIER.lower()}.{item.media_item_id} "
                             f"{item.feed}: {item.locator} "
                             f"{item.created.isoformat().split('.')[0]}"
                             f"{' ' if len(item.title.strip()) else ''}"
