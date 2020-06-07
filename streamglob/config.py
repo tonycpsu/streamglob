@@ -51,9 +51,16 @@ def yaml_loader(node_type):
         def yaml_join(loader, node):
             seq = loader.construct_sequence(node)
             return ' '.join([str(i) for i in seq])
+
+        def yaml_remove_arg(loader, node):
+            orig, remove = node.value
+            args = loader.construct_scalar(orig)
+            return " ".join(a for a in args.split() if a != remove.value)
+
         self.add_constructor(u'tag:yaml.org,2002:map', from_yaml)
         self.add_constructor(u'tag:yaml.org,2002:omap', from_yaml)
         self.add_constructor('!join', yaml_join)
+        self.add_constructor('!remove_arg', yaml_remove_arg)
 
     d = {"__init__": __init__}
 
