@@ -266,6 +266,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     def kill_all(self):
         if not self.provider.feed:
             return
+        logger.info(f"killing all messages for {self.provider.feed.locator}")
         with db_session:
             delete(i for i in self.provider.feed.items)
             commit()
