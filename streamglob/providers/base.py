@@ -122,6 +122,7 @@ class BaseProvider(abc.ABC):
     FILTERS = AttrDict()
     ATTRIBUTES = AttrDict(title={"width": ("weight", 1)})
     MEDIA_TYPES = None
+    RPC_METHODS = []
 
     def __init__(self, *args, **kwargs):
         self._view = None

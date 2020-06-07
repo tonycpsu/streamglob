@@ -29,6 +29,7 @@ setup(name=name,
           "streamglob": ["data/*"]
       },
       install_requires = [
+          "aiohttp-json-rpc",
           "atoma",
           "bitmath",
           "dataclasses_json",

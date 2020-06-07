@@ -31,6 +31,8 @@ import dateutil.parser
 import yaml
 import orderedattrdict.yamlutils
 from orderedattrdict.yamlutils import AttrDictYAMLLoader
+from aiohttp.web import Application, AppRunner, TCPSite
+from aiohttp_json_rpc import JsonRpc
 
 from .state import *
 from .widgets import *
@@ -554,8 +556,31 @@ def run_gui(action, provider, **kwargs):
     def activate_view(loop, user_data):
         state.browser_view.activate()
 
-    # tasks.start_task_manager()
 
+    def start_server(loop, user_data):
+
+        app = Application()
+
+        async def start_server_async():
+            runner = AppRunner(app)
+            await runner.setup()
+            site = TCPSite(runner, 'localhost', 8080)
+            await site.start()
+
+        rpc = JsonRpc()
+
+        methods = []
+        for pname, p in providers.PROVIDERS.items():
+            methods += [
+                (pname, func)
+                for name, func in p.RPC_METHODS
+            ]
+
+        rpc.add_methods(*methods)
+        app.router.add_route("*", "/", rpc.handle_request)
+        asyncio.create_task(start_server_async())
+
+    state.loop.set_alarm_in(0, start_server)
     state.loop.set_alarm_in(0, activate_view)
     state.loop.run()
 
