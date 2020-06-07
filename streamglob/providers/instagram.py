@@ -173,7 +173,7 @@ class InstagramSession(session.StreamSession):
 
             else:
                 if "carousel_media" in node:
-                    post_type = "story"
+                    post_type = "carousel"
 
                     # content = [
                     #     self.provider.new_media_source(
@@ -205,7 +205,7 @@ class InstagramSession(session.StreamSession):
                         #   The string 0_0_0 seems to always appear in corrupted URLs
                         if not any([ "0_0_0" in u for (t, u) in urls]):
                             break
-                        logger.info("oops story")
+                        logger.info("oops")
                         with limit(limiter, consume=2):
                             try:
                                 d = self.web_api.media_info2(node["shortcode"])
