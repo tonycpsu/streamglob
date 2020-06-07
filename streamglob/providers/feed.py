@@ -630,6 +630,6 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
                 ):
                     item.read = datetime.now()
                 commit()
-                self.view.table.reset()
+                self.view.table.refresh()
             except pony.orm.core.ObjectNotFound:
                 logger.info(f("mark_item_read: item {media_item_id} not found"))

@@ -398,6 +398,11 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
     #     self.end_cursor = None
     #     super().__init__(*args, **kwargs)
 
+    POST_TYPE_MAP = {
+        "image": "img",
+        "video": "vid",
+        "carousel": "car"
+    }
     @property
     def ATTRIBUTES(self):
         attrs = list(super().ATTRIBUTES.items())
@@ -405,7 +410,13 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
         return AttrDict(
             attrs[:idx]
             + [
-                ("post_type", {"label": "type", "width": 5})
+                ("post_type", {
+                    "label": "type",
+                    "width": 4,
+                    "format_fn": lambda t: self.POST_TYPE_MAP.get(t, t),
+                    "align": "right",
+                    "sort_icon": False,
+                })
             ]
             + attrs[idx:]
         )
