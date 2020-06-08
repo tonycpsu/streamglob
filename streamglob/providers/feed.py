@@ -174,6 +174,8 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             )
             for row in self for num, url in enumerate(row.data.content)
         ]
+        if not len(items):
+            return
         # raise Exception(items)
         if playlist:
             with tempfile.NamedTemporaryFile(suffix=".m3u8", delete=False) as m3u:
