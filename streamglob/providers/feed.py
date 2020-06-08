@@ -189,7 +189,6 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                             "."
                             f"{item.num:02d}_{item.count:02d}"
                             " "
-                            f"{' ' if len(item.title.strip()) else ''}"
                             f"{item.title.strip() or '(no title)'}"
                         ),
                         url=item.content.url
@@ -630,6 +629,6 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
                 ):
                     item.read = datetime.now()
                 commit()
-                self.view.table.refresh()
+                self.reset()
             except pony.orm.core.ObjectNotFound:
                 logger.info(f("mark_item_read: item {media_item_id} not found"))
