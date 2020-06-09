@@ -261,7 +261,7 @@ class TasksDataTable(BaseDataTable):
         (c.name, c)
         for c in [
                 # DataTableColumn("action", width=8),
-                DataTableColumn("program", width=16, format_fn = lambda p: p.cmd if p else ""),
+                DataTableColumn("program", width=16, format_fn = lambda p: p.result().cmd if p else ""),
                 DataTableColumn("started", width=20, format_fn = utils.format_datetime),
                 DataTableColumn("elapsed",  width=14, align="right",
                                 format_fn = utils.format_timedelta),

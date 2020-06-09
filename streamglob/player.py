@@ -20,6 +20,9 @@ import signal
 import platform
 import tempfile
 import shutil
+import json
+import time
+from python_mpv_jsonipc import MPV
 if platform.system() != "Windows":
     import termios, fcntl, struct, pty
 
@@ -561,21 +564,44 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
     INTEGRATED_HELPERS = ["youtube-dl"]
 
     def __init__(self, *args, **kwargs):
+        self._initialized = False
         super().__init__(*args, **kwargs)
         self.ipc_socket_name = None
         self.tmp_dir = None
         self._ipc_socket = None
+        self.controller = None
+        self._initialized = True
 
     async def run(self, *args, **kwargs):
         self.tmp_dir = tempfile.mkdtemp()
         self.ipc_socket_name = os.path.join(self.tmp_dir, "mpv_socket")
-        logger.info(f"mpv socket: {self.ipc_socket_name}")
+        # logger.info(f"mpv socket: {self.ipc_socket_name}")
         self.extra_args_pre += [f"--input-ipc-server={self.ipc_socket_name}"]
         await super().run(*args, **kwargs)
+        await self.wait_for_socket()
+        # logger.info("starting controller")
+        self.controller = MPV(start_mpv=False, ipc_socket=self.ipc_socket_name)
+        # state.asyncio_loop.call_later(5, self.test)
+
+    async def wait_for_socket(self):
+
+        while not os.path.exists(self.ipc_socket_name):
+            time.sleep(0.5)
+
+    def __getattr__(self, attr):
+        if attr in ["_initialized"] or not self._initialized:
+            return object.__getattribute__(self, attr)
+        return getattr(self.controller, attr)
+
+    def __setattr__(self, attr, value):
+        if attr in ["_initialized"] or not self._initialized or not hasattr(self.controller, attr):
+            return object.__setattr__(self, attr, value)
+        return setattr(self.controller, attr, value)
 
     def __del__(self):
         if self.tmp_dir:
             shutil.rmtree(self.tmp_dir)
+
 
 class VLCPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
     pass

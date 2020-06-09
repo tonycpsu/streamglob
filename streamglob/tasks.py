@@ -52,9 +52,10 @@ class TaskManager(Observable):
         # task.action = "play"
         task.args = (player_spec, helper_spec)
         task.kwargs = kwargs
+        task.program = asyncio.Future()
         task.result = asyncio.Future()
         self.to_play.append(task)
-        return task.result
+        return task
 
     def download(self, task, filename, helper_spec, **kwargs):
         self.current_task_id +=1
@@ -62,9 +63,10 @@ class TaskManager(Observable):
         # task.action = "download"
         task.args = (filename, helper_spec)
         task.kwargs = kwargs
+        task.program = asyncio.Future()
         task.result = asyncio.Future()
         self.to_download.append(task)
-        return task.result
+        return task
 
     async def start(self):
         logger.debug("task_manager starting")
@@ -119,7 +121,7 @@ class TaskManager(Observable):
                     continue
             else:
                 raise NotImplementedError
-            task.program = program
+            task.program.set_result(program)
             task.proc = program.proc
             logger.debug(f"proc: {task.proc}")
             task.pid = program.proc.pid
@@ -166,11 +168,12 @@ class TaskManager(Observable):
 
             for s in self.playing + self.active:
 
+                prog = await s.program
                 s.elapsed = datetime.now() - s.started
-                if hasattr(s.program, "update_progress"):
-                    await s.program.update_progress()
-                if hasattr(s.program.source, "update_progress"):
-                    await s.program.source.update_progress()
+                if hasattr(prog, "update_progress"):
+                    await prog.update_progress()
+                if hasattr(prog.source, "update_progress"):
+                    await prog.source.update_progress()
 
             if state.get("tasks_view"):
                 state.tasks_view.refresh()

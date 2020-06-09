@@ -65,6 +65,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         self.mark_read_on_focus = False
         self.mark_read_task = None
         self.update_count = True
+        self.player = None
         urwid.connect_signal(
             self, "focus",
             self.on_focus
@@ -89,6 +90,15 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     @db_session
     def on_focus(self, source, position):
+        if self.player:
+            try:
+                self.player.playlist_pos = next(
+                    i for n, i in enumerate(self.play_items)
+                    if i.media_item_id == self[position].data.media_item_id
+                ).row_num
+            except StopIteration:
+                pass
+            # self.player.controller.command("set", "playlist-pos", position)
         if self.mark_read_on_focus:
             self.mark_read_on_focus = False
             if self.mark_read_task:
@@ -169,13 +179,17 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 feed=row.data.feed.name,
                 locator=row.data.feed.locator,
                 num=num+1,
+                row_num=row_num,
                 count=len(row.data.content),
                 content=url
             )
-            for row in self for num, url in enumerate(row.data.content)
+            for row_num, (row, num, url) in enumerate( (row, num, url) for row in self for num, url in enumerate(row.data.content))
         ]
+
         if not len(items):
             return
+
+        self.play_items = items
         # raise Exception(items)
         if playlist:
             with tempfile.NamedTemporaryFile(suffix=".m3u8", delete=False) as m3u:
@@ -207,8 +221,6 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                         media_type = "video"
                     )
                 )
-                self.provider.play(listing)
-
 
         else:
             listing = self.provider.new_listing(
@@ -219,7 +231,15 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 ) + f"{self.provider.status})",
                 content = [ item.url for item in items ]
             )
-            self.provider.play(listing)
+        self.player_task =  self.provider.play(listing)
+        logger.info(self.player_task)
+        self.player = await self.player_task.program
+        logger.info(self.player)
+        def on_player_done(f):
+            logger.info("player done")
+            self.player = None
+
+        self.player_task.result.add_done_callback(on_player_done)
         # logger.info(urls)
 
 
