@@ -18,6 +18,8 @@ from collections.abc import MutableMapping
 import select
 import signal
 import platform
+import tempfile
+import shutil
 if platform.system() != "Windows":
     import termios, fcntl, struct, pty
 
@@ -557,6 +559,23 @@ class FEHPlayer(Player, MEDIA_TYPES={"image"}):
 class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
 
     INTEGRATED_HELPERS = ["youtube-dl"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.ipc_socket_name = None
+        self.tmp_dir = None
+        self._ipc_socket = None
+
+    async def run(self, *args, **kwargs):
+        self.tmp_dir = tempfile.mkdtemp()
+        self.ipc_socket_name = os.path.join(self.tmp_dir, "mpv_socket")
+        logger.info(f"mpv socket: {self.ipc_socket_name}")
+        self.extra_args_pre += [f"--input-ipc-server={self.ipc_socket_name}"]
+        await super().run(*args, **kwargs)
+
+    def __del__(self):
+        if self.tmp_dir:
+            shutil.rmtree(self.tmp_dir)
 
 class VLCPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
     pass
