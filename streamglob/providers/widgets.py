@@ -126,13 +126,14 @@ class ProviderDataTable(BaseDataTable):
             if self.translate and row.get("_title_translated"):
                 value = row.get("_title_translated")
 
-            markup = [
-                ( next(v for k, v in self.provider.highlight_map.items()
-                       if k.search(x)), x)
-                if self.provider.highlight_re.search(x)
-                else x for x in self.provider.highlight_re.split(value) if x
-            ]
-            if len(markup):
-                value = urwid.Text(markup)
+            if self.provider.highlight_map:
+                markup = [
+                    ( next(v for k, v in self.provider.highlight_map.items()
+                           if k.search(x)), x)
+                    if self.provider.highlight_re.search(x)
+                    else x for x in self.provider.highlight_re.split(value) if x
+                ]
+                if len(markup):
+                    value = urwid.Text(markup)
 
         return super().decorate(row, column, value)

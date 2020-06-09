@@ -132,8 +132,8 @@ class BaseProvider(abc.ABC):
                                   for n, f in self.FILTERS.items() })
 
         rules = AttrDict(
-            self.config.rules.label,
-            **config.settings.profile.rules.label
+            self.config.rules.label or {},
+            **config.settings.profile.rules.label or {}
         )
 
         labels = AttrDict(
