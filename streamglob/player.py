@@ -570,6 +570,7 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
         self.tmp_dir = None
         self._ipc_socket = None
         self.controller = None
+        self.extra_args_pre += ["--title=streamglob: ${media-title}"]
         self._initialized = True
 
     async def run(self, *args, **kwargs):
