@@ -116,7 +116,9 @@ class Program(abc.ABC):
     def __init__(self, path, args=[],
                  exclude_types=None, no_progress=False,
                  stdin=None, stdout=None, stderr=None,
+                 ssh_host=None,
                  **kwargs):
+
         self.path = path
         if isinstance(args, str):
             self.args = args.split()
@@ -139,6 +141,7 @@ class Program(abc.ABC):
         else:
             self.stdout = stdout
         self.stderr = stderr
+        self.ssh_host = ssh_host
         self.proc = None
 
         self.progress = ProgressStats()
@@ -378,32 +381,26 @@ class Program(abc.ABC):
 
         self.process_kwargs(kwargs)
 
-        cmd = self.command + self.extra_args_pre
+        cmd = []
+        if self.ssh_host:
+            cmd += ["/usr/bin/ssh", self.ssh_host]
+
+        cmd += self.command + self.extra_args_pre
         if self.source_is_program:
             read, write = os.pipe()
-            # self.source.stdout = asyncio.subprocess.PIPE#subprocess.PIPE
             self.source.stdout = write
-            # self.source.stdout = subprocess.PIPE
             self.proc = await self.source.run(**kwargs)
             os.close(write)
             self.stdin = read
             self.stdout = subprocess.PIPE
-            # self.stdin = self.proc.stdout
-            # self.stdin = self.proc._transport._proc.stdout
-            # os.close(read)
-            # self.proc.stdout = await self.source.stdout.read()
         elif isinstance(self.source, model.MediaTask):
             cmd += [s.locator for s in self.source.sources]
 
         elif isinstance(self.source, list):
-            # cmd += self.source
             cmd += [s.locator for s in self.source]
         else:
-            # raise Exception
-            # cmd += [self.source]
             cmd += [self.source.locator]
         cmd += self.extra_args_post
-
 
         if not self.source_integrated:
 
@@ -544,8 +541,6 @@ class Downloader(Program):
         logger.info(f"{downloader} downloading {source.locator} to {outfile}")
         downloader.source = task
         downloader.extra_args_post += ["-o", outfile]
-        # downloader.run(**kwargs)
-        # state.asyncio_loop.create_task(downloader.run(**kwargs))
         await(downloader.run(**kwargs))
         return downloader
 
@@ -642,12 +637,14 @@ class YouTubeDLHelper(Helper, Downloader):
         return False
 
     async def update_progress(self):
+        logger.debug("update_progress")
 
         async def process_lines():
             async for line in self.get_output():
+                logger.info(line)
                 if not line:
                     continue
-                # logger.info(line)
+                logger.debug(line)
                 if "[download] Destination:" in line:
                     self.source.dest = line.split(":")[1].strip()
                     continue
@@ -772,7 +769,7 @@ async def get():
     return await(Downloader.download(
         model.MediaSource("https://www.youtube.com/watch?v=5aVU_0a8-A4"),
         "foo.mp4",
-        "streamlink"
+        "youtube-dl"
     ))
 
 async def check_progress(program):
@@ -784,83 +781,68 @@ async def check_progress(program):
         # print(program.progress.size)
         # print(r)
 
-async def go():
+async def play_test():
     task = model.PlayMediaTask(
         provider="rss",
         title= "foo",
         sources = [
-            model.MediaSource("youtube", "https://pscp.tv/w/1lDGLXnEeBPGm")
-            # model.MediaSource("twitch", "https://steamcommunity.com/sharedfiles/filedetails/?id=1672526416")
+            model.MediaSource("youtube", "https://www.youtube.com/watch?v=5aVU_0a8-A4")
         ]
     )
 
-    # prog = await Player.play(task, {"media_types": {"video"}}, "streamlink")
-    prog = await Downloader.download(task, "foo.mp4", "youtube-dl")
+    prog = await Player.play(task, {"media_types": {"video"}}, "streamlink")
+    # prog = await Downloader.download(task, "foo.mp4", "youtube-dl")
     # prog = await Downloader.download(task, "foo.mp4", "streamlink")
     state.asyncio_loop.create_task(check_progress(prog))
+
+
+async def download_test():
+    task = model.DownloadMediaTask(
+        provider="rss",
+        title= "foo",
+        sources = [
+            model.MediaSource("youtube", "https://www.youtube.com/watch?v=5aVU_0a8-A4")
+        ]
+    )
+
+
+    # prog = await Player.play(task, {"media_types": {"video"}}, "streamlink")
+    task = await Downloader.download(task, "foo.mp4", "youtube-dl")
+    def on_downloader_done(result):
+        logger.info(result.returncode)
+
+    task.result.add_done_callback(on_downloader_done)
+
+    # prog = await Downloader.download(task, "foo.mp4", "streamlink")
+    task = state.asyncio_loop.create_task(check_progress(prog))
+
+
+def asyncio_test():
+    state.asyncio_loop = asyncio.get_event_loop()
+
+    state.asyncio_loop.create_task(download_test())
+    state.asyncio_loop.run_forever()
+
+
+class CatProgram(Program):
+    pass
+
 
 def main():
 
     from tonyc_utils import logging
 
-    logging.setup_logging(2)
-    config.load(merge_default=True)
-    config.settings.load()
-    Program.load()
-    state.asyncio_loop = asyncio.get_event_loop()
-
-    # global PROGRAMS
-    # from pprint import pprint
-    # pprint(PROGRAMS)
-    # raise Exception
-
     parser = argparse.ArgumentParser()
+    parser.add_argument("-c", "--config-dir", help="use alternate config directory")
     options, args = parser.parse_known_args()
 
-    p = Helper.get("streamlink")
+    logging.setup_logging(2)
+    config.load(options.config_dir, merge_default=True)
+    config.settings.load()
+    Program.load()
 
-    state.asyncio_loop.create_task(go())
-    state.asyncio_loop.run_forever()
-    # for line in iter(downloader.proc.stdout.readline, b""):
-    #     print(line)
+    asyncio_test()
 
-    # import time; time.sleep(5)
-
-    # raise Exception(list(Helper.get()))
-    # for p in [
-    #         next(Program.get("streamlink")),
-    #         next(Program.get("youtube-dl"))
-    # ]:
-    #     print(p.supports_url(args[0]))
-
-    # streamlink = next(Helper.get("streamlink"))
-    # streamlink.source = MediaSource("http://foo.com")
-
-    # mpv = next(Player.get("mpv"))
-    # mpv.source = streamlink
-    # mpv.play()
-
-    # streamlink = next(Helper.get("streamlink"))
-    # streamlink.source = model.MediaSource("http://foo.com")
-
-    # p = next(Player.get({"media_types": {"text"}}))
-    # p, h = Player.get_with_helper(
-    #     {"media_types": {"video"}},
-    #     {
-    #         "mpv": None,
-    #         None: "youtube-dl",
-    #     }
-    # )
-
-    # raise Exception(p, h)
-
-
-
-    # y = Program.get(config.settings.profile.helpers.youtube_dl,
-    #              "https://www.youtube.com/watch?v=5aVU_0a8-A4")
-    # v = Program.get(config.settings.profile.players.vlc, y)
-    # proc = v.play()
-    # proc.wait()
 
 if __name__ == "__main__":
     main()
