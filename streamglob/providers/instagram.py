@@ -60,7 +60,6 @@ class InstagramSession(session.StreamSession):
         super().__init__(
             *args, **kwargs
         )
-
         self.limiter = get_limiter(rate=self.RATE, capacity=self.CACPACITY)
         self.loader = None
         self.login()
@@ -139,7 +138,7 @@ class InstagramFeed(model.MediaFeed):
                 i = self.ITEM_CLASS(
                     feed = self,
                     guid = post.shortcode,
-                    title = post.caption,
+                    title = post.caption or "",
                     created = post.date_utc,
                     post_type = post_type,
                     content =  InstagramMediaSource.schema().dumps(
