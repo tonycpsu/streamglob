@@ -36,6 +36,11 @@ class InstagramMediaSource(model.MediaSource):
             ("mpv", None),
         ])
 
+    @property
+    def is_bad(self):
+        return any(s in self.locator for s in ["0_0_0", "null.jpg"])
+
+
 @dataclass
 class InstagramMediaListing(FeedMediaListing):
 
@@ -75,7 +80,6 @@ class InstagramSession(session.StreamSession):
 class InstagramItem(model.MediaItem):
 
     post_type = Required(str)
-
 
 class InstagramFeed(model.MediaFeed):
 

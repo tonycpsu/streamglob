@@ -170,9 +170,10 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 locator=row.data.feed.locator,
                 num=num+1,
                 count=len(row.data.content),
-                content=url
+                url=source.url
             )
-            for row in self for num, url in enumerate(row.data.content)
+            for row in self for num, source in enumerate(row.data.content)
+            if not source.is_bad
         ]
         if not len(items):
             return
@@ -193,7 +194,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                             " "
                             f"{item.title.strip() or '(no title)'}"
                         ),
-                        url=item.content.url
+                        url=item.url
                     ).encode("utf-8"))
                 logger.info(m3u.name)
                 listing = self.provider.new_listing(
