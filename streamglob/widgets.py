@@ -183,20 +183,6 @@ class ScrollbackListBox(panwid.listbox.ScrollingListBox):
 
     signals = ["updated"]
 
-    # def __init__(self, update_interval=1):
-    #     self.update_interval = update_interval
-    #     self._results = ScrollbackListWalker(1000)
-    #     self._fields = []
-    #     # self.lock = threading.Lock()
-    #     self.collapsed = True
-    #     self.hidefields = []
-    #     self.filters = []
-    #     self.pattern = None
-    #     self.updated = False
-    #     self.update_timer = None
-    #     self._listbox = urwid.ListBox(self._results)
-    #     urwid.WidgetWrap.__init__(self, self._listbox)
-
     def _modified(self):
         self.body._modified()
 
@@ -232,6 +218,9 @@ class ScrollbackListBox(panwid.listbox.ScrollingListBox):
     def on_updated(self):
         self._invalidate()
         self.set_focus(len(self.body)-1)
+        if not (self._width and self._height):
+            return
+        self.listbox.make_cursor_visible((self._width, self._height))
         # state.loop.draw_screen()
 
     def selectable(self):

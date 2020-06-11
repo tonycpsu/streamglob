@@ -65,6 +65,8 @@ class PatchedAsyncioEventLoop(urwid.AsyncioEventLoop):
             loop.default_exception_handler(context)
 
 
+
+
 class UrwidLoggingHandler(logging.Handler):
 
     pipe = None
@@ -83,7 +85,8 @@ class UrwidLoggingHandler(logging.Handler):
         msg = self.format(rec)
         (ignore, ready, ignore) = select.select([], [self.pipe], [])
         if self.pipe in ready:
-            os.write(self.pipe, (msg[:512]+"\n").encode("utf-8"))
+            msg = utils.format_str_truncated(511, msg, encoding="utf-8") + "\n"
+            os.write(self.pipe, msg.encode("utf-8"))
 
 
 def quit_app():
@@ -526,7 +529,7 @@ def run_gui(action, provider, **kwargs):
 
         add_log_handler(ulh)
         pile.contents.append(
-            (urwid.LineBox(log_console), pile.options("weight", 1))
+            (urwid.LineBox(log_console), pile.options("weight", 2))
         )
 
 

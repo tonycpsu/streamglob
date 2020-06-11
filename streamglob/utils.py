@@ -87,9 +87,22 @@ def format_timedelta(td):
     return (f"{'%sd' % days if days else ''}"
             f"{hours:02}:{minutes:02}:{seconds:02}")
 
-def format_str_truncated(n, s):
-    # FIXME: make non-unicode safe
-    return s[:n-1] + u"\u2026" if len(s) >= n else s
+ELLIPSIS=u"\u2026"
+def format_str_truncated(length, s, end_char=ELLIPSIS, encoding=None):
+    """
+    Truncate a string based on number of characters (default) or the encoded
+    length of the string if `encoding` is set.  Returns the string truncated,
+    optionally with a character at the end to denote truncation.
+    """
+    if encoding:
+        encoded = s.encode(encoding)
+        if len(encoded) > length:
+            encoded = encoded[:length - (len(end_char.encode(encoding)) if end_char else 0)]
+            s = encoded.decode(encoding, 'ignore') + (end_char or "")
+    else:
+        if len(s) > n:
+            s = s[:length - 1 if end_char else 0] + (end_char or "")
+    return s
 
 
 EMOJI_RE = re.compile(
@@ -233,7 +246,6 @@ def html_to_urwid_text_markup(html, excludes=[]):
         if a != "\n\n"
         or a != b
     ]
-
 
 
 __all__ = [
