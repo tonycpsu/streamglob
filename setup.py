@@ -35,7 +35,7 @@ setup(name=name,
           "dataclasses_json",
           "googletransx",
           "html2text",
-          "instagram_private_api @ git+https://github.com/eracle/instagram_private_api",
+          "instaloader @ git+https://github.com/tonycpsu/instaloader", # until #636 merged
           "limiter",
           "lxml",
           "mistune",

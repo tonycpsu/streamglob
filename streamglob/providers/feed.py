@@ -164,7 +164,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         items = [
             AttrDict(
                 media_item_id=row.data.media_item_id,
-                title=row.data.title,
+                title=row.data.title.replace("\n", " "),
                 created=row.data.created,
                 feed=row.data.feed.name,
                 locator=row.data.feed.locator,
