@@ -147,7 +147,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     def toggle_item_read(self, position):
         if not isinstance(self[position].data, model.MediaListing):
             return
-        logger.info(self.get_value(position, "read"))
+        # logger.info(self.get_value(position, "read"))
         if self.get_value(position, "read") is not None:
             self.mark_item_unread(position)
         else:
@@ -267,17 +267,21 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     def next_unread(self):
         self.mark_item_read(self.focus_position)
-        try:
-            idx = next(
-                r.data.media_item_id
-                for r in self[self.focus_position+1:]
-                if not r.data.read
-            )
-        except StopIteration:
-            self.focus_position = len(self)-1
-            self.load_more(self.focus_position)
-            self.focus_position += 1
-            return
+        while True:
+            try:
+                idx = next(
+                    r.data.media_item_id
+                    for r in self[self.focus_position+1:]
+                    if not r.data.read
+                )
+                break
+            except StopIteration:
+                if len(self) >= self.query_result_count():
+                    return
+                self.focus_position = len(self)-1
+                self.load_more(self.focus_position)
+                self.focus_position += 1
+
         pos = self.index_to_position(idx)
         self.focus_position = pos
         self.mark_read_on_focus = True
