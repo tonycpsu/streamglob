@@ -50,30 +50,9 @@ urwid.AsyncioEventLoop._idle_emulation_delay = 1/20
 
 PACKAGE_NAME=__name__.split('.')[0]
 
-class PatchedAsyncioEventLoop(urwid.AsyncioEventLoop):
-    def _exception_handler(self, loop, context):
-        exc = context.get('exception')
-        if exc:
-            loop.stop()
-            if not isinstance(exc, urwid.ExitMainLoop):
-                # Store the exc_info so we can re-raise after the loop stops
-                import sys
-                self._exc_info = sys.exc_info()
-                if self._exc_info == (None, None, None):
-                    self._exc_info = (type(exc), exc, exc.__traceback__)
-        else:
-            loop.default_exception_handler(context)
-
-
-
-
 class UrwidLoggingHandler(logging.Handler):
 
     pipe = None
-    # def __init__(self, console):
-
-    #     self.console = console
-    #     super(UrwidLoggingHandler, self).__init__()
 
     def connect(self, pipe):
         self.pipe = pipe
@@ -522,15 +501,14 @@ def run_gui(action, provider, **kwargs):
     ])
 
     set_stdout_level(logging.CRITICAL)
-    if options.debug_console:
-        log_console = ConsoleWindow()
+    log_console = ConsoleWindow()
 
-        ulh = UrwidLoggingHandler()
+    ulh = UrwidLoggingHandler()
 
-        add_log_handler(ulh)
-        pile.contents.append(
-            (urwid.LineBox(log_console), pile.options("weight", 2))
-        )
+    add_log_handler(ulh)
+    pile.contents.append(
+        (urwid.LineBox(log_console), pile.options("weight", 2))
+    )
 
 
     def global_input(key):
@@ -545,13 +523,12 @@ def run_gui(action, provider, **kwargs):
         pile,
         state.palette,
         screen=state.screen,
-        event_loop=PatchedAsyncioEventLoop(loop=state.asyncio_loop),
+        event_loop = urwid.AsyncioEventLoop(loop=state.asyncio_loop),
         unhandled_input=global_input,
         pop_ups=True
     )
 
-    if options.debug_console:
-        ulh.connect(state.loop.watch_pipe(log_console.log_message))
+    ulh.connect(state.loop.watch_pipe(log_console.log_message))
 
     if options.verbose:
         logger.setLevel(logging.DEBUG)
@@ -587,42 +564,28 @@ def run_gui(action, provider, **kwargs):
     state.loop.set_alarm_in(0, activate_view)
     state.loop.run()
 
+
 def run_cli(action, provider, selection, **kwargs):
 
-    if action == "play":
-        program = state.asyncio_loop.run_until_complete(
-            provider.play(
-                selection,
-                no_task_manager=True,
-                no_progress=True,
-                stdout=sys.stdout, stderr=sys.stderr, **kwargs
-            )
-        )
-    elif action == "download":
-        program = state.asyncio_loop.run_until_complete(
-            provider.download(
-                selection,
-                no_task_manager=True,
-                no_progress=True,
-                tdout=sys.stdout, stderr=sys.stderr, **kwargs
-            )
-        )
-    else:
+    try:
+        method = getattr(provider, action)
+    except AttributeError:
         raise Exception(f"unknown action: {action}")
 
     try:
-        state.asyncio_loop.run_until_complete(
-            program.proc.wait()
+        result = state.asyncio_loop.run_until_complete(
+            method(
+                selection,
+                no_progress=True,
+                stdout=sys.stdout, stderr=sys.stderr, **kwargs
+            ).result
         )
     except KeyboardInterrupt:
         logger.info("Exiting on keyboard interrupt")
         program.proc.send_signal(signal.SIGHUP)
 
-    # while True:
-    #     state.procs = [p for p in state.procs if p.poll() is None]
-    #     if not len(state.procs):
-    #         break
-    #     time.sleep(0.25)
+    return result
+
 
 def main():
 
@@ -648,9 +611,6 @@ def main():
                         help="verbose logging")
     group.add_argument("-q", "--quiet", action="count", default=0,
                         help="quiet logging")
-    parser.add_argument("-d", "--debug-console",
-                        help="show logging console (disables task manager UI)",
-                        action="store_true")
     parser.add_argument("spec", metavar="SPECIFIER",
                         help="media specifier", nargs="?")
 
@@ -692,10 +652,11 @@ def main():
     action, provider, selection, opts = providers.parse_spec(options.spec)
 
     if selection:
-        run_cli(action, provider, selection, **opts)
+        rc = run_cli(action, provider, selection, **opts)
     else:
-        run_gui(action, provider, **opts)
+        rc = run_gui(action, provider, **opts)
 
+    return rc
 
 if __name__ == "__main__":
     main()

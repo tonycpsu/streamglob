@@ -416,26 +416,17 @@ class BaseProvider(abc.ABC):
             sources = sources
         )
 
-        if not (no_task_manager or state.options.debug_console):
-            return state.task_manager.play(task, player_spec, helper_spec, **kwargs)
-        else:
-            return state.asyncio_loop.create_task(
-                Player.play(task, player_spec, helper_spec, **kwargs)
-            )
-
+        return state.task_manager.play(task, player_spec, helper_spec, **kwargs)
 
 
     def download(self, selection, no_task_manager=False, **kwargs):
 
         sources, kwargs = self.play_args(selection, **kwargs)
-        # filename = selection.download_filename
 
         if not isinstance(sources, list):
             sources = [sources]
 
         for i, s in enumerate(sources):
-            # filename = s.download_filename
-            # kwargs = {"ext": getattr(s, "ext", None)}
             if len(sources):
                 kwargs["index"] = i
             try:
@@ -443,7 +434,6 @@ class BaseProvider(abc.ABC):
             except SGInvalidFilenameTemplate as e:
                 logger.warn(f"filename template for provider {self.IDENTIFIER} is invalid: {e}")
             helper_spec = getattr(self.config, "helpers") or s.download_helper
-            # logger.info(f"helper: {helper_spec}")
 
             task = model.DownloadMediaTask(
                 provider=self.NAME,
@@ -452,17 +442,7 @@ class BaseProvider(abc.ABC):
                 dest=filename
             )
 
-            # s = AttrDict(dataclasses.asdict(s))
-            # s.provider = self.NAME
-            # s.title = selection.title
-            # s.dest = filename
-
-            if not (no_task_manager or state.options.debug_console):
-                return state.task_manager.download(task, filename, helper_spec, **kwargs)
-            else:
-                return state.asyncio_loop.create_task(
-                    Downloader.download(task, filename, helper_spec, **kwargs)
-                )
+            return state.task_manager.download(task, filename, helper_spec, **kwargs)
 
     def on_select(self, widget, selection):
         self.play(selection)

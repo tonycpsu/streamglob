@@ -244,7 +244,7 @@ class ConsoleWindow(urwid.WidgetWrap):
         self.log_message("-" * 80)
 
     def selectable(self):
-        return True
+        return False
 
     def keypress(self, size, key):
         if key == "m":
