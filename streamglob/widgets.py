@@ -192,25 +192,25 @@ class ScrollbackListBox(panwid.listbox.ScrollingListBox):
         self.body.append(result)
         self.on_updated()
 
-    def keypress(self, size, key):
+    # def keypress(self, size, key):
 
-        if key == 'up' or key == 'k':
-            self._listbox.keypress(size, 'up')
-        elif key == 'page up' or key == 'ctrl u':
-            self._listbox.keypress(size, 'page up')
-        elif key == 'down' or key == 'j':
-            self._listbox.keypress(size, 'down')
-        elif key == 'page down' or key == 'ctrl d':
-            self._listbox.keypress(size, 'page down')
-        elif key == 'home':
-            if len(self._listbox.body):
-                self._listbox.focus_position = 0
-                self.listbox._invalidate()
-        elif key == 'end':
-            if len(self._listbox.body):
-                self._listbox.focus_position = len(self._listbox.body)-1
-                self._listbox._invalidate()
-        return super(ScrollbackListBox, self).keypress(size, key)
+    #     if key == 'up' or key == 'k':
+    #         self._listbox.keypress(size, 'up')
+    #     elif key == 'page up' or key == 'ctrl u':
+    #         self._listbox.keypress(size, 'page up')
+    #     elif key == 'down' or key == 'j':
+    #         self._listbox.keypress(size, 'down')
+    #     elif key == 'page down' or key == 'ctrl d':
+    #         self._listbox.keypress(size, 'page down')
+    #     elif key == 'home':
+    #         if len(self._listbox.body):
+    #             self._listbox.focus_position = 0
+    #             self.listbox._invalidate()
+    #     elif key == 'end':
+    #         if len(self._listbox.body):
+    #             self._listbox.focus_position = len(self._listbox.body)-1
+    #             self._listbox._invalidate()
+    #     return super(ScrollbackListBox, self).keypress(size, key)
 
     # def clear(self):
     #     self._results.reset()
@@ -231,7 +231,6 @@ class ConsoleWindow(urwid.WidgetWrap):
 
     def __init__(self, verbose=False):
 
-        # self.fd = fd
         self.verbose = verbose
         self.listbox =  ScrollbackListBox([], with_scrollbar=True)
         super(ConsoleWindow, self).__init__(self.listbox)
