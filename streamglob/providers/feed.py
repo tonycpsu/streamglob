@@ -174,16 +174,19 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         items = [
             AttrDict(
                 media_item_id=row.data.media_item_id,
-                title=row.data.title,
+                title=row.data.title.replace("\n", " "),
                 created=row.data.created,
                 feed=row.data.feed.name,
                 locator=row.data.feed.locator,
                 num=num+1,
                 row_num=row_num,
                 count=len(row.data.content),
-                content=url
+                url=source.url
             )
-            for row_num, (row, num, url) in enumerate( (row, num, url) for row in self for num, url in enumerate(row.data.content))
+            for row_num, (row, num, source) in enumerate(
+                    (row, num, source) for row in self
+                    for num, source in enumerate(row.data.content))
+            if not source.is_bad
         ]
 
         if not len(items):
@@ -207,7 +210,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                             " "
                             f"{item.title.strip() or '(no title)'}"
                         ),
-                        url=item.content.url
+                        url=item.url
                     ).encode("utf-8"))
                 logger.info(m3u.name)
                 listing = self.provider.new_listing(

@@ -1,4 +1,5 @@
 import warnings
+from itertools import islice
 
 from .feed import *
 from ..exceptions import *
@@ -8,8 +9,8 @@ from .. import model
 from .. import session
 from .filters import *
 
-from orderedattrdict import DefaultAttrDict
-from instagram_web_api import Client, ClientCompatPatch, ClientError, ClientConnectionError, ClientThrottledError
+from orderedattrdict import AttrDict, DefaultAttrDict
+from instaloader import Instaloader, Profile
 from pony.orm import *
 from limiter import get_limiter, limit
 
@@ -35,10 +36,16 @@ class InstagramMediaSource(model.MediaSource):
             ("mpv", None),
         ])
 
+    @property
+    def is_bad(self):
+        return any(s in self.locator for s in ["0_0_0", "null.jpg"])
+
+
 @dataclass
 class InstagramMediaListing(FeedMediaListing):
 
     post_type: str = ""
+
 
 class InstagramSession(session.StreamSession):
 
@@ -53,223 +60,20 @@ class InstagramSession(session.StreamSession):
         super().__init__(
             *args, **kwargs
         )
-
         self.limiter = get_limiter(rate=self.RATE, capacity=self.CACPACITY)
+        self.loader = None
+        self.login()
 
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            self.web_api = Client(
-                proxy=self.proxies.get("https") if self.proxies else None,
-                auto_patch=True, drop_incompat_keys=False
-            )
-        self.end_cursors = DefaultAttrDict(lambda: None)
+    def login(self):
+        self.loader = Instaloader(
+            page_size=self.provider.config.get(
+                "fetch_limit",
+                self.DEFAULT_FETCH_LIMIT),
+            sleep=False
+        )
 
-    # @memo(region="long")
-    @db_session
-    def user_name_to_id(self, user_name):
-        try:
-            user_id = self.provider.provider_data["user_map"][user_name]
-        except KeyError:
-            user_id = self.web_api.user_info2(user_name)["id"]
-            self.provider.provider_data["user_map"][user_name] = user_id
-            self.provider.save_provider_data()
-        except:
-            raise SGException(f"user id for {user_name} not found")
-        return user_id
-
-
-    def get_feed_items(self, user_name, cursor=None, count=DEFAULT_BATCH_COUNT):
-
-        logger.info(f"get_feed_items cursor: {cursor}")
-        # number of times to retry bad URLs before giving up
-        RETRIES = 3
-
-        def get_nested(d, keys):
-            v = d
-            for k in keys:
-                v = v.get(k, None)
-                if v is None:
-                    return None
-            return v
-
-        def get_url_workaround(node, keys):
-            # URLs seem to get corrupted somewhat randomly by the API
-            # so we try to get it using a different endpoint as a workaround,
-            # retrying until we get a valid URL.
-
-            retries = 0
-            limiter = get_limiter(rate=1, capacity=2)
-            d = node
-            while retries <= RETRIES:
-                retries += 1
-                url = get_nested(d, keys)
-                #   The string 0_0_0 seems to always appear in corrupted URLs
-                if not "0_0_0" in url:
-                    return url
-                logger.info("oops")
-                with limit(limiter, consume=2):
-                    try:
-                        d = self.web_api.media_info2(node["shortcode"])
-                    except ClientError:
-                        continue
-
-
-        if count > self.MAX_BATCH_COUNT:
-            count = self.MAX_BATCH_COUNT
-        try:
-            with limit(self.limiter, consume = self.CONSUME):
-                feed = self.web_api.user_feed(
-                    self.user_name_to_id(user_name), count=count,
-                    end_cursor = cursor,
-                    extract = False
-                )
-                end_cursor = feed.get('data', {}).get('user', {}).get(
-                    'edge_owner_to_timeline_media', {}).get('page_info', {}).get('end_cursor')
-                posts = feed.get('data', {}).get('user', {}).get(
-                    'edge_owner_to_timeline_media', {}).get('edges', [])
-                # posts = self.web_api.user_feed(
-                #     self.user_name_to_id(user_name), count=count,
-                #     end_cursor = cursor
-                # )
-        except ClientConnectionError as e:
-            logger.warn(f"connection error: {e}")
-            raise
-        except ClientThrottledError:
-            logger.info("throttled")
-            raise SGClientThrottled
-
-        for post in posts:
-            node = post["node"]
-            # try:
-            #     cursor = (
-            #         post["node"]["edge_media_to_comment"]
-            #         ["page_info"]["end_cursor"]
-            #     ) or cursor
-            #     # if cursor:
-            #     #     self.end_cursors[user_name] = cursor
-            # except KeyError:
-            #     pass
-
-            post_type = None
-            post_id = node["id"]
-
-            try:
-                title = node["caption"]["text"].replace("\n", "")
-            except TypeError:
-                title = "(no caption)"
-
-            media_type = node["type"]
-
-            if media_type == "video":
-                post_type = "video"
-
-                url = get_url_workaround(node, ["videos", "standard_resolution", "url"])
-                if not url:
-                    logger.warn(f"couldn't get URL for {node['shortcode']}")
-                    continue
-                content = self.provider.new_media_source(
-                    url, media_type="video"
-                )
-
-            else:
-                if "carousel_media" in node:
-                    post_type = "carousel"
-
-                    # content = [
-                    #     self.provider.new_media_source(
-                    #         m["images"]["standard_resolution"]["url"], media_type="image"
-                    #     )
-                    #     if m["type"] == "image"
-                    #     else
-                    #     self.provider.new_media_source(
-                    #         m["video_url"], media_type="video"
-                    #     )
-                    #     if m["type"] == "video"
-                    #     else None
-                    #     for m in node["carousel_media"]
-                    # ]
-
-                    retries = 0
-                    limiter = get_limiter(rate=1, capacity=2)
-                    d = node
-                    while retries <= RETRIES:
-                        retries += 1
-                        urls = [
-                            (m["type"],
-                             m["images"]["standard_resolution"]["url"]
-                             if m["type"] == "image"
-                             else m["video_url"]
-                            )
-                            for m in d["carousel_media"]
-                        ]
-                        #   The string 0_0_0 seems to always appear in corrupted URLs
-                        if not any([ "0_0_0" in u for (t, u) in urls]):
-                            break
-                        logger.info("oops")
-                        with limit(limiter, consume=2):
-                            try:
-                                d = self.web_api.media_info2(node["shortcode"])
-                            except ClientError:
-                                continue
-
-                    else:
-                        logger.warn(f"couldn't get URL(s) for {node['shortcode']}")
-                        continue
-
-                    content = [
-                        self.provider.new_media_source(
-                            u, media_type=t
-                        )
-                        for t, u in urls
-                    ]
-
-                    # title = f"[{len(content)}] {title} "
-
-                elif media_type == "image":
-
-                        # if any([ "0_0_0" in u for (t, u) in urls]):
-                        #     limiter = get_limiter(rate=self.RATE, capacity=self.CACPACITY)
-                        #     retries = 0
-                        #     while retries < 5:
-                        #         with limit(limiter, consume=5):
-                        #             media = self.web_api.media_info2(node["shortcode"])
-
-                        #             url = get_nested(media, keys)
-                        #             if not "0_0_0" in url:
-                        #                 break
-                        #             logger.info("oops")
-                        #         retries += 1
-
-
-                    post_type = "image"
-
-                    url = get_url_workaround(node, ["images", "standard_resolution", "url"])
-                    if not url:
-                        logger.warn(f"couldn't get URL for {node['shortcode']}")
-                        continue
-
-                    content = self.provider.new_media_source(
-                        url, media_type="image"
-                    )
-                    urls = [ ("video", url) ]
-
-                else:
-                    logger.warn(f"no content for post {post_id}")
-                    continue
-
-            created = datetime.fromtimestamp(int(node["created_time"]))
-            # logger.info(f"post: {post_id}, {created.date()}, {end_cursor}")
-
-            yield(
-                AttrDict(
-                    guid = post_id,
-                    title = title.strip(),
-                    post_type = post_type,
-                    created = created,
-                    content = content,
-                    cursor = end_cursor
-                )
-            )
+    def profile_from_username(self, user_name):
+        return Profile.from_username(self.loader.context, user_name)
 
 
 class InstagramItem(model.MediaItem):
@@ -280,7 +84,14 @@ class InstagramFeed(model.MediaFeed):
 
     ITEM_CLASS = InstagramItem
 
+    POST_TYPE_MAP = {
+        "GraphImage": "image",
+        "GraphVideo": "video",
+        "GraphSidecar": "carousel"
+    }
+
     def fetch(self, cursor=None):
+
         if self.locator.startswith("@"):
             user_name = self.locator[1:]
         else:
@@ -290,52 +101,58 @@ class InstagramFeed(model.MediaFeed):
         logger.info(f"fetching {self.locator}")
 
         limit = self.provider.config.get("fetch_limit", self.DEFAULT_FETCH_LIMIT)
-        # logger.info(f"uodate: {self}")
-        last_count = 0
-        count = 0
-        while(count < limit):
-            # instagram API will sometimes give duplicates using end_cursor
-            # for pagination, so instead of specifying how many posts to get,
-            # we just get a batch of them at a time and break the loop after
-            # we've gotten the desired number of posts, or after a batch
-            # entirely comprised of duplicates
-            new_seen = False
-            try:
-                for post in self.session.get_feed_items(user_name, cursor):
-                    # logger.info(post.cursor)
-                    with db_session:
-                        if post.cursor:
-                            cursor = post.cursor
-                            self.attrs["cursor"] = cursor
-                        i = self.items.select(lambda i: i.guid == post.guid).first()
-                        if not i:
-                            logger.info(f"new: {post.created}")
-                            new_seen = True
-                            i = self.ITEM_CLASS(
-                                feed = self,
-                                guid = post.guid,
-                                title = post.title,
-                                created = post.created,
-                                post_type = post.post_type,
-                                content =  InstagramMediaSource.schema().dumps(
-                                    post.content
-                                    if isinstance(post.content, list)
-                                    else [post.content],
-                                    many=True
-                                ),
-                                attrs = dict(cursor=post.cursor)
-                            )
-                            count += 1
-                            yield i
-                    if count >= limit:
-                        return
-            except SGClientThrottled:
-                return
 
-            if not new_seen:
-                logger.info("fetch done")
-                return
-                last_count = count
+        profile = self.session.profile_from_username(user_name)
+
+        for post in islice(profile.get_posts(end_cursor=cursor), limit):
+            try:
+                post_type = self.POST_TYPE_MAP[post.typename]
+            except:
+                logger.warn("unknown post type: {post.typeame}")
+                continue
+
+            if post_type == "image":
+                content = self.provider.new_media_source(
+                    post.url, media_type = post_type
+                )
+            elif post_type == "video":
+                content = self.provider.new_media_source(
+                    post.video_url, media_type = post_type
+                )
+            elif post_type == "carousel":
+                content = [
+                    self.provider.new_media_source(
+                        s.video_url or s.display_url,
+                        media_type = "video" if s.is_video else "image"
+                    )
+                    for s in post.get_sidecar_nodes()
+                ]
+            else:
+                logger.warn("unknown post type: {post.typeame}")
+                continue
+
+            i = self.items.select(lambda i: i.guid == post.shortcode).first()
+            if not i:
+                logger.info(f"new: {post.date_utc}")
+                new_seen = True
+                i = self.ITEM_CLASS(
+                    feed = self,
+                    guid = post.shortcode,
+                    title = post.caption or "",
+                    created = post.date_utc,
+                    post_type = post_type,
+                    content =  InstagramMediaSource.schema().dumps(
+                        content
+                        if isinstance(content, list)
+                        else [content],
+                        many=True
+                    ),
+                    attrs = dict(
+                        cursor = post.end_cursor,
+                        short_code = post.shortcode
+                    )
+                )
+                yield i
 
 
 class InstagramDataTable(CachedFeedProviderDataTable):
@@ -350,7 +167,6 @@ class InstagramDataTable(CachedFeedProviderDataTable):
     @db_session
     def fetch_more(self):
         feed = self.provider.feed
-        logger.info(f"end: {count}")
         if feed is None:
             return
         try:
@@ -371,6 +187,25 @@ class InstagramDataTable(CachedFeedProviderDataTable):
 
         if key == "meta f":
             self.fetch_more()
+        elif key == "ctrl k":
+            from collections import OrderedDict
+            feed = self.provider.feed
+
+            with db_session:
+                cursors = (
+                    i.attrs["cursor"]
+                    for i in feed.items.select().order_by(
+                            self.provider.ITEM_CLASS.created
+                    ).limit(100)[:]
+                )
+                raise Exception(list(OrderedDict.fromkeys(cursors))[1])
+                cursor = select(
+                    (i.created, distinct(i.attrs["cursor"]))
+                    for i in feed.items
+                ).order_by(
+                    lambda i: i[0]
+                ).limit(1, 1).first()
+                logger.info(f"cursor rec: {cursor}")
         else:
             return super().keypress(size, key)
 
