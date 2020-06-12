@@ -90,14 +90,15 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     @db_session
     def on_focus(self, source, position):
-        if self.player:
-            try:
-                self.player.playlist_pos = next(
-                    i for n, i in enumerate(self.play_items)
-                    if i.media_item_id == self[position].data.media_item_id
-                ).row_num
-            except StopIteration:
-                pass
+        # if self.player:
+            # FIXME: this ain't it.
+            # try:
+            #     self.player.playlist_pos = next(
+            #         i for n, i in enumerate(self.play_items)
+            #         if i.media_item_id == self[position].data.media_item_id
+            #     ).row_num
+            # except StopIteration:
+            #     pass
             # self.player.controller.command("set", "playlist-pos", position)
         if self.mark_read_on_focus:
             self.mark_read_on_focus = False
@@ -528,10 +529,10 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
     def on_status_change(self, *args):
         self.reset()
 
-    def open_popup(self):
+    def open_popup(self, text):
         class UpdateMessage(BasePopUp):
             def __init__(self):
-                self.text = urwid.Text("Updating feeds...", align="center")
+                self.text = urwid.Text(text, align="center")
                 self.filler = urwid.Filler(self.text)
                 super().__init__(self.filler)
 
@@ -551,7 +552,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         self.create_feeds()
         # state.loop.draw_screen()
         def update_feeds():
-            self.open_popup()
+            self.open_popup("Updating feeds...")
             self.update_feeds(force=force)
             self.refresh()
             self.close_popup()

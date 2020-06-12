@@ -164,20 +164,29 @@ class InstagramDataTable(CachedFeedProviderDataTable):
             self.on_end
         )
 
-    @db_session
+    # FIXME: move to feed module
     def fetch_more(self):
-        feed = self.provider.feed
-        if feed is None:
-            return
-        try:
-            cursor = feed.items.select().order_by(
-                self.provider.ITEM_CLASS.created
-            ).first().attrs.get("cursor")
-        except AttributeError:
-            cursor = None
-        feed.update(cursor=cursor)
-        self.provider.update_query()
-        self.refresh()
+
+        @db_session
+        def fetch():
+            feed = self.provider.feed
+            if feed is None:
+                return
+            try:
+                cursor = feed.items.select().order_by(
+                    self.provider.ITEM_CLASS.created
+                ).first().attrs.get("cursor")
+            except AttributeError:
+                cursor = None
+
+
+            self.provider.open_popup("Fetching more posts...")
+            feed.update(cursor=cursor)
+            self.refresh()
+            self.provider.close_popup()
+            self.provider.update_query()
+
+        update_task = state.asyncio_loop.run_in_executor(None, fetch)
 
     @db_session
     def on_end(self, source, count):
