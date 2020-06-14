@@ -481,12 +481,19 @@ def run_gui(action, provider, **kwargs):
 
     state.palette = load_palette()
     state.screen = urwid.raw_display.Screen()
-    state.screen.set_terminal_properties(256)
+
+    def get_colors():
+        if config.settings.profile.colors == "true":
+            return 2**24
+        elif isinstance(config.settings.profile.colors, int):
+            return config.settings.profile.colors
+        else:
+            return 16
+
+    state.screen.set_terminal_properties(get_colors())
 
     state.browser_view = BrowserView(provider)
     state.tasks_view = TasksView()
-    # state.task_manager.connect("play_done", state.tasks_view.on_play_done)
-    # state.task_manager.connect("download_done", state.tasks_view.on_download_done)
 
     state.views = [
         Tab("Browser", state.browser_view, locked=True),
@@ -495,7 +502,6 @@ def run_gui(action, provider, **kwargs):
 
     state.main_view = BaseTabView(state.views)
 
-    # log_box = urwid.BoxAdapter(urwid.LineBox(log_console), 10)
     pile = urwid.Pile([
         ("weight", 5, urwid.LineBox(state.main_view)),
     ])
@@ -591,6 +597,9 @@ def run_cli(action, provider, selection, **kwargs):
 
 
 def main():
+
+    import urwid.old_str_util
+    # raise Exception(urwid.old_str_util.get_width(ord("⚾")))
 
     global options
     global logger
