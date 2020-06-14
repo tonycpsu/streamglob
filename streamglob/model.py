@@ -202,6 +202,14 @@ class MediaSource(BaseDataClass):
     def locator(self):
         return self.url
 
+    @property
+    def is_bad(self):
+        """
+        Subclasses can override this to check the validity of a source's URL
+        and return True if the source should be filtered or marked as such.
+        """
+        return False
+
     # def __str__(self):
     #     return self.locator
 

@@ -8,6 +8,7 @@ import pipes
 from orderedattrdict import AttrDict
 from panwid.dialog import *
 from limiter import get_limiter, limit
+from fysom import Fysom
 
 from .. import model
 from .. import utils
@@ -66,6 +67,19 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         self.mark_read_task = None
         self.update_count = True
         self.player = None
+        self.player_state = Fysom(
+            events=[
+                ("file_loaded",
+                 ["waiting", "updating ui", "updating mpv"],
+                 "ready"),
+                ("ui_update", "ready", "updating ui"),
+                ("ui_updated", "updating ui", "ready"),
+                ("mpv_update", "ready", "updating mpv"),
+                ("mpv_updated", "updating mpv", "ready"),
+            ], initial="waiting"
+        )
+        self.change_playlist_pos_on_focus = True
+        self.change_focus_on_playlist_pos = True
         urwid.connect_signal(
             self, "focus",
             self.on_focus
@@ -91,14 +105,19 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     @db_session
     def on_focus(self, source, position):
         if self.player:
-            try:
-                self.player.playlist_pos = next(
-                    i for n, i in enumerate(self.play_items)
-                    if i.media_item_id == self[position].data.media_item_id
-                ).row_num
-            except StopIteration:
-                pass
-            # self.player.controller.command("set", "playlist-pos", position)
+            if self.player_state.can("mpv_update"):
+                self.player_state.mpv_update()
+                try:
+                    self.player.playlist_pos = next(
+                        i for n, i in enumerate(self.play_items)
+                        if i.media_item_id == self[position].data.media_item_id
+                    ).row_num
+                except StopIteration:
+                    pass
+                self.player.controller.command("set", "playlist-pos", str(position))
+            elif self.player_state.can("ui_updated"):
+                self.player_state.ui_updated()
+
         if self.mark_read_on_focus:
             self.mark_read_on_focus = False
             if self.mark_read_task:
@@ -107,6 +126,22 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 self.HOVER_DELAY,
                 lambda: self.mark_item_read(position)
             )
+
+    def on_playlist_pos(self, name, value):
+        logger.info(f"playlist-pos: {value}, {type(value)}")
+        if self.player:
+            if self.player_state.can("ready"):
+                self.player_state.ready()
+            elif self.player_state.can("ui_update"):
+                index = self.play_items[value].row_num
+                if self.focus_position != index:
+                    self.player_state.ui_update()
+                    self.focus_position = index
+            elif self.player_state.can("mpv_updated"):
+                self.player_state.mpv_updated()
+
+    def on_file_loaded(self, name, value):
+        self.player_state.file_loaded()
 
     # @db_session
     # def on_blur(self, source, position):
@@ -146,7 +181,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     def toggle_item_read(self, position):
         if not isinstance(self[position].data, model.MediaListing):
             return
-        logger.info(self.get_value(position, "read"))
+        # logger.info(self.get_value(position, "read"))
         if self.get_value(position, "read") is not None:
             self.mark_item_unread(position)
         else:
@@ -174,16 +209,20 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         items = [
             AttrDict(
                 media_item_id=row.data.media_item_id,
-                title=row.data.title,
+                title=row.data.title.replace("\n", " "),
                 created=row.data.created,
                 feed=row.data.feed.name,
                 locator=row.data.feed.locator,
                 num=num+1,
                 row_num=row_num,
                 count=len(row.data.content),
-                content=url
+                url=source.url
             )
-            for row_num, (row, num, url) in enumerate( (row, num, url) for row in self for num, url in enumerate(row.data.content))
+            for (row_num, row, num, source) in [
+                    (row_num, row, num, source) for row_num, row in enumerate(self)
+                    for num, source in enumerate(row.data.content)
+                    if not source.is_bad
+            ]
         ]
 
         if not len(items):
@@ -207,7 +246,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                             " "
                             f"{item.title.strip() or '(no title)'}"
                         ),
-                        url=item.content.url
+                        url=item.url
                     ).encode("utf-8"))
                 logger.info(m3u.name)
                 listing = self.provider.new_listing(
@@ -235,6 +274,8 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         logger.info(self.player_task)
         self.player = await self.player_task.program
         logger.info(self.player)
+        self.player.bind_property_observer("file-loaded", self.on_file_loaded)
+        self.player.bind_property_observer("playlist-pos", self.on_playlist_pos)
         def on_player_done(f):
             logger.info("player done")
             self.player = None
@@ -263,17 +304,21 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     def next_unread(self):
         self.mark_item_read(self.focus_position)
-        try:
-            idx = next(
-                r.data.media_item_id
-                for r in self[self.focus_position+1:]
-                if not r.data.read
-            )
-        except StopIteration:
-            self.focus_position = len(self)-1
-            self.load_more(self.focus_position)
-            self.focus_position += 1
-            return
+        while True:
+            try:
+                idx = next(
+                    r.data.media_item_id
+                    for r in self[self.focus_position+1:]
+                    if not r.data.read
+                )
+                break
+            except StopIteration:
+                if len(self) >= self.query_result_count():
+                    return
+                self.focus_position = len(self)-1
+                self.load_more(self.focus_position)
+                self.focus_position += 1
+
         pos = self.index_to_position(idx)
         self.focus_position = pos
         self.mark_read_on_focus = True
@@ -327,6 +372,12 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         elif key == "meta ctrl d":
             self.kill_all()
             self.mark_visible_read(direction=-1)
+        if key == "meta k":
+            with db_session:
+                item = self.item_at_position(self.focus_position)
+                item.title = u"test: \U0001F50A test"
+                commit()
+
         else:
             return super().keypress(size, key)
         return key
@@ -421,7 +472,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
             media_item_id = {"hide": True},
             feed = {"width": 32, "format_fn": lambda f: f.name if hasattr(f, "name") else "none"},
             created = {"width": 19},
-            title = {"width": ("weight", 1), "format_fn": utils.strip_emoji},
+            title = {"width": ("weight", 1)},
         )
 
     @property
@@ -525,10 +576,10 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
     def on_status_change(self, *args):
         self.reset()
 
-    def open_popup(self):
+    def open_popup(self, text):
         class UpdateMessage(BasePopUp):
             def __init__(self):
-                self.text = urwid.Text("Updating feeds...", align="center")
+                self.text = urwid.Text(text, align="center")
                 self.filler = urwid.Filler(self.text)
                 super().__init__(self.filler)
 
@@ -548,7 +599,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         self.create_feeds()
         # state.loop.draw_screen()
         def update_feeds():
-            self.open_popup()
+            self.open_popup("Updating feeds...")
             self.update_feeds(force=force)
             self.refresh()
             self.close_popup()

@@ -115,9 +115,9 @@ class ProviderDataTable(BaseDataTable):
         else:
             return key
 
-    def reset(self):
+    def reset(self, *args, **kwargs):
         self.translate = False
-        super().reset()
+        super().reset(*args, **kwargs)
 
     def decorate(self, row, column, value):
 

@@ -76,17 +76,9 @@ class TaskManager(Observable):
 
     async def stop(self):
         logger.info("task_manager stopping")
-        # import time; time.sleep(1)
 
-        # for a in self.active:
-        #     if a.program.progress_stream:
-        #         os.close(a.program.progress_stream)
-        #         # a.proc.terminate()
-
-        # await self.pending.join()
         self.worker_task.cancel()
         self.poller_task.cancel()
-        # print(self.poller_task.exception())
 
     async def join(self):
         async with self.started:
@@ -99,7 +91,6 @@ class TaskManager(Observable):
     async def worker(self):
 
         while True:
-
             async def wait_for_item():
                 while True:
                     if len(self.to_play):
@@ -116,10 +107,12 @@ class TaskManager(Observable):
                 try:
                     logger.info(f"kwargs: {task.kwargs}")
                     program = await Downloader.download(task, *task.args, **task.kwargs)
+                    logger.info("await program")
                 except SGFileExists as e:
                     logger.warn(e)
                     continue
             else:
+                logger.info(f"not implemented: {program}")
                 raise NotImplementedError
             task.program.set_result(program)
             task.proc = program.proc
@@ -148,7 +141,6 @@ class TaskManager(Observable):
                 self.playing)
 
             playing_done = TaskList(playing_done)
-
             for t in playing_done:
                 t.result.set_result(t.proc.returncode)
 

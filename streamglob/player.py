@@ -374,6 +374,35 @@ class Program(abc.ABC):
         else:
             raise StopIteration
 
+    @property
+    def full_command(self):
+
+        if not self.source:
+            raise Exception("source not available")
+
+        if isinstance(self.source, model.MediaTask):
+            source_args = [s.locator for s in self.source.sources]
+        elif isinstance(self.source, list):
+            source_args =  [s.locator for s in self.source]
+        elif self.source_is_program:
+            source_args = [repr(self.source)]
+        else:
+            source_args = [self.source.locator]
+
+        cmd = []
+        if self.ssh_host:
+            cmd += ["/usr/bin/ssh", self.ssh_host]
+
+        cmd += self.command + self.extra_args_pre
+
+        return (
+            ["/usr/bin/ssh", self.ssh_host] if self.ssh_host else []
+            self.command
+            + self.extra_args_pre
+            + source_args
+            + self.extra_args_post
+        )
+
     async def run(self, source=None, **kwargs):
 
         if source:
@@ -381,11 +410,6 @@ class Program(abc.ABC):
 
         self.process_kwargs(kwargs)
 
-        cmd = []
-        if self.ssh_host:
-            cmd += ["/usr/bin/ssh", self.ssh_host]
-
-        cmd += self.command + self.extra_args_pre
         if self.source_is_program:
             read, write = os.pipe()
             self.source.stdout = write
@@ -393,37 +417,26 @@ class Program(abc.ABC):
             os.close(write)
             self.stdin = read
             self.stdout = subprocess.PIPE
-        elif isinstance(self.source, model.MediaTask):
-            cmd += [s.locator for s in self.source.sources]
 
-        elif isinstance(self.source, list):
-            cmd += [s.locator for s in self.source]
-        else:
-            cmd += [self.source.locator]
-        cmd += self.extra_args_post
+        logger.info(f"full cmd: {' '.join(self.full_command)}")
 
         if not self.source_integrated:
 
             pty_stream = None
-            logger.debug(f"cmd: {' '.join(cmd)}")
             spawn_func = asyncio.create_subprocess_exec
-            # if self.FOREGROUND:
-            #     spawn_func = subprocess.call
-            # else:
+
             if not self.FOREGROUND:
-                # spawn_func = asyncio.create_subprocess_exec
+
                 if not self.no_progress:
 
                     self.progress_stream, pty_stream = pty.openpty()
-                    # set width of console to 100 so we get full progress output
+
                     fcntl.ioctl(pty_stream, termios.TIOCSWINSZ,
                                 struct.pack('HHHH', 50, 100, 0, 0)
                     )
                     self.stdin = pty_stream
                     self.stdout = pty_stream
                     self.stderr = pty_stream
-                    # self.stdout = subprocess.PIPE
-                    # self.stderr = subprocess.PIPE
 
                 if self.stdin is None:
                     self.stdin = open(os.devnull, 'w')
@@ -434,18 +447,15 @@ class Program(abc.ABC):
             else:
                 raise NotImplementedError
             try:
-
                 self.proc = await spawn_func(
-                    *cmd,
+                    *self.full_command,
                     stdin = self.stdin,
                     stdout = self.stdout,
                     stderr = self.stderr,
-                    # preexec_fn = pre,
-                    # start_new_session = True
                 )
                 if pty_stream:
                     os.close(pty_stream)
-                # self.progress_stream = self.proc.stdout
+
             except SGException as e:
                 logger.warning(e)
 
@@ -513,40 +523,14 @@ class Downloader(Program):
 
         logger.info(f"downloader: {downloader}")
 
-        # if helper_spec is None:
-        #     helper_spec = {}
-
-        # if isinstance(helper_spec, str):
-        #     downloader = next(Helper.get(helper_spec))
-        # elif isinstance(helper_spec, dict):
-        #     helper_spec = [
-        #         h for h in list(AttrDict.fromkeys(helper_spec.values()))
-        #         if h
-        #     ]
-
-        # # else:
-        # #     raise NotImplementedError
-        # try:
-        #     downloader = next(iter(
-        #         sorted((
-        #             h for h in Helper.get()
-        #             if h.supports_url(source.locator)),
-        #             key = lambda h: helper_spec.index(h.cmd)
-        #                if h.cmd in helper_spec else len(helper_spec)+1
-        #         )
-        #     ))
-        # except (TypeError, StopIteration):
-        #     downloader = next(cls.get())
 
         logger.info(f"{downloader} downloading {source.locator} to {outfile}")
         downloader.source = task
         downloader.extra_args_post += ["-o", outfile]
+
         await(downloader.run(**kwargs))
         return downloader
 
-    # async def get_lines(self):
-    #     for line in iter(self.progress_stream.readline, ""):
-    #         yield (await line).decode("utf-8")
 
 
 
@@ -566,17 +550,19 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
         self._ipc_socket = None
         self.controller = None
         self.extra_args_pre += ["--title=streamglob: ${media-title}"]
-        self._initialized = True
+        self.create_socket()
 
-    async def run(self, *args, **kwargs):
+    def create_socket(self):
         self.tmp_dir = tempfile.mkdtemp()
         self.ipc_socket_name = os.path.join(self.tmp_dir, "mpv_socket")
-        # logger.info(f"mpv socket: {self.ipc_socket_name}")
         self.extra_args_pre += [f"--input-ipc-server={self.ipc_socket_name}"]
+
+    async def run(self, *args, **kwargs):
+        # logger.info("starting controller")
         await super().run(*args, **kwargs)
         await self.wait_for_socket()
-        # logger.info("starting controller")
         self.controller = MPV(start_mpv=False, ipc_socket=self.ipc_socket_name)
+        self._initialized = True
         # state.asyncio_loop.call_later(5, self.test)
 
     async def wait_for_socket(self):
@@ -679,7 +665,8 @@ class StreamlinkHelper(Helper, Downloader):
 
     def integrate_player(self, dst):
         logger.debug(f"dst: {dst}")
-        self.extra_args_pre += ["--player"] + [" ".join(dst.command)]
+        logger.info(dst.extra_args_pre)
+        self.extra_args_pre += ["--player"] + [" ".join(dst.command + dst.extra_args_pre)]
 
     def process_kwargs(self, kwargs):
 
@@ -726,7 +713,7 @@ class StreamlinkHelper(Helper, Downloader):
 
         async def process_lines():
             async for line in self.get_output():
-                logger.info(line)
+                logger.debug(line)
                 if not line:
                     return
                 try:
