@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from orderedattrdict import AttrDict
 import dataclasses
 
-from .player import Player, Downloader
+from . import player
 from .state import *
 from .exceptions import *
 from .widgets import Observable
@@ -102,12 +102,10 @@ class TaskManager(Observable):
             task = await wait_for_item()
 
             if isinstance(task, model.PlayMediaTask):
-                program = await Player.play(task, *task.args, **task.kwargs)
+                program = await player.Player.play(task, *task.args, **task.kwargs)
             elif isinstance(task, model.DownloadMediaTask):
                 try:
-                    logger.info(f"kwargs: {task.kwargs}")
-                    program = await Downloader.download(task, *task.args, **task.kwargs)
-                    logger.info("await program")
+                    program = await player.Downloader.download(task, *task.args, **task.kwargs)
                 except SGFileExists as e:
                     logger.warn(e)
                     continue

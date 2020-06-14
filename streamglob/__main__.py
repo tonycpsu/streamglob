@@ -598,9 +598,6 @@ def run_cli(action, provider, selection, **kwargs):
 
 def main():
 
-    import urwid.old_str_util
-    # raise Exception(urwid.old_str_util.get_width(ord("⚾")))
-
     global options
     global logger
 

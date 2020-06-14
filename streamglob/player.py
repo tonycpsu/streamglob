@@ -1,11 +1,13 @@
 import logging
 logger = logging.getLogger(__name__)
 
+import sys
 import os
 import abc
 from itertools import chain
 from functools import reduce
 import shlex
+import pipes
 import subprocess
 import asyncio
 from datetime import timedelta
@@ -33,11 +35,12 @@ import streamlink
 
 from . import config
 from . import model
+from . import tasks
 from .state import *
 from .utils import *
 from .exceptions import *
 
-PROGRAMS = Tree()
+PACKAGE_NAME=__name__.split('.')[0]
 
 bitmath.format_string = "{value:.1f}{unit}"
 bitmath.bestprefix = True
@@ -162,7 +165,7 @@ class Program(abc.ABC):
     @classmethod
     def __init_subclass__(cls, **kwargs):
         if cls.__base__ != Program:
-            cls.SUBCLASSES[cls.__base__][cls.cmd] = cls
+            cls.SUBCLASSES[cls.__base__.__name__][cls.cmd] = cls
             for k, v in kwargs.items():
                 setattr(cls, k, v)
         super().__init_subclass__()
@@ -171,21 +174,20 @@ class Program(abc.ABC):
     @classmethod
     def get(cls, spec, *args, **kwargs):
 
-        global PROGRAMS
-
+        ptype = cls.__name__.lower()
         if spec is None:
             return None
         elif spec is True:
             # get all known programs
             return (
                 p.cls(p.path, **dict(p.cfg, **kwargs))
-                for n, p in PROGRAMS[cls].items()
+                for n, p in state.PROGRAMS[ptype].items()
             )
 
         elif isinstance(spec, str):
             # get a program by name
             try:
-                p = PROGRAMS[cls][spec]
+                p = state.PROGRAMS[ptype][spec]
                 return iter([p.cls(p.path, **dict(p.cfg, **kwargs))])
             except KeyError:
                 raise SGException(f"Program {spec} not found")
@@ -210,7 +212,7 @@ class Program(abc.ABC):
                     return cfg == v
             return (
                 p.cls(p.path, **dict(p.cfg, **kwargs))
-                for p in PROGRAMS[cls].values()
+                for p in state.PROGRAMS[ptype].values()
                 if not spec or all([
                     check_cfg_key(getattr(p, k, None), v)
                     for k, v in spec.items()
@@ -281,12 +283,14 @@ class Program(abc.ABC):
     @classmethod
     def load(cls):
 
-        global PROGRAMS
+        state.PROGRAMS = Tree()
 
         # Add configured players
 
-        for ptype in [Player, Helper, Downloader]:
-            cfgkey = ptype.__name__.lower() + "s"
+        for pcls in [Player, Helper, Downloader]:
+
+            ptype = pcls.__name__.lower()
+            cfgkey = ptype + "s"
             for name, cfg in config.settings.profile[cfgkey].items():
                 if not cfg:
                     cfg = AttrDict()
@@ -301,11 +305,11 @@ class Program(abc.ABC):
                         if c.cmd == name
                     )
                 except StopIteration:
-                    klass = ptype
+                    klass = pcls
                 if cfg.get("disabled") == True:
                     logger.info(f"player {name} is disabled")
                     continue
-                PROGRAMS[ptype][name] = ProgramDef(
+                state.PROGRAMS[ptype][name] = ProgramDef(
                     cls=klass,
                     name=name,
                     path=path,
@@ -313,14 +317,15 @@ class Program(abc.ABC):
                 )
         # Try to find any players not configured
         for ptype in cls.SUBCLASSES.keys():
-            cfgkey = ptype.__name__.lower() + "s"
+            cfgkey = ptype + "s"
             for name, klass in cls.SUBCLASSES[ptype].items():
                 cfg = config.settings.profile[cfgkey][name]
-                if name in PROGRAMS[ptype] or cfg.disabled == True:
+                if name in state.PROGRAMS[ptype] or cfg.disabled == True:
                     continue
                 path = distutils.spawn.find_executable(name)
                 if path:
-                    PROGRAMS[ptype][name] = ProgramDef(
+                    print(ptype, name)
+                    state.PROGRAMS[ptype][name] = ProgramDef(
                         cls=klass,
                         name=name,
                         path=path,
@@ -381,27 +386,26 @@ class Program(abc.ABC):
             raise Exception("source not available")
 
         if isinstance(self.source, model.MediaTask):
-            source_args = [s.locator for s in self.source.sources]
+            source_args = [pipes.quote(s.locator) for s in self.source.sources]
         elif isinstance(self.source, list):
-            source_args =  [s.locator for s in self.source]
+            source_args =  [pipes.quote(s.locator) for s in self.source]
         elif self.source_is_program:
             source_args = [repr(self.source)]
         else:
-            source_args = [self.source.locator]
+            source_args = [pipes.quote(self.source.locator)]
 
-        cmd = []
-        if self.ssh_host:
-            cmd += ["/usr/bin/ssh", self.ssh_host]
-
-        cmd += self.command + self.extra_args_pre
-
-        return (
-            ["/usr/bin/ssh", self.ssh_host] if self.ssh_host else []
+        cmd = (
             self.command
             + self.extra_args_pre
             + source_args
             + self.extra_args_post
         )
+
+        if self.ssh_host:
+            cmd = ["/usr/bin/ssh", self.ssh_host] + cmd
+
+        return cmd
+
 
     async def run(self, source=None, **kwargs):
 
@@ -485,7 +489,6 @@ class Helper(Program):
 
     @classmethod
     def get(cls, spec, url=None, **kwargs):
-
         if not spec:
             return None
 
@@ -514,15 +517,11 @@ class Downloader(Program):
 
         if isinstance(helper_spec, MutableMapping):
             helper_spec = helper_spec.get(None, helper_spec, **kwargs)
-
         try:
             downloader = Helper.get(helper_spec, source.locator, **kwargs)
         except SGStreamNotFound as e:
             logger.warn(e)
             return
-
-        logger.info(f"downloader: {downloader}")
-
 
         logger.info(f"{downloader} downloading {source.locator} to {outfile}")
         downloader.source = task
@@ -783,7 +782,9 @@ async def play_test():
     state.asyncio_loop.create_task(check_progress(prog))
 
 
-async def download_test():
+def download_test():
+    logger.info("download_test")
+
     task = model.DownloadMediaTask(
         provider="rss",
         title= "foo",
@@ -794,42 +795,83 @@ async def download_test():
 
 
     # prog = await Player.play(task, {"media_types": {"video"}}, "streamlink")
-    task = await Downloader.download(task, "foo.mp4", "youtube-dl")
-    def on_downloader_done(result):
-        logger.info(result.returncode)
-
-    task.result.add_done_callback(on_downloader_done)
-
-    # prog = await Downloader.download(task, "foo.mp4", "streamlink")
-    task = state.asyncio_loop.create_task(check_progress(prog))
-
-
-def asyncio_test():
-    state.asyncio_loop = asyncio.get_event_loop()
-
-    state.asyncio_loop.create_task(download_test())
-    state.asyncio_loop.run_forever()
+    result = state.asyncio_loop.run_until_complete(
+        state.task_manager.download(
+            task,
+            no_progress=True,
+            stdout=sys.stdout, stderr=sys.stderr,
+            filename="foo.mkv",
+            helper_spec="youtube-dl"
+        ).result
+    )
+    return result
 
 
 class CatProgram(Program):
     pass
 
 
+# def main():
+
+
+#     parser = argparse.ArgumentParser()
+#     parser.add_argument("-c", "--config-dir", help="use alternate config directory")
+#     options, args = parser.parse_known_args()
+
+
+#     setup_logging(2, quiet_stdout=False)
+#     config.load(options.config_dir, merge_default=True)
+
+#     log_file = os.path.join(config.settings.CONFIG_DIR, f"{PACKAGE_NAME}.log")
+#     fh = logging.FileHandler(log_file)
+#     add_log_handler(fh)
+
+#     Player.load()
+#     asyncio_test()
+
+
+
 def main():
 
-    from tonyc_utils import logging
+    global options
+    global logger
+
+    from tonyc_utils.logging import setup_logging, add_log_handler
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--config-dir", help="use alternate config directory")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("-v", "--verbose", action="count", default=0,
+                        help="verbose logging")
+    group.add_argument("-q", "--quiet", action="count", default=0,
+                        help="quiet logging")
     options, args = parser.parse_known_args()
 
-    logging.setup_logging(2)
+    state.options = AttrDict(vars(options))
+
+    logger = logging.getLogger()
+
     config.load(options.config_dir, merge_default=True)
-    config.settings.load()
-    Program.load()
 
-    asyncio_test()
+    Player.load()
 
+    # providers.load()
+
+    model.init()
+
+    sh = logging.StreamHandler()
+    state.logger = setup_logging(options.verbose - options.quiet, quiet_stdout=False)
+
+    state.asyncio_loop = asyncio.get_event_loop()
+    state.task_manager = tasks.TaskManager()
+
+    state.task_manager_task = state.asyncio_loop.create_task(state.task_manager.start())
+
+    log_file = os.path.join(config.settings.CONFIG_DIR, f"{PACKAGE_NAME}.log")
+    fh = logging.FileHandler(log_file)
+    add_log_handler(fh)
+
+    download_test()
 
 if __name__ == "__main__":
     main()
