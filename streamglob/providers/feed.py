@@ -429,7 +429,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
             media_item_id = {"hide": True},
             feed = {"width": 32, "format_fn": lambda f: f.name if hasattr(f, "name") else "none"},
             created = {"width": 19},
-            title = {"width": ("weight", 1), "format_fn": utils.strip_emoji},
+            title = {"width": ("weight", 1)},
         )
 
     @property
