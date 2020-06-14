@@ -545,7 +545,10 @@ def run_gui(action, provider, **kwargs):
             runner = AppRunner(app)
             await runner.setup()
             site = TCPSite(runner, 'localhost', 8080)
-            await site.start()
+            try:
+                await site.start()
+            except OSError as e:
+                logger.warn(e)
 
         rpc = JsonRpc()
 
