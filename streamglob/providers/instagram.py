@@ -138,7 +138,7 @@ class InstagramFeed(model.MediaFeed):
                 i = self.ITEM_CLASS(
                     feed = self,
                     guid = post.shortcode,
-                    title = post.caption or "",
+                    title = post.caption or "(no caption)",
                     created = post.date_utc,
                     post_type = post_type,
                     content =  InstagramMediaSource.schema().dumps(
