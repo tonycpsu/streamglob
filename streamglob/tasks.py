@@ -134,7 +134,7 @@ class TaskManager(Observable):
     async def poller(self):
 
         while True:
-            logger.debug("poller")
+            logger.trace("poller")
 
             (playing_done, playing) = utils.partition(
                 lambda t: t.proc.returncode is None,

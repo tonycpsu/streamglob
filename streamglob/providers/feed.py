@@ -8,6 +8,7 @@ import pipes
 from orderedattrdict import AttrDict
 from panwid.dialog import *
 from limiter import get_limiter, limit
+from fysom import Fysom
 
 from .. import model
 from .. import utils
@@ -66,6 +67,19 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         self.mark_read_task = None
         self.update_count = True
         self.player = None
+        self.player_state = Fysom(
+            events=[
+                ("file_loaded",
+                 ["waiting", "updating ui", "updating mpv"],
+                 "ready"),
+                ("ui_update", "ready", "updating ui"),
+                ("ui_updated", "updating ui", "ready"),
+                ("mpv_update", "ready", "updating mpv"),
+                ("mpv_updated", "updating mpv", "ready"),
+            ], initial="waiting"
+        )
+        self.change_playlist_pos_on_focus = True
+        self.change_focus_on_playlist_pos = True
         urwid.connect_signal(
             self, "focus",
             self.on_focus
@@ -90,16 +104,20 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     @db_session
     def on_focus(self, source, position):
-        # if self.player:
-            # FIXME: this ain't it.
-            # try:
-            #     self.player.playlist_pos = next(
-            #         i for n, i in enumerate(self.play_items)
-            #         if i.media_item_id == self[position].data.media_item_id
-            #     ).row_num
-            # except StopIteration:
-            #     pass
-            # self.player.controller.command("set", "playlist-pos", position)
+        if self.player:
+            if self.player_state.can("mpv_update"):
+                self.player_state.mpv_update()
+                try:
+                    self.player.playlist_pos = next(
+                        i for n, i in enumerate(self.play_items)
+                        if i.media_item_id == self[position].data.media_item_id
+                    ).row_num
+                except StopIteration:
+                    pass
+                self.player.controller.command("set", "playlist-pos", str(position))
+            elif self.player_state.can("ui_updated"):
+                self.player_state.ui_updated()
+
         if self.mark_read_on_focus:
             self.mark_read_on_focus = False
             if self.mark_read_task:
@@ -108,6 +126,22 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 self.HOVER_DELAY,
                 lambda: self.mark_item_read(position)
             )
+
+    def on_playlist_pos(self, name, value):
+        logger.info(f"playlist-pos: {value}, {type(value)}")
+        if self.player:
+            if self.player_state.can("ready"):
+                self.player_state.ready()
+            elif self.player_state.can("ui_update"):
+                index = self.play_items[value].row_num
+                if self.focus_position != index:
+                    self.player_state.ui_update()
+                    self.focus_position = index
+            elif self.player_state.can("mpv_updated"):
+                self.player_state.mpv_updated()
+
+    def on_file_loaded(self, name, value):
+        self.player_state.file_loaded()
 
     # @db_session
     # def on_blur(self, source, position):
@@ -184,10 +218,11 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 count=len(row.data.content),
                 url=source.url
             )
-            for row_num, (row, num, source) in enumerate(
-                    (row, num, source) for row in self
-                    for num, source in enumerate(row.data.content))
-            if not source.is_bad
+            for (row_num, row, num, source) in [
+                    (row_num, row, num, source) for row_num, row in enumerate(self)
+                    for num, source in enumerate(row.data.content)
+                    if not source.is_bad
+            ]
         ]
 
         if not len(items):
@@ -239,6 +274,8 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         logger.info(self.player_task)
         self.player = await self.player_task.program
         logger.info(self.player)
+        self.player.bind_property_observer("file-loaded", self.on_file_loaded)
+        self.player.bind_property_observer("playlist-pos", self.on_playlist_pos)
         def on_player_done(f):
             logger.info("player done")
             self.player = None
@@ -335,6 +372,12 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         elif key == "meta ctrl d":
             self.kill_all()
             self.mark_visible_read(direction=-1)
+        if key == "meta k":
+            with db_session:
+                item = self.item_at_position(self.focus_position)
+                item.title = u"test: \U0001F50A test"
+                commit()
+
         else:
             return super().keypress(size, key)
         return key
