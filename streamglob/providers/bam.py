@@ -1487,17 +1487,7 @@ class WatchDialog(BasePopUp):
             self._emit("close_popup")
 
         def download(s):
-            media = self.feed_dropdown.selected_value
-            offset = (self.offset_dropdown.selected_label
-                      if media.is_complete
-                      else None)
-            self.provider.download(
-                selection,
-                media_id = media.media_id,
-                offset=offset,
-                resolution=self.resolution_dropdown.selected_label
-            )
-            self._emit("close_popup")
+            pass
 
         def cancel(s):
             self._emit("close_popup")

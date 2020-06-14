@@ -276,6 +276,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         logger.info(self.player)
         self.player.bind_property_observer("file-loaded", self.on_file_loaded)
         self.player.bind_property_observer("playlist-pos", self.on_playlist_pos)
+        self.player.bind_key_press("ctrl+d", self.download)
         def on_player_done(f):
             logger.info("player done")
             self.player = None
@@ -283,6 +284,18 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         self.player_task.result.add_done_callback(on_player_done)
         # logger.info(urls)
 
+    def download(self):
+        media = self.feed_dropdown.selected_value
+        offset = (self.offset_dropdown.selected_label
+                  if media.is_complete
+                  else None)
+        self.provider.download(
+            selection,
+            media_id = media.media_id,
+            offset=offset,
+            resolution=self.resolution_dropdown.selected_label
+        )
+        self._emit("close_popup")
 
     def mark_all_read(self):
             with db_session:
