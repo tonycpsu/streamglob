@@ -45,23 +45,23 @@ class TaskManager(Observable):
     def max_concurrent_tasks(self):
         return config.settings.tasks.max or self.DEFAULT_MAX_CONCURRENT_TASKS
 
-    def play(self, task, player_spec, helper_spec, **kwargs):
+    def play(self, task, player_spec, downloader_spec, **kwargs):
 
         self.current_task_id +=1
         task.task_id = self.current_task_id
         # task.action = "play"
-        task.args = (player_spec, helper_spec)
+        task.args = (player_spec, downloader_spec)
         task.kwargs = kwargs
         task.program = asyncio.Future()
         task.result = asyncio.Future()
         self.to_play.append(task)
         return task
 
-    def download(self, task, filename, helper_spec, **kwargs):
+    def download(self, task, filename, downloader_spec, **kwargs):
         self.current_task_id +=1
         task.task_id = self.current_task_id
         # task.action = "download"
-        task.args = (filename, helper_spec)
+        task.args = (filename, downloader_spec)
         task.kwargs = kwargs
         task.program = asyncio.Future()
         task.result = asyncio.Future()

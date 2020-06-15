@@ -105,7 +105,7 @@ class Program(abc.ABC):
 
     PLAYER_INTEGRATED=False
 
-    INTEGRATED_HELPERS = []
+    INTEGRATED_DOWNLOADERS = []
 
     MEDIA_TYPES = set()
 
@@ -223,18 +223,18 @@ class Program(abc.ABC):
         raise SGException(f"Program for {spec} not found")
 
     @classmethod
-    async def play(cls, task, player_spec=True, helper_spec=None, **kwargs):
+    async def play(cls, task, player_spec=True, downloader_spec=None, **kwargs):
 
         source = task.sources
-        logger.debug(f"source: {source}, player: {player_spec}, helper: {helper_spec}")
+        logger.debug(f"source: {source}, player: {player_spec}, helper: {downloader_spec}")
 
         player = next(cls.get(player_spec, no_progress=True))
-        if isinstance(helper_spec, MutableMapping):
+        if isinstance(downloader_spec, MutableMapping):
             # if helper spec is a dict, it maps players to helper programs
-            if player.cmd in helper_spec:
-                helper_spec = helper_spec[player.cmd]
+            if player.cmd in downloader_spec:
+                downloader_spec = downloader_spec[player.cmd]
             else:
-                helper_spec= helper_spec.get(None, None)
+                downloader_spec= downloader_spec.get(None, None)
         # else:
         #     # if helper is something else, resolve it, and get the default
         #     # player for audio and video
@@ -243,24 +243,24 @@ class Program(abc.ABC):
 
         # FIXME: assumption if helper supports first source, it supports the rest
         try:
-            helper = Helper.get(helper_spec, task.sources[0].locator)
+            helper = Downloader.get(downloader_spec, task.sources[0].locator)
         except SGStreamNotFound as e:
             logger.warn(e)
             return
 
-        if helper and helper.cmd in player.INTEGRATED_HELPERS:
+        if helper and helper.cmd in player.INTEGRATED_DOWNLOADERS:
             # if player integrates helper, use it instead of spawning
             helper = None
-        # if helper_spec:
-        #     if isinstance(helper_spec, str):
-        #         helper = next(Helper.get(helper_spec))
-        #     elif isinstance(helper_spec, dict):
-        #         if player.cmd in helper_spec:
-        #             helper_name = helper_spec[player.cmd]
+        # if downloader_spec:
+        #     if isinstance(downloader_spec, str):
+        #         helper = next(Downloader.get(downloader_spec))
+        #     elif isinstance(downloader_spec, dict):
+        #         if player.cmd in downloader_spec:
+        #             helper_name = downloader_spec[player.cmd]
         #         else:
-        #             helper_name = helper_spec.get(None, None)
+        #             helper_name = downloader_spec.get(None, None)
         #         if helper_name:
-        #             helper = next(Helper.get(helper_name))
+        #             helper = next(Downloader.get(helper_name))
 
         if helper:
             helper.source = source
@@ -286,7 +286,7 @@ class Program(abc.ABC):
 
         # Add configured players
 
-        for pcls in [Player, Helper, Downloader]:
+        for pcls in [Player, Downloader]:
 
             ptype = pcls.__name__.lower()
             cfgkey = ptype + "s"
@@ -483,7 +483,30 @@ class Player(Program):
 
 
 
-class Helper(Program):
+class Downloader(Program):
+
+    @classmethod
+    async def download(cls, task, outfile, downloader_spec=None, **kwargs):
+
+        if os.path.exists(outfile):
+            raise SGFileExists(f"File {outfile} already exists")
+        source = task.sources[0]
+
+        if isinstance(downloader_spec, MutableMapping):
+            downloader_spec = downloader_spec.get(None, downloader_spec, **kwargs)
+        try:
+            downloader = Downloader.get(downloader_spec, source.locator, **kwargs)
+        except SGStreamNotFound as e:
+            logger.warn(e)
+            return
+
+        logger.info(f"{downloader} downloading {source.locator} to {outfile}")
+        downloader.source = task
+        downloader.extra_args_post += ["-o", outfile]
+
+        await(downloader.run(**kwargs))
+        return downloader
+
 
     @classmethod
     def get(cls, spec, url=None, **kwargs):
@@ -504,31 +527,6 @@ class Helper(Program):
 
 
 
-class Downloader(Program):
-
-    @classmethod
-    async def download(cls, task, outfile, helper_spec=None, **kwargs):
-
-        if os.path.exists(outfile):
-            raise SGFileExists(f"File {outfile} already exists")
-        source = task.sources[0]
-
-        if isinstance(helper_spec, MutableMapping):
-            helper_spec = helper_spec.get(None, helper_spec, **kwargs)
-        try:
-            downloader = Helper.get(helper_spec, source.locator, **kwargs)
-        except SGStreamNotFound as e:
-            logger.warn(e)
-            return
-
-        logger.info(f"{downloader} downloading {source.locator} to {outfile}")
-        downloader.source = task
-        downloader.extra_args_post += ["-o", outfile]
-
-        await(downloader.run(**kwargs))
-        return downloader
-
-
 
 
 # Put image-only viewers first so they're selected for image links by default
@@ -537,7 +535,7 @@ class FEHPlayer(Player, MEDIA_TYPES={"image"}):
 
 class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
 
-    INTEGRATED_HELPERS = ["youtube-dl"]
+    INTEGRATED_DOWNLOADERS = ["youtube-dl"]
 
     def __init__(self, *args, **kwargs):
         self._initialized = False
@@ -590,7 +588,7 @@ class ElinksPlayer(Player, cmd="elinks", MEDIA_TYPES={"text"}, FOREGROUND=True):
 
 
 
-class YouTubeDLHelper(Helper, Downloader):
+class YouTubeDLDownlodaer(Downloader):
 
     CMD = "youtube-dl"
     PROGRESS_RE = re.compile(
@@ -648,7 +646,7 @@ class YouTubeDLHelper(Helper, Downloader):
         t.cancel()
 
 
-class StreamlinkHelper(Helper, Downloader):
+class StreamlinkDownloader(Downloader):
 
     PLAYER_INTEGRATED=True
 
@@ -741,6 +739,7 @@ class WgetDownloader(Downloader):
     def supports_url(cls, url):
         return True
 
+
 class CurlDownloader(Downloader):
 
     @classmethod
@@ -780,7 +779,7 @@ def play_test():
             no_progress=True,
             stdout=sys.stdout, stderr=sys.stderr,
             player_spec="mpv",
-            helper_spec=None
+            downloader_spec=None
         ).result
     )
     return result
@@ -805,7 +804,7 @@ def download_test():
             no_progress=True,
             stdout=sys.stdout, stderr=sys.stderr,
             filename="foo.mkv",
-            helper_spec="youtube-dl"
+            downloader_spec="youtube-dl"
         ).result
     )
     return result

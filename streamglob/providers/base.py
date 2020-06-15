@@ -16,7 +16,7 @@ from panwid.dialog import BaseView
 from .filters import *
 from ..session import *
 from ..state import *
-from ..player import Player, Helper, Downloader
+from ..player import Player, Downloader
 from .. import model
 from .. import config
 from  ..utils import *
@@ -24,6 +24,9 @@ from  ..utils import *
 class BaseProviderView(BaseView):
 
     def update(self):
+        pass
+
+    def refresh(self):
         pass
 
 
@@ -390,7 +393,7 @@ class BaseProvider(abc.ABC):
         # player program and hope it can handle all of them.
 
         player_spec = None
-        helper_spec = None
+        downloader_spec = None
 
         if not isinstance(sources, list):
             sources = [sources]
@@ -406,9 +409,9 @@ class BaseProvider(abc.ABC):
         media_types = set([s.media_type for s in sources if s.media_type])
         player_spec = {"media_types": media_types}
         if media_types == {"image"}:
-            helper_spec = {None: None}
+            downloader_spec = {None: None}
         else:
-            helper_spec = getattr(self.config, "helpers", None) or sources[0].helper
+            downloader_spec = getattr(self.config, "helpers", None) or sources[0].helper
 
         task = model.PlayMediaTask(
             provider=self.NAME,
@@ -416,7 +419,7 @@ class BaseProvider(abc.ABC):
             sources = sources
         )
 
-        return state.task_manager.play(task, player_spec, helper_spec, **kwargs)
+        return state.task_manager.play(task, player_spec, downloader_spec, **kwargs)
 
 
     def download(self, selection, no_task_manager=False, **kwargs):
@@ -433,7 +436,7 @@ class BaseProvider(abc.ABC):
                 filename = selection.download_filename(**kwargs)
             except SGInvalidFilenameTemplate as e:
                 logger.warn(f"filename template for provider {self.IDENTIFIER} is invalid: {e}")
-            helper_spec = getattr(self.config, "helpers") or s.download_helper
+            downloader_spec = getattr(self.config, "helpers") or s.download_helper
 
             task = model.DownloadMediaTask(
                 provider=self.NAME,
@@ -442,7 +445,7 @@ class BaseProvider(abc.ABC):
                 dest=filename
             )
 
-            return state.task_manager.download(task, filename, helper_spec, **kwargs)
+            return state.task_manager.download(task, filename, downloader_spec, **kwargs)
 
     def on_select(self, widget, selection):
         self.play(selection)

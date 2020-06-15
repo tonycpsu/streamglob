@@ -1656,9 +1656,9 @@ class BAMProviderDataTable(ProviderDataTable):
             )
             logger.info(f"task: {task}")
             player_spec = {"media_types": {"video"}}
-            helper_spec = None
-            # asyncio.create_task(Player.play(task, player_spec, helper_spec))
-            state.task_manager.play(task, player_spec, helper_spec)
+            downloader_spec = None
+            # asyncio.create_task(Player.play(task, player_spec, downloader_spec))
+            state.task_manager.play(task, player_spec, downloader_spec)
 
         elif key == "meta enter":
             self.provider.play(self.selection.data)
@@ -1759,7 +1759,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         return (
             super().config_is_valid
             and
-            self.HELPER in list(state.PROGRAMS[Helper].keys())
+            self.HELPER in list(state.PROGRAMS[Downloader].keys())
         )
 
     @property
@@ -1793,7 +1793,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         self.game_map.clear()
         for game in games:
             self.game_map[game["gamePk"]] = AttrDict(game)
-        self.view.table.refresh()
+        self.view.refresh()
 
     def on_date_change(self, date):
         self.update_games()
@@ -2132,9 +2132,9 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
             )
             logger.info(f"task: {task}")
             player_spec = {"media_types": {"video"}}
-            helper_spec = None
-            # asyncio.create_task(Player.play(task, player_spec, helper_spec))
-            state.task_manager.play(task, player_spec, helper_spec)
+            downloader_spec = None
+            # asyncio.create_task(Player.play(task, player_spec, downloader_spec))
+            state.task_manager.play(task, player_spec, downloader_spec)
 
         box = self.DETAIL_BOX_CLASS(self, listing)
         box.connect("play", play_highlight)
