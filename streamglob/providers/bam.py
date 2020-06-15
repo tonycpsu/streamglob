@@ -1759,7 +1759,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         return (
             super().config_is_valid
             and
-            self.HELPER in list(player.PROGRAMS[Helper].keys())
+            self.HELPER in list(state.PROGRAMS[Helper].keys())
         )
 
     @property

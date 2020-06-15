@@ -7,7 +7,6 @@ import abc
 from itertools import chain
 from functools import reduce
 import shlex
-import pipes
 import subprocess
 import asyncio
 from datetime import timedelta
@@ -165,7 +164,7 @@ class Program(abc.ABC):
     @classmethod
     def __init_subclass__(cls, **kwargs):
         if cls.__base__ != Program:
-            cls.SUBCLASSES[cls.__base__.__name__][cls.cmd] = cls
+            cls.SUBCLASSES[cls.__base__.__name__.lower()][cls.cmd] = cls
             for k, v in kwargs.items():
                 setattr(cls, k, v)
         super().__init_subclass__()
@@ -324,7 +323,6 @@ class Program(abc.ABC):
                     continue
                 path = distutils.spawn.find_executable(name)
                 if path:
-                    print(ptype, name)
                     state.PROGRAMS[ptype][name] = ProgramDef(
                         cls=klass,
                         name=name,
@@ -386,13 +384,13 @@ class Program(abc.ABC):
             raise Exception("source not available")
 
         if isinstance(self.source, model.MediaTask):
-            source_args = [pipes.quote(s.locator) for s in self.source.sources]
+            source_args = [s.locator for s in self.source.sources]
         elif isinstance(self.source, list):
-            source_args =  [pipes.quote(s.locator) for s in self.source]
+            source_args =  [s.locator for s in self.source]
         elif self.source_is_program:
             source_args = [repr(self.source)]
         else:
-            source_args = [pipes.quote(self.source.locator)]
+            source_args = [self.source.locator]
 
         cmd = (
             self.command
@@ -767,7 +765,7 @@ async def check_progress(program):
         # print(program.progress.size)
         # print(r)
 
-async def play_test():
+def play_test():
     task = model.PlayMediaTask(
         provider="rss",
         title= "foo",
@@ -776,10 +774,16 @@ async def play_test():
         ]
     )
 
-    prog = await Player.play(task, {"media_types": {"video"}}, "streamlink")
-    # prog = await Downloader.download(task, "foo.mp4", "youtube-dl")
-    # prog = await Downloader.download(task, "foo.mp4", "streamlink")
-    state.asyncio_loop.create_task(check_progress(prog))
+    result = state.asyncio_loop.run_until_complete(
+        state.task_manager.play(
+            task,
+            no_progress=True,
+            stdout=sys.stdout, stderr=sys.stderr,
+            player_spec="mpv",
+            helper_spec=None
+        ).result
+    )
+    return result
 
 
 def download_test():
