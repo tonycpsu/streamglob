@@ -247,7 +247,7 @@ class TasksDataTable(BaseDataTable):
                 DataTableColumn("started", width=20, format_fn = utils.format_datetime),
                 DataTableColumn("elapsed",  width=14, align="right",
                                 format_fn = utils.format_timedelta),
-                DataTableColumn("provider", width=18),
+                DataTableColumn("provider", width=12),
                 DataTableColumn(
                     "title", width=("weight", 3),
                     # FIXME: urwid miscalculates width of some unicode glyphs,
@@ -264,22 +264,22 @@ class TasksDataTable(BaseDataTable):
                     truncate=True
                 ),
                 DataTableColumn(
-                    "dest", width=40,
+                    "dest", width=20,
                     format_fn = utils.strip_emoji,
                     # format_fn = functools.partial(utils.format_str_truncated, 40),
                     truncate=True
                 ),
                 DataTableColumn(
                     "size", width=8, align="right",
-                    value = lambda t, r: r.data.program.progress.size_total,
+                    value = lambda t, r: r.data.program.result().progress.size_total,
                     format_fn = lambda v: v if v else "?"
                     # value = foo,
                 ),
                 DataTableColumn(
                     "size/total", width=16, align="right",
                     value = lambda t, r: (
-                        r.data.program.progress.size_downloaded,
-                        r.data.program.progress.size_total
+                        r.data.program.result().progress.size_downloaded,
+                        r.data.program.result().progress.size_total
                     ),
                     format_fn = lambda v: (f"{v[0] or '?'}/{v[1] or '?'}") if v else ""
                     # value = foo,
@@ -287,13 +287,13 @@ class TasksDataTable(BaseDataTable):
                 DataTableColumn(
                     "pct", width=5, align="right",
                     # format_fn = lambda r: f"{r.data.program.progress.get('pct', '').split('.')[0]}%"
-                    value = lambda t, r: r.data.program.progress.percent_downloaded,
+                    value = lambda t, r: r.data.program.result().progress.percent_downloaded,
                     format_fn = lambda v: f"{round(v, 1)}%" if v else "?",
                     # value = foo,
                 ),
                 DataTableColumn(
                     "rate", width=10, align="right",
-                    value = lambda t, r: r.data.program.progress.transfer_rate,
+                    value = lambda t, r: r.data.program.result().progress.transfer_rate,
                     format_fn = lambda v: f"{v}/s" if v else "?"
                 )
         ]

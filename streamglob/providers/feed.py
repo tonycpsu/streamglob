@@ -40,6 +40,10 @@ class FeedMediaListing(model.ContentMediaListing):
         return self.feed.name
 
     @property
+    def feed_locator(self):
+        return self.feed.locator
+
+    @property
     def timestamp(self):
         return self.created.strftime("%Y%m%d_%H%M%S")
 
@@ -102,18 +106,21 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             return "unread"
         return None
 
+    def playlist_pos_to_row(self, pos):
+        return self.play_items[pos].row_num
+
+    def row_to_playlist_pos(self, row):
+        return next(
+            i for n, i in enumerate(self.play_items)
+            if i.media_item_id == self[row].data.media_item_id
+        ).row_num
+
     @db_session
     def on_focus(self, source, position):
         if self.player:
             if self.player_state.can("mpv_update"):
                 self.player_state.mpv_update()
-                try:
-                    self.player.playlist_pos = next(
-                        i for n, i in enumerate(self.play_items)
-                        if i.media_item_id == self[position].data.media_item_id
-                    ).row_num
-                except StopIteration:
-                    pass
+                self.player.playlist_pos = self.row_to_playlist_pos(position)
                 self.player.controller.command("set", "playlist-pos", str(position))
             elif self.player_state.can("ui_updated"):
                 self.player_state.ui_updated()
@@ -133,7 +140,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             if self.player_state.can("ready"):
                 self.player_state.ready()
             elif self.player_state.can("ui_update"):
-                index = self.play_items[value].row_num
+                index = self.playlist_pos_to_row(value)
                 if self.focus_position != index:
                     self.player_state.ui_update()
                     self.focus_position = index
@@ -258,7 +265,8 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                     content=self.provider.new_media_source(
                         f"file://{m3u.name}",
                         media_type = "video"
-                    )
+                    ),
+                    feed = self.provider.feed
                 )
 
         else:
@@ -268,7 +276,8 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                     if self.provider.feed
                     else " ("
                 ) + f"{self.provider.status})",
-                content = [ item.url for item in items ]
+                content = [ item.url for item in items ],
+                feed = self.provider.feed
             )
         self.player_task =  self.provider.play(listing)
         logger.info(self.player_task)
@@ -277,6 +286,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         self.player.bind_property_observer("file-loaded", self.on_file_loaded)
         self.player.bind_property_observer("playlist-pos", self.on_playlist_pos)
         self.player.bind_key_press("ctrl+d", self.download)
+
         def on_player_done(f):
             logger.info("player done")
             self.player = None
@@ -285,17 +295,33 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         # logger.info(urls)
 
     def download(self):
-        media = self.feed_dropdown.selected_value
-        offset = (self.offset_dropdown.selected_label
-                  if media.is_complete
-                  else None)
-        self.provider.download(
-            selection,
-            media_id = media.media_id,
-            offset=offset,
-            resolution=self.resolution_dropdown.selected_label
+
+        # we could probably rely on focus position here, but let's be safe and
+        # go with what MPV has for playlist position first
+
+        if self.player:
+            index = self.player.controller.playlist_pos
+            row_num = self.playlist_pos_to_row(index)
+        else:
+            row_num = self.focus_position
+
+        url = self.player.controller.command(
+            "get_property", f"playlist/{index}/filename"
         )
-        self._emit("close_popup")
+        source = next(
+            s for s in self[row_num].data.content
+            if s.locator == url
+        )
+
+        listing = self.provider.new_listing(
+            title = f"{self.provider.NAME} "
+            + f" ({self.provider.feed.name}: "
+            + f"{self[row_num].data.title})",
+            content = [ source ],
+            feed = self.provider.feed
+        )
+        self.provider.download(listing)
+
 
     def mark_all_read(self):
             with db_session:
@@ -385,12 +411,8 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         elif key == "meta ctrl d":
             self.kill_all()
             self.mark_visible_read(direction=-1)
-        if key == "meta k":
-            with db_session:
-                item = self.item_at_position(self.focus_position)
-                item.title = u"test: \U0001F50A test"
-                commit()
-
+        if key == "ctrl d":
+            self.download()
         else:
             return super().keypress(size, key)
         return key

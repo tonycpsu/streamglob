@@ -6,6 +6,7 @@ from ..exceptions import *
 from ..state import *
 from .. import config
 from .. import model
+from .. import player
 from .. import session
 from .filters import *
 
@@ -39,6 +40,10 @@ class InstagramMediaSource(model.MediaSource):
     @property
     def is_bad(self):
         return any(s in self.locator for s in ["0_0_0", "null.jpg"])
+
+    @property
+    def download_helper(self):
+        return lambda d: d.is_simple
 
 
 @dataclass
@@ -234,6 +239,8 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
     MEDIA_TYPES = {"image", "video"}
 
     SESSION_CLASS = InstagramSession
+
+    HELPER = "youtube-dl"
 
     # VIEW_CLASS = InstagramProviderView
 

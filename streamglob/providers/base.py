@@ -437,7 +437,7 @@ class BaseProvider(abc.ABC):
             except SGInvalidFilenameTemplate as e:
                 logger.warn(f"filename template for provider {self.IDENTIFIER} is invalid: {e}")
             downloader_spec = getattr(self.config, "helpers") or s.download_helper
-
+            raise Exception(filename)
             task = model.DownloadMediaTask(
                 provider=self.NAME,
                 title=selection.title,

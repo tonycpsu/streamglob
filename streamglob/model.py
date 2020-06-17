@@ -153,7 +153,6 @@ class MediaListing(BaseDataClass):
         if template:
             # template = template.replace("{", "{self."
             template = self.TEMPLATE_RE.sub(r"{self.\1}", template)
-            # raise Exception(template)
             try:
                 outfile = template.format(self=self, index=index)
             except Exception as e:

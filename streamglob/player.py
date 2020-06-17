@@ -3,7 +3,6 @@ logger = logging.getLogger(__name__)
 
 import sys
 import os
-import abc
 from itertools import chain
 from functools import reduce
 import shlex
@@ -99,7 +98,7 @@ class ProgressStats:
     def transfer_rate(self):
         return self.rate.best_prefix(system=bitmath.SI) if self.rate else None
 
-class Program(abc.ABC):
+class Program(object):
 
     SUBCLASSES = Tree()
 
@@ -173,6 +172,7 @@ class Program(abc.ABC):
     @classmethod
     def get(cls, spec, *args, **kwargs):
 
+        logger.info(f"get: {spec}")
         ptype = cls.__name__.lower()
         if spec is None:
             return None
@@ -181,6 +181,13 @@ class Program(abc.ABC):
             return (
                 p.cls(p.path, **dict(p.cfg, **kwargs))
                 for n, p in state.PROGRAMS[ptype].items()
+            )
+
+        elif callable(spec):
+            return (
+                p.cls(p.path, **dict(p.cfg, **kwargs))
+                for n, p in state.PROGRAMS[ptype].items()
+                if spec(p.cls)
             )
 
         elif isinstance(spec, str):
@@ -225,49 +232,35 @@ class Program(abc.ABC):
     @classmethod
     async def play(cls, task, player_spec=True, downloader_spec=None, **kwargs):
 
+        downloader = None
         source = task.sources
-        logger.debug(f"source: {source}, player: {player_spec}, helper: {downloader_spec}")
+        logger.debug(f"source: {source}, player: {player_spec}, downloader: {downloader_spec}")
 
         player = next(cls.get(player_spec, no_progress=True))
         if isinstance(downloader_spec, MutableMapping):
-            # if helper spec is a dict, it maps players to helper programs
+            # if downloader spec is a dict, it maps players to downloader programs
             if player.cmd in downloader_spec:
                 downloader_spec = downloader_spec[player.cmd]
             else:
                 downloader_spec= downloader_spec.get(None, None)
-        # else:
-        #     # if helper is something else, resolve it, and get the default
-        #     # player for audio and video
-        #     player = next(cls.get(dict(media_types={"audio", "video"}),
-        #                           no_progress=True))
 
-        # FIXME: assumption if helper supports first source, it supports the rest
-        try:
-            helper = Downloader.get(downloader_spec, task.sources[0].locator)
-        except SGStreamNotFound as e:
-            logger.warn(e)
-            return
+        logger.info(f"player: {player}")
+        if downloader_spec:
+            # FIXME: assumption if downloader supports first source, it supports the rest
+            try:
+                downloader = Downloader.get(downloader_spec, task.sources[0].locator)
+            except SGStreamNotFound as e:
+                logger.warn(e)
+                return
 
-        if helper and helper.cmd in player.INTEGRATED_DOWNLOADERS:
-            # if player integrates helper, use it instead of spawning
-            helper = None
-        # if downloader_spec:
-        #     if isinstance(downloader_spec, str):
-        #         helper = next(Downloader.get(downloader_spec))
-        #     elif isinstance(downloader_spec, dict):
-        #         if player.cmd in downloader_spec:
-        #             helper_name = downloader_spec[player.cmd]
-        #         else:
-        #             helper_name = downloader_spec.get(None, None)
-        #         if helper_name:
-        #             helper = next(Downloader.get(helper_name))
-
-        if helper:
-            helper.source = source
-            source = helper
-
+            if downloader:
+                if downloader.cmd in player.INTEGRATED_DOWNLOADERS:
+                    downloader = None
+                else:
+                    downloader.source = source
+                    source = downloader
         player.source = source
-        logger.info(f"player: {player.cmd}: helper={helper.cmd if helper else helper}, playing {source}")
+        logger.info(f"player: {player.cmd}: downloader={downloader.cmd if downloader else downloader}, playing {source}")
         task = player.run(**kwargs)
         await state.asyncio_loop.create_task(task)
         return player
@@ -329,6 +322,7 @@ class Program(abc.ABC):
                         path=path,
                         cfg = AttrDict()
                     )
+
 
     @property
     def source(self):
@@ -406,7 +400,6 @@ class Program(abc.ABC):
 
 
     async def run(self, source=None, **kwargs):
-
         if source:
             self.source = source
 
@@ -474,59 +467,6 @@ class Program(abc.ABC):
 class Player(Program):
 
     pass
-    # def update_progress(self):
-
-    #     if self.source_is_program and hasattr(self.source, "update_progress"):
-    #         return self.source.update_progress()
-
-    #     return
-
-
-
-class Downloader(Program):
-
-    @classmethod
-    async def download(cls, task, outfile, downloader_spec=None, **kwargs):
-
-        if os.path.exists(outfile):
-            raise SGFileExists(f"File {outfile} already exists")
-        source = task.sources[0]
-
-        if isinstance(downloader_spec, MutableMapping):
-            downloader_spec = downloader_spec.get(None, downloader_spec, **kwargs)
-        try:
-            downloader = Downloader.get(downloader_spec, source.locator, **kwargs)
-        except SGStreamNotFound as e:
-            logger.warn(e)
-            return
-
-        logger.info(f"{downloader} downloading {source.locator} to {outfile}")
-        downloader.source = task
-        downloader.extra_args_post += ["-o", outfile]
-
-        await(downloader.run(**kwargs))
-        return downloader
-
-
-    @classmethod
-    def get(cls, spec, url=None, **kwargs):
-        if not spec:
-            return None
-
-        try:
-            return next(iter(
-                sorted((
-                    h for h in super().get(spec, **kwargs)
-                    if h.supports_url(url)),
-                    key = lambda h: spec.index(h.cmd)
-                       if h.cmd in spec else len(spec)+1
-                )
-            ))
-        except (TypeError, StopIteration):
-            return next(iter(super().get(spec, **kwargs)))
-
-
-
 
 
 # Put image-only viewers first so they're selected for image links by default
@@ -588,6 +528,67 @@ class ElinksPlayer(Player, cmd="elinks", MEDIA_TYPES={"text"}, FOREGROUND=True):
 
 
 
+class Downloader(Program):
+
+    @classmethod
+    async def download(cls, task, outfile, downloader_spec=None, **kwargs):
+
+        # FIXME: downloader may handle file naming
+        if os.path.exists(outfile):
+            raise SGFileExists(f"File {outfile} already exists")
+        source = task.sources[0] # FIXME
+
+        if isinstance(downloader_spec, MutableMapping):
+            downloader_spec = downloader_spec.get(None, downloader_spec, **kwargs)
+        try:
+            downloader = Downloader.get(downloader_spec, source.locator, **kwargs)
+        except SGStreamNotFound as e:
+            downloader = next(Downloader.get(downloader_spec, **kwargs))
+            logger.warn(e)
+            return
+
+        downloader.process_args(task, outfile, **kwargs)
+
+        downloader.source = source
+        logger.info(f"downloader: {downloader.cmd}, downloading {source} to {outfile}")
+        task = downloader.run(**kwargs)
+        await state.asyncio_loop.create_task(task)
+        return downloader
+
+
+    @classmethod
+    def get(cls, spec, url=None, **kwargs):
+        def sort_key(p):
+            if isinstance(spec, MutableMapping):
+                return spec.index(h.cmd) if h.cmd in spec else len(spec)+1
+            else:
+                return 0
+
+        logger.error(
+            [ d for d in super().get(spec, **kwargs)
+              if d.supports_url(url)
+        ])
+        if not spec:
+            spec = True
+        try:
+            return next(iter(
+                sorted((
+                    h for h in super().get(spec, **kwargs)
+                    if h.supports_url(url)),
+                    key = sort_key
+            )))
+        except (TypeError, StopIteration) as e:
+            logger.error(e)
+            return next(iter(super().get(spec, **kwargs)))
+
+    @property
+    def is_simple(self):
+        raise NotImplementedError
+
+    def process_args(task, outfile, **kwargs):
+        pass
+
+
 class YouTubeDLDownlodaer(Downloader):
 
     CMD = "youtube-dl"
@@ -600,6 +601,9 @@ class YouTubeDLDownlodaer(Downloader):
         if not self.no_progress:
             self.extra_args_pre += ["--newline"]
 
+    @property
+    def is_simple(self):
+        return False
 
     def process_kwargs(self, kwargs):
         if "format" in kwargs:
@@ -618,11 +622,9 @@ class YouTubeDLDownlodaer(Downloader):
         return False
 
     async def update_progress(self):
-        logger.debug("update_progress")
 
         async def process_lines():
             async for line in self.get_output():
-                logger.info(line)
                 if not line:
                     continue
                 logger.debug(line)
@@ -638,8 +640,8 @@ class YouTubeDLDownlodaer(Downloader):
                     self.progress.dled = (self.progress.pct * self.progress.total)
                     self.progress.rate = bitmath.parse_string(rate.split("/")[0]) if rate else None
                     self.progress.eta = eta
-                except AttributeError:
-                    pass
+                except AttributeError as e:
+                    logger.error(e)
 
         t = asyncio.create_task(process_lines())
         await asyncio.sleep(1)
@@ -657,10 +659,11 @@ class StreamlinkDownloader(Downloader):
     # def __init__(self, path, no_progress=False, *args, **kwargs):
     #     super().__init__(path, *args, **kwargs)
 
+    @property
+    def is_simple(self):
+        return False
 
     def integrate_player(self, dst):
-        logger.debug(f"dst: {dst}")
-        logger.info(dst.extra_args_pre)
         self.extra_args_pre += ["--player"] + [" ".join(dst.command + dst.extra_args_pre)]
 
     def process_kwargs(self, kwargs):
@@ -727,25 +730,30 @@ class StreamlinkDownloader(Downloader):
         t.cancel()
 
 
-class WgetDownloader(Downloader):
+# class WgetDownloader(Downloader):
 
-    def download(self, outfile, **kwargs):
-        self.source = source
-        self.extra_args_post += ["-O", outfile]
-        self.run(**kwargs) # FIXME
-        return self # FIXME x2
+#     @property
+#     def is_simple(self):
+#         return True
 
-    @classmethod
-    def supports_url(cls, url):
-        return True
+
+#     @classmethod
+#     def supports_url(cls, url):
+#         return True
 
 
 class CurlDownloader(Downloader):
 
+    @property
+    def is_simple(self):
+        return True
+
     @classmethod
     def supports_url(cls, url):
         return True
 
+    def process_args(self, task, outfile, **kwargs):
+        self.extra_args_post += ["-o", outfile]
 
 
 async def get():
@@ -786,13 +794,23 @@ def play_test():
 
 
 def download_test():
-    logger.info("download_test")
+
+    # task = model.DownloadMediaTask(
+    #     provider="rss",
+    #     title= "foo",
+    #     sources = [
+    #         model.MediaSource("youtube", "https://www.youtube.com/watch?v=5aVU_0a8-A4")
+    #     ]
+    # )
 
     task = model.DownloadMediaTask(
         provider="rss",
         title= "foo",
         sources = [
-            model.MediaSource("youtube", "https://www.youtube.com/watch?v=5aVU_0a8-A4")
+            model.MediaSource(
+                "rss",
+                "https://www.nasa.gov/sites/all/themes/custom/nasatwo/images/nasa-logo.svg",
+                media_type="image")
         ]
     )
 
@@ -803,8 +821,9 @@ def download_test():
             task,
             no_progress=True,
             stdout=sys.stdout, stderr=sys.stderr,
-            filename="foo.mkv",
-            downloader_spec="youtube-dl"
+            filename="foo.svg",
+            # downloader_spec="youtube-dl"
+            downloader_spec = lambda d: d.is_simple
         ).result
     )
     return result
