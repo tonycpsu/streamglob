@@ -87,13 +87,13 @@ class LiveStreamProvider(BackgroundTasksMixin, BaseProvider):
 
     @db_session
     def create_channels(self):
-        for name, locator in self.channels.items():
+        for locator, name in self.channels.items():
             feed = self.CHANNEL_CLASS.get(locator=locator)
             if not feed:
                 feed = self.CHANNEL_CLASS(
                     provider_id = self.IDENTIFIER,
-                    name = name,
-                    locator=self.filters.channel[name]
+                    name = name or locator,
+                    locator=locator
                     # **self.feed_attrs(name)
                 )
                 commit()
@@ -111,7 +111,7 @@ class LiveStreamProvider(BackgroundTasksMixin, BaseProvider):
     @db_session
     def refresh(self):
         if self.filters.channel.value:
-            channels = [self.filters.channel.value]
+            channels = [self.filters.channel.selected_label]
         else:
             channels = self.channels
 
