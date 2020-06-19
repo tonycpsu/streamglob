@@ -433,11 +433,10 @@ class BaseProvider(abc.ABC):
             if len(sources):
                 kwargs["index"] = i
             try:
-                filename = selection.download_filename(**kwargs)
+                filename = s.download_filename(selection, **kwargs)
             except SGInvalidFilenameTemplate as e:
                 logger.warn(f"filename template for provider {self.IDENTIFIER} is invalid: {e}")
             downloader_spec = getattr(self.config, "helpers") or s.download_helper
-            raise Exception(filename)
             task = model.DownloadMediaTask(
                 provider=self.NAME,
                 title=selection.title,

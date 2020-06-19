@@ -204,7 +204,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     #     self.update_c ount = True
     #     self.provider.update_query()
     #     super().reset(*args, **kwargs)
-    async def play_all(self, playlist=False):
+    async def play_all(self):
 
         ITEM_TEMPLATE="""#EXTINF:1,{title}
 {url}
@@ -237,48 +237,39 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
         self.play_items = items
         # raise Exception(items)
-        if playlist:
-            with tempfile.NamedTemporaryFile(suffix=".m3u8", delete=False) as m3u:
-                m3u.write(f"#EXTM3U\n".encode("utf-8"))
-                for item in items:
-                    m3u.write(ITEM_TEMPLATE.format(
-                        title=(
-                            f"{self.provider.IDENTIFIER.lower()}.{item.media_item_id}"
-                            " "
-                            f"{item.feed}: {item.locator}"
-                            " "
-                            f"{item.created.isoformat().split('.')[0]}"
-                            "."
-                            f"{item.num:02d}_{item.count:02d}"
-                            " "
-                            f"{item.title.strip() or '(no title)'}"
-                        ),
-                        url=item.url
-                    ).encode("utf-8"))
-                logger.info(m3u.name)
-                listing = self.provider.new_listing(
-                    title=f"{self.provider.NAME} playlist" + (
-                        f" ({self.provider.feed.name}/"
-                        if self.provider.feed
-                        else " ("
-                    ) + f"{self.provider.status})",
-                    content=self.provider.new_media_source(
-                        f"file://{m3u.name}",
-                        media_type = "video"
-                    ),
-                    feed = self.provider.feed
-                )
 
-        else:
+        with tempfile.NamedTemporaryFile(suffix=".m3u8", delete=False) as m3u:
+            m3u.write(f"#EXTM3U\n".encode("utf-8"))
+            for item in items:
+                m3u.write(ITEM_TEMPLATE.format(
+                    # title=(
+                    #     f"{self.provider.IDENTIFIER.lower()}.{item.media_item_id}"
+                    #     " "
+                    #     f"{item.feed}: {item.locator}"
+                    #     " "
+                    #     f"{item.created.isoformat().split('.')[0]}"
+                    #     "."
+                    #     f"{item.num:02d}_{item.count:02d}"
+                    #     " "
+                    #     f"{item.title.strip() or '(no title)'}"
+                    # ),
+                    title = item.title.strip() or "(no title)",
+                    url=item.url
+                ).encode("utf-8"))
+            logger.info(m3u.name)
             listing = self.provider.new_listing(
-                title = f"{self.provider.NAME} playlist" + (
+                title=f"{self.provider.NAME} playlist" + (
                     f" ({self.provider.feed.name}/"
                     if self.provider.feed
                     else " ("
                 ) + f"{self.provider.status})",
-                content = [ item.url for item in items ],
+                content=self.provider.new_media_source(
+                    f"file://{m3u.name}",
+                    media_type = "video"
+                ),
                 feed = self.provider.feed
             )
+
         self.player_task =  self.provider.play(listing)
         logger.info(self.player_task)
         self.player = await self.player_task.program
@@ -305,21 +296,22 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         else:
             row_num = self.focus_position
 
+        listing = self[row_num].data
         url = self.player.controller.command(
             "get_property", f"playlist/{index}/filename"
         )
         source = next(
-            s for s in self[row_num].data.content
+            s for s in listing.content
             if s.locator == url
         )
 
-        listing = self.provider.new_listing(
-            title = f"{self.provider.NAME} "
-            + f" ({self.provider.feed.name}: "
-            + f"{self[row_num].data.title})",
-            content = [ source ],
-            feed = self.provider.feed
-        )
+        # listing = self.provider.new_listing(
+        #     title = f"{self.provider.NAME} "
+        #     + f" ({self.provider.feed.name}: "
+        #     + f"{self[row_num].data.title})",
+        #     content = [ source ],
+        #     feed = self.provider.feed
+        # )
         self.provider.download(listing)
 
 
@@ -392,7 +384,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         if key == "meta r":
             asyncio.create_task(self.provider.update(force=True))
         elif key == "meta p":
-            asyncio.create_task(self.play_all(playlist=True))
+            asyncio.create_task(self.play_all())
         elif key == "n":
             self.next_unread()
         elif key == "p":

@@ -101,70 +101,11 @@ class MediaListing(BaseDataClass):
         if name != "_attrs":
             return self._attrs.get(name, default)
 
-    TEMPLATE_RE=re.compile("\{((?!index)[^}]+)\}")
-
     @property
     def provider(self):
         return providers.get(self.provider_id)
         # return self.provider.NAME.lower()
 
-    @property
-    def default_name(self):
-        import time
-
-        if len(self.content) > 1:
-            raise NotImplementedError
-
-        for s in reversed(self.content[0].locator.split("/")):
-            if not len(s): continue
-            return "".join(
-                [c for c in s if c.isalpha() or c.isdigit() or c in [" ", "-"]]
-            ).rstrip()
-        return "untitled"
-
-    @property
-    def timestamp(self):
-        return datetime.now().strftime("%Y%m%d_%H%M%S")
-
-    @property
-    def ext(self):
-        return f"{self.provider_id}_dl" # *shrug*
-
-
-    def download_filename(self, index=None, feed=None, **kwargs):
-
-        if "outfile" in kwargs:
-            return kwargs.get("outfile")
-
-        outpath = (
-            self.provider.config.get_path("output.path")
-            or
-            config.settings.profile.get_path("output.path")
-            or
-            "."
-        )
-
-        template = (
-            self.provider.config.get_path("output.template")
-            or
-            config.settings.profile.get_path("output.template")
-        )
-
-        if template:
-            # template = template.replace("{", "{self."
-            template = self.TEMPLATE_RE.sub(r"{self.\1}", template)
-            try:
-                outfile = template.format(self=self, index=index)
-            except Exception as e:
-                logger.exception(e)
-                raise SGInvalidFilenameTemplate
-        else:
-            # template = "{self.provider.name.lower()}.{self.default_name}.{self.timestamp}.{self.ext}"
-            # template = "{self.provider}.{self.ext}"
-            template = "{self.provider}.{self.default_name}.{self.timestamp}.{self.ext}"
-            outfile = template.format(self=self)
-        # logger.info(f"template: {template}, outfile: {outfile}")
-        return os.path.join(outpath, outfile)
 
 
 @dataclass
@@ -177,6 +118,8 @@ class ContentMediaListing(MediaListing):
 @dataclass_json
 @dataclass
 class MediaSource(BaseDataClass):
+
+    TEMPLATE_RE=re.compile("\{((?!(index|listing|feed))[^}]+)\}")
 
     # listing: MediaListing
     # locator: str
@@ -209,8 +152,64 @@ class MediaSource(BaseDataClass):
         """
         return False
 
-    # def __str__(self):
-    #     return self.locator
+    @property
+    def default_name(self):
+        import time
+
+        if len(self.content) > 1:
+            raise NotImplementedError
+
+        for s in reversed(self.content[0].locator.split("/")):
+            if not len(s): continue
+            return "".join(
+                [c for c in s if c.isalpha() or c.isdigit() or c in [" ", "-"]]
+            ).rstrip()
+        return "untitled"
+
+    @property
+    def timestamp(self):
+        return datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    @property
+    def ext(self):
+        return f"{self.provider_id}_dl" # *shrug*
+
+
+    def download_filename(self, listing, index=None, **kwargs):
+
+        if "outfile" in kwargs:
+            return kwargs.get("outfile")
+
+        outpath = (
+            listing.provider.config.get_path("output.path")
+            or
+            config.settings.profile.get_path("output.path")
+            or
+            "."
+        )
+
+        template = (
+            listing.provider.config.get_path("output.template")
+            or
+            config.settings.profile.get_path("output.template")
+        )
+
+        if template:
+            # template = template.replace("{", "{self."
+            template = self.TEMPLATE_RE.sub(r"{self.\1}", template)
+            template = template.replace("{feed", "{listing.feed")
+            try:
+                outfile = template.format(self=self, listing=listing, index=index)
+            except Exception as e:
+                logger.exception(e)
+                raise SGInvalidFilenameTemplate
+        else:
+            # template = "{self.provider.name.lower()}.{self.default_name}.{self.timestamp}.{self.ext}"
+            # template = "{self.provider}.{self.ext}"
+            template = "{listing.provider}.{self.default_name}.{self.timestamp}.{self.ext}"
+            outfile = template.format(self=self)
+        # logger.info(f"template: {template}, outfile: {outfile}")
+        return os.path.join(outpath, outfile)
 
 
 @dataclass
