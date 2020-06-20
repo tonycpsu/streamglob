@@ -25,7 +25,7 @@ class TaskList(list):
 
 class TaskManager(Observable):
 
-    QUEUE_INTERVAL = 1
+    QUEUE_INTERVAL = 5
     DEFAULT_MAX_CONCURRENT_TASKS = 20
 
     def __init__(self):
@@ -37,6 +37,7 @@ class TaskManager(Observable):
         self.to_download = TaskList()
         self.playing = TaskList()
         self.active = TaskList()
+        self.postprocessing = TaskList()
         self.done = TaskList()
         self.current_task_id = 0
         self.started = asyncio.Condition()
@@ -58,6 +59,7 @@ class TaskManager(Observable):
         return task
 
     def download(self, task, filename, downloader_spec, **kwargs):
+
         self.current_task_id +=1
         task.task_id = self.current_task_id
         # task.action = "download"
@@ -102,7 +104,8 @@ class TaskManager(Observable):
             task = await wait_for_item()
 
             if isinstance(task, model.PlayMediaTask):
-                program = await player.Player.play(task, *task.args, **task.kwargs)
+                # program = await player.Player.play(task, *task.args, **task.kwargs)
+                program = player.Player.play(task, *task.args, **task.kwargs)
             elif isinstance(task, model.DownloadMediaTask):
                 try:
                     program = await player.Downloader.download(task, *task.args, **task.kwargs)
@@ -132,7 +135,7 @@ class TaskManager(Observable):
     async def poller(self):
 
         while True:
-            logger.trace("poller")
+            logger.info("poller")
 
             (playing_done, playing) = utils.partition(
                 lambda t: t.proc.returncode is None,
@@ -144,26 +147,60 @@ class TaskManager(Observable):
 
             self.playing = TaskList(playing)
 
-            (done, active) = utils.partition(
+            (complete, active) = utils.partition(
                 lambda t: t.proc.returncode is None,
                 self.active)
 
-            done_list = TaskList(done)
+            (done, postprocessing) = utils.partition(
+                lambda t: t.postprocessors,
+                complete)
+
             active_list = TaskList(active)
+
+            postprocessing = list(postprocessing)
+            for t in postprocessing:
+                t.program = asyncio.Future()
+                t.proc = None
+                t.pid = None
+                t.sources = [t.dest]
+
+            postprocessing_list = TaskList(postprocessing)
+            done_list = TaskList(done)
 
             for t in done_list:
                 t.result.set_result(t.proc.returncode)
-            self.done += done_list
+
             self.active = active_list
+            self.postprocessing += postprocessing_list
+            self.done += done_list
 
-            for s in self.playing + self.active:
-
-                prog = await s.program
-                s.elapsed = datetime.now() - s.started
+            for t in self.playing + self.active:
+                prog = await t.program
+                t.elapsed = datetime.now() - t.started
                 if hasattr(prog, "update_progress"):
                     await prog.update_progress()
                 if hasattr(prog.source, "update_progress"):
                     await prog.source.update_progress()
+
+
+            for t in self.postprocessing:
+                logger.info(f"postprocessing: {t}")
+                if t.program.done():
+                    logger.info("program done")
+                    if t.proc.returncode is not None:
+                        logger.info("rc not None")
+                        t.result.set_result(t.program.update_progress())
+                    else:
+                        logger.info(f"running: {t.program}")
+                else:
+                    logger.info("program not done")
+                    pp = next(player.Postprocessor.get(t.postprocessors.pop(0)))
+                    logger.info(f"starting: {pp} {t.sources}")
+                    res = await pp.process(t.sources[0])
+                    logger.info(f"res: {res}")
+                    t.program.set_result(res)
+                    t.proc = t.program.proc
+                    t.pid = t.proc.pid
 
             if state.get("tasks_view"):
                 state.tasks_view.refresh()

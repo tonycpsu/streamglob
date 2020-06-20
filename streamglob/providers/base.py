@@ -441,9 +441,9 @@ class BaseProvider(abc.ABC):
                 provider=self.NAME,
                 title=selection.title,
                 sources = [s],
-                dest=filename
+                dest=filename,
+                postprocessors = self.config.get("postprocessors", None)
             )
-
             return state.task_manager.download(task, filename, downloader_spec, **kwargs)
 
     def on_select(self, widget, selection):

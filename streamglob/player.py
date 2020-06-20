@@ -231,7 +231,7 @@ class Program(object):
 
     @classmethod
     async def play(cls, task, player_spec=True, downloader_spec=None, **kwargs):
-
+        # FIXME: remove task arg an just pass in sources
         downloader = None
         source = task.sources
         logger.debug(f"source: {source}, player: {player_spec}, downloader: {downloader_spec}")
@@ -279,7 +279,7 @@ class Program(object):
 
         # Add configured players
 
-        for pcls in [Player, Downloader]:
+        for pcls in [Player, Downloader, Postprocessor]:
 
             ptype = pcls.__name__.lower()
             cfgkey = ptype + "s"
@@ -363,13 +363,12 @@ class Program(object):
         pass
 
     async def get_output(self):
+        logger.info("get_output")
         # yield os.read(self.progress_stream, 1024).decode("utf-8")
         r, w, e = select.select([ self.progress_stream ], [], [], 0)
         if self.progress_stream in r:
             for line in os.read(self.progress_stream, 1024).decode("utf-8").split("\n"):
                 yield line
-        else:
-            raise StopIteration
 
     @property
     def full_command(self):
@@ -383,8 +382,10 @@ class Program(object):
             source_args =  [s.locator for s in self.source]
         elif self.source_is_program:
             source_args = [repr(self.source)]
-        else:
+        elif isinstance(self.source, model.MediaSource):
             source_args = [self.source.locator]
+        else:
+            source_args = [self.source]
 
         cmd = (
             self.command
@@ -392,7 +393,6 @@ class Program(object):
             + source_args
             + self.extra_args_post
         )
-
         if self.ssh_host:
             cmd = ["/usr/bin/ssh", self.ssh_host] + cmd
 
@@ -423,15 +423,15 @@ class Program(object):
             if not self.FOREGROUND:
 
                 if not self.no_progress:
-
                     self.progress_stream, pty_stream = pty.openpty()
 
                     fcntl.ioctl(pty_stream, termios.TIOCSWINSZ,
                                 struct.pack('HHHH', 50, 100, 0, 0)
                     )
-                    self.stdin = pty_stream
+
+                    # self.stdin = pty_stream
                     self.stdout = pty_stream
-                    self.stderr = pty_stream
+                    # self.stderr = pty_stream
 
                 if self.stdin is None:
                     self.stdin = open(os.devnull, 'w')
@@ -532,6 +532,7 @@ class Downloader(Program):
 
     @classmethod
     async def download(cls, task, outfile, downloader_spec=None, **kwargs):
+        # FIXME: remove task arg an just pass in sources
 
         # FIXME: downloader may handle file naming
         if os.path.exists(outfile):
@@ -553,6 +554,7 @@ class Downloader(Program):
         logger.info(f"downloader: {downloader.cmd}, downloading {source} to {outfile}")
         task = downloader.run(**kwargs)
         await state.asyncio_loop.create_task(task)
+
         return downloader
 
 
@@ -624,6 +626,7 @@ class YouTubeDLDownlodaer(Downloader):
     async def update_progress(self):
 
         async def process_lines():
+
             async for line in self.get_output():
                 if not line:
                     continue
@@ -756,6 +759,47 @@ class CurlDownloader(Downloader):
         self.extra_args_post += ["-o", outfile]
 
 
+
+class Postprocessor(Program):
+
+    async def update_progress(self):
+
+        async def process_lines():
+            async for line in self.get_output():
+                if line:
+                    return line
+
+        t = asyncio.create_task(process_lines())
+        await asyncio.sleep(1)
+        t.cancel()
+        return t.result()
+
+    @classmethod
+    async def process(cls, postprocessor_spec, infile, **kwargs):
+
+        # logger.info(self.full_command)
+        # proc = await super().run(**kwargs)
+        # return proc
+        postprocessor = next(Postprocessor.get(postprocessor_spec))
+
+        postprocessor.source = infile
+        logger.info(f"postprocessor: {postprocessor.cmd}, processing {infile}")
+        task = postprocessor.run(**kwargs)
+        await state.asyncio_loop.create_task(task)
+        return postprocessor
+
+
+
+class TestPostprocessor(Postprocessor):
+    pass
+
+    # def process(self, infile):
+    #     logger.info("process")
+    #     outfile = f"{infile}.moved"
+    #     shutil.move(infile, outfile)
+    #     return outfile
+
+
 async def get():
     return await(Downloader.download(
         model.MediaSource("https://www.youtube.com/watch?v=5aVU_0a8-A4"),
@@ -795,14 +839,6 @@ def play_test():
 
 def download_test():
 
-    # task = model.DownloadMediaTask(
-    #     provider="rss",
-    #     title= "foo",
-    #     sources = [
-    #         model.MediaSource("youtube", "https://www.youtube.com/watch?v=5aVU_0a8-A4")
-    #     ]
-    # )
-
     task = model.DownloadMediaTask(
         provider="rss",
         title= "foo",
@@ -823,33 +859,27 @@ def download_test():
             stdout=sys.stdout, stderr=sys.stderr,
             filename="foo.svg",
             # downloader_spec="youtube-dl"
-            downloader_spec = lambda d: d.is_simple
+            downloader_spec = lambda d: d.is_simple,
+            postprocessors=TestPostprocessor("true")
         ).result
     )
+
     return result
 
 
-class CatProgram(Program):
-    pass
+def postprocessor_test():
 
+    # p = next(Postprocessor.get("test"))
 
-# def main():
+    # proc = state.asyncio_loop.run_until_complete(
+    #     p.process(
+    #         "foo.svg"
+    #     )
+    # )
+    # state.asyncio_loop.run_until_complete(proc.wait())
 
-
-#     parser = argparse.ArgumentParser()
-#     parser.add_argument("-c", "--config-dir", help="use alternate config directory")
-#     options, args = parser.parse_known_args()
-
-
-#     setup_logging(2, quiet_stdout=False)
-#     config.load(options.config_dir, merge_default=True)
-
-#     log_file = os.path.join(config.settings.CONFIG_DIR, f"{PACKAGE_NAME}.log")
-#     fh = logging.FileHandler(log_file)
-#     add_log_handler(fh)
-
-#     Player.load()
-#     asyncio_test()
+    proc = state.asyncio_loop.run_until_complete(Postprocessor.process("test", "foo.svg"))
+    state.asyncio_loop.run_until_complete(proc.wait())
 
 
 
@@ -893,7 +923,8 @@ def main():
     fh = logging.FileHandler(log_file)
     add_log_handler(fh)
 
-    download_test()
+    # download_test()
+    postprocessor_test()
 
 if __name__ == "__main__":
     main()

@@ -211,6 +211,8 @@ class MediaSource(BaseDataClass):
         # logger.info(f"template: {template}, outfile: {outfile}")
         return os.path.join(outpath, outfile)
 
+    def __str__(self):
+        return self.locator
 
 @dataclass
 class MediaTask(BaseDataClass):
@@ -240,6 +242,7 @@ class PlayMediaTask(ProgramMediaTask):
 class DownloadMediaTask(ProgramMediaTask):
 
     dest: typing.Optional[str] = None
+    postprocessors: typing.Optional[typing.List[str]] = None
 
 class CacheEntry(db.Entity):
 

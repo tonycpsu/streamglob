@@ -243,7 +243,7 @@ class TasksDataTable(BaseDataTable):
         (c.name, c)
         for c in [
                 # DataTableColumn("action", width=8),
-                DataTableColumn("program", width=16, format_fn = lambda p: p.result().cmd if p else ""),
+                DataTableColumn("program", width=16, format_fn = lambda p: p.result().cmd if p and p.done() else ""),
                 DataTableColumn("started", width=20, format_fn = utils.format_datetime),
                 DataTableColumn("elapsed",  width=14, align="right",
                                 format_fn = utils.format_timedelta),
@@ -260,7 +260,7 @@ class TasksDataTable(BaseDataTable):
                 ),
                 DataTableColumn(
                     "sources", label="sources", width=("weight", 1), wrap="any",
-                    format_fn = lambda l: f"{l[0].locator if len(l) == 1 else '[%s]' %(len(l))}",
+                    format_fn = lambda l: f"{str(l[0]) if len(l) == 1 else '[%s]' %(len(l))}",
                     truncate=True
                 ),
                 DataTableColumn(
@@ -383,6 +383,15 @@ class ActiveDownloadsDataTable(TasksDataTable):
         else:
             return super().keypress(size, key)
 
+class PostprocessingDownloadsDataTable(TasksDataTable):
+
+    COLUMNS = ["provider", "program", "sources", "title",
+               "started", "elapsed", "dest"]
+
+    def query(self, *args, **kwargs):
+        return [ t for t in state.task_manager.postprocessing ]
+
+
 class CompletedDownloadsDataTable(TasksDataTable):
 
     COLUMNS = ["provider", "program", "sources", "title",
@@ -398,6 +407,7 @@ class TasksView(BaseView):
         self.playing = PlayingDataTable()
         self.pending = PendingDataTable()
         self.active_downloads = ActiveDownloadsDataTable()
+        self.postprocessing_downloads = PostprocessingDownloadsDataTable()
         self.completed_downloads = CompletedDownloadsDataTable()
         self.pile = urwid.Pile([
             urwid.Columns([
@@ -412,6 +422,8 @@ class TasksView(BaseView):
             ], dividechars=1),
             (1, urwid.Filler(urwid.Text("Active Downloads"))),
             ("weight", 1, self.active_downloads),
+            (1, urwid.Filler(urwid.Text("Postprocessing Downloads"))),
+            ("weight", 1, self.postprocessing_downloads),
             (1, urwid.Filler(urwid.Text("Completed Downloads"))),
             ("weight", 1, self.completed_downloads)
         ])
@@ -421,6 +433,7 @@ class TasksView(BaseView):
         self.playing.refresh()
         self.pending.refresh()
         self.active_downloads.refresh()
+        self.postprocessing_downloads.refresh()
         self.completed_downloads.refresh()
 
 def load_palette():
