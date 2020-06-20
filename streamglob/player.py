@@ -259,11 +259,12 @@ class Program(object):
                 else:
                     downloader.source = source
                     source = downloader
+
+        task.program.set_result(player)
         player.source = source
         logger.info(f"player: {player.cmd}: downloader={downloader.cmd if downloader else downloader}, playing {source}")
-        task = player.run(**kwargs)
-        await state.asyncio_loop.create_task(task)
-        return player
+        proc = await player.run(**kwargs)
+        return proc
 
     @classmethod
     def from_config(cls, cfg):
@@ -453,7 +454,7 @@ class Program(object):
 
             except SGException as e:
                 logger.warning(e)
-
+        logger.info(f"returning proc: {self.proc}")
         return self.proc
 
     @classmethod
@@ -494,10 +495,11 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
 
     async def run(self, *args, **kwargs):
         # logger.info("starting controller")
-        await super().run(*args, **kwargs)
+        rc = await super().run(*args, **kwargs)
         await self.wait_for_socket()
         self.controller = MPV(start_mpv=False, ipc_socket=self.ipc_socket_name)
         self._initialized = True
+        return rc
         # state.asyncio_loop.call_later(5, self.test)
 
     async def wait_for_socket(self):
@@ -549,13 +551,12 @@ class Downloader(Program):
             return
 
         downloader.process_args(task, outfile, **kwargs)
-
         downloader.source = source
-        logger.info(f"downloader: {downloader.cmd}, downloading {source} to {outfile}")
-        task = downloader.run(**kwargs)
-        await state.asyncio_loop.create_task(task)
 
-        return downloader
+        task.program.set_result(downloader)
+        logger.info(f"downloader: {downloader.cmd}, downloading {source} to {outfile}")
+        proc = await downloader.run(**kwargs)
+        return proc
 
 
     @classmethod

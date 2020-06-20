@@ -54,6 +54,7 @@ class TaskManager(Observable):
         task.args = (player_spec, downloader_spec)
         task.kwargs = kwargs
         task.program = asyncio.Future()
+        task.proc = asyncio.Future()
         task.result = asyncio.Future()
         self.to_play.append(task)
         return task
@@ -66,21 +67,37 @@ class TaskManager(Observable):
         task.args = (filename, downloader_spec)
         task.kwargs = kwargs
         task.program = asyncio.Future()
+        task.proc = asyncio.Future()
         task.result = asyncio.Future()
         self.to_download.append(task)
         return task
 
+    async def run(self):
+        while True:
+            self.worker_task = state.asyncio_loop.create_task(self.worker())
+            self.poller_task = state.asyncio_loop.create_task(self.poller())
+            for result in await asyncio.gather(
+                    self.worker_task, self.poller_task, return_exceptions=True
+            ):
+                if isinstance(result, Exception):
+                    logger.error("Exception: ", exc_info=result)
+
+            logger.trace("sleeping")
+            await asyncio.sleep(self.QUEUE_INTERVAL)
+
+
     async def start(self):
         logger.debug("task_manager starting")
-        self.worker_task = state.asyncio_loop.create_task(self.worker())
-        self.poller_task = state.asyncio_loop.create_task(self.poller())
+        # self.worker_task = state.asyncio_loop.create_task(self.worker())
+        # self.poller_task = state.asyncio_loop.create_task(self.poller())
+        self.run_task = state.asyncio_loop.create_task(self.run())
         self.started.notify_all()
 
     async def stop(self):
-        logger.info("task_manager stopping")
-
-        self.worker_task.cancel()
-        self.poller_task.cancel()
+        logger.debug("task_manager stopping")
+        self.run_task.cancel()
+        # self.worker_task.cancel()
+        # self.poller_task.cancel()
 
     async def join(self):
         async with self.started:
@@ -92,120 +109,118 @@ class TaskManager(Observable):
 
     async def worker(self):
 
-        while True:
-            async def wait_for_item():
-                while True:
-                    if len(self.to_play):
-                        return self.to_play.pop(0)
-                    elif len(self.active) < self.max_concurrent_tasks and len(self.to_download):
-                        return self.to_download.pop(0)
-                    await asyncio.sleep(self.QUEUE_INTERVAL)
-
-            task = await wait_for_item()
-
+        logger.trace("worker")
+        async def get_tasks():
+            while True:
+                if len(self.to_play):
+                    yield self.to_play.pop(0)
+                elif len(self.active) < self.max_concurrent_tasks and len(self.to_download):
+                    yield self.to_download.pop(0)
+                else:
+                    return
+        async for task in get_tasks():
+            logger.debug(f"task: {task}")
             if isinstance(task, model.PlayMediaTask):
                 # program = await player.Player.play(task, *task.args, **task.kwargs)
-                program = player.Player.play(task, *task.args, **task.kwargs)
+                run_task = player.Player.play(task, *task.args, **task.kwargs)
+                # ret = state.asyncio_loop.create_task(run_task)
             elif isinstance(task, model.DownloadMediaTask):
                 try:
-                    program = await player.Downloader.download(task, *task.args, **task.kwargs)
+                    run_task = player.Downloader.download(task, *task.args, **task.kwargs)
                 except SGFileExists as e:
                     logger.warn(e)
                     continue
             else:
-                logger.info(f"not implemented: {program}")
+                logger.error(f"not implemented: {program}")
                 raise NotImplementedError
-            task.program.set_result(program)
-            task.proc = program.proc
+
+            proc = await run_task
+            task.proc.set_result(proc)
             logger.debug(f"proc: {task.proc}")
-            task.pid = program.proc.pid
+            task.pid = proc.pid
             logger.debug(f"pid: {task.pid}")
-            # logger.info(task.pid)
+
             task.started = datetime.now()
             task.elapsed = timedelta(0)
+
             if isinstance(task, model.PlayMediaTask):
                 self.playing.append(task)
             elif isinstance(task, model.DownloadMediaTask):
                 self.active.append(task)
             else:
                 raise NotImplementedError
-            await asyncio.sleep(self.QUEUE_INTERVAL)
-            # self.pending.task_done()
 
     async def poller(self):
 
-        while True:
-            logger.info("poller")
+        logger.trace("poller")
+        (playing_done, playing) = utils.partition(
+            lambda t: t.proc.result().returncode is None,
+            self.playing)
 
-            (playing_done, playing) = utils.partition(
-                lambda t: t.proc.returncode is None,
-                self.playing)
+        playing_done = TaskList(playing_done)
+        for t in playing_done:
+            t.result.set_result(t.proc.result().returncode)
 
-            playing_done = TaskList(playing_done)
-            for t in playing_done:
-                t.result.set_result(t.proc.returncode)
+        self.playing = TaskList(playing)
 
-            self.playing = TaskList(playing)
+        (complete, active) = utils.partition(
+            lambda t: t.proc.result().returncode is None,
+            self.active)
 
-            (complete, active) = utils.partition(
-                lambda t: t.proc.returncode is None,
-                self.active)
+        (done, postprocessing) = utils.partition(
+            lambda t: t.postprocessors,
+            complete)
 
-            (done, postprocessing) = utils.partition(
-                lambda t: t.postprocessors,
-                complete)
+        active_list = TaskList(active)
 
-            active_list = TaskList(active)
+        postprocessing = list(postprocessing)
+        for t in postprocessing:
+            t.program = asyncio.Future()
+            t.proc = None
+            t.pid = None
+            t.sources = [t.dest]
 
-            postprocessing = list(postprocessing)
-            for t in postprocessing:
-                t.program = asyncio.Future()
-                t.proc = None
-                t.pid = None
-                t.sources = [t.dest]
+        postprocessing_list = TaskList(postprocessing)
+        done_list = TaskList(done)
 
-            postprocessing_list = TaskList(postprocessing)
-            done_list = TaskList(done)
+        for t in done_list:
+            t.result.set_result(t.proc.result().returncode)
 
-            for t in done_list:
-                t.result.set_result(t.proc.returncode)
+        self.active = active_list
+        self.postprocessing += postprocessing_list
+        self.done += done_list
 
-            self.active = active_list
-            self.postprocessing += postprocessing_list
-            self.done += done_list
-
-            for t in self.playing + self.active:
-                prog = await t.program
-                t.elapsed = datetime.now() - t.started
-                if hasattr(prog, "update_progress"):
-                    await prog.update_progress()
-                if hasattr(prog.source, "update_progress"):
-                    await prog.source.update_progress()
+        for t in self.playing + self.active:
+            prog = await t.program
+            t.elapsed = datetime.now() - t.started
+            if hasattr(prog, "update_progress"):
+                await prog.update_progress()
+            if hasattr(prog.source, "update_progress"):
+                await prog.source.update_progress()
 
 
-            for t in self.postprocessing:
-                logger.info(f"postprocessing: {t}")
-                if t.program.done():
-                    logger.info("program done")
-                    if t.proc.returncode is not None:
-                        logger.info("rc not None")
-                        t.result.set_result(t.program.update_progress())
-                    else:
-                        logger.info(f"running: {t.program}")
+        for t in self.postprocessing:
+            logger.info(f"postprocessing: {t}")
+            if t.program.done():
+                logger.info("program done")
+                if t.proc.result().returncode is not None:
+                    logger.info("rc not None")
+                    t.result.set_result(t.program.update_progress())
                 else:
-                    logger.info("program not done")
-                    pp = next(player.Postprocessor.get(t.postprocessors.pop(0)))
-                    logger.info(f"starting: {pp} {t.sources}")
-                    res = await pp.process(t.sources[0])
-                    logger.info(f"res: {res}")
-                    t.program.set_result(res)
-                    t.proc = t.program.proc
-                    t.pid = t.proc.pid
+                    logger.info(f"running: {t.program}")
+            else:
+                logger.info("program not done")
+                # pp = next(player.Postprocessor.get(t.postprocessors.pop(0)))
+                pp = t.postprocessors.pop(0)
+                logger.info(f"starting: {pp} {t.sources}")
+                res = await player.Postprocessor.process(pp, t.sources[0])
+                logger.info(f"res: {res}")
+                t.program.set_result(res)
+                t.proc.set_result(t.program.proc)
+                t.pid = t.proc.pid
 
-            if state.get("tasks_view"):
-                state.tasks_view.refresh()
-            await asyncio.sleep(self.QUEUE_INTERVAL)
-
+        if state.get("tasks_view"):
+            state.tasks_view.refresh()
 
 def main():
 

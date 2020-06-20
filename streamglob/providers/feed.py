@@ -270,10 +270,11 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 feed = self.provider.feed
             )
 
-        self.player_task =  self.provider.play(listing)
+        self.player_task = self.provider.play(listing)
         logger.info(self.player_task)
         self.player = await self.player_task.program
         logger.info(self.player)
+        await self.player_task.proc
         self.player.bind_property_observer("file-loaded", self.on_file_loaded)
         self.player.bind_property_observer("playlist-pos", self.on_playlist_pos)
         self.player.bind_key_press("ctrl+d", self.download)
