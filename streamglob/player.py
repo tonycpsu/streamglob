@@ -4,7 +4,7 @@ logger = logging.getLogger(__name__)
 import sys
 import os
 from itertools import chain
-from functools import reduce
+import functools
 import shlex
 import subprocess
 import asyncio
@@ -147,6 +147,7 @@ class Program(object):
 
         self.progress = ProgressStats()
         self.progress_stream = None
+        self.progress_queue = asyncio.Queue()
 
 
     @classproperty
@@ -375,18 +376,22 @@ class Program(object):
     def full_command(self):
 
         if not self.source:
-            raise Exception("source not available")
+            raise RuntimeError("source not available")
 
-        if isinstance(self.source, model.MediaTask):
-            source_args = [s.locator for s in self.source.sources]
-        elif isinstance(self.source, list):
-            source_args =  [s.locator for s in self.source]
-        elif self.source_is_program:
+        if not isinstance(self.source, list):
+            self.source = [self.source]
+
+        # assumes all sources are of same type
+        if self.source_is_program:
             source_args = [repr(self.source)]
-        elif isinstance(self.source, model.MediaSource):
-            source_args = [self.source.locator]
+        elif isinstance(self.source[0], model.MediaSource):
+            source_args = [s.locator for s in self.source]
+        elif isinstance(self.source[0], model.MediaTask):
+            source_args = [s.locator for s in self.source.sources]
+        elif isinstance(self.source[0], str):
+            source_args = self.source
         else:
-            source_args = [self.source]
+            raise RuntimeError(f"unsupported source: {self.source}")
 
         cmd = (
             self.command
@@ -424,15 +429,12 @@ class Program(object):
             if not self.FOREGROUND:
 
                 if not self.no_progress:
-                    self.progress_stream, pty_stream = pty.openpty()
 
+                    self.progress_stream, pty_stream = pty.openpty()
                     fcntl.ioctl(pty_stream, termios.TIOCSWINSZ,
                                 struct.pack('HHHH', 50, 100, 0, 0)
                     )
-
-                    # self.stdin = pty_stream
                     self.stdout = pty_stream
-                    # self.stderr = pty_stream
 
                 if self.stdin is None:
                     self.stdin = open(os.devnull, 'w')
@@ -454,7 +456,6 @@ class Program(object):
 
             except SGException as e:
                 logger.warning(e)
-        logger.info(f"returning proc: {self.proc}")
         return self.proc
 
     @classmethod
@@ -534,8 +535,6 @@ class Downloader(Program):
 
     @classmethod
     async def download(cls, task, outfile, downloader_spec=None, **kwargs):
-        # FIXME: remove task arg an just pass in sources
-
         # FIXME: downloader may handle file naming
         if os.path.exists(outfile):
             raise SGFileExists(f"File {outfile} already exists")
@@ -763,32 +762,39 @@ class CurlDownloader(Downloader):
 
 class Postprocessor(Program):
 
-    async def update_progress(self):
+    # async def update_progress(self):
+    #     async for line in self.get_output():
+    #         if line:
+    #             print(f"line1: {line}")
+    #             return line
 
-        async def process_lines():
-            async for line in self.get_output():
-                if line:
-                    return line
 
-        t = asyncio.create_task(process_lines())
-        await asyncio.sleep(1)
-        t.cancel()
-        return t.result()
+    async def get_output(self):
+        for line in os.read(self.progress_stream, 1024).decode("utf-8").split("\n"):
+            if line:
+                await self.progress_queue.put(line.rstrip())
+
+    def get_result(self):
+        asyncio.create_task(self.get_output())
 
     @classmethod
-    async def process(cls, postprocessor_spec, infile, **kwargs):
+    async def process(cls, task, postprocessor_spec, infile, **kwargs):
 
-        # logger.info(self.full_command)
-        # proc = await super().run(**kwargs)
-        # return proc
         postprocessor = next(Postprocessor.get(postprocessor_spec))
-
         postprocessor.source = infile
-        logger.info(f"postprocessor: {postprocessor.cmd}, processing {infile}")
-        task = postprocessor.run(**kwargs)
-        await state.asyncio_loop.create_task(task)
-        return postprocessor
-
+        logger.info(f"postprocessor: {id(postprocessor):x} {postprocessor.cmd}, processing {infile}")
+        task.program.set_result(postprocessor)
+        proc = await postprocessor.run(**kwargs)
+        state.asyncio_loop.add_reader(
+            postprocessor.progress_stream,
+            postprocessor.get_result
+        )
+        res = asyncio.Future()
+        # task.stage_results[-1].set_result( (await postprocessor.progress_queue.get()).split(":")[1].strip())
+        res.set_result(await postprocessor.progress_queue.get())
+        task.stage_results.append(res)
+        state.asyncio_loop.remove_reader(postprocessor.progress_stream)
+        return proc
 
 
 class TestPostprocessor(Postprocessor):
@@ -848,23 +854,19 @@ def download_test():
                 "rss",
                 "https://www.nasa.gov/sites/all/themes/custom/nasatwo/images/nasa-logo.svg",
                 media_type="image")
-        ]
+        ],
+        postprocessors = ["test", "test"],
+        dest="foo.svg",
     )
 
 
-    # prog = await Player.play(task, {"media_types": {"video"}}, "streamlink")
     result = state.asyncio_loop.run_until_complete(
         state.task_manager.download(
             task,
-            no_progress=True,
-            stdout=sys.stdout, stderr=sys.stderr,
-            filename="foo.svg",
-            # downloader_spec="youtube-dl"
             downloader_spec = lambda d: d.is_simple,
-            postprocessors=TestPostprocessor("true")
         ).result
     )
-
+    logger.info(f"result: {result}")
     return result
 
 
@@ -920,12 +922,15 @@ def main():
 
     state.task_manager_task = state.asyncio_loop.create_task(state.task_manager.start())
 
-    log_file = os.path.join(config.settings.CONFIG_DIR, f"{PACKAGE_NAME}.log")
-    fh = logging.FileHandler(log_file)
-    add_log_handler(fh)
+    # log_file = os.path.join(config.settings.CONFIG_DIR, f"{PACKAGE_NAME}.log")
+    # fh = logging.FileHandler(log_file)
+    # add_log_handler(fh)
 
-    # download_test()
-    postprocessor_test()
+    download_test()
+
+    state.asyncio_loop.create_task(state.task_manager.stop())
+    state.task_manager_task.cancel()
+    # postprocessor_test()
 
 if __name__ == "__main__":
     main()

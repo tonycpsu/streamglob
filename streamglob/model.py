@@ -10,6 +10,8 @@ import dataclasses_json
 from dataclasses_json import dataclass_json
 import dateutil.parser
 import abc
+import asyncio
+import shutil
 
 from orderedattrdict import AttrDict
 from pony.orm import *
@@ -225,14 +227,24 @@ class MediaTask(BaseDataClass):
     kwargs: typing.Dict[str, str] = field(default_factory=AttrDict)
     # _details_open: bool = False
 
+    def finalize(self):
+        pass
+
 @dataclass
 class ProgramMediaTask(MediaTask):
 
-    program: typing.Optional[typing.Any] = None
-    proc: typing.Optional[typing.Any] = None
+    # program: typing.Optional[typing.Any] = None
+    program: typing.Optional[typing.Awaitable] = asyncio.Future()
+    proc: typing.Optional[typing.Awaitable] = asyncio.Future()
+    result: typing.Optional[typing.Awaitable] = asyncio.Future()
     pid: typing.Optional[int] = None
     started: typing.Optional[datetime] = None
     elapsed: typing.Optional[timedelta] = None
+
+    def reset(self):
+        self.program = asyncio.Future()
+        self.proc = asyncio.Future()
+        # self.result = asyncio.Future()
 
 @dataclass
 class PlayMediaTask(ProgramMediaTask):
@@ -243,6 +255,12 @@ class DownloadMediaTask(ProgramMediaTask):
 
     dest: typing.Optional[str] = None
     postprocessors: typing.Optional[typing.List[str]] = None
+    stage_results: typing.Optional[typing.List[typing.Awaitable]] = field(default_factory=list)
+
+    def finalize(self):
+        if len(self.stage_results) and self.stage_results[-1].result() != self.dest:
+            logger.debug(f"moving {self.stage_results[-1].result()} => {self.dest}")
+            shutil.move(self.stage_results[-1].result(), self.dest)
 
 class CacheEntry(db.Entity):
 

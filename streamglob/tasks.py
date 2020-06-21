@@ -4,6 +4,7 @@ import asyncio
 from datetime import datetime, timedelta
 from orderedattrdict import AttrDict
 import dataclasses
+import itertools
 
 from . import player
 from .state import *
@@ -25,7 +26,7 @@ class TaskList(list):
 
 class TaskManager(Observable):
 
-    QUEUE_INTERVAL = 5
+    QUEUE_INTERVAL = 1
     DEFAULT_MAX_CONCURRENT_TASKS = 20
 
     def __init__(self):
@@ -59,12 +60,12 @@ class TaskManager(Observable):
         self.to_play.append(task)
         return task
 
-    def download(self, task, filename, downloader_spec, **kwargs):
+    def download(self, task, downloader_spec, **kwargs):
 
         self.current_task_id +=1
         task.task_id = self.current_task_id
         # task.action = "download"
-        task.args = (filename, downloader_spec)
+        task.args = (task.dest, downloader_spec)
         task.kwargs = kwargs
         task.program = asyncio.Future()
         task.proc = asyncio.Future()
@@ -152,72 +153,80 @@ class TaskManager(Observable):
 
     async def poller(self):
 
-        logger.trace("poller")
         (playing_done, playing) = utils.partition(
             lambda t: t.proc.result().returncode is None,
             self.playing)
 
         playing_done = TaskList(playing_done)
-        for t in playing_done:
-            t.result.set_result(t.proc.result().returncode)
+        for task in playing_done:
+            task.result.set_result(task.proc.result().returncode)
 
         self.playing = TaskList(playing)
 
         (complete, active) = utils.partition(
-            lambda t: t.proc.result().returncode is None,
+            lambda t: t.proc.done() and t.proc.result().returncode is None,
             self.active)
 
-        (done, postprocessing) = utils.partition(
-            lambda t: t.postprocessors,
+        (done, to_postprocess) = utils.partition(
+            lambda t: len(t.postprocessors) > 0,
             complete)
 
-        active_list = TaskList(active)
 
-        postprocessing = list(postprocessing)
-        for t in postprocessing:
-            t.program = asyncio.Future()
-            t.proc = None
-            t.pid = None
-            t.sources = [t.dest]
+        to_postprocess = list(to_postprocess)
+        for task in to_postprocess:
+            task.reset()
+
+        (postprocessing_done, postprocessing) = utils.partition(
+            lambda t: len(t.postprocessors) > 0,
+            itertools.chain(self.postprocessing, to_postprocess))
 
         postprocessing_list = TaskList(postprocessing)
-        done_list = TaskList(done)
 
-        for t in done_list:
-            t.result.set_result(t.proc.result().returncode)
+        active_list = TaskList(active)
+        done_list = TaskList(itertools.chain(done, postprocessing_done))
+
+        for task in done_list:
+            task.result.set_result(task.proc.result().returncode)
 
         self.active = active_list
-        self.postprocessing += postprocessing_list
+        self.postprocessing = postprocessing_list
         self.done += done_list
 
-        for t in self.playing + self.active:
-            prog = await t.program
-            t.elapsed = datetime.now() - t.started
+        for task in self.playing + self.active:
+            prog = await task.program
+            task.elapsed = datetime.now() - task.started
             if hasattr(prog, "update_progress"):
                 await prog.update_progress()
             if hasattr(prog.source, "update_progress"):
                 await prog.source.update_progress()
 
-
-        for t in self.postprocessing:
-            logger.info(f"postprocessing: {t}")
-            if t.program.done():
-                logger.info("program done")
-                if t.proc.result().returncode is not None:
-                    logger.info("rc not None")
-                    t.result.set_result(t.program.update_progress())
+        for task in self.postprocessing:
+            task.elapsed = datetime.now() - task.started
+            if task.program.done():
+                program = task.program.result()
+                proc = task.proc.result()
+                if proc.returncode is not None:
+                    logger.debug("postprocessor done")
+                    task.postprocessors.pop(0)
+                    if len(task.postprocessors):
+                        task.reset()
+                    else:
+                        task.finalize()
                 else:
-                    logger.info(f"running: {t.program}")
-            else:
-                logger.info("program not done")
-                # pp = next(player.Postprocessor.get(t.postprocessors.pop(0)))
-                pp = t.postprocessors.pop(0)
-                logger.info(f"starting: {pp} {t.sources}")
-                res = await player.Postprocessor.process(pp, t.sources[0])
-                logger.info(f"res: {res}")
-                t.program.set_result(res)
-                t.proc.set_result(t.program.proc)
-                t.pid = t.proc.pid
+                    logger.debug(f"postprocessor still running: {task.program}")
+            elif len(task.postprocessors) > 0:
+                pp = task.postprocessors[0]
+                # use the output destination as the input for the next processor
+                if len(task.stage_results) == 0:
+                    infile = [task.dest]
+                    logger.debug(f"postprocessor first stage: {infile}")
+                else:
+                    infile = task.stage_results[-1].result()
+                    logger.debug(f"postprocessor next stage: {infile}")
+                proc = await player.Postprocessor.process(task, pp, infile)
+                # task.result.set_result(await task.program.result().update_progress())
+                task.proc.set_result(proc)
+                task.pid = proc.pid
 
         if state.get("tasks_view"):
             state.tasks_view.refresh()
