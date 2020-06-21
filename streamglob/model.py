@@ -202,17 +202,13 @@ class MediaSource(BaseDataClass):
         )
 
         if template:
-            # template = template.replace("{", "{self."
             template = self.TEMPLATE_RE.sub(r"{self.\1}", template)
-            template = template.replace("{feed", "{listing.feed")
             try:
                 outfile = template.format(self=self, listing=listing, index=index+1, num=num)
             except Exception as e:
                 logger.exception(e)
                 raise SGInvalidFilenameTemplate
         else:
-            # template = "{self.provider.name.lower()}.{self.default_name}.{self.timestamp}.{self.ext}"
-            # template = "{self.provider}.{self.ext}"
             template = "{listing.provider}.{self.default_name}.{self.timestamp}.{self.ext}"
             outfile = template.format(self=self)
         # logger.info(f"template: {template}, outfile: {outfile}")
@@ -227,6 +223,7 @@ class MediaTask(BaseDataClass):
     provider: str
     title: str
     sources: typing.List[MediaSource]
+    listing: typing.Optional[MediaListing] = None
     task_id: typing.Optional[int] = None
     args: typing.List[str] = field(default_factory=list)
     kwargs: typing.Dict[str, str] = field(default_factory=AttrDict)

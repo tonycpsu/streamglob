@@ -442,6 +442,7 @@ class BaseProvider(abc.ABC):
                 provider=self.NAME,
                 title=selection.title,
                 sources = [s],
+                listing = selection,
                 dest=filename,
                 postprocessors = (self.config.get("postprocessors", []) or []).copy()
             )

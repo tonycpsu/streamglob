@@ -114,7 +114,7 @@ class Program(object):
         '.+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$)'
     )
 
-    def __init__(self, path, args=[],
+    def __init__(self, path, args=[], output_args=None,
                  exclude_types=None, no_progress=False,
                  stdin=None, stdout=None, stderr=None,
                  ssh_host=None,
@@ -125,6 +125,13 @@ class Program(object):
             self.args = args.split()
         else:
             self.args = args
+
+        # FIXME: only relevant for downloader/postprocessor
+        if isinstance(output_args, str):
+            self.output_args = output_args.split()
+        else:
+            self.output_args = output_args
+
         self.exclude_types = set(exclude_types) if exclude_types else set()
         # FIXME: Windows doesn't have necessary modules (pty, termios, fnctl,
         # etc. to get output from the child process for progress display.  Until
@@ -136,6 +143,7 @@ class Program(object):
         self.extra_args_post = []
 
         self.source = None
+        self.listing = None
         self.stdin = stdin
         if not self.no_progress:
             self.stdout = subprocess.PIPE
@@ -350,8 +358,16 @@ class Program(object):
         raise NotImplementedError
 
     @property
+    def expanded_args(self):
+        return [
+            # FIXME: only works for single source
+            a.format(source=self.source[0], listing=self.listing)
+            for a in self.args
+        ]
+
+    @property
     def command(self):
-        return [self.path] + self.args
+        return [self.path] + self.expanded_args
 
     @property
     def source_is_program(self):
@@ -575,6 +591,7 @@ class Downloader(Program):
 
         downloader.process_args(task, outfile, **kwargs)
         downloader.source = source
+        downloader.listing = task.listing
 
         task.program.set_result(downloader)
         logger.info(f"downloader: {downloader.cmd}, downloading {source} to {outfile}")
@@ -794,6 +811,7 @@ class Postprocessor(Program):
 
         postprocessor = next(Postprocessor.get(postprocessor_spec))
         postprocessor.source = infile
+        postprocessor.listing = task.listing
         postprocessor.process_args(task, outfile, **kwargs)
         logger.debug(f"postprocessor: {id(postprocessor):x} {postprocessor.cmd}, processing {infile} => {outfile}")
         task.program.set_result(postprocessor)
@@ -802,10 +820,13 @@ class Postprocessor(Program):
         return proc
 
     def process_args(self, task, outfile, **kwargs):
-        self.extra_args_post += [outfile]
+        self.extra_args_post += self.expanded_output_args(task, outfile)
 
-class TestPostprocessor(Postprocessor):
-    pass
+    def expanded_output_args(self, task, outfile):
+        return [
+            a.format(source=self.source[0], listing=self.listing, task=task, outfile=outfile)
+            for a in (self.output_args or [outfile])
+        ]
 
     # def process(self, infile):
     #     logger.info("process")
