@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from orderedattrdict import AttrDict
 import dataclasses
 import itertools
+import tempfile
 
 from . import player
 from .state import *
@@ -31,8 +32,6 @@ class TaskManager(Observable):
 
     def __init__(self):
 
-        # global state
-        # self.pending = asyncio.Queue()
         super().__init__()
         self.to_play = TaskList()
         self.to_download = TaskList()
@@ -51,7 +50,6 @@ class TaskManager(Observable):
 
         self.current_task_id +=1
         task.task_id = self.current_task_id
-        # task.action = "play"
         task.args = (player_spec, downloader_spec)
         task.kwargs = kwargs
         task.program = asyncio.Future()
@@ -64,8 +62,7 @@ class TaskManager(Observable):
 
         self.current_task_id +=1
         task.task_id = self.current_task_id
-        # task.action = "download"
-        task.args = (task.dest, downloader_spec)
+        task.args = (downloader_spec,)
         task.kwargs = kwargs
         task.program = asyncio.Future()
         task.proc = asyncio.Future()
@@ -89,16 +86,12 @@ class TaskManager(Observable):
 
     async def start(self):
         logger.debug("task_manager starting")
-        # self.worker_task = state.asyncio_loop.create_task(self.worker())
-        # self.poller_task = state.asyncio_loop.create_task(self.poller())
         self.run_task = state.asyncio_loop.create_task(self.run())
         self.started.notify_all()
 
     async def stop(self):
         logger.debug("task_manager stopping")
         self.run_task.cancel()
-        # self.worker_task.cancel()
-        # self.poller_task.cancel()
 
     async def join(self):
         async with self.started:
@@ -127,7 +120,10 @@ class TaskManager(Observable):
                 # ret = state.asyncio_loop.create_task(run_task)
             elif isinstance(task, model.DownloadMediaTask):
                 try:
-                    run_task = player.Downloader.download(task, *task.args, **task.kwargs)
+                    task.tempdir = tempfile.mkdtemp(prefix="streamglob")
+                    outfile = task.stage_outfile
+                    run_task = player.Downloader.download(task, outfile, *task.args, **task.kwargs)
+                    task.stage_results.append(outfile)
                 except SGFileExists as e:
                     logger.warn(e)
                     continue
@@ -171,7 +167,6 @@ class TaskManager(Observable):
             lambda t: len(t.postprocessors) > 0,
             complete)
 
-
         to_postprocess = list(to_postprocess)
         for task in to_postprocess:
             task.reset()
@@ -186,7 +181,7 @@ class TaskManager(Observable):
         done_list = TaskList(itertools.chain(done, postprocessing_done))
 
         for task in done_list:
-            task.result.set_result(task.proc.result().returncode)
+            task.finalize()
 
         self.active = active_list
         self.postprocessing = postprocessing_list
@@ -207,24 +202,21 @@ class TaskManager(Observable):
                 proc = task.proc.result()
                 if proc.returncode is not None:
                     logger.debug("postprocessor done")
+                    task.stage_results.append(task.stage_outfile)
                     task.postprocessors.pop(0)
                     if len(task.postprocessors):
                         task.reset()
-                    else:
-                        task.finalize()
                 else:
                     logger.debug(f"postprocessor still running: {task.program}")
             elif len(task.postprocessors) > 0:
                 pp = task.postprocessors[0]
-                # use the output destination as the input for the next processor
-                if len(task.stage_results) == 0:
-                    infile = [task.dest]
-                    logger.debug(f"postprocessor first stage: {infile}")
-                else:
-                    infile = task.stage_results[-1].result()
-                    logger.debug(f"postprocessor next stage: {infile}")
-                proc = await player.Postprocessor.process(task, pp, infile)
-                # task.result.set_result(await task.program.result().update_progress())
+
+                proc = await player.Postprocessor.process(
+                    task, pp,
+                    task.stage_infile,
+                    task.stage_outfile,
+                )
+
                 task.proc.set_result(proc)
                 task.pid = proc.pid
 
@@ -239,9 +231,6 @@ def main():
     task_manager = TaskManager()
     state.start_task_manager()
     state.stop_task_manager()
-    # state.loop.close()
-    # await asyncio.sleep(10)
-    # time.sleep(10)
 
 if __name__ == "__main__":
     main()

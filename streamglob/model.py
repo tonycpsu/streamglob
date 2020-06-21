@@ -233,7 +233,6 @@ class MediaTask(BaseDataClass):
 @dataclass
 class ProgramMediaTask(MediaTask):
 
-    # program: typing.Optional[typing.Any] = None
     program: typing.Optional[typing.Awaitable] = asyncio.Future()
     proc: typing.Optional[typing.Awaitable] = asyncio.Future()
     result: typing.Optional[typing.Awaitable] = asyncio.Future()
@@ -244,7 +243,10 @@ class ProgramMediaTask(MediaTask):
     def reset(self):
         self.program = asyncio.Future()
         self.proc = asyncio.Future()
-        # self.result = asyncio.Future()
+
+    def finalize(self):
+        self.result.set_result(self.proc.result().returncode)
+
 
 @dataclass
 class PlayMediaTask(ProgramMediaTask):
@@ -254,13 +256,31 @@ class PlayMediaTask(ProgramMediaTask):
 class DownloadMediaTask(ProgramMediaTask):
 
     dest: typing.Optional[str] = None
-    postprocessors: typing.Optional[typing.List[str]] = None
-    stage_results: typing.Optional[typing.List[typing.Awaitable]] = field(default_factory=list)
+    tempdir: typing.Optional[str] = None
+    postprocessors: typing.Optional[typing.List[str]] = field(default_factory=list)
+    stage_results: typing.Optional[typing.List[str]] = field(default_factory=list)
+
+    @property
+    def stage(self):
+        return len(self.stage_results)
+
+    @property
+    def stage_infile(self):
+        if len(self.stage_results):
+            return self.stage_results[-1]
+        else:
+            return self.sources
+
+    @property
+    def stage_outfile(self):
+        return os.path.join(self.tempdir, f"{self.stage}.tmp")
 
     def finalize(self):
-        if len(self.stage_results) and self.stage_results[-1].result() != self.dest:
-            logger.debug(f"moving {self.stage_results[-1].result()} => {self.dest}")
-            shutil.move(self.stage_results[-1].result(), self.dest)
+        if len(self.stage_results) and self.stage_results[-1] != self.dest:
+            logger.debug(f"moving {self.stage_results[-1]} => {self.dest}")
+            shutil.move(self.stage_results[-1], self.dest)
+        shutil.rmtree(self.tempdir)
+        super().finalize()
 
 class CacheEntry(db.Entity):
 

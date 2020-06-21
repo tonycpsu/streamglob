@@ -364,8 +364,32 @@ class Program(object):
     def process_kwargs(self, kwargs):
         pass
 
+
     async def get_output(self):
-        logger.info("get_output")
+
+        # FIXME: use loop.add_reader() instead of select
+
+        # state.asyncio_loop.add_reader(
+        #     postprocessor.progress_stream,
+        #     postprocessor.get_result
+        # )
+        # res = asyncio.Future()
+        # task.stage_results[-1].set_result( (await postprocessor.progress_queue.get()).split(":")[1].strip())
+        # res.set_result(await postprocessor.progress_queue.get())
+        # task.stage_results.append(res)
+        # state.asyncio_loop.remove_reader(postprocessor.progress_stream)
+
+        # async def update_progress(self):
+        #     async for line in self.get_output():
+        #         if line:
+        #             print(f"line1: {line}")
+        #             return line
+
+
+        # async def get_output(self):
+        #     for line in os.read(self.progress_stream, 1024).decode("utf-8").split("\n"):
+        #         if line:
+        #             await self.progress_queue.put(line.rstrip())
         # yield os.read(self.progress_stream, 1024).decode("utf-8")
         r, w, e = select.select([ self.progress_stream ], [], [], 0)
         if self.progress_stream in r:
@@ -762,40 +786,25 @@ class CurlDownloader(Downloader):
 
 class Postprocessor(Program):
 
-    # async def update_progress(self):
-    #     async for line in self.get_output():
-    #         if line:
-    #             print(f"line1: {line}")
-    #             return line
 
-
-    async def get_output(self):
-        for line in os.read(self.progress_stream, 1024).decode("utf-8").split("\n"):
-            if line:
-                await self.progress_queue.put(line.rstrip())
 
     def get_result(self):
         asyncio.create_task(self.get_output())
 
     @classmethod
-    async def process(cls, task, postprocessor_spec, infile, **kwargs):
+    async def process(cls, task, postprocessor_spec, infile, outfile, **kwargs):
 
         postprocessor = next(Postprocessor.get(postprocessor_spec))
         postprocessor.source = infile
-        logger.info(f"postprocessor: {id(postprocessor):x} {postprocessor.cmd}, processing {infile}")
+        postprocessor.process_args(task, outfile, **kwargs)
+        logger.debug(f"postprocessor: {id(postprocessor):x} {postprocessor.cmd}, processing {infile} => {outfile}")
         task.program.set_result(postprocessor)
         proc = await postprocessor.run(**kwargs)
-        state.asyncio_loop.add_reader(
-            postprocessor.progress_stream,
-            postprocessor.get_result
-        )
-        res = asyncio.Future()
-        # task.stage_results[-1].set_result( (await postprocessor.progress_queue.get()).split(":")[1].strip())
-        res.set_result(await postprocessor.progress_queue.get())
-        task.stage_results.append(res)
-        state.asyncio_loop.remove_reader(postprocessor.progress_stream)
+
         return proc
 
+    def process_args(self, task, outfile, **kwargs):
+        self.extra_args_post += [outfile]
 
 class TestPostprocessor(Postprocessor):
     pass
