@@ -786,8 +786,6 @@ class CurlDownloader(Downloader):
 
 class Postprocessor(Program):
 
-
-
     def get_result(self):
         asyncio.create_task(self.get_output())
 

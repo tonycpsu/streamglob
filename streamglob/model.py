@@ -117,11 +117,16 @@ class ContentMediaListing(MediaListing):
     title: str = None
     created: datetime = None
 
+    @property
+    def created_timestamp(self):
+        return self.created.isoformat().split(".")[0]
+
+
 @dataclass_json
 @dataclass
 class MediaSource(BaseDataClass):
 
-    TEMPLATE_RE=re.compile("\{((?!(index|listing|feed))[^}]+)\}")
+    TEMPLATE_RE=re.compile("\{((?!(index|num|listing|feed))[^}]+)\}")
 
     # listing: MediaListing
     # locator: str
@@ -177,7 +182,7 @@ class MediaSource(BaseDataClass):
         return f"{self.provider_id}_dl" # *shrug*
 
 
-    def download_filename(self, listing, index=None, **kwargs):
+    def download_filename(self, listing, index=None, num=None, **kwargs):
 
         if "outfile" in kwargs:
             return kwargs.get("outfile")
@@ -201,7 +206,7 @@ class MediaSource(BaseDataClass):
             template = self.TEMPLATE_RE.sub(r"{self.\1}", template)
             template = template.replace("{feed", "{listing.feed")
             try:
-                outfile = template.format(self=self, listing=listing, index=index)
+                outfile = template.format(self=self, listing=listing, index=index+1, num=num)
             except Exception as e:
                 logger.exception(e)
                 raise SGInvalidFilenameTemplate
@@ -278,6 +283,9 @@ class DownloadMediaTask(ProgramMediaTask):
     def finalize(self):
         if len(self.stage_results) and self.stage_results[-1] != self.dest:
             logger.debug(f"moving {self.stage_results[-1]} => {self.dest}")
+            d = os.path.dirname(self.dest)
+            if not os.path.isdir(d):
+                os.makedirs(d)
             shutil.move(self.stage_results[-1], self.dest)
         shutil.rmtree(self.tempdir)
         super().finalize()
@@ -432,9 +440,6 @@ class MediaItem(db.Entity):
     @db_session
     def mark_unread(self):
         self.read = None
-
-    def created_date(self):
-        return datetime.now().strftime("%Y%m%d_%H%M%S")
 
     @property
     def age(self):

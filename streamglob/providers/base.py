@@ -429,6 +429,7 @@ class BaseProvider(abc.ABC):
         if not isinstance(sources, list):
             sources = [sources]
 
+        kwargs["num"] = len(sources)
         for i, s in enumerate(sources):
             if len(sources):
                 kwargs["index"] = i
@@ -442,7 +443,7 @@ class BaseProvider(abc.ABC):
                 title=selection.title,
                 sources = [s],
                 dest=filename,
-                postprocessors = self.config.get("postprocessors", []).copy()
+                postprocessors = (self.config.get("postprocessors", []) or []).copy()
             )
             return state.task_manager.download(task, downloader_spec, **kwargs)
 
