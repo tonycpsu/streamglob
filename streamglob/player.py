@@ -156,7 +156,7 @@ class Program(object):
         self.progress = ProgressStats()
         self.progress_stream = None
         self.progress_queue = asyncio.Queue()
-
+        asyncio.set_event_loop(asyncio.get_event_loop())
 
     @classproperty
     def cmd(cls):
