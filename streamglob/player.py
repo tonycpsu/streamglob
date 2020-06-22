@@ -632,7 +632,7 @@ class Downloader(Program):
         pass
 
 
-class YouTubeDLDownlodaer(Downloader):
+class YouTubeDLDownloader(Downloader):
 
     CMD = "youtube-dl"
     PROGRESS_RE = re.compile(
