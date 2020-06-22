@@ -388,6 +388,20 @@ class Program(object):
                 yield line
 
     @property
+    def source_args(self):
+
+        if self.source_is_program:
+            return [repr(self.source)]
+        elif isinstance(self.source[0], model.MediaSource):
+            return [s.locator for s in self.source]
+        elif isinstance(self.source[0], model.MediaTask):
+            return [s.locator for s in self.source.sources]
+        elif isinstance(self.source[0], str):
+            return self.source
+        else:
+            raise RuntimeError(f"unsupported source: {self.source}")
+
+    @property
     def full_command(self):
 
         if not self.source:
@@ -396,22 +410,10 @@ class Program(object):
         if not isinstance(self.source, list):
             self.source = [self.source]
 
-        # assumes all sources are of same type
-        if self.source_is_program:
-            source_args = [repr(self.source)]
-        elif isinstance(self.source[0], model.MediaSource):
-            source_args = [s.locator for s in self.source]
-        elif isinstance(self.source[0], model.MediaTask):
-            source_args = [s.locator for s in self.source.sources]
-        elif isinstance(self.source[0], str):
-            source_args = self.source
-        else:
-            raise RuntimeError(f"unsupported source: {self.source}")
-
         cmd = (
             self.command
             + self.extra_args_pre
-            + source_args
+            + self.source_args
             + self.extra_args_post
         )
         if self.ssh_host:
@@ -473,6 +475,9 @@ class Program(object):
                 logger.warning(e)
         return self.proc
 
+    async def kill(self):
+        self.proc.kill()
+
     @classmethod
     def supports_url(cls, url):
         return False
@@ -520,6 +525,12 @@ class Player(Program):
         proc = await player.run(**kwargs)
         return proc
 
+    async def load_source(self, sources):
+        self.kill()
+        self.source =  sources
+        proc = await self.run()
+        return proc
+
 
 # Put image-only viewers first so they're selected for image links by default
 class FEHPlayer(Player, MEDIA_TYPES={"image"}):
@@ -545,7 +556,7 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
         self.extra_args_pre += [f"--input-ipc-server={self.ipc_socket_name}"]
 
     async def run(self, *args, **kwargs):
-        # logger.info("starting controller")
+        logger.info("starting controller")
         rc = await super().run(*args, **kwargs)
         await self.wait_for_socket()
         self.controller = MPV(start_mpv=False, ipc_socket=self.ipc_socket_name)
@@ -557,6 +568,12 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
 
         while not os.path.exists(self.ipc_socket_name):
             time.sleep(0.5)
+
+    async def load_source(self, sources):
+        self.source = sources
+        for i, s in enumerate(self.source_args):
+            self.controller.loadfile(s, "replace" if i==0 else "append")
+        return self.proc
 
     def __getattr__(self, attr):
         if attr in ["_initialized"] or not self._initialized:

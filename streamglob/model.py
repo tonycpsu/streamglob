@@ -254,7 +254,12 @@ class ProgramMediaTask(MediaTask):
 
 @dataclass
 class PlayMediaTask(ProgramMediaTask):
-    pass
+
+    async def load_sources(self, sources):
+        self.proc = state.event_loop.create_future()
+        proc = await self.program.result().load_source(sources)
+        self.proc.set_result(proc)
+
 
 @dataclass
 class DownloadMediaTask(ProgramMediaTask):

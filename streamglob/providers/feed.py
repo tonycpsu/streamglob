@@ -7,6 +7,7 @@ import pipes
 
 from orderedattrdict import AttrDict
 from panwid.dialog import *
+from panwid.keymap import *
 from limiter import get_limiter, limit
 from fysom import Fysom
 
@@ -53,6 +54,7 @@ class FeedMediaListing(model.ContentMediaListing):
 
 #     url = Required(str)
 
+@keymapped()
 class CachedFeedProviderDataTable(ProviderDataTable):
 
     signals = ["focus"]
@@ -64,6 +66,12 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     index = "media_item_id"
     no_load_on_init = True
 
+    KEYMAP = {
+        "any": {
+            "ctrl r": "reset"
+        }
+    }
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.ignore_blur = False
@@ -71,6 +79,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         self.mark_read_task = None
         self.update_count = True
         self.player = None
+        self.player_task = None
         self.player_state = Fysom(
             events=[
                 ("file_loaded",
@@ -123,7 +132,9 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 try:
                     self.player.playlist_pos = self.row_to_playlist_pos(position)
                 except BrokenPipeError:
-                    pass
+                    return
+                except StopIteration:
+                    return
                 # self.player.controller.command("set", "playlist-pos", str(position))
             elif self.player_state.can("ui_updated"):
                 self.player_state.ui_updated()
@@ -203,11 +214,13 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             guid=self[position].data.get("guid")
         )
 
+    @keymap_command("reset")
     def reset(self, *args, **kwargs):
-        if self.player:
-            self.quit_player()
-            self.play_all()
+        # if self.player:
+        #     self.quit_player()
         super().reset()
+        if state.event_loop.is_running():
+            asyncio.create_task(self.play_all())
 
     async def play_all(self):
 
@@ -274,15 +287,24 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 ),
                 feed = self.provider.feed
             )
-
-        self.player_task = self.provider.play(listing)
-        logger.info(self.player_task)
-        self.player = await self.player_task.program
-        logger.info(self.player)
-        await self.player_task.proc
+        if self.player_task:
+            sources, kwargs = self.provider.play_args(listing)
+            asyncio.create_task(self.player_task.load_sources(sources))
+        else:
+            self.player_task = self.provider.play(listing)
+            logger.info(self.player_task)
+            self.player = await self.player_task.program
+            logger.info(self.player)
+            await self.player_task.proc
+        # FIXME: MPV-only
+        self.player_state.current = "waiting"
         self.player.bind_property_observer("file-loaded", self.on_file_loaded)
         self.player.bind_property_observer("playlist-pos", self.on_playlist_pos)
-        self.player.bind_key_press("ctrl+d", self.download)
+        for key, fname in self.KEYMAP["any"].items():
+            mpkey = key.replace("ctrl ", "ctrl+")
+            self.player.bind_key_press(mpkey, getattr(self, fname))
+
+        # self.player.bind_key_press("ctrl+d", self.download)
 
         def on_player_done(f):
             logger.info("player done")
@@ -322,7 +344,10 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         self.provider.download(listing)
 
     def quit_player(self):
-        self.player.quit()
+        try:
+            self.player.quit()
+        except BrokenPipeError:
+            pass
 
     def mark_all_read(self):
             with db_session:
