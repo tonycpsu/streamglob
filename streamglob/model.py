@@ -12,6 +12,7 @@ import dateutil.parser
 import abc
 import asyncio
 import shutil
+import unicodedata
 
 from orderedattrdict import AttrDict
 from pony.orm import *
@@ -280,6 +281,8 @@ class DownloadMediaTask(ProgramMediaTask):
     def finalize(self):
         if len(self.stage_results) and self.stage_results[-1] != self.dest:
             logger.debug(f"moving {self.stage_results[-1]} => {self.dest}")
+            if config.settings.profile.unicode_normalization:
+                self.dest = unicodedata.normalize(config.settings.profile.unicode_normalization, self.dest)
             d = os.path.dirname(self.dest)
             if not os.path.isdir(d):
                 os.makedirs(d)
