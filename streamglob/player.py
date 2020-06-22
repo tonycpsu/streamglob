@@ -360,15 +360,15 @@ class Program(object):
 
         # FIXME: use loop.add_reader() instead of select
 
-        # state.asyncio_loop.add_reader(
+        # state.event_loop.add_reader(
         #     postprocessor.progress_stream,
         #     postprocessor.get_result
         # )
-        # res = asyncio.Future()
+        # res = state.event_loop.create_future()
         # task.stage_results[-1].set_result( (await postprocessor.progress_queue.get()).split(":")[1].strip())
         # res.set_result(await postprocessor.progress_queue.get())
         # task.stage_results.append(res)
-        # state.asyncio_loop.remove_reader(postprocessor.progress_stream)
+        # state.event_loop.remove_reader(postprocessor.progress_stream)
 
         # async def update_progress(self):
         #     async for line in self.get_output():
@@ -551,7 +551,7 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
         self.controller = MPV(start_mpv=False, ipc_socket=self.ipc_socket_name)
         self._initialized = True
         return rc
-        # state.asyncio_loop.call_later(5, self.test)
+        # state.event_loop.call_later(5, self.test)
 
     async def wait_for_socket(self):
 
@@ -872,7 +872,7 @@ def play_test():
         ]
     )
 
-    result = state.asyncio_loop.run_until_complete(
+    result = state.event_loop.run_until_complete(
         state.task_manager.play(
             task,
             no_progress=True,
@@ -900,7 +900,7 @@ def download_test():
     )
 
 
-    result = state.asyncio_loop.run_until_complete(
+    result = state.event_loop.run_until_complete(
         state.task_manager.download(
             task,
             downloader_spec = lambda d: d.is_simple,
@@ -914,15 +914,15 @@ def postprocessor_test():
 
     # p = next(Postprocessor.get("test"))
 
-    # proc = state.asyncio_loop.run_until_complete(
+    # proc = state.event_loop.run_until_complete(
     #     p.process(
     #         "foo.svg"
     #     )
     # )
-    # state.asyncio_loop.run_until_complete(proc.wait())
+    # state.event_loop.run_until_complete(proc.wait())
 
-    proc = state.asyncio_loop.run_until_complete(Postprocessor.process("test", "foo.svg"))
-    state.asyncio_loop.run_until_complete(proc.wait())
+    proc = state.event_loop.run_until_complete(Postprocessor.process("test", "foo.svg"))
+    state.event_loop.run_until_complete(proc.wait())
 
 
 
@@ -957,10 +957,10 @@ def main():
     sh = logging.StreamHandler()
     state.logger = setup_logging(options.verbose - options.quiet, quiet_stdout=False)
 
-    state.asyncio_loop = asyncio.get_event_loop()
+    state.event_loop = asyncio.get_event_loop()
     state.task_manager = tasks.TaskManager()
 
-    state.task_manager_task = state.asyncio_loop.create_task(state.task_manager.start())
+    state.task_manager_task = state.event_loop.create_task(state.task_manager.start())
 
     # log_file = os.path.join(config.settings.CONFIG_DIR, f"{PACKAGE_NAME}.log")
     # fh = logging.FileHandler(log_file)
@@ -968,7 +968,7 @@ def main():
 
     download_test()
 
-    state.asyncio_loop.create_task(state.task_manager.stop())
+    state.event_loop.create_task(state.task_manager.stop())
     state.task_manager_task.cancel()
     # postprocessor_test()
 

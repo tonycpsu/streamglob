@@ -85,7 +85,7 @@ class SimpleProviderView(BaseProviderView):
         key = super().keypress(size, key)
         if key == "ctrl r":
             self.reset()
-            # state.asyncio_loop.create_task(self.provider.refresh())
+            # state.event_loop.create_task(self.provider.refresh())
         # elif key == "d":
         #     self.download(self.table.selection.data)
         elif key in ["[", "]", "meta left", "meta right"]:
@@ -501,20 +501,20 @@ class BackgroundTasksMixin(object):
                 logger.info(f"running {fn.__name__} {args} {kwargs}")
                 # self._tasks[fn.__name__] = None
                 # fn(*args, **kwargs)
-                # await state.asyncio_loop.run_in_executor(
+                # await state.event_loop.run_in_executor(
                 #     None, lambda: fn(*args, **kwargs)
                 # )
 
                 # logger.info(fn)
                 # await fn(*args, **kwargs)
-                state.asyncio_loop.create_task(fn(*args, **kwargs))
-                # state.asyncio_loop.run_in_executor(None, lambda: fn(*args, **kwargs))
+                state.event_loop.create_task(fn(*args, **kwargs))
+                # state.event_loop.run_in_executor(None, lambda: fn(*args, **kwargs))
 
                 # state.loop.event_loop.enter_idle(lambda: fn(*args, **kwargs))
                 logger.debug(f"sleeping for {interval}")
                 await asyncio.sleep(interval)
 
-        self._tasks[fn.__name__] = state.asyncio_loop.create_task(run())
+        self._tasks[fn.__name__] = state.event_loop.create_task(run())
 
     def on_activate(self):
         # self.update()

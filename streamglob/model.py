@@ -27,6 +27,7 @@ dataclasses_json.mm.TYPES.update({
 
 from . import config
 from . import providers
+from .state import *
 from .exceptions import *
 
 CACHE_DURATION_SHORT = 60 # 60 seconds
@@ -236,16 +237,16 @@ class MediaTask(BaseDataClass):
 @dataclass
 class ProgramMediaTask(MediaTask):
 
-    program: typing.Optional[typing.Awaitable] = asyncio.Future()
-    proc: typing.Optional[typing.Awaitable] = asyncio.Future()
-    result: typing.Optional[typing.Awaitable] = asyncio.Future()
+    program: typing.Optional[typing.Awaitable] = state.event_loop.create_future()
+    proc: typing.Optional[typing.Awaitable] = state.event_loop.create_future()
+    result: typing.Optional[typing.Awaitable] = state.event_loop.create_future()
     pid: typing.Optional[int] = None
     started: typing.Optional[datetime] = None
     elapsed: typing.Optional[timedelta] = None
 
     def reset(self):
-        self.program = asyncio.Future()
-        self.proc = asyncio.Future()
+        self.program = state.event_loop.create_future()
+        self.proc = state.event_loop.create_future()
 
     def finalize(self):
         self.result.set_result(self.proc.result().returncode)

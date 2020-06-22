@@ -2,6 +2,7 @@ import logging
 logger = logging.getLogger(__name__)
 from memoize import *
 from orderedattrdict import AttrDict
+import asyncio
 
 from . import providers
 from . import config
@@ -21,6 +22,10 @@ class State(AttrDict):
         # self.task_manager = TaskManager()
 
     @property
+    def event_loop(self):
+        return asyncio.get_event_loop()
+
+    @property
     def procs(self):
         return self._procs
 
@@ -29,10 +34,10 @@ class State(AttrDict):
         self._procs = value
 
     def start_task_manager(self):
-        self.task_manager_task = self.asyncio_loop.create_task(self.task_manager.start())
+        self.task_manager_task = self.event_loop.create_task(self.task_manager.start())
 
     def stop_task_manager(self):
-        self.asyncio_loop.create_task(self.task_manager.stop())
+        self.event_loop.create_task(self.task_manager.stop())
 
     @property
     def memo(self):

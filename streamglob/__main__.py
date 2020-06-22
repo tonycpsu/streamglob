@@ -71,7 +71,7 @@ class UrwidLoggingHandler(logging.Handler):
 def quit_app():
 
     state.browser_view.provider.deactivate()
-    state.asyncio_loop.create_task(state.task_manager.stop())
+    state.event_loop.create_task(state.task_manager.stop())
     state.task_manager_task.cancel()
     raise urwid.ExitMainLoop()
 
@@ -541,7 +541,7 @@ def run_gui(action, provider, **kwargs):
         pile,
         state.palette,
         screen=state.screen,
-        event_loop = urwid.AsyncioEventLoop(loop=state.asyncio_loop),
+        event_loop = urwid.AsyncioEventLoop(loop=state.event_loop),
         unhandled_input=global_input,
         pop_ups=True
     )
@@ -594,7 +594,7 @@ def run_cli(action, provider, selection, **kwargs):
         raise Exception(f"unknown action: {action}")
 
     try:
-        result = state.asyncio_loop.run_until_complete(
+        result = state.event_loop.run_until_complete(
             method(
                 selection,
                 no_progress=True,
@@ -660,10 +660,9 @@ def main():
     spec = None
 
     logger.debug(f"{PACKAGE_NAME} starting")
-    state.asyncio_loop = asyncio.get_event_loop()
     state.task_manager = tasks.TaskManager()
 
-    state.task_manager_task = state.asyncio_loop.create_task(state.task_manager.start())
+    state.task_manager_task = state.event_loop.create_task(state.task_manager.start())
 
     log_file = os.path.join(config.settings.CONFIG_DIR, f"{PACKAGE_NAME}.log")
     fh = logging.FileHandler(log_file)
