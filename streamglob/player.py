@@ -22,7 +22,9 @@ import tempfile
 import shutil
 import json
 import time
-from python_mpv_jsonipc import MPV
+# from python_mpv_jsonipc import MPV
+from aio_mpv_jsonipc import MPV
+from asgiref.sync import async_to_sync
 if platform.system() != "Windows":
     import termios, fcntl, struct, pty
 
@@ -156,7 +158,7 @@ class Program(object):
         self.progress = ProgressStats()
         self.progress_stream = None
         self.progress_queue = asyncio.Queue()
-        asyncio.set_event_loop(asyncio.get_event_loop())
+
 
     @classproperty
     def cmd(cls):
@@ -536,6 +538,21 @@ class Player(Program):
 class FEHPlayer(Player, MEDIA_TYPES={"image"}):
     pass
 
+class MyMPV(MPV):
+
+    def __init__(self, *args, **kwargs):
+        self.properties = set()
+        super().__init__(*args, **kwargs)
+        asyncio.create_task(self.set_properties())
+
+    async def set_properties(self):
+        self.properties = set(x.replace("-", "_") for x in await self.command("get_property", "property-list"))
+        raise Exception(self.properties)
+
+    async def command(self, *args):
+        await self.send(args)
+
+
 class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
 
     INTEGRATED_DOWNLOADERS = ["youtube-dl"]
@@ -559,7 +576,8 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
         logger.info("starting controller")
         rc = await super().run(*args, **kwargs)
         await self.wait_for_socket()
-        self.controller = MPV(start_mpv=False, ipc_socket=self.ipc_socket_name)
+        # self.controller = MPV(start_mpv=False, ipc_socket=self.ipc_socket_name)
+        self.controller = MyMPV(socket=self.ipc_socket_name)
         self._initialized = True
         return rc
         # state.event_loop.call_later(5, self.test)
