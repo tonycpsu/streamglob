@@ -300,6 +300,9 @@ class Program(object):
                     "command",
                     distutils.spawn.find_executable(name)
                 )
+                if not path:
+                    logger.warning(f"couldn't find command for {name}")
+                    continue
                 # First, try to find by "type" config value, if present
                 try:
                     klass = next(
@@ -331,7 +334,7 @@ class Program(object):
             cfgkey = ptype + "s"
             for name, klass in cls.SUBCLASSES[ptype].items():
                 cfg = config.settings.profile[cfgkey][name]
-                if name in state.PROGRAMS[ptype] or cfg.disabled == True:
+                if name in state.PROGRAMS[ptype] or (cfg and cfg.disabled == True):
                     continue
                 path = distutils.spawn.find_executable(name)
                 if path:
@@ -637,7 +640,7 @@ class Downloader(Program):
     def is_simple(self):
         raise NotImplementedError
 
-    def process_args(task, outfile, **kwargs):
+    def process_args(self, task, outfile, **kwargs):
         pass
 
 
@@ -783,16 +786,16 @@ class StreamlinkDownloader(Downloader):
         t.cancel()
 
 
-# class WgetDownloader(Downloader):
+class WgetDownloader(Downloader):
 
-#     @property
-#     def is_simple(self):
-#         return True
+    @property
+    def is_simple(self):
+        return True
 
 
-#     @classmethod
-#     def supports_url(cls, url):
-#         return True
+    @classmethod
+    def supports_url(cls, url):
+        return True
 
 
 class CurlDownloader(Downloader):
