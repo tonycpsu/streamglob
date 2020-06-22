@@ -21,15 +21,15 @@ class SquareButton(urwid.Button):
         return ( cols, )
 
 class BaseDataTable(panwid.DataTable):
+    pass
+    # def keypress(self, size, key):
+    #     key = super().keypress(size, key)
 
-    def keypress(self, size, key):
-        key = super().keypress(size, key)
-
-        if key == "ctrl d":
-            logger.info(self.focus_position)
-            self.log_dump(20)
-        else:
-            return key
+    #     if key == "ctrl d":
+    #         logger.info(self.focus_position)
+    #         self.log_dump(20)
+    #     else:
+    #         return key
 
 class Observable(object):
 
