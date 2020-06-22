@@ -300,14 +300,23 @@ class Program(object):
                     "command",
                     distutils.spawn.find_executable(name)
                 )
+                # First, try to find by "type" config value, if present
                 try:
-                    # raise Exception(cls.SUBCLASSES[ptype])
                     klass = next(
                         c for c in cls.SUBCLASSES[ptype].values()
-                        if c.cmd == name
+                        if c.__name__.lower().replace(ptype, "")
+                        == cfg.get("type", "").replace("-", "").lower()
                     )
                 except StopIteration:
-                    klass = pcls
+                    # Next, try to find by config name matching class name
+                    try:
+                        klass = next(
+                            c for c in cls.SUBCLASSES[ptype].values()
+                            if c.cmd == name
+                        )
+                    except StopIteration:
+                        # Give up and make it a generic program
+                        klass = pcls
                 if cfg.get("disabled") == True:
                     logger.info(f"player {name} is disabled")
                     continue
