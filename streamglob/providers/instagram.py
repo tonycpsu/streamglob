@@ -201,25 +201,6 @@ class InstagramDataTable(CachedFeedProviderDataTable):
 
         if key == "meta f":
             self.fetch_more()
-        elif key == "ctrl k":
-            from collections import OrderedDict
-            feed = self.provider.feed
-
-            with db_session:
-                cursors = (
-                    i.attrs["cursor"]
-                    for i in feed.items.select().order_by(
-                            self.provider.ITEM_CLASS.created
-                    ).limit(100)[:]
-                )
-                raise Exception(list(OrderedDict.fromkeys(cursors))[1])
-                cursor = select(
-                    (i.created, distinct(i.attrs["cursor"]))
-                    for i in feed.items
-                ).order_by(
-                    lambda i: i[0]
-                ).limit(1, 1).first()
-                logger.info(f"cursor rec: {cursor}")
         else:
             return super().keypress(size, key)
 
