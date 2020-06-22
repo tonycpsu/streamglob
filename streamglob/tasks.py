@@ -1,5 +1,6 @@
 import logging
 logger = logging.getLogger(__name__)
+import os
 import asyncio
 from datetime import datetime, timedelta
 from orderedattrdict import AttrDict
@@ -202,6 +203,9 @@ class TaskManager(Observable):
                 proc = task.proc.result()
                 if proc.returncode is not None:
                     logger.debug("postprocessor done")
+                    if not os.path.isfile(task.stage_outfile):
+                        logger.warn(f"{task.provider} processing stage {task.stage} failed")
+                        task.postprocessors = []
                     task.stage_results.append(task.stage_outfile)
                     task.postprocessors.pop(0)
                     if len(task.postprocessors):
