@@ -132,7 +132,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             self.mark_read_on_focus = False
             if self.mark_read_task:
                 self.mark_read_task.cancel()
-            self.mark_read_task = state.asyncio_loop.call_later(
+            self.mark_read_task = state.event_loop.call_later(
                 self.HOVER_DELAY,
                 lambda: self.mark_item_read(position)
             )
@@ -639,7 +639,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
             self.update_feeds(force=force)
             self.refresh()
             self.close_popup()
-        update_task = state.asyncio_loop.run_in_executor(None, update_feeds)
+        update_task = state.event_loop.run_in_executor(None, update_feeds)
         # logger.info("-update bar")
         # state.loop.draw_screen()
         logger.info("-update")

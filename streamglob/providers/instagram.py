@@ -191,7 +191,7 @@ class InstagramDataTable(CachedFeedProviderDataTable):
             self.provider.close_popup()
             self.provider.update_query()
 
-        update_task = state.asyncio_loop.run_in_executor(None, fetch)
+        update_task = state.event_loop.run_in_executor(None, fetch)
 
     @db_session
     def on_end(self, source, count):

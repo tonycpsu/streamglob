@@ -53,9 +53,9 @@ class TaskManager(Observable):
         task.task_id = self.current_task_id
         task.args = (player_spec, downloader_spec)
         task.kwargs = kwargs
-        task.program = asyncio.Future()
-        task.proc = asyncio.Future()
-        task.result = asyncio.Future()
+        task.program = state.event_loop.create_future()
+        task.proc = state.event_loop.create_future()
+        task.result = state.event_loop.create_future()
         self.to_play.append(task)
         return task
 
@@ -65,16 +65,16 @@ class TaskManager(Observable):
         task.task_id = self.current_task_id
         task.args = (downloader_spec,)
         task.kwargs = kwargs
-        task.program = asyncio.Future()
-        task.proc = asyncio.Future()
-        task.result = asyncio.Future()
+        task.program = state.event_loop.create_future()
+        task.proc = state.event_loop.create_future()
+        task.result = state.event_loop.create_future()
         self.to_download.append(task)
         return task
 
     async def run(self):
         while True:
-            self.worker_task = state.asyncio_loop.create_task(self.worker())
-            self.poller_task = state.asyncio_loop.create_task(self.poller())
+            self.worker_task = state.event_loop.create_task(self.worker())
+            self.poller_task = state.event_loop.create_task(self.poller())
             for result in await asyncio.gather(
                     self.worker_task, self.poller_task, return_exceptions=True
             ):
@@ -87,7 +87,7 @@ class TaskManager(Observable):
 
     async def start(self):
         logger.debug("task_manager starting")
-        self.run_task = state.asyncio_loop.create_task(self.run())
+        self.run_task = state.event_loop.create_task(self.run())
         self.started.notify_all()
 
     async def stop(self):
@@ -97,7 +97,7 @@ class TaskManager(Observable):
     async def join(self):
         async with self.started:
             await self.started.wait()
-            state.asyncio_loop.run_until_complete(
+            state.event_loop.run_until_complete(
                 self.worker_task,
                 self.poller_task
             )
@@ -118,7 +118,7 @@ class TaskManager(Observable):
             if isinstance(task, model.PlayMediaTask):
                 # program = await player.Player.play(task, *task.args, **task.kwargs)
                 run_task = player.Player.play(task, *task.args, **task.kwargs)
-                # ret = state.asyncio_loop.create_task(run_task)
+                # ret = state.event_loop.create_task(run_task)
             elif isinstance(task, model.DownloadMediaTask):
                 try:
                     task.tempdir = tempfile.mkdtemp(prefix="streamglob")
@@ -231,7 +231,7 @@ def main():
 
     import time
 
-    state.asyncio_loop = asyncio.get_event_loop()
+    state.event_loop = asyncio.get_event_loop()
     task_manager = TaskManager()
     state.start_task_manager()
     state.stop_task_manager()
