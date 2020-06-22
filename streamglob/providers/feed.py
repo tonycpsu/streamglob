@@ -658,6 +658,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
 
     def on_activate(self):
         super().on_activate()
+        asyncio.create_task(self.view.table.play_all())
         # self.refresh()
         # self.update()
 
