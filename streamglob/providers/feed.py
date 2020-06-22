@@ -282,6 +282,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         def on_player_done(f):
             logger.info("player done")
             self.player = None
+            self.player_state.current = "waiting"
 
         self.player_task.result.add_done_callback(on_player_done)
         # logger.info(urls)
