@@ -239,43 +239,6 @@ class Program(object):
         raise SGException(f"Program for {spec} not found")
 
     @classmethod
-    async def play(cls, task, player_spec=True, downloader_spec=None, **kwargs):
-        # FIXME: remove task arg an just pass in sources
-        downloader = None
-        source = task.sources
-        logger.debug(f"source: {source}, player: {player_spec}, downloader: {downloader_spec}")
-
-        player = next(cls.get(player_spec, no_progress=True))
-        if isinstance(downloader_spec, MutableMapping):
-            # if downloader spec is a dict, it maps players to downloader programs
-            if player.cmd in downloader_spec:
-                downloader_spec = downloader_spec[player.cmd]
-            else:
-                downloader_spec= downloader_spec.get(None, None)
-
-        logger.info(f"player: {player}")
-        if downloader_spec:
-            # FIXME: assumption if downloader supports first source, it supports the rest
-            try:
-                downloader = Downloader.get(downloader_spec, task.sources[0].locator)
-            except SGStreamNotFound as e:
-                logger.warn(e)
-                return
-
-            if downloader:
-                if downloader.cmd in player.INTEGRATED_DOWNLOADERS:
-                    downloader = None
-                else:
-                    downloader.source = source
-                    source = downloader
-
-        task.program.set_result(player)
-        player.source = source
-        logger.info(f"player: {player.cmd}: downloader={downloader.cmd if downloader else downloader}, playing {source}")
-        proc = await player.run(**kwargs)
-        return proc
-
-    @classmethod
     def from_config(cls, cfg):
         klass = cls.SUBCLASSES.get(cfg.name, cls)
         # return klass(cfg.name, cfg.command, cfg.get("args", []))
@@ -520,7 +483,42 @@ class Program(object):
 
 class Player(Program):
 
-    pass
+    @classmethod
+    async def play(cls, task, player_spec=True, downloader_spec=None, **kwargs):
+        # FIXME: remove task arg an just pass in sources
+        downloader = None
+        source = task.sources
+        logger.debug(f"source: {source}, player: {player_spec}, downloader: {downloader_spec}")
+
+        player = next(cls.get(player_spec, no_progress=True))
+        if isinstance(downloader_spec, MutableMapping):
+            # if downloader spec is a dict, it maps players to downloader programs
+            if player.cmd in downloader_spec:
+                downloader_spec = downloader_spec[player.cmd]
+            else:
+                downloader_spec= downloader_spec.get(None, None)
+
+        logger.info(f"player: {player}")
+        if downloader_spec:
+            # FIXME: assumption if downloader supports first source, it supports the rest
+            try:
+                downloader = Downloader.get(downloader_spec, task.sources[0].locator)
+            except SGStreamNotFound as e:
+                logger.warn(e)
+                return
+
+            if downloader:
+                if downloader.cmd in player.INTEGRATED_DOWNLOADERS:
+                    downloader = None
+                else:
+                    downloader.source = source
+                    source = downloader
+
+        task.program.set_result(player)
+        player.source = source
+        logger.info(f"player: {player.cmd}: downloader={downloader.cmd if downloader else downloader}, playing {source}")
+        proc = await player.run(**kwargs)
+        return proc
 
 
 # Put image-only viewers first so they're selected for image links by default
