@@ -120,8 +120,11 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         if self.player:
             if self.player_state.can("mpv_update"):
                 self.player_state.mpv_update()
-                self.player.playlist_pos = self.row_to_playlist_pos(position)
-                self.player.controller.command("set", "playlist-pos", str(position))
+                try:
+                    self.player.playlist_pos = self.row_to_playlist_pos(position)
+                except BrokenPipeError:
+                    pass
+                # self.player.controller.command("set", "playlist-pos", str(position))
             elif self.player_state.can("ui_updated"):
                 self.player_state.ui_updated()
 
@@ -200,10 +203,12 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             guid=self[position].data.get("guid")
         )
 
-    # def reset(self, *args, **kwargs):
-    #     self.update_c ount = True
-    #     self.provider.update_query()
-    #     super().reset(*args, **kwargs)
+    def reset(self, *args, **kwargs):
+        if self.player:
+            self.quit_player()
+            self.play_all()
+        super().reset()
+
     async def play_all(self):
 
         ITEM_TEMPLATE="""#EXTINF:1,{title}
@@ -316,6 +321,8 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         # )
         self.provider.download(listing)
 
+    def quit_player(self):
+        self.player.quit()
 
     def mark_all_read(self):
             with db_session:
@@ -663,6 +670,9 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         # self.refresh()
         # self.update()
 
+    def on_deactivate(self):
+        if self.view.table.player:
+            self.view.table.quit_player()
 
     @db_session
     def update_query(self):

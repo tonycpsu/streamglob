@@ -70,10 +70,9 @@ class UrwidLoggingHandler(logging.Handler):
 
 def quit_app():
 
-    # tasks.stop_task_manager()
+    state.browser_view.provider.deactivate()
     state.asyncio_loop.create_task(state.task_manager.stop())
     state.task_manager_task.cancel()
-
     raise urwid.ExitMainLoop()
 
 
