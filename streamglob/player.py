@@ -797,6 +797,8 @@ class WgetDownloader(Downloader):
     def supports_url(cls, url):
         return True
 
+    def process_args(self, task, outfile, **kwargs):
+        self.extra_args_post += ["-O", outfile]
 
 class CurlDownloader(Downloader):
 
