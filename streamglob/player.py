@@ -538,20 +538,6 @@ class Player(Program):
 class FEHPlayer(Player, MEDIA_TYPES={"image"}):
     pass
 
-class MyMPV(MPV):
-
-    def __init__(self, *args, **kwargs):
-        self.properties = set()
-        super().__init__(*args, **kwargs)
-        asyncio.create_task(self.set_properties())
-
-    async def set_properties(self):
-        self.properties = set(x.replace("-", "_") for x in await self.command("get_property", "property-list"))
-        raise Exception(self.properties)
-
-    async def command(self, *args):
-        await self.send(args)
-
 
 class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
 
@@ -577,7 +563,8 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
         rc = await super().run(*args, **kwargs)
         await self.wait_for_socket()
         # self.controller = MPV(start_mpv=False, ipc_socket=self.ipc_socket_name)
-        self.controller = MyMPV(socket=self.ipc_socket_name)
+        self.controller = MPV(socket=self.ipc_socket_name)
+        await self.controller.start()
         self._initialized = True
         return rc
         # state.event_loop.call_later(5, self.test)

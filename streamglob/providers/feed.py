@@ -126,6 +126,8 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     @db_session
     def on_focus(self, source, position):
+        logger.info(f"on_focus: {self.player_state.current}")
+
         if self.player:
             if self.player_state.can("mpv_update"):
                 self.player_state.mpv_update()
@@ -148,8 +150,8 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 lambda: self.mark_item_read(position)
             )
 
-    def on_playlist_pos(self, name, value):
-        logger.info(f"playlist-pos: {value}, {type(value)}")
+    async def on_playlist_pos(self, name, value):
+        logger.info(f"playlist-pos: {value}")
         if self.player:
             if self.player_state.can("ready"):
                 self.player_state.ready()
@@ -161,8 +163,10 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             elif self.player_state.can("mpv_updated"):
                 self.player_state.mpv_updated()
 
-    def on_file_loaded(self, name, value):
-        self.player_state.file_loaded()
+    async def on_file_loaded(self):
+        # logger.info("on_file_loaded")
+        if self.player_state.can("file_loaded"):
+            self.player_state.file_loaded()
 
     # @db_session
     # def on_blur(self, source, position):
@@ -298,7 +302,10 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             await self.player_task.proc
         # FIXME: MPV-only
         self.player_state.current = "waiting"
-        self.player.bind_property_observer("file-loaded", self.on_file_loaded)
+        self.player.controller.listen_for("file-loaded", self.on_file_loaded)
+        def foo(val):
+            logger.info(f"foo: {val}")
+        # self.player.controller.listen_for("property-change", foo)
         self.player.bind_property_observer("playlist-pos", self.on_playlist_pos)
         for key, fname in self.KEYMAP["any"].items():
             mpkey = key.replace("ctrl ", "ctrl+")
@@ -415,6 +422,9 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     def keypress(self, size, key):
 
+        def player_command(command):
+            asyncio.create_task(self.player.controller.command(command))
+
         if key == "meta r":
             asyncio.create_task(self.provider.update(force=True))
         elif key == "meta p":
@@ -439,6 +449,8 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             self.mark_visible_read(direction=-1)
         if key == "ctrl d":
             self.download()
+        if key == "ctrl k":
+            player_command("quit")
         else:
             return super().keypress(size, key)
         return key
