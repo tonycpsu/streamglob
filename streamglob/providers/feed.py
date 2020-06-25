@@ -87,7 +87,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                  "ready"),
                 ("ui_update", "ready", "updating ui"),
                 ("ui_updated", "updating ui", "ready"),
-                ("mpv_update", "ready", "updating mpv"),
+                ("mpv_update", ["ready", "updating mpv"], "updating mpv"),
                 ("mpv_updated", "updating mpv", "ready"),
             ], initial="waiting"
         )
@@ -120,25 +120,40 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     def row_to_playlist_pos(self, row):
         return next(
-            i for n, i in enumerate(self.play_items)
+            n for n, i in enumerate(self.play_items)
             if i.media_item_id == self[row].data.media_item_id
-        ).row_num
+        )#
+
+
+    async def set_playlist_pos(self, pos):
+        # logger.info(f"set_playlist_pos: {pos}")
+        # if pos != await self.player.controller.command(
+        #     "get_property", "playlist-pos"
+        # ):
+        if not self.player_state.can("mpv_update"):
+            return
+        self.player_state.mpv_update()
+        await self.player.controller.command(
+            "set_property", "playlist-pos", pos
+        )
 
     @db_session
     def on_focus(self, source, position):
-        logger.info(f"on_focus: {self.player_state.current}")
 
         if self.player:
-            if self.player_state.can("mpv_update"):
-                self.player_state.mpv_update()
-                try:
-                    self.player.playlist_pos = self.row_to_playlist_pos(position)
-                except BrokenPipeError:
-                    return
-                except StopIteration:
-                    return
-                # self.player.controller.command("set", "playlist-pos", str(position))
-            elif self.player_state.can("ui_updated"):
+            index = self.row_to_playlist_pos(position)
+            logger.info(f"on_focus: {self.player_state.current},{ position}, {index}")
+
+            try:
+                state.event_loop.create_task(
+                    self.set_playlist_pos(index)
+                )
+            except BrokenPipeError:
+                return
+            except StopIteration:
+                return
+            # self.player.controller.command("set", "playlist-pos", str(position))
+            if self.player_state.can("ui_updated"):
                 self.player_state.ui_updated()
 
         if self.mark_read_on_focus:
@@ -151,22 +166,32 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             )
 
     async def on_playlist_pos(self, name, value):
-        logger.info(f"playlist-pos: {value}")
         if self.player:
-            if self.player_state.can("ready"):
-                self.player_state.ready()
-            elif self.player_state.can("ui_update"):
-                index = self.playlist_pos_to_row(value)
-                if self.focus_position != index:
-                    self.player_state.ui_update()
-                    self.focus_position = index
-            elif self.player_state.can("mpv_updated"):
-                self.player_state.mpv_updated()
 
-    async def on_file_loaded(self):
-        # logger.info("on_file_loaded")
-        if self.player_state.can("file_loaded"):
-            self.player_state.file_loaded()
+            # if self.foo == 1:
+            #     self.foo = 0
+            # else:
+            #     self.foo = 2
+            #     index = self.playlist_pos_to_row(value)
+            #     if self.focus_position != index:
+            #         self.focus_position = index
+
+            if self.player_state.can("file_loaded"):
+                self.player_state.file_loaded()
+            index = self.playlist_pos_to_row(value)
+            logger.info(f"on_playlist_pos: {value}, {index}")
+            if index == self.focus_position:
+                return
+            if self.player_state.can("mpv_updated"):
+                self.player_state.mpv_updated()
+            if self.focus_position != index:
+                if self.player_state.can("ui_update"):
+                    self.focus_position = index
+
+    # async def on_file_loaded(self):
+    #     logger.info("on_file_loaded")
+    #     if self.player_state.can("file_loaded"):
+    #         self.player_state.file_loaded()
 
     # @db_session
     # def on_blur(self, source, position):
@@ -302,7 +327,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             await self.player_task.proc
         # FIXME: MPV-only
         self.player_state.current = "waiting"
-        self.player.controller.listen_for("file-loaded", self.on_file_loaded)
+        # self.player.controller.listen_for("file-loaded", self.on_file_loaded)
         def foo(val):
             logger.info(f"foo: {val}")
         # self.player.controller.listen_for("property-change", foo)

@@ -577,7 +577,7 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
     async def load_source(self, sources):
         self.source = sources
         for i, s in enumerate(self.source_args):
-            self.controller.loadfile(s, "replace" if i==0 else "append")
+            self.controller.command("loadfile", (s, "replace" if i==0 else "append"))
         return self.proc
 
     def __getattr__(self, attr):
