@@ -585,10 +585,10 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
             return object.__getattribute__(self, attr)
         return getattr(self.controller, attr)
 
-    def __setattr__(self, attr, value):
-        if attr in ["_initialized"] or not self._initialized or not hasattr(self.controller, attr):
-            return object.__setattr__(self, attr, value)
-        return setattr(self.controller, attr, value)
+    # def __setattr__(self, attr, value):
+    #     if attr in ["_initialized"] or not self._initialized or attr not in self.controller.properties:
+    #         return object.__setattr__(self, attr, value)
+    #     return setattr(self.controller, attr, value)
 
     def __del__(self):
         if self.tmp_dir:
