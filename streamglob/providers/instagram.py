@@ -49,7 +49,7 @@ class InstagramMediaSource(model.MediaSource):
 @dataclass
 class InstagramMediaListing(FeedMediaListing):
 
-    post_type: str = ""
+    media_type: str = ""
 
 
 class InstagramSession(session.StreamSession):
@@ -83,7 +83,7 @@ class InstagramSession(session.StreamSession):
 
 class InstagramItem(model.MediaItem):
 
-    post_type = Required(str)
+    media_type = Required(str)
 
 class InstagramFeed(model.MediaFeed):
 
@@ -111,20 +111,20 @@ class InstagramFeed(model.MediaFeed):
 
         for post in islice(profile.get_posts(end_cursor=cursor), limit):
             try:
-                post_type = self.POST_TYPE_MAP[post.typename]
+                media_type = self.POST_TYPE_MAP[post.typename]
             except:
                 logger.warn("unknown post type: {post.typeame}")
                 continue
 
-            if post_type == "image":
+            if media_type == "image":
                 content = self.provider.new_media_source(
-                    post.url, media_type = post_type
+                    post.url, media_type = media_type
                 )
-            elif post_type == "video":
+            elif media_type == "video":
                 content = self.provider.new_media_source(
-                    post.video_url, media_type = post_type
+                    post.video_url, media_type = media_type
                 )
-            elif post_type == "carousel":
+            elif media_type == "carousel":
                 content = [
                     self.provider.new_media_source(
                         s.video_url or s.display_url,
@@ -145,7 +145,7 @@ class InstagramFeed(model.MediaFeed):
                     guid = post.shortcode,
                     title = post.caption.replace("\n", " ") or "(no caption)",
                     created = post.date_utc,
-                    post_type = post_type,
+                    media_type = media_type,
                     content =  InstagramMediaSource.schema().dumps(
                         content
                         if isinstance(content, list)
@@ -242,7 +242,7 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
         return AttrDict(
             attrs[:idx]
             + [
-                ("post_type", {
+                ("media_type", {
                     "label": "type",
                     "width": 4,
                     "format_fn": lambda t: self.POST_TYPE_MAP.get(t, t),
