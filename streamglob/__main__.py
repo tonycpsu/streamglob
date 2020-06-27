@@ -669,7 +669,7 @@ def main():
     fh = logging.FileHandler(log_file)
     add_log_handler(fh)
     logging.getLogger("panwid.datatable").setLevel(logging.INFO)
-    logging.getLogger("aio_mpv_jsonipc").setLevel(logging.INFO)
+    # logging.getLogger("aio_mpv_jsonipc").setLevel(logging.INFO)
 
     action, provider, selection, opts = providers.parse_spec(options.spec)
 

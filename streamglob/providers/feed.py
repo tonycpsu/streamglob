@@ -68,7 +68,10 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     KEYMAP = {
         "any": {
-            "ctrl r": "reset"
+            "ctrl r": "reset",
+            "ctrl d": "download",
+            "n": "next_unread",
+            "p": "prev_unread"
         }
     }
 
@@ -87,7 +90,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                  "ready"),
                 ("ui_update", "ready", "updating ui"),
                 ("ui_updated", "updating ui", "ready"),
-                ("mpv_update", ["ready", "updating mpv"], "updating mpv"),
+                ("mpv_update", "ready", "updating mpv"),
                 ("mpv_updated", "updating mpv", "ready"),
             ], initial="waiting"
         )
@@ -141,7 +144,10 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     def on_focus(self, source, position):
 
         if self.player:
-            index = self.row_to_playlist_pos(position)
+            try:
+                index = self.row_to_playlist_pos(position)
+            except StopIteration:
+                return
             logger.info(f"on_focus: {self.player_state.current},{ position}, {index}")
 
             try:
@@ -328,13 +334,14 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         # FIXME: MPV-only
         self.player_state.current = "waiting"
         # self.player.controller.listen_for("file-loaded", self.on_file_loaded)
-        def foo(val):
-            logger.info(f"foo: {val}")
+        async def bind_mpv_key(key, fname):
+            await self.player.bind_key_press(key, getattr(self, fname))
+
         # self.player.controller.listen_for("property-change", foo)
         self.player.bind_property_observer("playlist-pos", self.on_playlist_pos)
         for key, fname in self.KEYMAP["any"].items():
             mpkey = key.replace("ctrl ", "ctrl+")
-            self.player.bind_key_press(mpkey, getattr(self, fname))
+            state.event_loop.create_task(bind_mpv_key(mpkey, fname))
 
         # self.player.bind_key_press("ctrl+d", self.download)
 
@@ -346,19 +353,23 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         self.player_task.result.add_done_callback(on_player_done)
         # logger.info(urls)
 
-    def download(self):
+    async def download(self):
 
         # we could probably rely on focus position here, but let's be safe and
         # go with what MPV has for playlist position first
 
         if self.player:
-            index = self.player.controller.playlist_pos
+            # index = self.player.controller.playlist_pos
+            index = await self.player.controller.command(
+                    "get_property", "playlist-pos"
+            )
             row_num = self.playlist_pos_to_row(index)
         else:
             row_num = self.focus_position
 
         listing = self[row_num].data
-        url = self.player.controller.command(
+        logger.info(listing)
+        url = await self.player.controller.command(
             "get_property", f"playlist/{index}/filename"
         )
         source = next(
@@ -415,7 +426,6 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 self.focus_position = len(self)-1
                 self.load_more(self.focus_position)
                 self.focus_position += 1
-
         pos = self.index_to_position(idx)
         self.focus_position = pos
         self.mark_read_on_focus = True
@@ -473,7 +483,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             self.kill_all()
             self.mark_visible_read(direction=-1)
         if key == "ctrl d":
-            self.download()
+            state.event_loop.create_task(self.download())
         if key == "ctrl k":
             player_command("quit")
         else:
