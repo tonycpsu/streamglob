@@ -6,6 +6,7 @@ import tempfile
 import pipes
 
 from orderedattrdict import AttrDict
+from panwid.datatable import *
 from panwid.dialog import *
 from panwid.keymap import *
 from limiter import get_limiter, limit
@@ -54,8 +55,24 @@ class FeedMediaListing(model.ContentMediaListing):
 
 #     url = Required(str)
 
+
+
 @keymapped()
 class CachedFeedProviderDataTable(ProviderDataTable):
+
+    class DetailTable(BaseDataTable):
+
+        with_header = False
+        # cell_selection = True
+
+        attr_map = { "table_row_body focused": "table_row_body highlight"}
+
+        def keypress(self, size, key):
+            if key == ".":
+                raise Exception(self.selection.__class__.__name__, self.selection.ATTR, self.selection.focus_map)
+            else:
+                return super().keypress(size, key)
+
 
     signals = ["focus"]
 
@@ -64,7 +81,9 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     with_scrollbar=True
     sort_by = ("created", True)
     index = "media_item_id"
-    no_load_on_init = True
+    # no_load_on_init = True
+    detail_auto_open = True
+    detail_selectable=True
 
     KEYMAP = {
         "any": {
@@ -89,7 +108,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                  ["waiting", "updating ui", "updating mpv"],
                  "ready"),
                 ("ui_update", "ready", "updating ui"),
-                ("ui_updated", "updating ui", "ready"),
+                ("ui_updated", ["updating mpv", "updating ui"], "ready"),
                 ("mpv_update", "ready", "updating mpv"),
                 ("mpv_updated", "updating mpv", "ready"),
             ], initial="waiting"
@@ -118,6 +137,31 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             return "unread"
         return None
 
+    def detail_fn(self, data):
+
+        if len(data.content) <= 1:
+            return
+
+        columns = self.columns.copy()
+        next(c for c in columns if c.name=="title").truncate = True
+        table = self.DetailTable(
+            columns=columns,
+            data=[dict(
+                c,
+                **dict(
+                    # title=f"[{i+1}/{len(data.content)}] {data.title}"
+                    title=f"[{i+1}] {data.title}"
+                ))
+                  for i, c in enumerate(data.content)
+            ])
+
+        box = urwid.BoxAdapter(table, len(data.content)+1)
+        def on_inner_focus(source, position):
+            logger.info(position)
+
+        urwid.connect_signal(table, "focus", lambda s, i: self.on_focus(s, self.focus_position))
+        return box
+
     def playlist_pos_to_row(self, pos):
         return self.play_items[pos].row_num
 
@@ -140,15 +184,25 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             "set_property", "playlist-pos", pos
         )
 
+    @property
+    def inner_focus(self):
+        if self.selection.details_open:
+            logger.info("inner_focus: %s" %(self.selection.details.contents.box_widget.focus_position))
+            return self.selection.details.contents.box_widget.focus_position
+        return 0
+
     @db_session
     def on_focus(self, source, position):
-
         if self.player:
             try:
-                index = self.row_to_playlist_pos(position)
+                index = self.row_to_playlist_pos(position) + self.inner_focus
             except StopIteration:
                 return
-            logger.info(f"on_focus: {self.player_state.current},{ position}, {index}")
+            logger.info(f"on_focus: {self.player_state.current}, {position}, {index}")
+
+            # self.player.controller.command("set", "playlist-pos", str(position))
+            if self.player_state.can("ui_updated"):
+                self.player_state.ui_updated()
 
             try:
                 state.event_loop.create_task(
@@ -158,9 +212,6 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 return
             except StopIteration:
                 return
-            # self.player.controller.command("set", "playlist-pos", str(position))
-            if self.player_state.can("ui_updated"):
-                self.player_state.ui_updated()
 
         if self.mark_read_on_focus:
             self.mark_read_on_focus = False
@@ -186,8 +237,8 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 self.player_state.file_loaded()
             index = self.playlist_pos_to_row(value)
             logger.info(f"on_playlist_pos: {value}, {index}")
-            if index == self.focus_position:
-                return
+            # if index == self.focus_position:
+            #     return
             if self.player_state.can("mpv_updated"):
                 self.player_state.mpv_updated()
             if self.focus_position != index:
@@ -481,9 +532,9 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         elif key == "meta ctrl d":
             self.kill_all()
             self.mark_visible_read(direction=-1)
-        if key == "ctrl d":
+        elif key == "ctrl d":
             state.event_loop.create_task(self.download())
-        if key == "ctrl k":
+        elif key == "ctrl k":
             player_command("quit")
         else:
             return super().keypress(size, key)
@@ -577,9 +628,9 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
     def ATTRIBUTES(self):
         return AttrDict(
             media_item_id = {"hide": True},
-            feed = {"width": 32, "format_fn": lambda f: f.name if hasattr(f, "name") else "none"},
+            feed = {"width": 32, "format_fn": lambda f: f.name if hasattr(f, "name") else ""},
             created = {"width": 19},
-            title = {"width": ("weight", 1)},
+            title = {"width": ("weight", 1), "truncate": False},
         )
 
     @property
@@ -737,7 +788,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
 
     def on_activate(self):
         super().on_activate()
-        asyncio.create_task(self.view.table.play_all())
+        # asyncio.create_task(self.view.table.play_all())
         # self.refresh()
         # self.update()
 
@@ -746,7 +797,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
             self.view.table.quit_player()
 
     @db_session
-    def update_query(self):
+    def  update_query(self):
 
         status_filters =  {
             "all": lambda: True,

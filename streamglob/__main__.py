@@ -453,13 +453,13 @@ def load_palette():
     for k, v in config.settings.profile.attributes.items():
         state.palette_entries[k] = PaletteEntry.from_config(v)
 
-    for pname, p in providers.PROVIDERS.items():
-        if not hasattr(p.config, "attributes"):
-            continue
-        for gname, group in p.config.attributes.items():
-            for k, v in group.items():
-                ename = f"{pname}.{gname}.{k}"
-                state.palette_entries[ename] = PaletteEntry.from_config(v)
+    # for pname, p in providers.PROVIDERS.items():
+    #     if not hasattr(p.config, "attributes"):
+    #         continue
+    #     for gname, group in p.config.attributes.items():
+    #         for k, v in group.items():
+    #             ename = f"{pname}.{gname}.{k}"
+    #             state.palette_entries[ename] = PaletteEntry.from_config(v)
 
     state.palette_entries.update(DataTable.get_palette_entries(
         user_entries=state.palette_entries
@@ -669,7 +669,7 @@ def main():
     fh = logging.FileHandler(log_file)
     add_log_handler(fh)
     logging.getLogger("panwid.datatable").setLevel(logging.INFO)
-    # logging.getLogger("aio_mpv_jsonipc").setLevel(logging.INFO)
+    logging.getLogger("aio_mpv_jsonipc").setLevel(logging.INFO)
 
     action, provider, selection, opts = providers.parse_spec(options.spec)
 
