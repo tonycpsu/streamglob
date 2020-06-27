@@ -22,7 +22,9 @@ import tempfile
 import shutil
 import json
 import time
-from python_mpv_jsonipc import MPV
+# from python_mpv_jsonipc import MPV
+from aio_mpv_jsonipc import MPV
+from asgiref.sync import async_to_sync
 if platform.system() != "Windows":
     import termios, fcntl, struct, pty
 
@@ -536,6 +538,7 @@ class Player(Program):
 class FEHPlayer(Player, MEDIA_TYPES={"image"}):
     pass
 
+
 class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
 
     INTEGRATED_DOWNLOADERS = ["youtube-dl"]
@@ -559,7 +562,9 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
         logger.info("starting controller")
         rc = await super().run(*args, **kwargs)
         await self.wait_for_socket()
-        self.controller = MPV(start_mpv=False, ipc_socket=self.ipc_socket_name)
+        # self.controller = MPV(start_mpv=False, ipc_socket=self.ipc_socket_name)
+        self.controller = MPV(socket=self.ipc_socket_name)
+        await self.controller.start()
         self._initialized = True
         return rc
         # state.event_loop.call_later(5, self.test)
@@ -572,7 +577,7 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
     async def load_source(self, sources):
         self.source = sources
         for i, s in enumerate(self.source_args):
-            self.controller.loadfile(s, "replace" if i==0 else "append")
+            await self.controller.command("loadfile", s, "replace" if i==0 else "append")
         return self.proc
 
     def __getattr__(self, attr):
@@ -580,10 +585,10 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
             return object.__getattribute__(self, attr)
         return getattr(self.controller, attr)
 
-    def __setattr__(self, attr, value):
-        if attr in ["_initialized"] or not self._initialized or not hasattr(self.controller, attr):
-            return object.__setattr__(self, attr, value)
-        return setattr(self.controller, attr, value)
+    # def __setattr__(self, attr, value):
+    #     if attr in ["_initialized"] or not self._initialized or attr not in self.controller.properties:
+    #         return object.__setattr__(self, attr, value)
+    #     return setattr(self.controller, attr, value)
 
     def __del__(self):
         if self.tmp_dir:

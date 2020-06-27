@@ -639,6 +639,7 @@ def main():
 
     state.options = AttrDict(vars(options))
 
+    logging.captureWarnings(True)
     logger = logging.getLogger()
 
     providers.load()
@@ -667,7 +668,8 @@ def main():
     log_file = os.path.join(config.settings.CONFIG_DIR, f"{PACKAGE_NAME}.log")
     fh = logging.FileHandler(log_file)
     add_log_handler(fh)
-    logging.getLogger("panwid").setLevel(logging.INFO)
+    logging.getLogger("panwid.datatable").setLevel(logging.INFO)
+    # logging.getLogger("aio_mpv_jsonipc").setLevel(logging.INFO)
 
     action, provider, selection, opts = providers.parse_spec(options.spec)
 
