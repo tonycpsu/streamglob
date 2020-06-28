@@ -104,15 +104,13 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         self.player_task = None
         self.player_state = Fysom(
             events=[
-                ("file_loaded",
-                 ["waiting", "updating ui", "updating mpv"],
-                 "ready"),
-                ("ui_update", "ready", "updating ui"),
-                ("ui_updated", ["updating mpv", "updating ui"], "ready"),
-                ("mpv_update", "ready", "updating mpv"),
-                ("mpv_updated", "updating mpv", "ready"),
-            ], initial="waiting"
+                ("file_loaded", "init", "ready"),
+                ("wait", "ready", "waiting"),
+                ("reset", "waiting", "ready")
+            ], initial="init"
         )
+        self.reset_player_state_task = None
+        self.pending_event_task = None
         self.change_playlist_pos_on_focus = True
         self.change_focus_on_playlist_pos = True
         urwid.connect_signal(
@@ -173,13 +171,6 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
 
     async def set_playlist_pos(self, pos):
-        # logger.info(f"set_playlist_pos: {pos}")
-        # if pos != await self.player.controller.command(
-        #     "get_property", "playlist-pos"
-        # ):
-        if not self.player_state.can("mpv_update"):
-            return
-        self.player_state.mpv_update()
         await self.player.controller.command(
             "set_property", "playlist-pos", pos
         )
@@ -191,6 +182,14 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             return self.selection.details.contents.box_widget.focus_position
         return 0
 
+    def reset_player_state(self):
+        logger.info("reset")
+        if self.player_state.can("reset"):
+            self.player_state.reset()
+        if self.pending_event_task:
+            state.event_loop.create_task(self.pending_event_task)
+            self.pending_event_task = None
+
     @db_session
     def on_focus(self, source, position):
         if self.player:
@@ -200,18 +199,25 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 return
             logger.info(f"on_focus: {self.player_state.current}, {position}, {index}")
 
-            # self.player.controller.command("set", "playlist-pos", str(position))
-            if self.player_state.can("ui_updated"):
-                self.player_state.ui_updated()
+            if self.player_state.current == "ready":
+                try:
+                    self.player_state.wait()
+                    state.event_loop.create_task(
+                        self.set_playlist_pos(index)
+                    )
+                    if self.reset_player_state_task:
+                        self.reset_player_state_task.cancel()
+                    self.reset_player_state_task = state.event_loop.call_later(
+                        1,
+                        self.reset_player_state
+                    )
 
-            try:
-                state.event_loop.create_task(
-                    self.set_playlist_pos(index)
-                )
-            except BrokenPipeError:
-                return
-            except StopIteration:
-                return
+                except BrokenPipeError:
+                    return
+                except StopIteration:
+                    return
+            else:
+                self.pending_event_task = self.set_playlist_pos(index)
 
         if self.mark_read_on_focus:
             self.mark_read_on_focus = False
@@ -223,39 +229,20 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             )
 
     async def on_playlist_pos(self, name, value):
+        async def set_focus_position(index):
+            self.focus_position = index
+
+        index = self.playlist_pos_to_row(value)
+        logger.info(f"on_playlist_pos: {value}, {index}")
         if self.player:
-
-            # if self.foo == 1:
-            #     self.foo = 0
-            # else:
-            #     self.foo = 2
-            #     index = self.playlist_pos_to_row(value)
-            #     if self.focus_position != index:
-            #         self.focus_position = index
-
             if self.player_state.can("file_loaded"):
                 self.player_state.file_loaded()
-            index = self.playlist_pos_to_row(value)
-            logger.info(f"on_playlist_pos: {value}, {index}")
-            # if index == self.focus_position:
-            #     return
-            if self.player_state.can("mpv_updated"):
-                self.player_state.mpv_updated()
-            if self.focus_position != index:
-                if self.player_state.can("ui_update"):
-                    self.focus_position = index
 
-    # async def on_file_loaded(self):
-    #     logger.info("on_file_loaded")
-    #     if self.player_state.can("file_loaded"):
-    #         self.player_state.file_loaded()
-
-    # @db_session
-    # def on_blur(self, source, position):
-    #     if self.ignore_blur:
-    #         self.ignore_blur = False
-    #         return
-    #     self.mark_item_read(position)
+            if self.player_state.current == "ready":
+                if self.focus_position != index:
+                     state.event_loop.create_task(set_focus_position(index))
+            else:
+                self.pending_event_task = set_focus_position(index)
 
     @db_session
     def mark_item_read(self, position):
@@ -383,7 +370,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             logger.info(self.player)
             await self.player_task.proc
         # FIXME: MPV-only
-        self.player_state.current = "waiting"
+        self.player_state.current = "init"
         # self.player.controller.listen_for("file-loaded", self.on_file_loaded)
         async def bind_mpv_key(key, fname):
             await self.player.bind_key_press(key, getattr(self, fname))
@@ -398,7 +385,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         def on_player_done(f):
             logger.info("player done")
             self.player = None
-            self.player_state.current = "waiting"
+            self.player_state.current = "init"
 
         self.player_task.result.add_done_callback(on_player_done)
         # logger.info(urls)
@@ -426,14 +413,6 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             s for s in listing.content
             if s.locator == url
         )
-
-        # listing = self.provider.new_listing(
-        #     title = f"{self.provider.NAME} "
-        #     + f" ({self.provider.feed.name}: "
-        #     + f"{self[row_num].data.title})",
-        #     content = [ source ],
-        #     feed = self.provider.feed
-        # )
         self.provider.download(listing)
 
     def quit_player(self):
@@ -461,6 +440,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             self.reset()
 
     def next_unread(self):
+        self.selection.close_details()
         self.mark_item_read(self.focus_position)
         while True:
             try:
@@ -482,6 +462,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         self._modified()
 
     def prev_unread(self):
+        self.selection.close_details()
         self.mark_item_read(self.focus_position)
         try:
             idx = next(
