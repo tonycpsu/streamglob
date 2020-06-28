@@ -65,13 +65,25 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         with_header = False
         # cell_selection = True
 
-        attr_map = { "table_row_body focused": "table_row_body highlight"}
+        attr_map = {
+            # None: "table_row_body",
+            "table_row_body focused": "table_row_body highlight",
+            # "table_row_body highlight": "table_row_body highlight focused",
+            # "unread": "unread highlight column_focused",
+            "unread": "unread highlight",
+            "unread focused": "unread highlight focused",
+        }
 
         def keypress(self, size, key):
             if key == ".":
                 raise Exception(self.selection.__class__.__name__, self.selection.ATTR, self.selection.focus_map)
             else:
                 return super().keypress(size, key)
+
+        def row_attr_fn(self, row):
+            if not row.get("read"):
+                return "unread"
+            return None
 
 
     signals = ["focus"]
@@ -83,6 +95,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     index = "media_item_id"
     # no_load_on_init = True
     detail_auto_open = True
+    # detail_replace = True
     detail_selectable=True
 
     KEYMAP = {
@@ -113,10 +126,8 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         self.pending_event_task = None
         self.change_playlist_pos_on_focus = True
         self.change_focus_on_playlist_pos = True
-        urwid.connect_signal(
-            self, "focus",
-            self.on_focus
-        )
+        urwid.connect_signal(self, "focus", self.on_focus)
+        # urwid.connect_signal(self, "blur", self.on_blur)
 
     def query_result_count(self):
         if self.update_count:
@@ -130,8 +141,13 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         return self._row_count
 
 
+    def check_parts(self, row):
+        return (
+            k for k, v in row.attrs.get("parts_read", {}).items() if v
+        )
+
     def row_attr_fn(self, row):
-        if not row.get("read"):
+        if not (row.get("read") or list(self.check_parts(row))):
             return "unread"
         return None
 
@@ -148,7 +164,10 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 c,
                 **dict(
                     # title=f"[{i+1}/{len(data.content)}] {data.title}"
-                    title=f"[{i+1}] {data.title}"
+                    title = f"[{i+1}] {data.title}",
+                    feed = data.feed,
+                    created = data.created,
+                    read = data.attrs.get("parts_read", {}).get(i, False)
                 ))
                   for i, c in enumerate(data.content)
             ])
@@ -164,9 +183,13 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         return self.play_items[pos].row_num
 
     def row_to_playlist_pos(self, row):
+        try:
+            media_item_id = self[row].data.media_item_id
+        except IndexError:
+            return
         return next(
             n for n, i in enumerate(self.play_items)
-            if i.media_item_id == self[row].data.media_item_id
+            if i.media_item_id == media_item_id
         )#
 
 
@@ -176,22 +199,30 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         )
 
     @property
+    def inner_table(self):
+        if self.selection.details_open and self.selection.details:
+            return self.selection.details.contents.box_widget
+        return None
+
+    @property
     def inner_focus(self):
-        if self.selection.details_open:
-            logger.info("inner_focus: %s" %(self.selection.details.contents.box_widget.focus_position))
+        if self.inner_table:
             return self.selection.details.contents.box_widget.focus_position
         return 0
 
     def reset_player_state(self):
-        logger.info("reset")
         if self.player_state.can("reset"):
+            logger.info("reset")
             self.player_state.reset()
         if self.pending_event_task:
-            state.event_loop.create_task(self.pending_event_task)
+            state.event_loop.create_task(self.pending_event_task())
             self.pending_event_task = None
 
     @db_session
     def on_focus(self, source, position):
+        if not self._initialized:
+            return
+
         if self.player:
             try:
                 index = self.row_to_playlist_pos(position) + self.inner_focus
@@ -217,7 +248,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 except StopIteration:
                     return
             else:
-                self.pending_event_task = self.set_playlist_pos(index)
+                self.pending_event_task = lambda: self.set_playlist_pos(index)
 
         if self.mark_read_on_focus:
             self.mark_read_on_focus = False
@@ -228,36 +259,74 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 lambda: self.mark_item_read(position)
             )
 
+        if len(self[position].data.content) > 1:
+            self[position].open_details()
+
+
     async def on_playlist_pos(self, name, value):
         async def set_focus_position(index):
             self.focus_position = index
 
-        index = self.playlist_pos_to_row(value)
+        row = self.playlist_pos_to_row(value)
+        index = row + self.inner_focus
         logger.info(f"on_playlist_pos: {value}, {index}")
         if self.player:
             if self.player_state.can("file_loaded"):
                 self.player_state.file_loaded()
 
             if self.player_state.current == "ready":
-                if self.focus_position != index:
-                     state.event_loop.create_task(set_focus_position(index))
+                if self.focus_position != row:
+                    state.event_loop.create_task(set_focus_position(index))
             else:
-                self.pending_event_task = set_focus_position(index)
+                self.pending_event_task = lambda: set_focus_position(index)
+
+
+    def on_blur(self, source, position):
+        if not self._initialized or self.ignore_blur:
+            return
+        # if len(self[position].data.content) <= 1:
+        #     self[position].close_details()
+
 
     @db_session
     def mark_item_read(self, position):
+        logger.info(f"mark_item_read: {position}")
         try:
             if not isinstance(self[position].data, model.MediaListing):
                 return
         except IndexError:
             return
+        row = self[position]
         item = self.item_at_position(position)
         if not item:
             return
-        item.mark_read()
-        self[position].clear_attr("unread")
-        self.set_value(position, "read", item.read)
-        self.invalidate_rows([self[position].data.media_item_id])
+
+        partial = self.inner_table is not None
+        if partial:
+            logger.info("mark part read")
+            pos = self.inner_focus
+            item.mark_part_read(pos)
+            # row.clear_attr("unread")
+            self.inner_table.set_value(pos, "read", True)
+            self.inner_table[pos].clear_attr("unread")
+            logger.info(f"{item.attrs}, {len(self.inner_table)}")
+            if len(list(self.check_parts(item))) == len(self.inner_table):
+                partial = False
+                logger.info("all parts read")
+                item.mark_read()
+                row.clear_attr("unread")
+                self.set_value(position, "read", item.read)
+                # row.close_details()
+            else:
+                self.inner_table.focus_position += 1
+            # self.inner_table.reset()
+        else:
+            logger.info("mark item read")
+            item.mark_read()
+            row.clear_attr("unread")
+            self.set_value(position, "read", item.read)
+            self.invalidate_rows([self[position].data.media_item_id])
+        return partial
 
     @db_session
     def mark_item_unread(self, position):
@@ -271,6 +340,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         self.set_value(position, "read", item.read)
         self.invalidate_rows([self[position].data.media_item_id])
 
+
     @db_session
     def toggle_item_read(self, position):
         if not isinstance(self[position].data, model.MediaListing):
@@ -280,6 +350,70 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             self.mark_item_unread(position)
         else:
             self.mark_item_read(position)
+
+
+    def mark_all_read(self):
+            with db_session:
+                if self.provider.feed:
+                    self.provider.feed.mark_all_items_read()
+                else:
+                    self.provider.FEED_CLASS.mark_all_feeds_read()
+            self.reset()
+
+
+    def mark_visible_read(self, direction=None):
+            for n, item in enumerate(self):
+                if direction and (
+                        direction < 0 and n > self.focus_position
+                        or direction> 0 and n < self.focus_position
+                ):
+                    continue
+                self.mark_item_read(n)
+            self.reset()
+
+
+    def next_unread(self):
+        rc = self.mark_item_read(self.focus_position)
+        logger.info(rc)
+        if rc:
+            logger.info("mark was partial")
+            return
+        while True:
+            try:
+                idx = next(
+                    r.data.media_item_id
+                    for r in self[self.focus_position+1:]
+                    if not r.data.read
+                )
+                break
+            except StopIteration:
+                if len(self) >= self.query_result_count():
+                    return
+                self.focus_position = len(self)-1
+                self.load_more(self.focus_position)
+                self.focus_position += 1
+        pos = self.index_to_position(idx)
+        logger.info(pos)
+        self.focus_position = pos
+        self.mark_read_on_focus = True
+        self._modified()
+
+
+    def prev_unread(self):
+        self.mark_item_read(self.focus_position)
+        try:
+            idx = next(
+                r.data.media_item_id
+                for r in self[self.focus_position-1::-1]
+                if not r.data.read
+            )
+        except StopIteration:
+            return
+        pos = self.index_to_position(idx)
+        self.focus_position = pos
+        self.mark_read_on_focus = True
+        self._modified()
+
 
     @db_session
     def item_at_position(self, position):
@@ -420,62 +554,6 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             self.player.quit()
         except BrokenPipeError:
             pass
-
-    def mark_all_read(self):
-            with db_session:
-                if self.provider.feed:
-                    self.provider.feed.mark_all_items_read()
-                else:
-                    self.provider.FEED_CLASS.mark_all_feeds_read()
-            self.reset()
-
-    def mark_visible_read(self, direction=None):
-            for n, item in enumerate(self):
-                if direction and (
-                        direction < 0 and n > self.focus_position
-                        or direction> 0 and n < self.focus_position
-                ):
-                    continue
-                self.mark_item_read(n)
-            self.reset()
-
-    def next_unread(self):
-        self.selection.close_details()
-        self.mark_item_read(self.focus_position)
-        while True:
-            try:
-                idx = next(
-                    r.data.media_item_id
-                    for r in self[self.focus_position+1:]
-                    if not r.data.read
-                )
-                break
-            except StopIteration:
-                if len(self) >= self.query_result_count():
-                    return
-                self.focus_position = len(self)-1
-                self.load_more(self.focus_position)
-                self.focus_position += 1
-        pos = self.index_to_position(idx)
-        self.focus_position = pos
-        self.mark_read_on_focus = True
-        self._modified()
-
-    def prev_unread(self):
-        self.selection.close_details()
-        self.mark_item_read(self.focus_position)
-        try:
-            idx = next(
-                r.data.media_item_id
-                for r in self[self.focus_position-1::-1]
-                if not r.data.read
-            )
-        except StopIteration:
-            return
-        pos = self.index_to_position(idx)
-        self.focus_position = pos
-        self.mark_read_on_focus = True
-        self._modified()
 
     def kill_all(self):
         if not self.provider.feed:

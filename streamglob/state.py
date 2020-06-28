@@ -23,7 +23,10 @@ class State(AttrDict):
 
     @property
     def event_loop(self):
-        return asyncio.get_event_loop()
+        try:
+            return asyncio.get_event_loop()
+        except RuntimeError:
+            return asyncio.new_event_loop()
 
     @property
     def procs(self):

@@ -256,8 +256,8 @@ class ProgramMediaTask(MediaTask):
 class PlayMediaTask(ProgramMediaTask):
 
     async def load_sources(self, sources):
-        self.proc = state.event_loop.create_future()
         proc = await self.program.result().load_source(sources)
+        self.proc = state.event_loop.create_future()
         self.proc.set_result(proc)
 
 
@@ -442,6 +442,12 @@ class MediaItem(db.Entity):
     @db_session
     def mark_read(self):
         self.read = datetime.now()
+
+    @db_session
+    def mark_part_read(self, index):
+        if not "parts_read" in self.attrs:
+            self.attrs["parts_read"] = dict()
+        self.attrs["parts_read"][str(index)] = True
 
     @db_session
     def mark_unread(self):
