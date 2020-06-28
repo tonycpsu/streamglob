@@ -95,10 +95,9 @@ class ProviderDataTable(BaseDataTable):
             ]
             translations = self.translator.translate(
                 [ t[1] for t in texts ],
-                src=self.translate_src,
+                src=self.translate_src or "auto",
                 dest=config.settings.profile.translate
             )
-            logger.info(len(translations))
             for (i, _), t in zip(texts, translations):
                 self.df.set(i, "_title_translated", utils.strip_emoji(t.text))
         self.invalidate_rows(
