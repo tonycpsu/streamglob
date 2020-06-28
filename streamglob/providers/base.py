@@ -29,6 +29,9 @@ class BaseProviderView(BaseView):
     def refresh(self):
         pass
 
+    def init_config(self, config):
+        pass
+
 
 class InvalidConfigView(BaseProviderView):
 
@@ -102,7 +105,12 @@ class SimpleProviderView(BaseProviderView):
     def selectable(self):
         return True
 
-
+    def init_config(self, config):
+        for name, attrs in config.columns.items():
+            for attr, value in attrs.items():
+                col = next(c for c in self.table._columns if c.name == name)
+                setattr(col, attr, value)
+                # config.view.columns[name][attr] = value
 
 def with_view(view):
     def inner(cls):
@@ -168,6 +176,8 @@ class BaseProvider(abc.ABC):
                 self.provider_data = model.ProviderData.get(name=self.IDENTIFIER).settings
             except AttributeError:
                 self.provider_data = model.ProviderData(name=self.IDENTIFIER).settings
+        self.view.init_config(self.config.view)
+
 
     @db_session
     def save_provider_data(self):
