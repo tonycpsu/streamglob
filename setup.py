@@ -30,9 +30,11 @@ setup(name=name,
       },
       install_requires = [
           "aiohttp-json-rpc",
+          "aio-mpv-jsonipc",
           "atoma",
           "bitmath",
           "dataclasses_json",
+          "fysom",
           "googletransx",
           "html2text",
           "instaloader @ git+https://github.com/tonycpsu/instaloader", # until #636 merged
