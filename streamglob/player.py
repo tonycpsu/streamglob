@@ -24,7 +24,6 @@ import json
 import time
 # from python_mpv_jsonipc import MPV
 from aio_mpv_jsonipc import MPV
-from asgiref.sync import async_to_sync
 if platform.system() != "Windows":
     import termios, fcntl, struct, pty
 
