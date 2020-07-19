@@ -29,8 +29,11 @@ setup(name=name,
           "streamglob": ["data/*"]
       },
       install_requires = [
+          # swap with "aio-mpv-jsonipc" when
+          # https://github.com/marios8543/aio-mpv-jsonipc/pull/2 is merged
+          "aio-mpv-jsonipc @ git+https://github.com/tonycpsu/aio-mpv-jsonipc",
+          # "aio-mpv-jsonipc",
           "aiohttp-json-rpc",
-          "aio-mpv-jsonipc",
           "atoma",
           "bitmath",
           "dataclasses_json",
