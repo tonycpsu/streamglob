@@ -444,14 +444,18 @@ class MediaItem(db.Entity):
         self.read = datetime.now()
 
     @db_session
+    def mark_unread(self):
+        self.read = None
+
+    @db_session
     def mark_part_read(self, index):
         if not "parts_read" in self.attrs:
             self.attrs["parts_read"] = dict()
         self.attrs["parts_read"][str(index)] = True
 
     @db_session
-    def mark_unread(self):
-        self.read = None
+    def mark_part_unread(self, index):
+        self.attrs["parts_read"].pop(str(index))
 
     @property
     def age(self):

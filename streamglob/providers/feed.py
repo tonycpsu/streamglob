@@ -1,7 +1,5 @@
 from datetime import datetime
 from dataclasses import *
-import typing
-from itertools import chain
 import tempfile
 import pipes
 
@@ -13,7 +11,6 @@ from limiter import get_limiter, limit
 from fysom import Fysom
 
 from .. import model
-from .. import utils
 
 from .base import *
 
@@ -50,11 +47,9 @@ class FeedMediaListing(model.ContentMediaListing):
         return self.created.strftime("%Y%m%d_%H%M%S")
 
 
-
 # class URLFeed(model.MediaFeed):
 
 #     url = Required(str)
-
 
 
 @keymapped()
@@ -85,6 +80,32 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 return "unread"
             return None
 
+    class DetailBox(urwid.WidgetWrap):
+
+        def __init__(self, columns, data, *args, **kwargs):
+            self.table = CachedFeedProviderDataTable.DetailTable(
+            columns=columns,
+            data=[dict(
+                c,
+                **dict(
+                    # title=f"[{i+1}/{len(data.content)}] {data.title}"
+                    title = f"[{i+1}] {data.title}",
+                    feed = data.feed,
+                    created = data.created,
+                    read = data.attrs.get("parts_read", {}).get(i, False)
+                ))
+                  for i, c in enumerate(data.content)
+            ])
+            self.pile = urwid.Pile([
+                (1, urwid.SolidFill(" ")),
+                ("pack", urwid.BoxAdapter(self.table, len(data.content)+1))
+            ])
+            # ]
+            super().__init__(self.pile)
+
+        @property
+        def focus_position(self):
+            return self.table.focus_position
 
     signals = ["focus"]
 
@@ -106,7 +127,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             "p": "prev_unread"
         }
     }
-
+    
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.ignore_blur = False
@@ -114,7 +135,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         self.mark_read_task = None
         self.update_count = True
         self.player = None
-        self.player_task = None
+        self.player_state_task = None
         self.player_state = Fysom(
             events=[
                 ("file_loaded", "init", "ready"),
@@ -158,25 +179,28 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
         columns = self.columns.copy()
         next(c for c in columns if c.name=="title").truncate = True
-        table = self.DetailTable(
-            columns=columns,
-            data=[dict(
-                c,
-                **dict(
-                    # title=f"[{i+1}/{len(data.content)}] {data.title}"
-                    title = f"[{i+1}] {data.title}",
-                    feed = data.feed,
-                    created = data.created,
-                    read = data.attrs.get("parts_read", {}).get(i, False)
-                ))
-                  for i, c in enumerate(data.content)
-            ])
 
-        box = urwid.BoxAdapter(table, len(data.content)+1)
+        box = self.DetailBox(columns, data)
+        urwid.connect_signal(box.table, "focus", lambda s, i: self.on_focus(s, self.focus_position))
+
+        # table = self.DetailTable(
+        #     columns=columns,
+        #     data=[dict(
+        #         c,
+        #         **dict(
+        #             # title=f"[{i+1}/{len(data.content)}] {data.title}"
+        #             title = f"[{i+1}] {data.title}",
+        #             feed = data.feed,
+        #             created = data.created,
+        #             read = data.attrs.get("parts_read", {}).get(i, False)
+        #         ))
+        #           for i, c in enumerate(data.content)
+        #     ])
+
+        # box = urwid.BoxAdapter(urwid.Filler(table, valign="bottom"), len(data.content)+2)
         def on_inner_focus(source, position):
             logger.info(position)
 
-        urwid.connect_signal(table, "focus", lambda s, i: self.on_focus(s, self.focus_position))
         return box
 
     def playlist_pos_to_row(self, pos):
@@ -192,7 +216,6 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             if i.media_item_id == media_item_id
         )#
 
-
     async def set_playlist_pos(self, pos):
         await self.player.controller.command(
             "set_property", "playlist-pos", pos
@@ -201,13 +224,13 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     @property
     def inner_table(self):
         if self.selection.details_open and self.selection.details:
-            return self.selection.details.contents.box_widget
+            return self.selection.details.contents.table
         return None
 
     @property
     def inner_focus(self):
         if self.inner_table:
-            return self.selection.details.contents.box_widget.focus_position
+            return self.inner_table.focus_position
         return 0
 
     def reset_player_state(self):
@@ -310,7 +333,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             self.inner_table.set_value(pos, "read", True)
             self.inner_table[pos].clear_attr("unread")
             logger.info(f"{item.attrs}, {len(self.inner_table)}")
-            if len(list(self.check_parts(item))) == len(self.inner_table):
+            if pos == len(self.inner_table)-1 and len(list(self.check_parts(item))) == len(self.inner_table):
                 partial = False
                 logger.info("all parts read")
                 item.mark_read()
@@ -335,9 +358,16 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         item = self.item_at_position(position)
         if not item:
             return
-        item.mark_unread()
-        self[position].set_attr("unread")
-        self.set_value(position, "read", item.read)
+
+        partial = self.inner_table is not None
+        if partial:
+            item.mark_part_unread(pos)
+            self.inner_table.set_value(pos, "read", Falserue)
+            self.inner_table[pos].set_attr("unread")
+        else:
+            item.mark_unread()
+            self[position].set_attr("unread")
+            self.set_value(position, "read", item.read)
         self.invalidate_rows([self[position].data.media_item_id])
 
 
@@ -372,7 +402,8 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             self.reset()
 
 
-    def next_unread(self):
+    @keymap_command
+    async def next_unread(self):
         rc = self.mark_item_read(self.focus_position)
         logger.info(rc)
         if rc:
@@ -399,7 +430,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         self._modified()
 
 
-    def prev_unread(self):
+    async def prev_unread(self):
         self.mark_item_read(self.focus_position)
         try:
             idx = next(
@@ -467,17 +498,6 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             m3u.write(f"#EXTM3U\n".encode("utf-8"))
             for item in items:
                 m3u.write(ITEM_TEMPLATE.format(
-                    # title=(
-                    #     f"{self.provider.IDENTIFIER.lower()}.{item.media_item_id}"
-                    #     " "
-                    #     f"{item.feed}: {item.locator}"
-                    #     " "
-                    #     f"{item.created.isoformat().split('.')[0]}"
-                    #     "."
-                    #     f"{item.num:02d}_{item.count:02d}"
-                    #     " "
-                    #     f"{item.title.strip() or '(no title)'}"
-                    # ),
                     title = item.title.strip() or "(no title)",
                     url=item.url
                 ).encode("utf-8"))
@@ -494,15 +514,15 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 ),
                 feed = self.provider.feed
             )
-        if self.player_task:
+        if self.player_state_task:
             sources, kwargs = self.provider.play_args(listing)
-            asyncio.create_task(self.player_task.load_sources(sources))
+            asyncio.create_task(self.player_state_task.load_sources(sources))
         else:
-            self.player_task = self.provider.play(listing)
-            logger.info(self.player_task)
-            self.player = await self.player_task.program
+            self.player_state_task = self.provider.play(listing)
+            logger.info(self.player_state_task)
+            self.player = await self.player_state_task.program
             logger.info(self.player)
-            await self.player_task.proc
+            await self.player_state_task.proc
         # FIXME: MPV-only
         self.player_state.current = "init"
         # self.player.controller.listen_for("file-loaded", self.on_file_loaded)
@@ -521,7 +541,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             self.player = None
             self.player_state.current = "init"
 
-        self.player_task.result.add_done_callback(on_player_done)
+        self.player_state_task.result.add_done_callback(on_player_done)
         # logger.info(urls)
 
     async def download(self):
@@ -567,16 +587,18 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     def keypress(self, size, key):
 
         def player_command(command):
-            asyncio.create_task(self.player.controller.command(command))
+            state.event_loop.create_task(self.player.controller.command(command))
 
         if key == "meta r":
             asyncio.create_task(self.provider.update(force=True))
         elif key == "meta p":
             asyncio.create_task(self.play_all())
-        elif key == "n":
-            self.next_unread()
-        elif key == "p":
-            self.prev_unread()
+        # elif key == "n":
+        #     # self.next_unread()
+        #     state.event_loop.create_task(self.next_unread())
+        # elif key == "p":
+        #     # self.prev_unread()
+        #     state.event_loop.create_task(self.prev_unread())
         elif key == "A":
             self.mark_all_read()
         elif key == "ctrl a":
