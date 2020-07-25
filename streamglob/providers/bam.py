@@ -1769,7 +1769,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         return (
             super().config_is_valid
             and
-            self.HELPER in list(state.PROGRAMS[Downloader].keys())
+            self.HELPER in list(state.PROGRAMS.downloader.keys())
         )
 
     @property
@@ -2182,7 +2182,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
             kwargs["resolution"] = "best"
 
 
-        offset = kwargs.pop("offset", None)
+        offset = kwargs.pop("offset", self.filters.live_stream.value)
         if offset:
             try:
                 offset = int(offset)

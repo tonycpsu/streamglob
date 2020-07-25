@@ -218,7 +218,7 @@ class ScrollbackListBox(panwid.listbox.ScrollingListBox):
     def on_updated(self):
         self._invalidate()
         self.set_focus(len(self.body)-1)
-        if not (self._width and self._height):
+        if not (getattr(self, "_width", None) and getattr(self, "_height", None)):
             return
         self.listbox.make_cursor_visible((self._width, self._height))
         # state.loop.draw_screen()

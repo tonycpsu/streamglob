@@ -114,7 +114,7 @@ class TaskManager(Observable):
                 else:
                     return
         async for task in get_tasks():
-            logger.debug(f"task: {task}")
+            logger.trace(f"task: {task}")
             if isinstance(task, model.PlayMediaTask):
                 # program = await player.Player.play(task, *task.args, **task.kwargs)
                 run_task = player.Player.play(task, *task.args, **task.kwargs)
@@ -132,7 +132,11 @@ class TaskManager(Observable):
                 logger.error(f"not implemented: {program}")
                 raise NotImplementedError
 
-            proc = await run_task
+            try:
+                proc = await run_task
+            except Exception as e:
+                task.result.set_result(e)
+                continue
             task.proc.set_result(proc)
             logger.debug(f"proc: {task.proc}")
             task.pid = proc.pid

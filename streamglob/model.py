@@ -282,7 +282,10 @@ class DownloadMediaTask(ProgramMediaTask):
 
     @property
     def stage_outfile(self):
-        return os.path.join(self.tempdir, f"{self.stage}.tmp")
+        if len(self.postprocessors):
+            return os.path.join(self.tempdir, f"{self.stage}.tmp")
+        else:
+            return self.dest
 
     def finalize(self):
         if len(self.stage_results) and self.stage_results[-1] != self.dest:

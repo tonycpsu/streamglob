@@ -454,13 +454,13 @@ def load_palette():
     for k, v in config.settings.profile.attributes.items():
         state.palette_entries[k] = PaletteEntry.from_config(v)
 
-    # for pname, p in providers.PROVIDERS.items():
-    #     if not hasattr(p.config, "attributes"):
-    #         continue
-    #     for gname, group in p.config.attributes.items():
-    #         for k, v in group.items():
-    #             ename = f"{pname}.{gname}.{k}"
-    #             state.palette_entries[ename] = PaletteEntry.from_config(v)
+    for pname, p in providers.PROVIDERS.items():
+        if not hasattr(p.config, "attributes"):
+            continue
+        for gname, group in p.config.attributes.items():
+            for k, v in group.items():
+                ename = f"{pname}.{gname}.{k}"
+                state.palette_entries[ename] = PaletteEntry.from_config(v)
 
     state.palette_entries.update(DataTable.get_palette_entries(
         user_entries=state.palette_entries
@@ -601,10 +601,17 @@ def run_cli(action, provider, selection, **kwargs):
             stdout=sys.stdout, stderr=sys.stderr, **kwargs
         )
         res = state.event_loop.run_until_complete(task.result)
+        if isinstance(task.result.result(), Exception):
+            logger.exception(task.result.result())
+        if task.proc.done():
+            proc = task.proc.result()
+        else:
+            proc = None
     except KeyboardInterrupt:
         logger.info("Exiting on keyboard interrupt")
-        proc = task.proc.result()
-        proc.send_signal(signal.SIGHUP)
+    if proc:
+        rc = proc.returncode
+    else:
         rc = -1
     return rc
 
@@ -679,7 +686,6 @@ def main():
         rc = run_cli(action, provider, selection, **opts)
     else:
         rc = run_gui(action, provider, **opts)
-
     return rc
 
 if __name__ == "__main__":

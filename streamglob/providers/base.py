@@ -176,7 +176,10 @@ class BaseProvider(abc.ABC):
                 self.provider_data = model.ProviderData.get(name=self.IDENTIFIER).settings
             except AttributeError:
                 self.provider_data = model.ProviderData(name=self.IDENTIFIER).settings
-        self.view.init_config(self.config.view)
+        try:
+            self.view.init_config(self.config.view)
+        except:
+            logger.warn(f"couldn't initialize configuration for {self.IDENTIFIER}")
 
 
     @db_session
