@@ -498,7 +498,14 @@ def init(filename=None, *args, **kwargs):
     if not filename:
         filename = os.path.join(config.settings.CONFIG_DIR, f"{config.PACKAGE_NAME}.sqlite")
     db.bind("sqlite", filename, create_db=True, *args, **kwargs)
-    db.generate_mapping(create_tables=True)
+    try:
+        db.generate_mapping(create_tables=True)
+    except pony.orm.dbapiprovider.OperationalError:
+        logger.warn(f"database file {filename} is using an old schema, creating a new one...")
+        new_name = f"{filename}.{datetime.now().isoformat().replace(':','').replace('-', '').split()[0]}"
+        shutil.move(filename, new_name)
+        db.generate_mapping(create_tables=True)
+
     CacheEntry.purge()
 
 def main():
