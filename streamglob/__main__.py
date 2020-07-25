@@ -595,18 +595,18 @@ def run_cli(action, provider, selection, **kwargs):
         raise Exception(f"unknown action: {action}")
 
     try:
-        result = state.event_loop.run_until_complete(
-            method(
-                selection,
-                no_progress=True,
-                stdout=sys.stdout, stderr=sys.stderr, **kwargs
-            ).result
+        task = method(
+            selection,
+            no_progress=True,
+            stdout=sys.stdout, stderr=sys.stderr, **kwargs
         )
+        res = state.event_loop.run_until_complete(task.result)
     except KeyboardInterrupt:
         logger.info("Exiting on keyboard interrupt")
-        program.proc.send_signal(signal.SIGHUP)
-
-    return result
+        proc = task.proc.result()
+        proc.send_signal(signal.SIGHUP)
+        rc = -1
+    return rc
 
 
 def main():

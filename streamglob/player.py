@@ -741,6 +741,9 @@ class StreamlinkDownloader(Downloader):
     def integrate_player(self, dst):
         self.extra_args_pre += ["--player"] + [" ".join(dst.command + dst.extra_args_pre)]
 
+    def process_args(self, task, outfile, **kwargs):
+        self.extra_args_post += ["-o", outfile]
+
     def process_kwargs(self, kwargs):
 
         resolution = kwargs.pop("resolution", "best")
