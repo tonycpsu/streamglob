@@ -939,22 +939,6 @@ class BAMMediaListing(model.MediaListing):
     #     return self.provider.NAME.lower()
 
     @property
-    def start_date(self):
-        return self.start.strftime("%Y%m%d")
-
-    @property
-    def start_time(self):
-        return self.start.strftime("%H%M%S")
-
-    @property
-    def start_date_time(self):
-        return f"{self.start_date}_{self.start_time}"
-
-    @property
-    def ext(self):
-        return "mp4"
-
-    @property
     def title(self):
         return f"{self.away_team.abbreviation}@{self.home_team.abbreviation}"
 
@@ -1078,6 +1062,7 @@ class BAMMediaListing(model.MediaListing):
             [ self.provider.new_media_source(
                 # mediaId and guid fields are both used to identify streams
                 # provider_id = self.provider_id,
+                listing = self,
                 game_id = self.game_id,
                 media_id = item.get(
                     "mediaPlaybackId",
@@ -1218,6 +1203,7 @@ class BAMMediaListing(model.MediaListing):
 class BAMMediaSource(model.MediaSource):
 
     # provider: typing.Optional[BaseProvider] = None
+    listing: typing.Optional[BAMMediaListing] = None
     game_id: str = ""
     media_id: str = ""
     title: str = ""
@@ -1319,6 +1305,30 @@ class BAMMediaSource(model.MediaSource):
             except (TypeError, AttributeError):
                 raise SGException("no stream URL for game %d, %s" %(self.game_id))
         return media_url
+
+    @property
+    def start_date(self):
+        return self.listing.start.strftime("%Y%m%d")
+
+    @property
+    def start_time(self):
+        return self.listing.start.strftime("%H%M%S")
+
+    @property
+    def start_date_time(self):
+        return f"{self.start_date}_{self.start_time}"
+
+    @property
+    def away_team(self):
+        return self.listing.away_team
+
+    @property
+    def home_team(self):
+        return self.listing.home_team
+
+    @property
+    def ext(self):
+        return "mp4"
 
 
 def parse_int(n):
