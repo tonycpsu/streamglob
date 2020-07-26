@@ -7,7 +7,7 @@ profiles:
                     password: CHANGEME
                 output:
                     path: .
-                    template: "{provider_id}.{start_date_time}.{away_abbrev}@{home_abbrev}.{ext}"
+                    template: "{provider_id}.{start_date_time}.{away_team.abbreviation}@{home_team.abbreviation}.{ext}"
                 # if you'd like to hide scores, etc. for certain teams
                 teams:
                     favorite:
@@ -99,7 +99,7 @@ profiles:
                     password: CHANGEME
                 output:
                     path: .
-                    template: "{provider_id}.{start_date_time}.{away_abbrev}@{home_abbrev}.{ext}"
+                    template: "{provider_id}.{start_date_time}.{away_team.abbreviation}@{home_team.abbreviation}.{ext}"
                 attributes:
                     teams:
                         none: {fg: '#333333', bg: '#aaaaaa'}                        
