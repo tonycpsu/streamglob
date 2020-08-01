@@ -163,29 +163,38 @@ class InstagramFeed(model.MediaFeed):
             i = self.items.select(lambda i: i.guid == post.shortcode).first()
             # if not i:
             if i:
-                return
-            logger.info(f"new: {post.date_utc}")
-            new_seen = True
-            i = self.ITEM_CLASS(
-                feed = self,
-                guid = post.shortcode,
-                title = (post.caption or "(no caption)").replace("\n", " "),
-                created = post.date_utc,
-                media_type = media_type,
-                content =  InstagramMediaSource.schema().dumps(
-                    content
-                    if isinstance(content, list)
-                    else [content],
-                    many=True
-                ),
-                attrs = dict(
-                    short_code = post.shortcode
+                continue
+            else:
+                logger.info(f"new: {post.date_utc}")
+                new_seen = True
+                i = self.ITEM_CLASS(
+                    feed = self,
+                    guid = post.shortcode,
+                    title = (post.caption or "(no caption)").replace("\n", " "),
+                    created = post.date_utc,
+                    media_type = media_type,
+                    content =  InstagramMediaSource.schema().dumps(
+                        content
+                        if isinstance(content, list)
+                        else [content],
+                        many=True
+                    ),
+                    attrs = dict(
+                        short_code = post.shortcode
+                    )
                 )
-            )
-            yield i
+                yield i
 
         if resume or not self.attrs.get("post_iter"):
+            logger.info("saving post_iter")
             self.freeze_post_iter(post_iter)
+
+    @db_session
+    def reset(self):
+        super().reset()
+        if "post_iter" in self.attrs:
+            del self.attrs["post_iter"]
+            commit()
 
 
 class InstagramDataTable(CachedFeedProviderDataTable):
@@ -212,6 +221,7 @@ class InstagramDataTable(CachedFeedProviderDataTable):
             # except AttributeError:
             #     cursor = None
 
+            logger.info("fetching more")
             self.provider.open_popup("Fetching more posts...")
             feed.update(resume=True)
             self.refresh()
@@ -222,6 +232,7 @@ class InstagramDataTable(CachedFeedProviderDataTable):
 
     @db_session
     def on_end(self, source, count):
+        logger.info("on_end")
         self.fetch_more()
 
     def keypress(self, size, key):

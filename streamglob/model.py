@@ -388,6 +388,11 @@ class MediaFeed(MediaChannel):
             for i in f.items.select():
                 i.read = datetime.now()
 
+    @db_session
+    def reset(self):
+        delete(i for i in self.items)
+        commit()
+
     @classmethod
     @db_session
     def purge_all(cls,
@@ -418,6 +423,7 @@ class MediaFeed(MediaChannel):
                 i.time_since_fetched >= timedelta(days=max_age)):
                 i.delete()
         commit()
+
 
 
 class MediaItem(db.Entity):

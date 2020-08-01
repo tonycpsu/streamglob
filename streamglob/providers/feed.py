@@ -148,6 +148,12 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         self.change_playlist_pos_on_focus = True
         self.change_focus_on_playlist_pos = True
         urwid.connect_signal(self, "focus", self.on_focus)
+        def on_requery(source, count):
+            # logger.info("foo: %s" %(c))
+            if not self.player:
+                return
+            state.event_loop.create_task(self.play_all())
+        urwid.connect_signal(self, "requery", on_requery)
         # urwid.connect_signal(self, "blur", self.on_blur)
 
     def query_result_count(self):
@@ -210,11 +216,14 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         try:
             media_item_id = self[row].data.media_item_id
         except IndexError:
-            return
-        return next(
-            n for n, i in enumerate(self.play_items)
-            if i.media_item_id == media_item_id
-        )#
+            return None
+        try:
+            return next(
+                n for n, i in enumerate(self.play_items)
+                if i.media_item_id == media_item_id
+            )
+        except StopIteration:
+            return None
 
     async def set_playlist_pos(self, pos):
         await self.player.controller.command(
@@ -246,13 +255,15 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         if not self._initialized:
             return
 
-        if self.player:
+        if self.player and len(self):
             try:
                 index = self.row_to_playlist_pos(position) + self.inner_focus
-            except StopIteration:
-                return
+            except (StopIteration, AttributeError, TypeError):
+                index = self.row_to_playlist_pos(position)
             logger.info(f"on_focus: {self.player_state.current}, {position}, {index}")
 
+            if not index:
+                return
             if self.player_state.current == "ready":
                 try:
                     self.player_state.wait()
@@ -291,7 +302,10 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             self.focus_position = index
 
         row = self.playlist_pos_to_row(value)
-        index = row + self.inner_focus
+        try:
+            index = row + self.inner_focus
+        except AttributeError:
+            index = row
         logger.info(f"on_playlist_pos: {value}, {index}")
         if self.player:
             if self.player_state.can("file_loaded"):
@@ -461,6 +475,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             asyncio.create_task(self.play_all())
 
     async def play_all(self):
+        logger.info("play_all")
 
         ITEM_TEMPLATE="""#EXTINF:1,{title}
 {url}
@@ -539,6 +554,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         def on_player_done(f):
             logger.info("player done")
             self.player = None
+            self.player_state_task = None
             self.player_state.current = "init"
 
         self.player_state_task.result.add_done_callback(on_player_done)
@@ -575,14 +591,13 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         except BrokenPipeError:
             pass
 
+    @db_session
     def kill_all(self):
         if not self.provider.feed:
             return
         logger.info(f"killing all messages for {self.provider.feed.locator}")
-        with db_session:
-            delete(i for i in self.provider.feed.items)
-            commit()
-            self.reset()
+        self.provider.feed.reset()
+        self.reset()
 
     def keypress(self, size, key):
 
