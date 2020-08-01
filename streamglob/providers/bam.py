@@ -2056,7 +2056,11 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
 
         try:
             date = schedule["dates"][-1]
-            game = date["games"][game_number-1]
+            games = [
+                g for g in date["games"]
+                if g["status"]["codedGameState"] != "D"
+            ]
+            game = games[game_number-1]
             game_date = dateutil.parser.parse(game["gameDate"]).date()
 
         except IndexError:
