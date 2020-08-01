@@ -40,7 +40,7 @@ setup(name=name,
           "fysom",
           "googletransx",
           "html2text",
-          "instaloader @ git+https://github.com/tonycpsu/instaloader", # until #636 merged
+          "instaloader @ git+https://github.com/instaloader/instaloader@upcoming/v4.5#egg=instaloader",
           "limiter",
           "lxml",
           "mistune",

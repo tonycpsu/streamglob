@@ -11,10 +11,10 @@ from .. import session
 from .filters import *
 
 from orderedattrdict import AttrDict, DefaultAttrDict
-from instaloader import Instaloader, Profile
+from instaloader import Instaloader, Profile, FrozenNodeIterator
 from pony.orm import *
 from limiter import get_limiter, limit
-
+import json
 
 @dataclass
 class InstagramMediaSource(model.MediaSource):
@@ -70,12 +70,8 @@ class InstagramSession(session.StreamSession):
         self.login()
 
     def login(self):
-        self.loader = Instaloader(
-            page_size=self.provider.config.get(
-                "fetch_limit",
-                self.DEFAULT_FETCH_LIMIT),
-            sleep=False
-        )
+        # self.loader = Instaloader(sleep=False)
+        self.loader = Instaloader()
 
     def profile_from_username(self, user_name):
         return Profile.from_username(self.loader.context, user_name)
@@ -95,7 +91,8 @@ class InstagramFeed(model.MediaFeed):
         "GraphSidecar": "carousel"
     }
 
-    def fetch(self, cursor=None):
+    @property
+    def profile(self):
 
         if self.locator.startswith("@"):
             user_name = self.locator[1:]
@@ -103,13 +100,40 @@ class InstagramFeed(model.MediaFeed):
             logger.error(self.locator)
             raise NotImplementedError
 
+        return self.session.profile_from_username(user_name)
+
+    @property
+    @db_session
+    def end_post_iter(self):
+        it = self.profile.get_posts()
+        frozen = json.loads(self.attrs.get("post_iter", None))
+        if frozen:
+            it.thaw(FrozenNodeIterator(**frozen))
+        return it
+
+    @db_session
+    def freeze_post_iter(self, post_iter):
+        self.attrs["post_iter"] = json.dumps(post_iter.freeze()._asdict())
+        commit()
+
+    def fetch(self, resume=False):
+
+        # if self.locator.startswith("@"):
+        #     user_name = self.locator[1:]
+        # else:
+        #     logger.error(self.locator)
+        #     raise NotImplementedError
+
         logger.info(f"fetching {self.locator}")
 
         limit = self.provider.config.get("fetch_limit", self.DEFAULT_FETCH_LIMIT)
 
-        profile = self.session.profile_from_username(user_name)
+        if resume:
+            post_iter = self.end_post_iter
+        else:
+            post_iter = self.profile.get_posts()
 
-        for post in islice(profile.get_posts(end_cursor=cursor), limit):
+        for post in islice(post_iter, limit):
             try:
                 media_type = self.POST_TYPE_MAP[post.typename]
             except:
@@ -137,7 +161,10 @@ class InstagramFeed(model.MediaFeed):
                 continue
 
             i = self.items.select(lambda i: i.guid == post.shortcode).first()
-            if not i:
+            # if not i:
+            if i:
+                continue
+            else:
                 logger.info(f"new: {post.date_utc}")
                 new_seen = True
                 i = self.ITEM_CLASS(
@@ -153,11 +180,21 @@ class InstagramFeed(model.MediaFeed):
                         many=True
                     ),
                     attrs = dict(
-                        cursor = post.end_cursor,
                         short_code = post.shortcode
                     )
                 )
                 yield i
+
+        if resume or not self.attrs.get("post_iter"):
+            logger.info("saving post_iter")
+            self.freeze_post_iter(post_iter)
+
+    @db_session
+    def reset(self):
+        super().reset()
+        if "post_iter" in self.attrs:
+            del self.attrs["post_iter"]
+            commit()
 
 
 class InstagramDataTable(CachedFeedProviderDataTable):
@@ -177,16 +214,16 @@ class InstagramDataTable(CachedFeedProviderDataTable):
             feed = self.provider.feed
             if feed is None:
                 return
-            try:
-                cursor = feed.items.select().order_by(
-                    self.provider.ITEM_CLASS.created
-                ).first().attrs.get("cursor")
-            except AttributeError:
-                cursor = None
+            # try:
+            #     cursor = feed.items.select().order_by(
+            #         self.provider.ITEM_CLASS.created
+            #     ).first().attrs.get("cursor")
+            # except AttributeError:
+            #     cursor = None
 
-
+            logger.info("fetching more")
             self.provider.open_popup("Fetching more posts...")
-            feed.update(cursor=cursor)
+            feed.update(resume=True)
             self.refresh()
             self.provider.close_popup()
             self.provider.update_query()
@@ -195,6 +232,7 @@ class InstagramDataTable(CachedFeedProviderDataTable):
 
     @db_session
     def on_end(self, source, count):
+        logger.info("on_end")
         self.fetch_more()
 
     def keypress(self, size, key):
@@ -225,16 +263,12 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
 
     # VIEW_CLASS = InstagramProviderView
 
-    # def __init__(self, *args, **kwargs):
-    #     self.web_api = Client(auto_patch=True, drop_incompat_keys=False)
-    #     self.end_cursor = None
-    #     super().__init__(*args, **kwargs)
-
     POST_TYPE_MAP = {
         "image": "img",
         "video": "vid",
         "carousel": "car"
     }
+    
     @property
     def ATTRIBUTES(self):
         attrs = list(super().ATTRIBUTES.items())
