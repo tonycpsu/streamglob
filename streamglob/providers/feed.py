@@ -127,7 +127,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             "p": "prev_unread"
         }
     }
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.ignore_blur = False
@@ -687,6 +687,10 @@ class FeedProvider(BaseProvider):
                 self.filters.feed.selected_label = identifier
             except StopIteration:
                 self.filters.feed.value = identifier
+
+        elif self.provider_data["selected_feed"]:
+            self.filters.feed.value = self.provider_data["selected_feed"]
+
         raise SGIncompleteIdentifier
 
 
@@ -824,6 +828,12 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         return None
 
     def on_feed_change(self, *args):
+        if self.feed:
+            self.provider_data["selected_feed"] = self.feed.locator
+        else:
+            self.provider_data["selected_feed"] = None
+
+        self.save_provider_data()
         self.view.table.translate_src = getattr(args[0], "translate", None)
         self.reset()
 
