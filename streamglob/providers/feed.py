@@ -124,7 +124,8 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             "ctrl r": "reset",
             "ctrl d": "download",
             "n": "next_unread",
-            "p": "prev_unread"
+            "p": "prev_unread",
+            "meta f": "fetch_more"
         }
     }
 
@@ -262,7 +263,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 index = self.row_to_playlist_pos(position)
             logger.info(f"on_focus: {self.player_state.current}, {position}, {index}")
 
-            if not index:
+            if index is None:
                 return
             if self.player_state.current == "ready":
                 try:
@@ -444,17 +445,19 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         self._modified()
 
 
+    @keymap_command
     async def prev_unread(self):
-        self.mark_item_read(self.focus_position)
         try:
             idx = next(
                 r.data.media_item_id
                 for r in self[self.focus_position-1::-1]
                 if not r.data.read
             )
+            self.mark_item_read(self.focus_position)
+            pos = self.index_to_position(idx)
         except StopIteration:
-            return
-        pos = self.index_to_position(idx)
+            if self.focus_position >= 1:
+                pos = self.focus_position - 1
         self.focus_position = pos
         self.mark_read_on_focus = True
         self._modified()
@@ -473,6 +476,12 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         super().reset()
         if state.event_loop.is_running():
             asyncio.create_task(self.play_all())
+
+
+    # Feed providers that can fetch older items can implement this
+    @keymap_command()
+    async def fetch_more(self):
+        pass
 
     async def play_all(self):
         logger.info("play_all")
@@ -546,7 +555,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
         self.player.bind_property_observer("playlist-pos", self.on_playlist_pos)
         for key, fname in self.KEYMAP["any"].items():
-            mpkey = key.replace("ctrl ", "ctrl+")
+            mpkey = key.replace("ctrl ", "ctrl+").replace("meta ", "alt+")
             state.event_loop.create_task(bind_mpv_key(mpkey, fname))
 
         # self.player.bind_key_press("ctrl+d", self.download)

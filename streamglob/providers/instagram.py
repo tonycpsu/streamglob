@@ -206,9 +206,8 @@ class InstagramDataTable(CachedFeedProviderDataTable):
             self.on_end
         )
 
-    # FIXME: move to feed module
-    def fetch_more(self):
-
+    @keymap_command()
+    async def fetch_more(self):
         @db_session
         def fetch():
             feed = self.provider.feed
@@ -222,9 +221,9 @@ class InstagramDataTable(CachedFeedProviderDataTable):
             #     cursor = None
 
             logger.info("fetching more")
-            self.provider.open_popup("Fetching more posts...")
+            # self.provider.open_popup("Fetching more posts...")
             feed.update(resume=True)
-            self.refresh()
+            self.provider.reset()
             self.provider.close_popup()
             self.provider.update_query()
 
@@ -234,13 +233,6 @@ class InstagramDataTable(CachedFeedProviderDataTable):
     def on_end(self, source, count):
         logger.info("on_end")
         self.fetch_more()
-
-    def keypress(self, size, key):
-
-        if key == "meta f":
-            self.fetch_more()
-        else:
-            return super().keypress(size, key)
 
 
 class InstagramProviderView(SimpleProviderView):
