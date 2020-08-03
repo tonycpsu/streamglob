@@ -6,7 +6,6 @@ from datetime import datetime, timedelta
 from orderedattrdict import AttrDict
 import dataclasses
 import itertools
-import tempfile
 
 from . import player
 from .state import *
@@ -121,7 +120,6 @@ class TaskManager(Observable):
                 # ret = state.event_loop.create_task(run_task)
             elif isinstance(task, model.DownloadMediaTask):
                 try:
-                    task.tempdir = tempfile.mkdtemp(prefix="streamglob")
                     outfile = task.stage_outfile
                     run_task = player.Downloader.download(task, outfile, *task.args, **task.kwargs)
                     task.stage_results.append(outfile)

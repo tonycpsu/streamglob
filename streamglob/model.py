@@ -13,6 +13,7 @@ import abc
 import asyncio
 import shutil
 import unicodedata
+import tempfile
 
 from orderedattrdict import AttrDict
 from pony.orm import *
@@ -268,6 +269,10 @@ class DownloadMediaTask(ProgramMediaTask):
     tempdir: typing.Optional[str] = None
     postprocessors: typing.Optional[typing.List[str]] = field(default_factory=list)
     stage_results: typing.Optional[typing.List[str]] = field(default_factory=list)
+
+    def __post_init__(self):
+        if len(self.postprocessors):
+            self.tempdir = tempfile.mkdtemp(prefix="streamglob")
 
     @property
     def stage(self):
