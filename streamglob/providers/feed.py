@@ -88,20 +88,22 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             data=[dict(
                 c,
                 **dict(
-                    # title=f"[{i+1}/{len(data.content)}] {data.title}"
-                    title = f"[{i+1}] {data.title}",
+                    title=f"[{i+1}/{len(data.content)}] {data.title}",
+                    # title = f"[{i+1}] {data.title}",
                     feed = data.feed,
                     created = data.created,
                     read = data.attrs.get("parts_read", {}).get(i, False)
                 ))
                   for i, c in enumerate(data.content)
             ])
-            self.pile = urwid.Pile([
-                (1, urwid.SolidFill(" ")),
-                ("pack", urwid.BoxAdapter(self.table, len(data.content)+1))
-            ])
+            self.box = urwid.BoxAdapter(self.table, 1)
+            # self.pile = urwid.Pile([
+            #     (1, urwid.SolidFill(" ")),
+            #     # ("pack", urwid.BoxAdapter(self.table, len(data.content)+1))
+            #     ("pack", urwid.BoxAdapter(self.table, 1))
+            # ])
             # ]
-            super().__init__(self.pile)
+            super().__init__(self.box)
 
         @property
         def focus_position(self):
@@ -116,7 +118,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     index = "media_item_id"
     # no_load_on_init = True
     detail_auto_open = True
-    # detail_replace = True
+    detail_replace = True
     detail_selectable=True
 
     KEYMAP = {
@@ -260,6 +262,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             try:
                 index = self.row_to_playlist_pos(position) + self.inner_focus
             except (StopIteration, AttributeError, TypeError):
+                logger.info("on_focus no inner_focus")
                 index = self.row_to_playlist_pos(position)
             logger.info(f"on_focus: {self.player_state.current}, {position}, {index}")
 
@@ -271,12 +274,13 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                     state.event_loop.create_task(
                         self.set_playlist_pos(index)
                     )
-                    if self.reset_player_state_task:
-                        self.reset_player_state_task.cancel()
-                    self.reset_player_state_task = state.event_loop.call_later(
-                        1,
-                        self.reset_player_state
-                    )
+                    self.reset_player_state()
+                    # if self.reset_player_state_task:
+                    #     self.reset_player_state_task.cancel()
+                    # self.reset_player_state_task = state.event_loop.call_later(
+                    #     5,
+                    #     self.reset_player_state
+                    # )
 
                 except BrokenPipeError:
                     return
@@ -294,8 +298,8 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 lambda: self.mark_item_read(position)
             )
 
-        if len(self[position].data.content) > 1:
-            self[position].open_details()
+        # if len(self[position].data.content) > 1:
+        #     self[position].open_details()
 
 
     async def on_playlist_pos(self, name, value):
@@ -306,6 +310,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         try:
             index = row + self.inner_focus
         except AttributeError:
+            logger.info("on_playlist_pos no inner_focus")
             index = row
         logger.info(f"on_playlist_pos: {value}, {index}")
         if self.player:
@@ -340,6 +345,8 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             return
 
         partial = self.inner_table is not None
+        # FIXME: HACK until there's a better UI for marking parts read
+        # partial = False
         if partial:
             logger.info("mark part read")
             pos = self.inner_focus
@@ -368,6 +375,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     @db_session
     def mark_item_unread(self, position):
+        logger.info(f"mark_item_unread: {position}")
         if not isinstance(self[position].data, model.MediaListing):
             return
         item = self.item_at_position(position)
@@ -375,9 +383,12 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             return
 
         partial = self.inner_table is not None
+        # FIXME: HACK until there's a better UI for marking parts read
+        # partial = False
         if partial:
+            pos = self.inner_focus
             item.mark_part_unread(pos)
-            self.inner_table.set_value(pos, "read", Falserue)
+            self.inner_table.set_value(pos, "read", False)
             self.inner_table[pos].set_attr("unread")
         else:
             item.mark_unread()
@@ -547,27 +558,27 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             self.player = await self.player_state_task.program
             logger.info(self.player)
             await self.player_state_task.proc
-        # FIXME: MPV-only
-        self.player_state.current = "init"
-        # self.player.controller.listen_for("file-loaded", self.on_file_loaded)
-        async def bind_mpv_key(key, fname):
-            await self.player.bind_key_press(key, getattr(self, fname))
-
-        self.player.bind_property_observer("playlist-pos", self.on_playlist_pos)
-        for key, fname in self.KEYMAP["any"].items():
-            mpkey = key.replace("ctrl ", "ctrl+").replace("meta ", "alt+")
-            state.event_loop.create_task(bind_mpv_key(mpkey, fname))
-
-        # self.player.bind_key_press("ctrl+d", self.download)
-
-        def on_player_done(f):
-            logger.info("player done")
-            self.player = None
-            self.player_state_task = None
+            # FIXME: MPV-only
             self.player_state.current = "init"
+            # self.player.controller.listen_for("file-loaded", self.on_file_loaded)
+            async def bind_mpv_key(key, fname):
+                await self.player.bind_key_press(key, getattr(self, fname))
 
-        self.player_state_task.result.add_done_callback(on_player_done)
-        # logger.info(urls)
+            self.player.bind_property_observer("playlist-pos", self.on_playlist_pos)
+            for key, fname in self.KEYMAP["any"].items():
+                mpkey = key.replace("ctrl ", "ctrl+").replace("meta ", "alt+")
+                state.event_loop.create_task(bind_mpv_key(mpkey, fname))
+
+            # self.player.bind_key_press("ctrl+d", self.download)
+
+            def on_player_done(f):
+                logger.info("player done")
+                self.player = None
+                self.player_state_task = None
+                self.player_state.current = "init"
+
+            self.player_state_task.result.add_done_callback(on_player_done)
+            # logger.info(urls)
 
     async def download(self):
 

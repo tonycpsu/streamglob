@@ -464,7 +464,7 @@ class MediaItem(db.Entity):
 
     @db_session
     def mark_part_unread(self, index):
-        self.attrs["parts_read"].pop(str(index))
+        self.attrs["parts_read"].pop(str(index), None)
 
     @property
     def age(self):
