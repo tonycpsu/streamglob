@@ -106,9 +106,11 @@ class InstagramFeed(model.MediaFeed):
     @db_session
     def end_post_iter(self):
         it = self.profile.get_posts()
-        frozen = json.loads(self.attrs.get("post_iter", None))
-        if frozen:
+        try:
+            frozen = json.loads(self.attrs.get("post_iter", None))
             it.thaw(FrozenNodeIterator(**frozen))
+        except:
+            pass
         return it
 
     @db_session
