@@ -2,6 +2,7 @@ from datetime import datetime
 from dataclasses import *
 import tempfile
 import pipes
+import functools
 
 from orderedattrdict import AttrDict
 from panwid.datatable import *
@@ -127,7 +128,8 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             "ctrl d": "download",
             "n": "next_unread",
             "p": "prev_unread",
-            "meta f": "fetch_more"
+            "meta f": "fetch_more",
+            "f": ["cycle", "fullscreen"]
         }
     }
 
@@ -564,13 +566,27 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             async def bind_mpv_key(key, fname):
                 await self.player.bind_key_press(key, getattr(self, fname))
 
-            self.player.bind_property_observer("playlist-pos", self.on_playlist_pos)
-            for key, fname in self.KEYMAP["any"].items():
-                mpkey = key.replace("ctrl ", "ctrl+").replace("meta ", "alt+")
-                state.event_loop.create_task(bind_mpv_key(mpkey, fname))
+            # self.player.bind_property_observer("playlist-pos", self.on_playlist_pos)
+            # for key, fname in self.KEYMAP["any"].items():
+            #     mpkey = key.replace("ctrl ", "ctrl+").replace("meta ", "alt+")
+            #     state.event_loop.create_task(bind_mpv_key(mpkey, fname))
 
             # self.player.bind_key_press("ctrl+d", self.download)
 
+            async def handle_mpv_key(key_state, key_name, key_string):
+                logger.info(f"handle: {key_name}")
+                if key_name in self.KEYMAP.get("any", {}):
+                    command = self.KEYMAP["any"][key_name]
+                    try:
+                        key_func = getattr(self,command)
+                    except (TypeError, AttributeError):
+                        key_func = functools.partial(self.player.controller.command, *command)
+                    await key_func()
+
+            state.event_loop.create_task(
+                self.player.controller.register_unbound_key_callback(handle_mpv_key)
+            )
+            # self.player_command("keybind", "UNMAPPED", "script-binding unampped-keypress")
             def on_player_done(f):
                 logger.info("player done")
                 self.player = None
@@ -619,10 +635,10 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         self.provider.feed.reset()
         self.reset()
 
-    def keypress(self, size, key):
+    def player_command(self, *command):
+        state.event_loop.create_task(self.player.controller.command(*command))
 
-        def player_command(command):
-            state.event_loop.create_task(self.player.controller.command(command))
+    def keypress(self, size, key):
 
         if key == "meta r":
             asyncio.create_task(self.provider.update(force=True))
@@ -651,7 +667,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         elif key == "ctrl d":
             state.event_loop.create_task(self.download())
         elif key == "ctrl k":
-            player_command("quit")
+            self.player_command("quit")
         else:
             return super().keypress(size, key)
         return key
