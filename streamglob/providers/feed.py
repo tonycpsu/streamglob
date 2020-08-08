@@ -529,7 +529,10 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                         key_func = getattr(self,command)
                     except (TypeError, AttributeError):
                         key_func = functools.partial(self.player.controller.command, *command)
-                    await key_func()
+                    if asyncio.iscoroutine(key_func()):
+                        await key_func()
+                    else:
+                        key_func()
 
             state.event_loop.create_task(
                 self.player.controller.register_unbound_key_callback(handle_mpv_key)
