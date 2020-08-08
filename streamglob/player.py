@@ -542,6 +542,13 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
 
     INTEGRATED_DOWNLOADERS = ["youtube-dl"]
 
+    URWID_KEY_MAPPING = {
+        "UP": "cursor up",
+        "DOWN": "cursor down",
+        "LEFT": "cursor left",
+        "RIGHT": "cursor right"
+    }
+
     def __init__(self, *args, **kwargs):
         self._initialized = False
         super().__init__(*args, **kwargs)
@@ -578,6 +585,9 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
         for i, s in enumerate(self.source_args):
             await self.controller.command("loadfile", s, "replace" if i==0 else "append")
         return self.proc
+
+    def key_to_urwid(self, key):
+        return self.URWID_KEY_MAPPING.get(key, key).lower().replace("alt+", "meta ").replace("ctrl+", "ctrl ")
 
     def __getattr__(self, attr):
         if attr in ["_initialized"] or not self._initialized:

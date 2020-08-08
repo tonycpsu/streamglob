@@ -47,10 +47,6 @@ class FeedMediaListing(model.ContentMediaListing):
         return self.created.strftime("%Y%m%d_%H%M%S")
 
 
-# class URLFeed(model.MediaFeed):
-
-#     url = Required(str)
-
 
 @keymapped()
 class CachedFeedProviderDataTable(ProviderDataTable):
@@ -123,6 +119,8 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     KEYMAP = {
         "any": {
+            "cursor up": "prev_item",
+            "cursor down": "next_item",
             "ctrl r": "reset",
             "ctrl d": "download",
             "n": "next_unread",
@@ -380,6 +378,15 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 self.mark_item_read(n)
             self.reset()
 
+    @keymap_command
+    async def prev_item(self):
+        if self.focus_position > 0:
+            self.focus_position -= 1
+
+    @keymap_command
+    async def next_item(self):
+        if self.focus_position < len(self)-1:
+            self.focus_position += 1
 
     @keymap_command
     async def next_unread(self):
@@ -513,9 +520,11 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             await self.player_task.proc
 
             async def handle_mpv_key(key_state, key_name, key_string):
-                logger.info(f"handle: {key_name}")
-                if key_name in self.KEYMAP.get("any", {}):
-                    command = self.KEYMAP["any"][key_name]
+                logger.info(f"debug: {key_name}")
+                key = self.player.key_to_urwid(key_name)
+                logger.debug(f"key: {key_name}, {key}")
+                if key in self.KEYMAP.get("any", {}):
+                    command = self.KEYMAP["any"][key]
                     try:
                         key_func = getattr(self,command)
                     except (TypeError, AttributeError):
