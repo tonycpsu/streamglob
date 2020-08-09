@@ -234,7 +234,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     def run_queued_task(self):
         if self.pending_event_task:
-            state.event_loop.create_task(self.queued_task)
+            state.event_loop.create_task(self.queued_task())
             self.pending_event_task = None
 
     @db_session
@@ -257,7 +257,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 delay = 1
             else:
                 delay = 0
-            self.queued_task = self.set_playlist_pos(index)
+            self.queued_task = lambda: self.set_playlist_pos(index)
 
             self.pending_event_task = state.event_loop.call_later(
                 delay,
@@ -529,7 +529,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                         key_func = getattr(self,command)
                     except (TypeError, AttributeError):
                         key_func = functools.partial(self.player.controller.command, *command)
-                    if asyncio.iscoroutine(key_func()):
+                    if asyncio.iscoroutinefunction(key_func):
                         await key_func()
                     else:
                         key_func()
@@ -561,7 +561,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             row_num = self.focus_position
 
         listing = self[row_num].data
-        logger.info(listing)
+        # logger.debug(listing)
         url = await self.player.controller.command(
             "get_property", f"playlist/{index}/filename"
         )

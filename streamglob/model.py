@@ -370,6 +370,7 @@ class MediaFeed(MediaChannel):
     def fetch(self):
         pass
 
+    @db_session
     def update(self, *args, **kwargs):
         for item in self.fetch(*args, **kwargs):
             listing = self.provider.new_listing(
