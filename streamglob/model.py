@@ -257,6 +257,7 @@ class ProgramMediaTask(MediaTask):
 class PlayMediaTask(ProgramMediaTask):
 
     async def load_sources(self, sources):
+        await self.program
         proc = await self.program.result().load_source(sources)
         self.proc = state.event_loop.create_future()
         self.proc.set_result(proc)

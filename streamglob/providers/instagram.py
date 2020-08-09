@@ -227,7 +227,6 @@ class InstagramDataTable(CachedFeedProviderDataTable):
             feed.update(resume=True)
             self.provider.reset()
             self.provider.close_popup()
-            self.provider.update_query()
 
         update_task = state.event_loop.run_in_executor(None, fetch)
 

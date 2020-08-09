@@ -558,14 +558,18 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
     }
 
     def __init__(self, *args, **kwargs):
-        self._initialized = False
+        # self._initialized = False
+        self.ready = asyncio.Future()
         super().__init__(*args, **kwargs)
         self.ipc_socket_name = None
         self.tmp_dir = None
         self._ipc_socket = None
-        self.controller = None
         self.extra_args_pre += ["--title=streamglob: ${media-title}"]
         self.create_socket()
+
+    @property
+    def controller(self):
+        return self.ready.result()
 
     def create_socket(self):
         self.tmp_dir = tempfile.mkdtemp()
@@ -577,9 +581,10 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
         rc = await super().run(*args, **kwargs)
         await self.wait_for_socket()
         # self.controller = MPV(start_mpv=False, ipc_socket=self.ipc_socket_name)
-        self.controller = MPV(socket=self.ipc_socket_name)
-        await self.controller.start()
-        self._initialized = True
+        controller = MPV(socket=self.ipc_socket_name)
+        await controller.start()
+        self.ready.set_result(controller)
+        # self._initialized = True
         return rc
         # state.event_loop.call_later(5, self.test)
 
@@ -589,6 +594,7 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
             time.sleep(0.5)
 
     async def load_source(self, sources):
+        await self.ready
         self.source = sources
         for i, s in enumerate(self.source_args):
             await self.controller.command("loadfile", s, "replace" if i==0 else "append")

@@ -119,6 +119,8 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     KEYMAP = {
         "any": {
+            "home": "first_item",
+            "end": "last_item",
             "cursor up": "prev_item",
             "cursor down": "next_item",
             "ctrl r": "reset",
@@ -144,12 +146,12 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         self.change_playlist_pos_on_focus = True
         self.change_focus_on_playlist_pos = True
         urwid.connect_signal(self, "focus", self.on_focus)
-        def on_requery(source, count):
-            # logger.info("foo: %s" %(c))
-            if not self.player:
-                return
-            state.event_loop.create_task(self.play_all())
-        urwid.connect_signal(self, "requery", on_requery)
+        # def on_requery(source, count):
+        #     # logger.info("foo: %s" %(c))
+        #     if not self.player:
+        #         return
+        #     state.event_loop.create_task(self.play_all())
+        # urwid.connect_signal(self, "requery", on_requery)
         # urwid.connect_signal(self, "blur", self.on_blur)
 
     def query_result_count(self):
@@ -389,6 +391,14 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             self.focus_position += 1
 
     @keymap_command
+    async def first_item(self):
+        self.focus_position = 0
+
+    @keymap_command
+    async def last_item(self):
+        self.focus_position = len(self)-1
+
+    @keymap_command
     async def next_unread(self):
         rc = self.mark_item_read(self.focus_position)
         logger.info(rc)
@@ -442,12 +452,16 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     @keymap_command("reset")
     def reset(self, *args, **kwargs):
+        logger.info("datatable reset")
+        super().reset()
         # if self.player:
         #     self.quit_player()
-        super().reset()
-        if state.event_loop.is_running():
-            asyncio.create_task(self.play_all())
-
+        state.event_loop.create_task(self.play_all())
+        # if state.event_loop.is_running():
+        #     logger.debug("play_all")
+        #     state.event_loop.create_task(self.play_all())
+        # else:
+        #     logger.debug("not running")
 
     # Feed providers that can fetch older items can implement this
     @keymap_command()
@@ -483,8 +497,8 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             ]
         ]
 
-        if not len(items):
-            return
+        # if not len(items):
+        #     return
 
         self.play_items = items
         # raise Exception(items)
@@ -510,8 +524,9 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 feed = self.provider.feed
             )
         if self.player_task:
+            self.player = await self.player_task.program
             sources, kwargs = self.provider.play_args(listing)
-            asyncio.create_task(self.player_task.load_sources(sources))
+            state.event_loop.create_task(self.player_task.load_sources(sources))
         else:
             self.player_task = self.provider.play(listing)
             logger.info(self.player_task)
@@ -526,12 +541,15 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 if key in self.KEYMAP.get("any", {}):
                     command = self.KEYMAP["any"][key]
                     try:
-                        key_func = getattr(self,command)
+                        key_func = getattr(self, command)
                     except (TypeError, AttributeError):
-                        key_func = functools.partial(self.player.controller.command, *command)
+                        key_func = asyncio.coroutine(functools.partial(self.player.controller.command, *command))
+                    logger.info(f"command: {command}, key_func: {key_func}")
                     if asyncio.iscoroutinefunction(key_func):
+                        logger.info("coro")
                         await key_func()
                     else:
+                        logger.info("not coro")
                         key_func()
 
             state.event_loop.create_task(
@@ -591,9 +609,9 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     def keypress(self, size, key):
 
         if key == "meta r":
-            asyncio.create_task(self.provider.update(force=True))
+            state.event_loop.create_task(self.provider.update(force=True))
         elif key == "meta p":
-            asyncio.create_task(self.play_all())
+            state.event_loop.create_task(self.play_all())
         # elif key == "n":
         #     # self.next_unread()
         #     state.event_loop.create_task(self.next_unread())
@@ -618,6 +636,11 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             state.event_loop.create_task(self.download())
         elif key == "ctrl k":
             self.player_command("quit")
+        elif key in self.KEYMAP.get("any", {}) and isinstance(self.KEYMAP.get("any", {})[key], list):
+            command = self.KEYMAP["any"][key]
+            state.event_loop.create_task(
+                self.player.controller.command(*command)
+            )
         else:
             return super().keypress(size, key)
         return key
@@ -836,8 +859,8 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         def update_feeds():
             self.open_popup("Updating feeds...")
             self.update_feeds(force=force)
-            self.refresh()
             self.close_popup()
+            self.reset()
         update_task = state.event_loop.run_in_executor(None, update_feeds)
         # logger.info("-update bar")
         # state.loop.draw_screen()
@@ -852,12 +875,13 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         logger.info("-refresh")
 
     def reset(self):
+        logger.info("provider reset")
         self.update_query()
         self.view.reset()
 
     def on_activate(self):
         super().on_activate()
-        # asyncio.create_task(self.view.table.play_all())
+        # state.event_loop.create_task(self.view.table.play_all())
         # self.refresh()
         # self.update()
 
