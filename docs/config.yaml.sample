@@ -206,7 +206,7 @@ profiles:
                 path: youtube-dl
             streamlink:
                 path: streamlink
-                no_progress: True
+                # progress: False
                 # args: --hls-audio-select *
         rules:
             label:

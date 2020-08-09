@@ -597,7 +597,7 @@ def run_cli(action, provider, selection, **kwargs):
     try:
         task = method(
             selection,
-            no_progress=True,
+            progress=False,
             stdout=sys.stdout, stderr=sys.stderr, **kwargs
         )
         res = state.event_loop.run_until_complete(task.result)

@@ -115,8 +115,10 @@ class Program(object):
         '.+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$)'
     )
 
+    with_progress = False
+
     def __init__(self, path, args=[], output_args=None,
-                 exclude_types=None, no_progress=False,
+                 exclude_types=None, with_progress=None,
                  stdin=None, stdout=None, stderr=None,
                  ssh_host=None,
                  **kwargs):
@@ -136,9 +138,11 @@ class Program(object):
         self.exclude_types = set(exclude_types) if exclude_types else set()
         # FIXME: Windows doesn't have necessary modules (pty, termios, fnctl,
         # etc. to get output from the child process for progress display.  Until
-        # we have a cross-platform solution, force no_progress to False if
+        # we have a cross-platform solution, force with_progress to False if
         # running on Windows
-        self.no_progress = True if platform.system() == "Windows" else no_progress
+
+        if with_progress is None:
+            self.with_progress = False if platform.system() == "Windows" else with_progress
 
         self.extra_args_pre = []
         self.extra_args_post = []
@@ -146,7 +150,7 @@ class Program(object):
         self.source = None
         self.listing = None
         self.stdin = stdin
-        if not self.no_progress:
+        if self.with_progress:
             self.stdout = subprocess.PIPE
         else:
             self.stdout = stdout
@@ -446,12 +450,14 @@ class Program(object):
 
             if not self.FOREGROUND:
 
-                if not self.no_progress:
-
+                if self.with_progress:
+                    logger.info(f"opening progress stream: {self.__class__.__name__}")
                     self.progress_stream, pty_stream = pty.openpty()
                     fcntl.ioctl(pty_stream, termios.TIOCSWINSZ,
                                 struct.pack('HHHH', 50, 100, 0, 0)
                     )
+                    if self.stdout is not None:
+                        logger.info(f"stdout: {self.stdout}")
                     self.stdout = pty_stream
 
                 if self.stdin is None:
@@ -469,11 +475,12 @@ class Program(object):
                     stdout = self.stdout,
                     stderr = self.stderr,
                 )
-                if pty_stream:
-                    os.close(pty_stream)
-
             except SGException as e:
                 logger.warning(e)
+            finally:
+                if pty_stream is not None:
+                    os.close(pty_stream)
+
         return self.proc
 
     async def kill(self):
@@ -482,6 +489,7 @@ class Program(object):
     @classmethod
     def supports_url(cls, url):
         return False
+
 
     def __repr__(self):
         return "<%s: %s %s>" %(self.__class__.__name__, self.cmd, self.args)
@@ -496,7 +504,7 @@ class Player(Program):
         source = task.sources
         logger.debug(f"source: {source}, player: {player_spec}, downloader: {downloader_spec}")
 
-        player = next(cls.get(player_spec, no_progress=True))
+        player = next(cls.get(player_spec))
         if isinstance(downloader_spec, MutableMapping):
             # if downloader spec is a dict, it maps players to downloader programs
             if player.cmd in downloader_spec:
@@ -648,10 +656,10 @@ class Downloader(Program):
             else:
                 return 0
 
-        logger.error(
-            [ d for d in super().get(spec, **kwargs)
-              if d.supports_url(url)
-        ])
+        # logger.error(
+        #     [ d for d in super().get(spec, **kwargs)
+        #       if d.supports_url(url)
+        # ])
         if not spec:
             spec = True
         try:
@@ -680,9 +688,11 @@ class YouTubeDLDownloader(Downloader):
         r"(\d+\.\d+)% of ~?(\d+.\d+\S+)(?: at\s+(\d+\.\d{2}\d*\S+) ETA (\d+:\d+))?"
     )
 
-    def __init__(self, path, no_progress=False, *args, **kwargs):
+    with_progress = True
+
+    def __init__(self, path, *args, **kwargs):
         super().__init__(path, *args, **kwargs)
-        if not self.no_progress:
+        if self.with_progress:
             self.extra_args_pre += ["--newline"]
 
     @property
@@ -741,8 +751,7 @@ class StreamlinkDownloader(Downloader):
         r"Written (\d+.\d+ \S+) \((\d+\S+) @ (\d+.\d+ \S+)\)"
     )
 
-    # def __init__(self, path, no_progress=False, *args, **kwargs):
-    #     super().__init__(path, *args, **kwargs)
+    with_progress = True
 
     @property
     def is_simple(self):
@@ -909,7 +918,7 @@ def play_test():
     result = state.event_loop.run_until_complete(
         state.task_manager.play(
             task,
-            no_progress=True,
+            with_progress=False,
             stdout=sys.stdout, stderr=sys.stderr,
             player_spec="mpv",
             downloader_spec=None
