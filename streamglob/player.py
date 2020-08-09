@@ -455,11 +455,11 @@ class Program(object):
                     self.stdout = pty_stream
 
                 if self.stdin is None:
-                    self.stdin = open(os.devnull, 'w')
+                    self.stdin = subprocess.DEVNULL #open(os.devnull, 'w')
                 if self.stdout is None:
-                    self.stdout = open(os.devnull, 'w')
+                    self.stdout = subprocess.DEVNULL # open(os.devnull, 'w')
                 if self.stderr is None:
-                    self.stderr = open(os.devnull, 'w')
+                    self.stderr = subprocess.DEVNULL # open(os.devnull, 'w')
             else:
                 raise NotImplementedError
             try:
