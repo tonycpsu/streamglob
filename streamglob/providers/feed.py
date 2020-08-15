@@ -11,6 +11,7 @@ from panwid.keymap import *
 from limiter import get_limiter, limit
 
 from .. import model
+from .. import utils
 
 from .base import *
 
@@ -481,7 +482,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         items = [
             AttrDict(
                 media_item_id=row.data.media_item_id,
-                title=row.data.title.replace("\n", " "),
+                title=utils.sanitize_filename(row.data.title),
                 created=row.data.created,
                 feed=row.data.feed.name,
                 locator=row.data.feed.locator,
@@ -698,7 +699,10 @@ class FeedProvider(BaseProvider):
                 self.filters.feed.value = identifier
 
         elif self.provider_data["selected_feed"]:
-            self.filters.feed.value = self.provider_data["selected_feed"]
+            try:
+                self.filters.feed.value = self.provider_data["selected_feed"]
+            except StopIteration:
+                pass
 
         raise SGIncompleteIdentifier
 

@@ -1,8 +1,10 @@
+import os
 import itertools
 import re
 import mistune
 import html2text
 import html.parser
+import pathvalidate
 
 FORMAT_DATETIME_12H_RE = re.compile("0*(\d+?:\d+\w)")
 def format_datetime_12h(dt):
@@ -247,6 +249,19 @@ def html_to_urwid_text_markup(html, excludes=[]):
         or a != b
     ]
 
+def sanitize_filename(t):
+    return pathvalidate.sanitize_filename(
+        t
+        # strip newlines
+        .replace("\n", " ")
+        # forward slash isn't legal in filenames for UNIX or Windows,
+        # so use a Unicode homoglyph instead
+        .replace("/", "u\N{FRACTION SLASH}")
+        # let the pathvalidate module handle the rest for the current platform
+        , platform=pathvalidate.normalize_platform(os.name).name
+    )
+
+
 
 __all__ = [
     "classproperty",
@@ -255,5 +270,6 @@ __all__ = [
     "format_timedelta",
     "strip_emoji",
     "strip_html",
-    "html_to_urwid_text_markup"
+    "html_to_urwid_text_markup",
+    "sanitize_filename"
 ]
