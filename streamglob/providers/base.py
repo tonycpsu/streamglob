@@ -442,9 +442,10 @@ class BaseProvider(abc.ABC):
         if not isinstance(sources, list):
             sources = [sources]
 
-        kwargs["num"] = len(sources)
+        if "num" not in kwargs:
+            kwargs["num"] = len(sources)
         for i, s in enumerate(sources):
-            if len(sources):
+            if len(sources) and "index" not in kwargs:
                 kwargs["index"] = i
             try:
                 filename = s.download_filename(selection, **kwargs)

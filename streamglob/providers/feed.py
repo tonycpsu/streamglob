@@ -587,7 +587,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             s for s in listing.content
             if s.locator == url
         )
-        self.provider.download(listing)
+        self.provider.download(listing, index = self.inner_focus or 0)
 
     def quit_player(self):
         try:
