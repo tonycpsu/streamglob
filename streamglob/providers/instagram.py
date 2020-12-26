@@ -233,7 +233,8 @@ class InstagramDataTable(CachedFeedProviderDataTable):
     @db_session
     def on_end(self, source, count):
         logger.info("on_end")
-        self.fetch_more()
+        # self.fetch_more()
+        state.event_loop.create_task(self.fetch_more())
 
 
 class InstagramProviderView(SimpleProviderView):
