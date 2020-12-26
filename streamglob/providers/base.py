@@ -435,7 +435,7 @@ class BaseProvider(abc.ABC):
         return state.task_manager.play(task, player_spec, downloader_spec, **kwargs)
 
 
-    def download(self, selection, no_task_manager=False, **kwargs):
+    def download(self, selection, index=None, no_task_manager=False, **kwargs):
 
         sources, kwargs = self.play_args(selection, **kwargs)
 
@@ -445,10 +445,11 @@ class BaseProvider(abc.ABC):
         if "num" not in kwargs:
             kwargs["num"] = len(sources)
         for i, s in enumerate(sources):
-            if len(sources) and "index" not in kwargs:
-                kwargs["index"] = i
+
+            if index is not None and index != i:
+                continue
             try:
-                filename = s.download_filename(selection, **kwargs)
+                filename = s.download_filename(selection, index=index, **kwargs)
             except SGInvalidFilenameTemplate as e:
                 logger.warn(f"filename template for provider {self.IDENTIFIER} is invalid: {e}")
             downloader_spec = getattr(self.config, "helpers") or s.download_helper
@@ -460,7 +461,7 @@ class BaseProvider(abc.ABC):
                 dest=filename,
                 postprocessors = (self.config.get("postprocessors", []) or []).copy()
             )
-            return state.task_manager.download(task, downloader_spec, **kwargs)
+            state.task_manager.download(task, downloader_spec, **kwargs)
 
     def on_select(self, widget, selection):
         self.play(selection)

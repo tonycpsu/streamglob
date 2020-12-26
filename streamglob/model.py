@@ -185,7 +185,7 @@ class MediaSource(BaseDataClass):
         return f"{self.provider_id}_dl" # *shrug*
 
 
-    def download_filename(self, listing, index=None, num=None, **kwargs):
+    def download_filename(self, listing, index=0, num=None, **kwargs):
 
         if "outfile" in kwargs:
             return kwargs.get("outfile")
