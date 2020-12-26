@@ -569,6 +569,8 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
 
     @property
     def controller(self):
+        if not self.ready.done():
+            return None
         return self.ready.result()
 
     def create_socket(self):

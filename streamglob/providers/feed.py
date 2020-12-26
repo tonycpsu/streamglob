@@ -147,13 +147,6 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         self.change_playlist_pos_on_focus = True
         self.change_focus_on_playlist_pos = True
         urwid.connect_signal(self, "focus", self.on_focus)
-        # def on_requery(source, count):
-        #     # logger.info("foo: %s" %(c))
-        #     if not self.player:
-        #         return
-        #     state.event_loop.create_task(self.play_all())
-        # urwid.connect_signal(self, "requery", on_requery)
-        # urwid.connect_signal(self, "blur", self.on_blur)
 
     def query_result_count(self):
         if self.update_count:
@@ -242,9 +235,6 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     @db_session
     def on_focus(self, source, position):
-
-        if not self._initialized:
-            return
 
         if self.player and len(self):
             try:
@@ -455,14 +445,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     def reset(self, *args, **kwargs):
         logger.info("datatable reset")
         super().reset()
-        # if self.player:
-        #     self.quit_player()
         state.event_loop.create_task(self.play_all())
-        # if state.event_loop.is_running():
-        #     logger.debug("play_all")
-        #     state.event_loop.create_task(self.play_all())
-        # else:
-        #     logger.debug("not running")
 
     # Feed providers that can fetch older items can implement this
     @keymap_command()
@@ -475,10 +458,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         ITEM_TEMPLATE="""#EXTINF:1,{title}
 {url}
 """
-        # items = list(chain.from_iterable(
-        #     item.data
-        #     for item in self
-        # ))
+
         items = [
             AttrDict(
                 media_item_id=row.data.media_item_id,
@@ -826,6 +806,8 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         return None
 
     def on_feed_change(self, *args):
+        if not self.is_active:
+            return
         if self.feed:
             self.provider_data["selected_feed"] = self.feed.locator
         else:
@@ -836,6 +818,8 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         self.reset()
 
     def on_status_change(self, *args):
+        if not self.is_active:
+            return
         self.reset()
 
     def open_popup(self, text):
@@ -885,9 +869,6 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
 
     def on_activate(self):
         super().on_activate()
-        # state.event_loop.create_task(self.view.table.play_all())
-        # self.refresh()
-        # self.update()
 
     def on_deactivate(self):
         if self.view.table.player:
