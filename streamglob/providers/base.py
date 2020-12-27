@@ -551,6 +551,7 @@ class BackgroundTasksMixin(object):
     def on_deactivate(self):
         for name, task in self._tasks.items():
             if task:
+                logger.info("deactivate cancel task")
                 task.cancel()
                 self._tasks[name] = None
         # if self._refresh_alarm:

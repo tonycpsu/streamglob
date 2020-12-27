@@ -246,6 +246,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 return
             
             if self.pending_event_task:
+                logger.warn("canceling  task")
                 self.pending_event_task.cancel()
                 delay = 1
             else:
@@ -391,12 +392,21 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     @keymap_command
     async def next_unread(self):
+
+        idx = None
+        count = 0
+        last_count = None
+
         rc = self.mark_item_read(self.focus_position)
         logger.info(rc)
         if rc:
             logger.info("mark was partial")
             return
+
         while True:
+            if count == last_count:
+                return
+            count += len(self)
             try:
                 idx = next(
                     r.data.media_item_id
@@ -410,11 +420,13 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 self.focus_position = len(self)-1
                 self.load_more(self.focus_position)
                 self.focus_position += 1
-        pos = self.index_to_position(idx)
-        logger.info(pos)
-        self.focus_position = pos
-        self.mark_read_on_focus = True
-        self._modified()
+                last_count = count
+        if idx:
+            pos = self.index_to_position(idx)
+            logger.info(pos)
+            self.focus_position = pos
+            self.mark_read_on_focus = True
+            self._modified()
 
 
     @keymap_command
@@ -445,7 +457,12 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     def reset(self, *args, **kwargs):
         logger.info("datatable reset")
         super().reset()
-        state.event_loop.create_task(self.play_all())
+        state.foo = state.event_loop.create_task(self.play_all())
+
+    def refresh(self, *args, **kwargs):
+        logger.info("datatable refresh")
+        super().refresh(*args, **kwargs)
+
 
     # Feed providers that can fetch older items can implement this
     @keymap_command()
