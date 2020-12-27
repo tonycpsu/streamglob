@@ -385,6 +385,7 @@ class MediaFeed(MediaChannel):
 
             self.provider.on_new_listing(listing)
             self.updated = datetime.now()
+            commit()
 
     @db_session
     def mark_all_items_read(self):
