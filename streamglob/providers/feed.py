@@ -129,6 +129,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             "n": "next_unread",
             "p": "prev_unread",
             "meta f": "fetch_more",
+            "meta p": "play_all",
             "f": ["cycle", "fullscreen"]
         }
     }
@@ -469,6 +470,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     async def fetch_more(self):
         pass
 
+    @keymap_command()
     async def play_all(self):
         logger.info("play_all")
 
@@ -608,8 +610,8 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
         if key == "meta r":
             state.event_loop.create_task(self.provider.update(force=True))
-        elif key == "meta p":
-            state.event_loop.create_task(self.play_all())
+        # elif key == "meta p":
+        #     state.event_loop.create_task(self.play_all())
         # elif key == "n":
         #     # self.next_unread()
         #     state.event_loop.create_task(self.next_unread())
