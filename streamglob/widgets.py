@@ -162,6 +162,30 @@ class IntegerTextFilterWidget(TextFilterWidget):
 
 class BaseDropdown(Observable, panwid.Dropdown):
 
+    auto_complete = True
+
+    KEYMAP = {
+        "dropdown": {
+            "k": "up",
+            "j": "down",
+            "page up": "page up",
+            "page down": "page down",
+            "ctrl up": ("cycle", [1]),
+            "ctrl down": ("cycle", [-1]),
+            "home": "home",
+            "end": "end",
+            "/": "complete prefix",
+            "?": "complete substring",
+        },
+        "dropdown_dialog": {
+            "esc": "cancel",
+            "/": "complete substring",
+            "?": "complete prefix",
+            "ctrl p": ("complete", [], {"step": -1, "no_wrap": True}),
+            "ctrl n": ("complete", [], {"step": 1, "no_wrap": True}),
+        }
+    }
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         urwid.connect_signal(
