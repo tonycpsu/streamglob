@@ -798,8 +798,8 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
                 logger.info(f"updating {f.locator}")
                 with limit(self.limiter):
                     f.update()
-                    f.updated = datetime.now()
-                    commit()
+                    # f.updated = datetime.now()
+                    # commit()
 
     @property
     def feed_filters(self):
