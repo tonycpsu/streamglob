@@ -143,7 +143,12 @@ class InstagramFeed(model.MediaFeed):
         else:
             post_iter = self.profile.get_posts()
 
-        for post in islice(post_iter, limit):
+        # for post in islice(post_iter, limit):
+        count = 0
+        for post in post_iter:
+
+            if count >= limit:
+                break
             try:
                 media_type = self.POST_TYPE_MAP[post.typename]
             except:
@@ -193,6 +198,7 @@ class InstagramFeed(model.MediaFeed):
                         short_code = post.shortcode
                     )
                 )
+                count += 1
                 yield i
 
         if resume or not self.attrs.get("post_iter"):
