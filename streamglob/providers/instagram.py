@@ -52,7 +52,7 @@ class InstagramMediaListing(FeedMediaListing):
     media_type: str = ""
 
 
-class InstagramSession(session.StreamSession):
+class InstagramSession(session.AuthenticatedStreamSession):
 
     MAX_BATCH_COUNT = 50
     DEFAULT_BATCH_COUNT = 10
@@ -71,7 +71,15 @@ class InstagramSession(session.StreamSession):
 
     def login(self):
         # self.loader = Instaloader(sleep=False)
-        self.loader = Instaloader()
+        self.loader = Instaloader(
+            download_pictures=False,
+            download_videos=False,
+            download_video_thumbnails=False,
+            download_geotags=False,
+            download_comments=False,
+        )
+        self.loader.login(self.username, self.password)
+        self.loader.context.raise_all_errors = True
 
     def profile_from_username(self, user_name):
         return Profile.from_username(self.loader.context, user_name)
@@ -210,7 +218,7 @@ class InstagramDataTable(CachedFeedProviderDataTable):
 
     @keymap_command()
     async def fetch_more(self):
-        @db_session
+        @db_session(optimistic=False)
         def fetch():
             feed = self.provider.feed
             if feed is None:
@@ -262,6 +270,10 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
         "video": "vid",
         "carousel": "car"
     }
+
+    @property
+    def session_params(self):
+        return self.config.credentials
     
     @property
     def ATTRIBUTES(self):
