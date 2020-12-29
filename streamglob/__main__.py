@@ -642,8 +642,8 @@ def main():
                         help="verbose logging")
     group.add_argument("-q", "--quiet", action="count", default=0,
                         help="quiet logging")
-    parser.add_argument("spec", metavar="SPECIFIER",
-                        help="media specifier", nargs="?")
+    parser.add_argument("uri", metavar="URI",
+                        help="media URI", nargs="?")
 
     options, args = parser.parse_known_args(args)
 
@@ -682,7 +682,7 @@ def main():
     logging.getLogger("panwid.datatable").setLevel(logging.INFO)
     logging.getLogger("aio_mpv_jsonipc").setLevel(logging.INFO)
 
-    action, provider, selection, opts = providers.parse_spec(options.spec)
+    action, provider, selection, opts = providers.parse_uri(options.uri)
 
     if selection:
         rc = run_cli(action, provider, selection, **opts)

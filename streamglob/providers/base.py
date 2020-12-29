@@ -121,6 +121,9 @@ def with_view(view):
         return type(cls.__name__, (cls,), {'make_view': make_view})
     return inner
 
+
+MEDIA_SPEC_RE=re.compile(r"(?:/([^:]+))?(?::(.*))?")
+
 @with_view(SimpleProviderView)
 class BaseProvider(abc.ABC):
     """
@@ -295,8 +298,61 @@ class BaseProvider(abc.ABC):
         d.update(getattr(self, "FILTERS_OPTIONS", {}))
         return d
 
+    def parse_spec(self, spec):
+
+        (identifier, options) = MEDIA_SPEC_RE.search(spec).groups()
+
+        try:
+            selection, filters, identifier_options = self.parse_identifier(identifier)
+            self.apply_identifier(selection, filters, identifier_options)
+        except SGIncompleteIdentifier:
+            selection, identifier_options = None, {}
+
+        options = AttrDict(identifier_options, **self.parse_options(options))
+        self.apply_options(options)
+        return (selection, options)
+
+
     def parse_identifier(self, identifier):
-        return
+        return (None, identifier, {})
+
+    def apply_identifier(self, selection, filters, options):
+
+        if filters:
+            selected_filters = zip(self.filters.keys(), filters)
+
+            for f, value in selected_filters:
+                if value is None:
+                    continue
+                try:
+                    self.filters[f].selected_label = value
+                except StopIteration:
+                    self.filters[f].value = value
+
+    def parse_options(self, options):
+        if not options:
+            options=""
+
+        d = AttrDict([
+            (list(self.FILTERS_OPTIONS.keys())[n], v)
+            for n, v in enumerate(
+                    [o for o in options.split(",") if "=" not in o]
+            ) if v], **dict(o.split("=") for o in options.split(",") if "=" in o)
+        )
+        return d
+
+    def apply_options(self, options):
+
+        for k, v in options.items():
+            if v is None:
+                continue
+            if k in self.filters:
+                logger.debug(f"option: {k}={v}")
+                try:
+                    self.filters[k].value = v
+                except StopIteration:
+                    raise SGException("invalid value for %s: %s" %(k, v))
+
 
     def new_media_source(self, *args, **kwargs):
         return self.MEDIA_SOURCE_CLASS(
@@ -365,16 +421,6 @@ class BaseProvider(abc.ABC):
             getattr(self, "REQUIRED_CONFIG", []),
             self.config
         )
-
-    def parse_options(self, options):
-        if not options:
-            return AttrDict()
-        return AttrDict([
-            (list(self.FILTERS_OPTIONS.keys())[n], v)
-            for n, v in enumerate(
-                    [o for o in options.split(",") if "=" not in o]
-            )], **dict(o.split("=") for o in options.split(",") if "=" in o)
-    )
 
     def get_source(self, selection, **kwargs):
         source = selection.content

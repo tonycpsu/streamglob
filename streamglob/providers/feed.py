@@ -696,25 +696,35 @@ class FeedProvider(BaseProvider):
         return self.filters.feed.value
 
     def parse_identifier(self, identifier):
-        if identifier:
-            try:
-                self.filters.feed.selected_label = identifier
-            except StopIteration:
-                self.filters.feed.value = identifier
+        return (
+            None,
+            (identifier or self.provider_data.get("selected_feed", None),),
+            {}
+        )
 
-        elif self.provider_data["selected_feed"]:
-            try:
-                self.filters.feed.value = self.provider_data["selected_feed"]
-            except StopIteration:
-                pass
+    #     super().parse_identifier(identifier)
 
-        if self.provider_data["selected_status"]:
-            try:
-                self.filters.status.value = self.provider_data["selected_status"]
-            except StopIteration:
-                pass
+    #     if identifier:
+    #         logger.info(f"identifier: {identifier}")
+    #         try:
+    #             self.filters.feed.selected_label = identifier
+    #         except StopIteration:
+    #             self.filters.feed.value = identifier
 
         raise SGIncompleteIdentifier
+
+    def apply_options(self, options):
+        if "status" not in options:
+            options.status = self.provider_data.get("selected_status", None)
+        super().apply_options(options)
+        # try:
+        #     self.filters.status.value = options.get(
+        #         "status",
+        #         self.provider_data.get("selected_status", None)
+        #     )
+        # except (StopIteration, SGException):
+        #     pass
+
 
 
 class CachedFeedProviderView(SimpleProviderView):
@@ -742,6 +752,10 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         self.filters["status"].connect("changed", self.on_status_change)
         self.game_map = AttrDict()
         self.limiter = get_limiter(rate=self.RATE_LIMIT, capacity=self.BURST_LIMIT)
+
+    def init_config(self):
+        super().init_config()
+
 
     @property
     def ITEM_CLASS(self):
@@ -836,22 +850,22 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         return None
 
     def on_feed_change(self, feed):
-        if not self.is_active:
-            return
         if feed:
             self.provider_data["selected_feed"] = feed.locator
         else:
             self.provider_data["selected_feed"] = None
-
         self.save_provider_data()
         self.view.table.translate_src = getattr(feed, "translate", None)
+
+        if not self.is_active:
+            return
         self.reset()
 
     def on_status_change(self, status, *args):
-        if not self.is_active:
-            return
         self.provider_data["selected_status"] = status
         self.save_provider_data()
+        if not self.is_active:
+            return
         self.reset()
 
     def open_popup(self, text):

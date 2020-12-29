@@ -69,11 +69,11 @@ class LiveStreamProvider(BackgroundTasksMixin, BaseProvider):
         pkg = sys.modules.get(cls.__module__)
         return getattr(pkg, clsname, model.MediaSource)
 
-    def parse_identifier(self, identifier):
-        if identifier:
-            # print(self.view) # FIXME
-            self.filters.channel.selected_label = identifier
-        raise SGIncompleteIdentifier
+    # def parse_identifier(self, identifier):
+    #     if identifier:
+    #         # print(self.view) # FIXME
+    #         self.filters.channel.selected_label = identifier
+    #     raise SGIncompleteIdentifier
 
 
     @property

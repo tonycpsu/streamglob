@@ -2081,7 +2081,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         else:
             raise Exception(team, g.away_team.abbreviation)
 
-        return (g, dict(feed_type=feed_type))
+        return (g, (date,), dict(feed_type=feed_type))
 
     def on_select(self, widget, selection):
         self.open_watch_dialog(selection)

@@ -26,14 +26,17 @@ def get(provider, *args, **kwargs):
     except TypeError:
         raise Exception(provider, PROVIDERS)
 
-MEDIA_SPEC_RE=re.compile(r"(?:(\w+)://)?([^:/]*)(?:/([^:]+))?(?::(.*))?")
+URI_SPEC_RE=re.compile(r"(?:(\w+)://)?([^:/]*)(.*)")
 
-def parse_spec(spec):
+def parse_uri(uri):
 
-    if not spec:
-        spec = DEFAULT_PROVIDER
+    action = "play"
+    options = AttrDict()
 
-    (action, provider, identifier, options) = MEDIA_SPEC_RE.search(spec).groups()
+    if not uri:
+        uri = DEFAULT_PROVIDER
+
+    (action, provider, spec) = URI_SPEC_RE.search(uri).groups()
 
     if not provider:
         provider = DEFAULT_PROVIDER
@@ -43,24 +46,9 @@ def parse_spec(spec):
     if not p:
         raise Exception(f"provider {provider} not found")
 
-    options = p.parse_options(options)
-    for k, v in options.items():
-        if k in p.filters:
-            logger.debug(f"option: {k}={v}")
-            try:
-                p.filters[k].value = v
-            except StopIteration:
-                raise SGException("invalid value for %s: %s" %(k, v))
-
-    try:
-        selection, identifier_opts = p.parse_identifier(identifier)
-        options.update({k: v for k, v in identifier_opts.items() if k not in options})
-        # options.update(identifier_opts)
-    except SGIncompleteIdentifier as e:
-        return (action, p, None, options)
-    if selection and not action:
-        action = "play"
+    selection, options = p.parse_spec(spec)
     return (action, p, selection, options)
+
 
 def load_config():
 
