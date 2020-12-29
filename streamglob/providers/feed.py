@@ -708,6 +708,12 @@ class FeedProvider(BaseProvider):
             except StopIteration:
                 pass
 
+        if self.provider_data["selected_status"]:
+            try:
+                self.filters.status.value = self.provider_data["selected_status"]
+            except StopIteration:
+                pass
+
         raise SGIncompleteIdentifier
 
 
@@ -829,21 +835,23 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
     def feed_filters(self):
         return None
 
-    def on_feed_change(self, *args):
+    def on_feed_change(self, feed):
         if not self.is_active:
             return
-        if self.feed:
-            self.provider_data["selected_feed"] = self.feed.locator
+        if feed:
+            self.provider_data["selected_feed"] = feed.locator
         else:
             self.provider_data["selected_feed"] = None
 
         self.save_provider_data()
-        self.view.table.translate_src = getattr(args[0], "translate", None)
+        self.view.table.translate_src = getattr(feed, "translate", None)
         self.reset()
 
-    def on_status_change(self, *args):
+    def on_status_change(self, status, *args):
         if not self.is_active:
             return
+        self.provider_data["selected_status"] = status
+        self.save_provider_data()
         self.reset()
 
     def open_popup(self, text):
