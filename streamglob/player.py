@@ -599,7 +599,10 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
         await self.ready
         self.source = sources
         for i, s in enumerate(self.source_args):
-            await self.controller.command("loadfile", s, "replace" if i==0 else "append")
+            try:
+                await self.controller.command("loadfile", s, "replace" if i==0 else "append")
+            except ConnectionResetError:
+                logger.warn("player connection reset")
         return self.proc
 
     def key_to_urwid(self, key):
