@@ -299,8 +299,8 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         # FIXME: HACK until there's a better UI for marking parts read
         # partial = False
         if partial:
-            logger.info("mark part read")
             pos = self.inner_focus
+            logger.info(f"mark part read: {pos}, {len(self.inner_table)}")
             item.mark_part_read(pos)
             # row.clear_attr("unread")
             self.inner_table.set_value(pos, "read", True)

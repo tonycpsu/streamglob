@@ -59,18 +59,30 @@ class InstagramMediaListing(FeedMediaListing):
 
 class InstagramSession(session.StreamSession):
 
-    CACPACITY = 100
-    RATE = 10
-    CONSUME = 50
+    DEFAULT_CACPACITY = 100
+    DEFAULT_CONSUME = 50
+    DEFAULT_RATE = 10
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._limiter = limiter.get_limiter(rate=self.RATE, capacity=self.CACPACITY)
+    def __init__(
+            self,
+            provider_id,
+            capacity = DEFAULT_CACPACITY,
+            consume = DEFAULT_CONSUME,
+            rate = DEFAULT_RATE,
+            *args, **kwargs
+    ):
+        super().__init__(provider_id, *args, **kwargs)
+        self.capacity = capacity
+        self.consume = consume
+        self.rate = rate
+        self._limiter = limiter.get_limiter(
+            rate = self.rate, capacity=self.capacity
+        )
 
     @contextmanager
     def limiter(self):
         try:
-            with limiter.limit(self._limiter, consume=self.CONSUME):
+            with limiter.limit(self._limiter, consume = self.consume):
                 yield
         finally:
             pass
@@ -95,15 +107,15 @@ class InstagramFeed(model.MediaFeed):
         return self.attrs.get("end_cursor", None)
 
     @db_session
-    def save_end_cursor(self, end_cursor):
-        self.attrs["end_cursor"] = end_cursor
+    def save_end_cursor(self, timestamp, end_cursor):
+        self.attrs["end_cursor"] = [timestamp, end_cursor]
         commit()
 
     @property
     def looter(self):
         if not hasattr(self, "_looter") or not self._looter or self._looter._username != self.locator[1:]:
             self._looter = ProfileLooter(self.locator[1:])
-            if self.provider.config.credentials:
+            if self.provider.config.credentials and not self._looter.logged_in:
                 self._looter.login(**self.provider.session_params)
         return self._looter
 
@@ -114,15 +126,17 @@ class InstagramFeed(model.MediaFeed):
 
         limit = self.provider.config.get("fetch_limit", self.DEFAULT_FETCH_LIMIT)
 
-        cursor = self.end_cursor if resume else None
-        logger.info(f"cursor: {cursor}")
-        self.pages = self.looter.pages(cursor = cursor)
+        try:
+            (_, end_cursor) = self.end_cursor if resume else None
+        except TypeError:
+            end_cursor = None
+
+        logger.info(f"cursor: {end_cursor}")
+        self.pages = self.looter.pages(cursor = end_cursor)
 
         def get_posts(pages):
             for page in pages:
                 cursor = page["edge_owner_to_timeline_media"]["page_info"]["end_cursor"]
-                print(cursor)
-            #     for media in looter._medias(iter([page])):
                 for media in self.looter._medias(iter([page])):
                     code = media["shortcode"]
                     with self.session.limiter():
@@ -136,10 +150,7 @@ class InstagramFeed(model.MediaFeed):
 
             count += 1
 
-            end_cursor = post.get("edge_media_to_parent_comment", {}).get("page_info", {}).get("end_cursor", end_cursor)
-            if end_cursor and (resume or not self.end_cursor):
-                logger.info("saving end_cursor")
-                self.save_end_cursor(end_cursor)
+            logger.info(f"cursor: {end_cursor}")
 
             logger.debug(f"{count} {new_count} {limit}")
 
@@ -171,20 +182,24 @@ class InstagramFeed(model.MediaFeed):
                 logger.warn(f"unknown post type: {post.__typename}")
                 continue
 
-            i = self.items.select(lambda i: i.guid == post.shortcode).first()
-
-            created = datetime.utcfromtimestamp(
-                post.get(
-                    "date", post.get("taken_at_timestamp")
-                )
+            created_timestamp = post.get(
+                "date", post.get("taken_at_timestamp")
             )
 
+            if end_cursor and (self.end_cursor is None or created_timestamp < self.end_cursor[0]):
+                logger.info(f"saving end_cursor: {created_timestamp}, {self.end_cursor[0] if self.end_cursor else None}")
+                self.save_end_cursor(created_timestamp, end_cursor)
+
+            created = datetime.utcfromtimestamp(created_timestamp)
+
+            i = self.items.select(lambda i: i.guid == post.shortcode).first()
+
             if i:
-                logger.info(f"old: {created}")
+                logger.debug(f"old: {created}")
                 continue
             else:
                 new_seen = True
-                logger.info(f"new: {created}")
+                logger.debug(f"new: {created}")
                 caption = (
                     post["edge_media_to_caption"]["edges"][0]["node"]["text"]
                     if "edge_media_to_caption" in post and post["edge_media_to_caption"]["edges"]
@@ -286,7 +301,10 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
 
     @property
     def session_params(self):
-        return self.config.credentials
+        return dict(
+            self.config.get("credentials", {}),
+            **self.config.get("rate_limit", {})
+        )
     
     @property
     def ATTRIBUTES(self):
