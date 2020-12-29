@@ -29,10 +29,7 @@ setup(name=name,
           "streamglob": ["data/*"]
       },
       install_requires = [
-          # swap with "aio-mpv-jsonipc" when
-          # https://github.com/marios8543/aio-mpv-jsonipc/pull/2 is merged
-          "aio-mpv-jsonipc @ git+https://github.com/tonycpsu/aio-mpv-jsonipc",
-          # "aio-mpv-jsonipc",
+          "aio-mpv-jsonipc",
           "aiohttp-json-rpc",
           "atoma",
           "bitmath",
@@ -50,7 +47,6 @@ setup(name=name,
           "py-dateutil",
           "pymemoize",
           "PyPeri @ git+https://github.com/tonycpsu/PyPeri",
-          "python-mpv-jsonipc",
           "python-twitch-client",
           "pytz",
           "pyyaml",
