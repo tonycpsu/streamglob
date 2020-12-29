@@ -1,5 +1,10 @@
+import logging
+logger = logging.getLogger(__name__)
+
 import warnings
 from itertools import islice
+from datetime import datetime
+from contextlib import contextmanager
 
 from .feed import *
 from ..exceptions import *
@@ -8,12 +13,12 @@ from .. import config
 from .. import model
 from .. import player
 from .. import session
-from .filters import *
+
 
 from orderedattrdict import AttrDict, DefaultAttrDict
-from instaloader import Instaloader, Profile, FrozenNodeIterator
+from instalooter.looters import ProfileLooter
 from pony.orm import *
-from limiter import get_limiter, limit
+import limiter
 import json
 
 @dataclass
@@ -52,38 +57,23 @@ class InstagramMediaListing(FeedMediaListing):
     media_type: str = ""
 
 
-class InstagramSession(session.AuthenticatedStreamSession):
+class InstagramSession(session.StreamSession):
 
-    MAX_BATCH_COUNT = 50
-    DEFAULT_BATCH_COUNT = 10
-
-    RATE = 25
     CACPACITY = 100
+    RATE = 10
     CONSUME = 50
 
     def __init__(self, *args, **kwargs):
-        super().__init__(
-            *args, **kwargs
-        )
-        self.limiter = get_limiter(rate=self.RATE, capacity=self.CACPACITY)
-        self.loader = None
-        self.login()
+        super().__init__(*args, **kwargs)
+        self._limiter = limiter.get_limiter(rate=self.RATE, capacity=self.CACPACITY)
 
-    def login(self):
-        # self.loader = Instaloader(sleep=False)
-        self.loader = Instaloader(
-            download_pictures=False,
-            download_videos=False,
-            download_video_thumbnails=False,
-            download_geotags=False,
-            download_comments=False,
-        )
-        self.loader.login(self.username, self.password)
-        self.loader.context.raise_all_errors = True
-
-    def profile_from_username(self, user_name):
-        return Profile.from_username(self.loader.context, user_name)
-
+    @contextmanager
+    def limiter(self):
+        try:
+            with limiter.limit(self._limiter, consume=self.CONSUME):
+                yield
+        finally:
+            pass
 
 class InstagramItem(model.MediaItem):
 
@@ -100,64 +90,70 @@ class InstagramFeed(model.MediaFeed):
     }
 
     @property
-    def profile(self):
-
-        if self.locator.startswith("@"):
-            user_name = self.locator[1:]
-        else:
-            logger.error(self.locator)
-            raise NotImplementedError
-
-        return self.session.profile_from_username(user_name)
-
-    @property
     @db_session
-    def end_post_iter(self):
-        it = self.profile.get_posts()
-        try:
-            frozen = json.loads(self.attrs.get("post_iter", None))
-            it.thaw(FrozenNodeIterator(**frozen))
-        except:
-            pass
-        return it
+    def end_cursor(self):
+        return self.attrs.get("end_cursor", None)
 
     @db_session
-    def freeze_post_iter(self, post_iter):
-        self.attrs["post_iter"] = json.dumps(post_iter.freeze()._asdict())
+    def save_end_cursor(self, end_cursor):
+        self.attrs["end_cursor"] = end_cursor
         commit()
 
-    def fetch(self, resume=False):
+    @property
+    def looter(self):
+        if not hasattr(self, "_looter") or not self._looter or self._looter._username != self.locator[1:]:
+            self._looter = ProfileLooter(self.locator[1:])
+            if self.provider.config.credentials:
+                self._looter.login(**self.provider.session_params)
+        return self._looter
 
-        # if self.locator.startswith("@"):
-        #     user_name = self.locator[1:]
-        # else:
-        #     logger.error(self.locator)
-        #     raise NotImplementedError
+
+    def fetch(self, resume=False):
 
         logger.info(f"fetching {self.locator}")
 
         limit = self.provider.config.get("fetch_limit", self.DEFAULT_FETCH_LIMIT)
 
-        if resume:
-            post_iter = self.end_post_iter
-        else:
-            post_iter = self.profile.get_posts()
+        cursor = self.end_cursor if resume else None
+        logger.info(f"cursor: {cursor}")
+        self.pages = self.looter.pages(cursor = cursor)
 
-        # for post in islice(post_iter, limit):
+        def get_posts(pages):
+            for page in pages:
+                cursor = page["edge_owner_to_timeline_media"]["page_info"]["end_cursor"]
+                print(cursor)
+            #     for media in looter._medias(iter([page])):
+                for media in self.looter._medias(iter([page])):
+                    code = media["shortcode"]
+                    with self.session.limiter():
+                        post = self.looter.get_post_info(code)
+                        yield (cursor, AttrDict(post))
+
         count = 0
-        for post in post_iter:
+        new_count = 0
 
-            if count >= limit:
+        for end_cursor, post in get_posts(self.pages):
+
+            count += 1
+
+            end_cursor = post.get("edge_media_to_parent_comment", {}).get("page_info", {}).get("end_cursor", end_cursor)
+            if end_cursor and (resume or not self.end_cursor):
+                logger.info("saving end_cursor")
+                self.save_end_cursor(end_cursor)
+
+            logger.debug(f"{count} {new_count} {limit}")
+
+            if new_count >= limit or new_count == 0 and count >= limit:
                 break
             try:
-                media_type = self.POST_TYPE_MAP[post.typename]
+                media_type = self.POST_TYPE_MAP[post["__typename"]]
             except:
-                logger.warn("unknown post type: {post.typeame}")
+                logger.warn(f"unknown post type: {post.__typename}")
                 continue
 
             if media_type == "image":
                 content = self.provider.new_media_source(
-                    post.url, media_type = media_type
+                    post.display_url, media_type = media_type
                 )
             elif media_type == "video":
                 content = self.provider.new_media_source(
@@ -166,27 +162,42 @@ class InstagramFeed(model.MediaFeed):
             elif media_type == "carousel":
                 content = [
                     self.provider.new_media_source(
-                        s.video_url or s.display_url,
+                        s.video_url if s.is_video else s.display_url,
                         media_type = "video" if s.is_video else "image"
                     )
-                    for s in post.get_sidecar_nodes()
+                    for s in [AttrDict(e['node']) for e in post['edge_sidecar_to_children']['edges']]
                 ]
             else:
-                logger.warn("unknown post type: {post.typeame}")
+                logger.warn(f"unknown post type: {post.__typename}")
                 continue
 
             i = self.items.select(lambda i: i.guid == post.shortcode).first()
-            # if not i:
+
+            created = datetime.utcfromtimestamp(
+                post.get(
+                    "date", post.get("taken_at_timestamp")
+                )
+            )
+
             if i:
+                logger.info(f"old: {created}")
                 continue
             else:
-                logger.info(f"new: {post.date_utc}")
                 new_seen = True
+                logger.info(f"new: {created}")
+                caption = (
+                    post["edge_media_to_caption"]["edges"][0]["node"]["text"]
+                    if "edge_media_to_caption" in post and post["edge_media_to_caption"]["edges"]
+                    else  post["caption"]
+                    if "caption" in post
+                    else None
+                )
+
                 i = self.ITEM_CLASS(
                     feed = self,
                     guid = post.shortcode,
-                    title = (post.caption or "(no caption)").replace("\n", " "),
-                    created = post.date_utc,
+                    title = (caption or "(no caption)").replace("\n", " "),
+                    created = created,
                     media_type = media_type,
                     content =  InstagramMediaSource.schema().dumps(
                         content
@@ -198,12 +209,8 @@ class InstagramFeed(model.MediaFeed):
                         short_code = post.shortcode
                     )
                 )
-                count += 1
+                new_count += 1
                 yield i
-
-        if resume or not self.attrs.get("post_iter"):
-            logger.info("saving post_iter")
-            self.freeze_post_iter(post_iter)
 
     @db_session
     def reset(self):

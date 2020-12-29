@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 from datetime import datetime
 from dataclasses import *
 import tempfile
@@ -209,7 +212,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         )
         # HACK to work around https://github.com/mpv-player/mpv/issues/7247
         #
-        await asyncio.sleep(0.5)
+        # await asyncio.sleep(0.5)
         geom = await self.player.controller.command(
             "get_property", "geometry"
         )
@@ -721,7 +724,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
 
     TASKS = [
         # ("update", UPDATE_INTERVAL, [], {"force": True})
-        ("update", UPDATE_INTERVAL, [])
+        ("update", UPDATE_INTERVAL)
     ]
 
     def __init__(self, *args, **kwargs):
@@ -888,6 +891,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
 
     def on_activate(self):
         super().on_activate()
+        self.refresh()
 
     def on_deactivate(self):
         if self.view.table.player:

@@ -508,6 +508,7 @@ class BackgroundTasksMixin(object):
         self._tasks = defaultdict(lambda: None)
 
     def run_in_background(self, fn, interval=DEFAULT_INTERVAL,
+                          instant=False,
                           *args, **kwargs):
 
         logger.info(f"run_in_background {fn.__name__} {interval}")
@@ -522,12 +523,14 @@ class BackgroundTasksMixin(object):
 
                 # logger.info(fn)
                 # await fn(*args, **kwargs)
-                state.event_loop.create_task(fn(*args, **kwargs))
+                logger.error(instant)
+                if instant:
+                    state.event_loop.create_task(fn(*args, **kwargs))
+                logger.debug(f"sleeping for {interval}")
+                await asyncio.sleep(interval)
                 # state.event_loop.run_in_executor(None, lambda: fn(*args, **kwargs))
 
                 # state.loop.event_loop.enter_idle(lambda: fn(*args, **kwargs))
-                logger.debug(f"sleeping for {interval}")
-                await asyncio.sleep(interval)
 
         self._tasks[fn.__name__] = state.event_loop.create_task(run())
 
