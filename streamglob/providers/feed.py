@@ -207,16 +207,18 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             return None
 
     async def set_playlist_pos(self, pos):
-        await self.player.controller.command(
+        if not self.player:
+            return
+        await self.player.command(
             "set_property", "playlist-pos", pos
         )
         # HACK to work around https://github.com/mpv-player/mpv/issues/7247
         #
         # await asyncio.sleep(0.5)
-        geom = await self.player.controller.command(
+        geom = await self.player.command(
             "get_property", "geometry"
         )
-        await self.player.controller.command(
+        await self.player.command(
             "set_property", "geometry", geom
         )
 
@@ -546,7 +548,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                     try:
                         key_func = getattr(self, command)
                     except (TypeError, AttributeError):
-                        key_func = asyncio.coroutine(functools.partial(self.player.controller.command, *command))
+                        key_func = asyncio.coroutine(functools.partial(self.player.command, *command))
                     logger.info(f"command: {command}, key_func: {key_func}")
                     if asyncio.iscoroutinefunction(key_func):
                         logger.info("coro")
@@ -574,7 +576,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
         if self.player:
             # index = self.player.controller.playlist_pos
-            index = await self.player.controller.command(
+            index = await self.player.command(
                     "get_property", "playlist-pos"
             )
             row_num = self.playlist_pos_to_row(index)
@@ -583,7 +585,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
         listing = self[row_num].data
         # logger.debug(listing)
-        url = await self.player.controller.command(
+        url = await self.player.command(
             "get_property", f"playlist/{index}/filename"
         )
         source = next(
@@ -607,7 +609,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         self.reset()
 
     def player_command(self, *command):
-        state.event_loop.create_task(self.player.controller.command(*command))
+        state.event_loop.create_task(self.player.command(*command))
 
     def keypress(self, size, key):
 
@@ -642,7 +644,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         elif key in self.KEYMAP.get("any", {}) and isinstance(self.KEYMAP.get("any", {})[key], list):
             command = self.KEYMAP["any"][key]
             state.event_loop.create_task(
-                self.player.controller.command(*command)
+                self.player.command(*command)
             )
         else:
             return super().keypress(size, key)

@@ -246,8 +246,6 @@ class Program(object):
     @classmethod
     def from_config(cls, cfg):
         klass = cls.SUBCLASSES.get(cfg.name, cls)
-        # return klass(cfg.name, cfg.command, cfg.get("args", []))
-        # return klass(*kargs, **kwargs)
         return klass(**cfg)
 
     @classmethod
@@ -346,7 +344,7 @@ class Program(object):
         ]
 
     @property
-    def command(self):
+    def executable_path(self):
         return [self.path] + self.expanded_args
 
     @property
@@ -416,7 +414,7 @@ class Program(object):
             self.source = [self.source]
 
         cmd = (
-            self.command
+            self.executable_path
             + self.extra_args_pre
             + self.source_args
             + self.extra_args_post
@@ -590,6 +588,14 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
         return rc
         # state.event_loop.call_later(5, self.test)
 
+    async def command(self, *args, **kwargs):
+        try:
+            return await self.controller.command(*args, **kwargs)
+        except ConnectionResetError:
+            logger.warn("player connection reset")
+        except BrokenPipeError:
+            logger.warn("player broken pipe")
+
     async def wait_for_socket(self):
 
         while not os.path.exists(self.ipc_socket_name):
@@ -599,10 +605,7 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
         await self.ready
         self.source = sources
         for i, s in enumerate(self.source_args):
-            try:
-                await self.controller.command("loadfile", s, "replace" if i==0 else "append")
-            except ConnectionResetError:
-                logger.warn("player connection reset")
+            await self.command("loadfile", s, "replace" if i==0 else "append")
         return self.proc
 
     def key_to_urwid(self, key):
@@ -769,7 +772,7 @@ class StreamlinkDownloader(Downloader):
         return False
 
     def integrate_player(self, dst):
-        self.extra_args_pre += ["--player"] + [" ".join(dst.command + dst.extra_args_pre)]
+        self.extra_args_pre += ["--player"] + [" ".join(dst.executable_command + dst.extra_args_pre)]
 
     def process_args(self, task, outfile, **kwargs):
         self.extra_args_post += ["-o", outfile]
