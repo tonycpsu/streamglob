@@ -2,6 +2,7 @@ import logging
 # logger = logging.getLogger(__name__)
 import sys
 import os
+import traceback
 from datetime import datetime, timedelta
 from collections import namedtuple
 import argparse
@@ -600,9 +601,10 @@ def run_cli(action, provider, selection, **kwargs):
             progress=False,
             stdout=sys.stdout, stderr=sys.stderr, **kwargs
         )
-        res = state.event_loop.run_until_complete(task.result)
-        if isinstance(task.result.result(), Exception):
-            logger.exception(task.result.result())
+        loop_result = state.event_loop.run_until_complete(task.result)
+        result = task.result.result()
+        if isinstance(result, Exception):
+            logger.exception(traceback.print_exception(type(result), result, result.__traceback__))
         if task.proc.done():
             proc = task.proc.result()
         else:
