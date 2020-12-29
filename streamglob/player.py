@@ -337,9 +337,10 @@ class Program(object):
 
     @property
     def expanded_args(self):
+        source = self.source[0] if isinstance(self.source, list) else self.source
         return [
             # FIXME: only works for single source
-            a.format(source=self.source[0], listing=self.listing)
+            a.format(source=source, listing=self.listing)
             for a in self.args
         ]
 
@@ -439,7 +440,8 @@ class Program(object):
             self.stdin = read
             self.stdout = subprocess.PIPE
 
-        logger.info(f"full cmd: {' '.join(self.full_command)}")
+        else:
+            logger.info(f"full cmd: {' '.join(self.full_command)}")
 
         if not self.source_integrated:
 
@@ -556,7 +558,7 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
     }
 
     def __init__(self, *args, **kwargs):
-        # self._initialized = False
+        self._initialized = False
         self.ready = asyncio.Future()
         super().__init__(*args, **kwargs)
         self.ipc_socket_name = None
@@ -772,7 +774,7 @@ class StreamlinkDownloader(Downloader):
         return False
 
     def integrate_player(self, dst):
-        self.extra_args_pre += ["--player"] + [" ".join(dst.executable_command + dst.extra_args_pre)]
+        self.extra_args_pre += ["--player"] + [" ".join(dst.executable_path + dst.extra_args_pre)]
 
     def process_args(self, task, outfile, **kwargs):
         self.extra_args_post += ["-o", outfile]
