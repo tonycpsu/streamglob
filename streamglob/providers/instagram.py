@@ -1,6 +1,10 @@
+import logging
+logger = logging.getLogger(__name__)
+
 import warnings
 from itertools import islice
 from datetime import datetime
+from contextlib import contextmanager
 
 from .feed import *
 from ..exceptions import *
@@ -14,7 +18,7 @@ from .. import session
 from orderedattrdict import AttrDict, DefaultAttrDict
 from instalooter.looters import ProfileLooter
 from pony.orm import *
-from limiter import get_limiter, limit
+import limiter
 import json
 
 @dataclass
@@ -54,8 +58,22 @@ class InstagramMediaListing(FeedMediaListing):
 
 
 class InstagramSession(session.StreamSession):
-    pass
 
+    CACPACITY = 100
+    RATE = 10
+    CONSUME = 50
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._limiter = limiter.get_limiter(rate=self.RATE, capacity=self.CACPACITY)
+
+    @contextmanager
+    def limiter(self):
+        try:
+            with limiter.limit(self._limiter, consume=self.CONSUME):
+                yield
+        finally:
+            pass
 
 class InstagramItem(model.MediaItem):
 
@@ -85,6 +103,8 @@ class InstagramFeed(model.MediaFeed):
     def looter(self):
         if not hasattr(self, "_looter") or not self._looter or self._looter._username != self.locator[1:]:
             self._looter = ProfileLooter(self.locator[1:])
+            if self.provider.config.credentials:
+                self._looter.login(**self.provider.session_params)
         return self._looter
 
 
@@ -94,7 +114,9 @@ class InstagramFeed(model.MediaFeed):
 
         limit = self.provider.config.get("fetch_limit", self.DEFAULT_FETCH_LIMIT)
 
-        self.pages = self.looter.pages(cursor = self.end_cursor if resume else None)
+        cursor = self.end_cursor if resume else None
+        logger.info(f"cursor: {cursor}")
+        self.pages = self.looter.pages(cursor = cursor)
 
         def get_posts(pages):
             for page in pages:
@@ -103,14 +125,25 @@ class InstagramFeed(model.MediaFeed):
             #     for media in looter._medias(iter([page])):
                 for media in self.looter._medias(iter([page])):
                     code = media["shortcode"]
-                    post = self.looter.get_post_info(code)
-                    yield (cursor, AttrDict(post))
+                    with self.session.limiter():
+                        post = self.looter.get_post_info(code)
+                        yield (cursor, AttrDict(post))
 
         count = 0
+        new_count = 0
+
         for end_cursor, post in get_posts(self.pages):
 
+            count += 1
+
             end_cursor = post.get("edge_media_to_parent_comment", {}).get("page_info", {}).get("end_cursor", end_cursor)
-            if count >= limit:
+            if end_cursor and (resume or not self.end_cursor):
+                logger.info("saving end_cursor")
+                self.save_end_cursor(end_cursor)
+
+            logger.debug(f"{count} {new_count} {limit}")
+
+            if new_count >= limit or new_count == 0 and count >= limit:
                 break
             try:
                 media_type = self.POST_TYPE_MAP[post["__typename"]]
@@ -140,15 +173,17 @@ class InstagramFeed(model.MediaFeed):
 
             i = self.items.select(lambda i: i.guid == post.shortcode).first()
 
+            created = datetime.utcfromtimestamp(
+                post.get(
+                    "date", post.get("taken_at_timestamp")
+                )
+            )
+
             if i:
+                logger.info(f"old: {created}")
                 continue
             else:
                 new_seen = True
-                created = datetime.utcfromtimestamp(
-                    post.get(
-                        "date", post.get("taken_at_timestamp")
-                    )
-                )
                 logger.info(f"new: {created}")
                 caption = (
                     post["edge_media_to_caption"]["edges"][0]["node"]["text"]
@@ -157,7 +192,6 @@ class InstagramFeed(model.MediaFeed):
                     if "caption" in post
                     else None
                 )
-
 
                 i = self.ITEM_CLASS(
                     feed = self,
@@ -175,12 +209,8 @@ class InstagramFeed(model.MediaFeed):
                         short_code = post.shortcode
                     )
                 )
-                count += 1
+                new_count += 1
                 yield i
-
-        if resume or not self.end_cursor:
-            logger.info("saving end_cursor")
-            self.save_end_cursor(end_cursor)
 
     @db_session
     def reset(self):
