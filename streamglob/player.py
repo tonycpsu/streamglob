@@ -593,6 +593,8 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
     async def command(self, *args, **kwargs):
         try:
             return await self.controller.command(*args, **kwargs)
+        except AttributeError:
+            pass
         except ConnectionResetError:
             logger.warn("player connection reset")
         except BrokenPipeError:
