@@ -5,6 +5,18 @@ import urwid
 import panwid
 from orderedattrdict import AttrDict, DefaultAttrDict
 
+from .state import *
+
+class StreamglobView(panwid.BaseView):
+
+    def quit_app(self):
+
+        state.browser_view.provider.deactivate()
+        state.event_loop.create_task(state.task_manager.stop())
+        state.task_manager_task.cancel()
+        raise urwid.ExitMainLoop()
+
+
 class SquareButton(urwid.Button):
 
     button_left = urwid.Text("[")

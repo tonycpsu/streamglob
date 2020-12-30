@@ -600,6 +600,9 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
         except BrokenPipeError:
             logger.warn("player broken pipe")
 
+    async def quit(self):
+        await self.command("quit")
+
     async def wait_for_socket(self):
 
         while not os.path.exists(self.ipc_socket_name):

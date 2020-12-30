@@ -69,14 +69,6 @@ class UrwidLoggingHandler(logging.Handler):
             os.write(self.pipe, msg.encode("utf-8"))
 
 
-def quit_app():
-
-    state.browser_view.provider.deactivate()
-    state.event_loop.create_task(state.task_manager.stop())
-    state.task_manager_task.cancel()
-    raise urwid.ExitMainLoop()
-
-
 class BaseTabView(TabView):
 
     CHANGE_TAB_KEYS = "!@#$%^&*()"
@@ -180,7 +172,7 @@ class MainToolbar(urwid.WidgetWrap):
         return (self.provider_dropdown.selected_label)
 
 
-class BrowserView(BaseView):
+class BrowserView(StreamglobView):
 
     def __init__(self, provider):
 
@@ -400,7 +392,7 @@ class CompletedDownloadsDataTable(TasksDataTable):
     def query(self, *args, **kwargs):
         return [ t for t in state.task_manager.done ]
 
-class TasksView(BaseView):
+class TasksView(StreamglobView):
 
     def __init__(self):
 
@@ -533,7 +525,7 @@ def run_gui(action, provider, **kwargs):
 
     def global_input(key):
         if key in ('q', 'Q'):
-            quit_app()
+            state.browser_view.quit_app()
         elif key == "meta C":
             reload_config()
         else:

@@ -133,7 +133,8 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             "p": "prev_unread",
             "meta f": "fetch_more",
             "meta p": "play_all",
-            "f": ["cycle", "fullscreen"]
+            "f": ["cycle", "fullscreen"],
+            "q": "quit_app"
         }
     }
 
@@ -606,6 +607,12 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             self.player.quit()
         except BrokenPipeError:
             pass
+
+
+    # FIXME: move to base view
+    @keymap_command
+    def quit_app(self):
+        self.view.quit_app()
 
     @db_session
     def kill_all(self):
