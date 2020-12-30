@@ -50,9 +50,10 @@ class ProviderDataTable(BaseDataTable):
 
     signals = ["cycle_filter"]
 
-    def __init__(self, provider, *args, **kwargs):
+    def __init__(self, provider, view, *args, **kwargs):
 
         self.provider = provider
+        self.view = view
         self.columns = [ panwid.DataTableColumn(k, **v if v else {})
                          for k, v in self.provider.ATTRIBUTES.items() ]
         self.translate = False

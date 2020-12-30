@@ -477,7 +477,7 @@ class BAMDetailBox(Observable, urwid.WidgetWrap):
 
                 def open_body_popup(b):
 
-                    self.provider.view.open_popup(
+                    self.view.open_popup(
                         BAMArticleBody(body_markup),
                         width=("relative", 80),
                         height=("relative", 80),

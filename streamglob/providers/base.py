@@ -21,7 +21,7 @@ from .. import model
 from .. import config
 from  ..utils import *
 
-class BaseProviderView(BaseView):
+class BaseProviderView(StreamglobView):
 
     def update(self):
         pass
@@ -53,7 +53,7 @@ class SimpleProviderView(BaseProviderView):
     def __init__(self, provider):
         self.provider = provider
         self.toolbar = FilterToolbar(self.provider.filters)
-        self.table = self.PROVIDER_DATA_TABLE_CLASS(self.provider)
+        self.table = self.PROVIDER_DATA_TABLE_CLASS(self.provider, self)
         # urwid.connect_signal(self.toolbar, "filter_change", self.filter_change)
         urwid.connect_signal(self.table, "select", self.provider.on_select)
         urwid.connect_signal(self.table, "cycle_filter", self.cycle_filter)
