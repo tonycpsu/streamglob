@@ -244,27 +244,6 @@ class InstagramDataTable(CachedFeedProviderDataTable):
             self.on_end
         )
 
-    @keymap_command()
-    async def fetch_more(self):
-        @db_session(optimistic=False)
-        def fetch():
-            feed = self.provider.feed
-            if feed is None:
-                return
-            # try:
-            #     cursor = feed.items.select().order_by(
-            #         self.provider.ITEM_CLASS.created
-            #     ).first().attrs.get("cursor")
-            # except AttributeError:
-            #     cursor = None
-
-            logger.info("fetching more")
-            # self.provider.open_popup("Fetching more posts...")
-            feed.update(resume=True)
-            self.provider.reset()
-            self.provider.close_popup()
-
-        update_task = state.event_loop.run_in_executor(None, fetch)
 
     @db_session
     def on_end(self, source, count):

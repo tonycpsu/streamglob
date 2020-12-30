@@ -462,18 +462,25 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     @keymap_command("reset")
     def reset(self, *args, **kwargs):
         logger.info("datatable reset")
-        super().reset()
         state.foo = state.event_loop.create_task(self.play_all())
+        super().reset()
 
     def refresh(self, *args, **kwargs):
         logger.info("datatable refresh")
         super().refresh(*args, **kwargs)
 
 
-    # Feed providers that can fetch older items can implement this
     @keymap_command()
     async def fetch_more(self):
-        pass
+        fetch_task = state.event_loop.run_in_executor(None, self.fetch)
+
+
+    @db_session(optimistic=False)
+    def fetch(self):
+        self.provider.feed.update(resume=True)
+        self.refresh()
+        asyncio.run(self.play_all())
+
 
     @keymap_command()
     async def play_all(self):
@@ -889,24 +896,19 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         logger.info(f"update: {force}")
         self.refresh()
         self.create_feeds()
-        # state.loop.draw_screen()
         def update_feeds():
             self.open_popup("Updating feeds...")
             self.update_feeds(force=force)
             self.close_popup()
             self.reset()
         update_task = state.event_loop.run_in_executor(None, update_feeds)
-        # logger.info("-update bar")
-        # state.loop.draw_screen()
-        logger.info("-update")
-        # state.loop.draw_screen()
 
     def refresh(self):
-        logger.info("+refresh")
+        logger.info("+feed provider refresh")
         self.update_query()
         self.view.table.refresh()
         # state.loop.draw_screen()
-        logger.info("-refresh")
+        logger.info("-feed provider refresh")
 
     def reset(self):
         logger.info("provider reset")

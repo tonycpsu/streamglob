@@ -560,7 +560,7 @@ class BackgroundTasksMixin(object):
         logger.info(f"run_in_background {fn.__name__} {interval}")
         async def run():
             while True:
-                logger.info(f"running {fn.__name__} {args} {kwargs}")
+                logger.info(f"running task {fn.__name__} {args} {kwargs}")
                 # self._tasks[fn.__name__] = None
                 # fn(*args, **kwargs)
                 # await state.event_loop.run_in_executor(
@@ -569,7 +569,6 @@ class BackgroundTasksMixin(object):
 
                 # logger.info(fn)
                 # await fn(*args, **kwargs)
-                logger.error(instant)
                 if instant:
                     state.event_loop.create_task(fn(*args, **kwargs))
                 logger.debug(f"sleeping for {interval}")
