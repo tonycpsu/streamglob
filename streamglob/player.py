@@ -936,7 +936,7 @@ def play_test():
         ]
     )
 
-    result = state.event_loop.run_until_complete(
+    result = asyncio.run(
         state.task_manager.play(
             task,
             with_progress=False,
@@ -964,7 +964,7 @@ def download_test():
     )
 
 
-    result = state.event_loop.run_until_complete(
+    result = asyncio.run(
         state.task_manager.download(
             task,
             downloader_spec = lambda d: d.is_simple,
@@ -978,15 +978,15 @@ def postprocessor_test():
 
     # p = next(Postprocessor.get("test"))
 
-    # proc = state.event_loop.run_until_complete(
+    # proc = asyncio.run(
     #     p.process(
     #         "foo.svg"
     #     )
     # )
-    # state.event_loop.run_until_complete(proc.wait())
+    # asyncio.run(proc.wait())
 
-    proc = state.event_loop.run_until_complete(Postprocessor.process("test", "foo.svg"))
-    state.event_loop.run_until_complete(proc.wait())
+    proc = asyncio.run(Postprocessor.process("test", "foo.svg"))
+    asyncio.run(proc.wait())
 
 
 

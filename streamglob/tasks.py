@@ -96,7 +96,7 @@ class TaskManager(Observable):
     async def join(self):
         async with self.started:
             await self.started.wait()
-            state.event_loop.run_until_complete(
+            asyncio.run(
                 self.worker_task,
                 self.poller_task
             )

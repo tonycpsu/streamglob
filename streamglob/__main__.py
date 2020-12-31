@@ -593,7 +593,7 @@ def run_cli(action, provider, selection, **kwargs):
             progress=False,
             stdout=sys.stdout, stderr=sys.stderr, **kwargs
         )
-        loop_result = state.event_loop.run_until_complete(task.result)
+        loop_result = asyncio.run(task.result)
         result = task.result.result()
         if isinstance(result, Exception):
             logger.exception(traceback.print_exception(type(result), result, result.__traceback__))
