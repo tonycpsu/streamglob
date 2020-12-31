@@ -95,7 +95,7 @@ class BaseDataClass:
 @dataclass
 class MediaListing(BaseDataClass):
 
-    provider_id: str
+    provider_id: typing.Optional[str] = None
     _attrs: AttrDict = field(default_factory=AttrDict)
 
     # def __init__(self, provider_id, *args, **kwargs):
@@ -131,16 +131,19 @@ class MediaSource(BaseDataClass):
 
     TEMPLATE_RE=re.compile("\{((?!(index|num|listing|feed))[^}]+)\}")
 
-    # listing: MediaListing
-    # locator: str
-    # provider: typing.Any = None
-    provider_id: str
+    provider_id: str = ""
     url: typing.Optional[str] = None # Pony also uses Optional
     media_type: typing.Optional[str] = None
 
     @property
     def provider(self):
         return providers.get(self.provider_id)
+
+    def is_inflated(self):
+        return True
+
+    def inflate(self):
+        pass
 
     @property
     def helper(self):
@@ -219,6 +222,26 @@ class MediaSource(BaseDataClass):
 
     def __str__(self):
         return self.locator
+
+
+@dataclass_json
+@dataclass
+class InflatableMediaSource(MediaSource):
+
+    preview_url: typing.Optional[str] = None
+
+    @property
+    def preview_locator(self):
+        return self.preview_url
+
+    @property
+    def is_inflated(self):
+        return self.locator is not None
+
+    @abc.abstractmethod
+    def inflate(self):
+        pass
+
 
 @dataclass
 class MediaTask(BaseDataClass):

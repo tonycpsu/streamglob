@@ -493,15 +493,15 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
         items = [
             AttrDict(
-                media_item_id=row.data.media_item_id,
-                title=utils.sanitize_filename(row.data.title),
-                created=row.data.created,
-                feed=row.data.feed.name,
-                locator=row.data.feed.locator,
-                num=num+1,
-                row_num=row_num,
-                count=len(row.data.content),
-                url=source.url
+                media_item_id = row.data.media_item_id,
+                title = utils.sanitize_filename(row.data.title),
+                created = row.data.created,
+                feed = row.data.feed.name,
+                locator = row.data.feed.locator,
+                num = num+1,
+                row_num = row_num,
+                count = len(row.data.content),
+                url = source.locator or source.preview_locator
             )
             for (row_num, row, num, source) in [
                     (row_num, row, num, source) for row_num, row in enumerate(self)
@@ -596,10 +596,10 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         url = await self.player.command(
             "get_property", f"playlist/{index}/filename"
         )
-        source = next(
-            s for s in listing.content
-            if s.locator == url
-        )
+        # source = next(
+        #     s for s in listing.content
+        #     if s.locator == url
+        # )
         self.provider.download(listing, index = self.inner_focus or 0)
 
     def quit_player(self):

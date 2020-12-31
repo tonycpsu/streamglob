@@ -490,10 +490,14 @@ class BaseProvider(abc.ABC):
 
         if "num" not in kwargs:
             kwargs["num"] = len(sources)
-        for i, s in enumerate(sources):
+        for i, source in enumerate(sources):
 
             if index is not None and index != i:
                 continue
+
+            if not source.is_inflated:
+                source.inflate()
+
             try:
                 filename = s.download_filename(selection, index=index, **kwargs)
             except SGInvalidFilenameTemplate as e:
@@ -502,7 +506,7 @@ class BaseProvider(abc.ABC):
             task = model.DownloadMediaTask(
                 provider=self.NAME,
                 title=selection.title,
-                sources = [s],
+                sources = [source],
                 listing = selection,
                 dest=filename,
                 postprocessors = (self.config.get("postprocessors", []) or []).copy()
