@@ -371,21 +371,21 @@ class MediaFeed(MediaChannel):
     def fetch(self):
         pass
 
-    @db_session
-    def update(self, *args, **kwargs):
-        for item in self.fetch(*args, **kwargs):
-            listing = self.provider.new_listing(
-                # feed = f.to_dict(),
-                **item.to_dict(
-                    exclude=["media_item_id", "feed", "classtype"],
-                    related_objects=True
+    async def update(self, *args, **kwargs):
+        with db_session:
+            for item in self.fetch(*args, **kwargs):
+                listing = self.provider.new_listing(
+                    # feed = f.to_dict(),
+                    **item.to_dict(
+                        exclude=["media_item_id", "feed", "classtype"],
+                        related_objects=True
+                    )
                 )
-            )
-            listing.content = self.provider.MEDIA_SOURCE_CLASS.schema().loads(listing["content"], many=True)
+                listing.content = self.provider.MEDIA_SOURCE_CLASS.schema().loads(listing["content"], many=True)
 
-            self.provider.on_new_listing(listing)
-            self.updated = datetime.now()
-            commit()
+                self.provider.on_new_listing(listing)
+                self.updated = datetime.now()
+                commit()
 
     @db_session
     def mark_all_items_read(self):

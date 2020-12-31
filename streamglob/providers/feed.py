@@ -131,7 +131,9 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             "ctrl d": "download",
             "n": "next_unread",
             "p": "prev_unread",
-            "meta f": "fetch_more",
+            "meta r": ("update", [], {"force": True}),
+            "meta f": ("update", [], {"force": True, "resume": True}),
+            # "meta f": "fetch_more",
             "meta p": "play_all",
             "f": ["cycle", "fullscreen"],
             "q": "quit_app"
@@ -253,7 +255,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 return
             
             if self.pending_event_task:
-                logger.warn("canceling  task")
+                logger.warn("canceling task")
                 self.pending_event_task.cancel()
                 delay = 1
             else:
@@ -473,15 +475,27 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     @keymap_command()
     async def fetch_more(self):
-        fetch_task = state.event_loop.run_in_executor(None, self.fetch)
+        await self.update(resume=True)
+        # fetch_task = state.event_loop.run_in_executor(None, self.fetch)
+
+    @keymap_command()
+    async def update(self, force=False, resume=False):
+        await self.provider.update(force=force, resume=resume)
 
 
-    @db_session(optimistic=False)
-    def fetch(self):
-        self.provider.feed.update(resume=True)
-        self.refresh()
-        asyncio.run(self.play_all())
-
+    # @db_session(optimistic=False)
+    # async def fetch(self):
+    #     # self.provider.feed.update(resume=True)
+    #     async def fetch_async():
+    #         logger.debug("foo")
+    #         await self.provider.update(resume=True)
+    #         logger.debug("bar")
+    #         # self.refresh()
+    #         # logger.debug("baz")
+    #         # await self.play_all()
+    #         # logger.debug("qux")
+    #     asyncio.run(fetch_async())
+    #     # asyncio.run(self.play_all())
 
     @keymap_command()
     async def play_all(self):
@@ -577,6 +591,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             self.player_task.result.add_done_callback(on_player_done)
             # logger.info(urls)
 
+
     async def download(self):
 
         # we could probably rely on focus position here, but let's be safe and
@@ -604,7 +619,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     def quit_player(self):
         try:
-            self.player.quit()
+            asyncio.run(self.player.quit())
         except BrokenPipeError:
             pass
 
@@ -627,8 +642,8 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     def keypress(self, size, key):
 
-        if key == "meta r":
-            state.event_loop.create_task(self.provider.update(force=True))
+        # if key == "meta r":
+        #     state.event_loop.create_task(self.provider.update(force=True))
         # elif key == "meta p":
         #     state.event_loop.create_task(self.play_all())
         # elif key == "n":
@@ -637,7 +652,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         # elif key == "p":
         #     # self.prev_unread()
         #     state.event_loop.create_task(self.prev_unread())
-        elif key == "A":
+        if key == "A":
             self.mark_all_read()
         elif key == "ctrl a":
             self.mark_visible_read()
@@ -822,42 +837,22 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         #         for f in self.config.feeds
         #     ])
 
-    @db_session
+
     def create_feeds(self):
-        for n, f in self.feeds.items():
-            feed = self.FEED_CLASS.get(locator=f.locator)
-            if not feed:
-                feed = self.FEED_CLASS(
-                    provider_id = self.IDENTIFIER,
-                    name = n,
-                    locator= f.locator
-                    # **self.feed_attrs(name)
-                )
-                commit()
+        with db_session:
+            for n, f in self.feeds.items():
+                feed = self.FEED_CLASS.get(locator=f.locator)
+                if not feed:
+                    feed = self.FEED_CLASS(
+                        provider_id = self.IDENTIFIER,
+                        name = n,
+                        locator= f.locator
+                        # **self.feed_attrs(name)
+                    )
+                    commit()
 
     def feed_attrs(self, feed_name):
         return {}
-
-    @db_session
-    def update_feeds(self, force=False):
-        logger.info(f"update_feeds: {force}")
-        if not self.feed:
-            feeds = self.FEED_CLASS.select()
-        else:
-            feeds = [self.feed]
-
-        for f in feeds:
-            if (force
-                or
-                f.updated is None
-                or
-                datetime.now() - f.updated > timedelta(seconds=f.update_interval)
-            ):
-                logger.info(f"updating {f.locator}")
-                with limit(self.limiter):
-                    f.update()
-                    # f.updated = datetime.now()
-                    # commit()
 
     @property
     def feed_filters(self):
@@ -898,17 +893,39 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
     def close_popup(self):
         self.view.close_popup()
 
-    # @db_session
-    async def update(self, force=False):
-        logger.info(f"update: {force}")
+    async def update(self, force=False, resume=False):
+        logger.info(f"update: force={force} resume={resume}")
         self.refresh()
         self.create_feeds()
         def update_feeds():
             self.open_popup("Updating feeds...")
-            self.update_feeds(force=force)
+            # self.update_feeds(force=force)
             self.close_popup()
             self.reset()
-        update_task = state.event_loop.run_in_executor(None, update_feeds)
+        await self.update_feeds(force=force)
+        # update_task = state.event_loop.run_in_executor(None, update_feeds)
+
+    async def update_feeds(self, force=False):
+        logger.info(f"update_feeds: {force}")
+        with db_session:
+            if not self.feed:
+                feeds = self.FEED_CLASS.select()
+            else:
+                feeds = [self.feed]
+
+            for f in feeds:
+                if (force
+                    or
+                    f.updated is None
+                    or
+                    datetime.now() - f.updated > timedelta(seconds=f.update_interval)
+                ):
+                    logger.info(f"updating {f.locator}")
+                    with limit(self.limiter):
+                        await f.update()
+                        # f.updated = datetime.now()
+                    # commit()
+
 
     def refresh(self):
         logger.info("+feed provider refresh")
