@@ -5,6 +5,7 @@ import os
 from datetime import datetime, timedelta
 from dataclasses import *
 import typing
+import types
 import re
 import dataclasses_json
 from dataclasses_json import dataclass_json
@@ -18,6 +19,7 @@ import tempfile
 from orderedattrdict import AttrDict
 from pony.orm import *
 from pony.orm.core import EntityMeta
+from pydantic import BaseModel, Field, validator
 
 
 # monkey-patch
@@ -64,6 +66,82 @@ def upsert(cls, keys, values=None):
         return obj
 
 db.Entity.upsert = classmethod(upsert)
+
+
+ATTRCLASS_TYPE_MAP = {
+    Json: typing.Any
+}
+
+def parse_attr(attr):
+
+    validator_fn = None
+    py_type = ATTRCLASS_TYPE_MAP.get(attr.py_type, attr.py_type)
+    attr_type = typing.Optional[py_type]
+
+    def pony_set_validator(cls, v):
+        return list(v)
+
+    if attr.is_discriminator:
+        return (None, None)
+
+    if attr.is_collection:
+        # Would like to use the related entity class here, but the mapping
+        # hasn't been generated yet, so these aren't available.
+        attr_type = typing.List[db.Entity]
+        validator_fn = pony_set_validator
+
+    elif attr.is_relation:
+        attr_type = db.Entity
+
+    elif attr.is_required and not attr.auto and attr.default is None:
+        attr_type = py_type
+
+    return (attr_type, validator_fn)
+
+
+def attrclass(cls):
+
+    class_name = f"{cls.__name__}_Attr"
+
+    def attrclass_exec_body(ns):
+
+        def config_exec_body(ns):
+
+            ns["orm_mode"] = True
+            ns["arbitrary_types_allowed"] = True
+            return ns
+
+        ns["Config"] = types.new_class(
+            "Config",
+            (object,),
+            exec_body = config_exec_body
+        )
+
+        ns["__annotations__"] = {}
+
+        for attr in cls._attrs_:
+            attr_type, validator_fn = parse_attr(attr)
+            if not attr_type:
+                continue
+            # I don't know if there's a less hacky way to add type annotations
+            # to dynamically-created classes, but this seems to work
+            ns[attr.name] = None
+            ns["__annotations__"][attr.name] = attr_type
+            if validator_fn:
+                val_func_name = f"validate_{attr.name}"
+                ns[val_func_name] = validator(
+                    attr.name, pre=True, check_fields=False
+                )(validator_fn)
+        return ns
+
+
+    attr_class = types.new_class(
+        class_name,
+        (BaseModel,),
+        exec_body = attrclass_exec_body
+    )
+    cls.attr_class = attr_class
+    return cls
 
 
 @dataclass
@@ -342,6 +420,7 @@ class CacheEntry(db.Entity):
             lambda e: e.last_seen < datetime.now() - timedelta(seconds=age)
         ).delete()
 
+@attrclass
 class MediaChannel(db.Entity):
     """
     A streaming video channel, identified by some unique string (locator).  This
@@ -372,7 +451,7 @@ class MediaChannel(db.Entity):
     def session(self):
         return self.provider.session
 
-
+@attrclass
 class MediaFeed(MediaChannel):
     """
     A subclass of MediaChannel for providers that can distinguish between
@@ -459,7 +538,7 @@ class MediaFeed(MediaChannel):
         commit()
 
 
-
+@attrclass
 class MediaItem(db.Entity):
     """
     An individual media clip, broadcast, episode, etc. within a particular

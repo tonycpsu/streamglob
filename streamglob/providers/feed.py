@@ -524,6 +524,21 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                     url=item.url
                 ).encode("utf-8"))
             logger.info(m3u.name)
+
+            # listing = self.provider.LISTING_CLASS.attr_class(
+            #     self.provider.IDENTIFIER,
+            #     title=f"{self.provider.NAME} playlist" + (
+            #         f" ({self.provider.feed.name}/"
+            #         if self.provider.feed
+            #         else " ("
+            #     ) + f"{self.provider.status})",
+            #     content=self.provider.new_media_source(
+            #         f"file://{m3u.name}",
+            #         media_type = "video"
+            #     ),
+            #     feed = self.provider.feed
+            # )
+
             listing = self.provider.new_listing(
                 title=f"{self.provider.NAME} playlist" + (
                     f" ({self.provider.feed.name}/"
@@ -536,6 +551,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 ),
                 feed = self.provider.feed
             )
+
         if self.player_task:
             self.player = await self.player_task.program
             sources, kwargs = self.provider.play_args(listing)
@@ -976,9 +992,14 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         with db_session:
 
             for item in self.items_query[offset:offset+limit]:
+                # raise Exception(self.ITEM_CLASS.attr_class.from_orm(item).__dict__)
+                # raise Exception(item.to_dict())
+                # raise Exception(item, type(item))
                 # listing = self.item_to_listing(item)
+                # item.content = {}
                 listing = self.new_listing(
                     feed = AttrDict(item.feed.to_dict()),
+                    # **self.ITEM_CLASS.attr_class.from_orm(item).__dict__
                     **item.to_dict(
                         exclude=["feed", "classtype"],
                         related_objects=True
