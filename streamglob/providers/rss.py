@@ -42,12 +42,12 @@ class RSSSession(session.StreamSession):
             logger.error(f"{e}: {content}")
             raise SGFeedUpdateFailedException
 
-class RSSItem(model.MediaItem):
+class RSSListing(model.TitledMediaListing):
     pass
 
-class RSSFeed(model.MediaFeed):
+class RSSFeed(MediaFeed):
 
-    ITEM_CLASS = RSSItem
+    LISTING_CLASS = RSSListing
 
     # @db_session
     def fetch(self, limit = None):
@@ -65,7 +65,7 @@ class RSSFeed(model.MediaFeed):
                             url=item.link,
                             media_type="video" # FIXME: could be something else
                         )
-                        i = self.ITEM_CLASS(
+                        i = self.LISTING_CLASS(
                             feed = self,
                             guid = guid,
                             title = item.title,

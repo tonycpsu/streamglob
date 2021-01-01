@@ -21,22 +21,143 @@ from .base import *
 from .widgets import *
 from .filters import *
 
-@dataclass
-class FeedMediaListing(model.ContentMediaListing):
 
-    media_item_id: int = None
-    guid: str = None
-    media_type: str = None
-    feed: model.MediaFeed = None
-    read: bool = False
-    fetched: bool = False
-    downloaded: bool = False
-    watched: bool = False
-    attrs: dict = field(default_factory=dict)
 
-    # @property
-    # def locator(self):
-    #     return self.content
+@model.attrclass
+class MediaFeed(model.MediaChannel):
+    """
+    A subclass of MediaChannel for providers that can distinguish between
+    individual broadcasts / episodes / events, perhaps with the abilit to watch
+    on demand.
+    """
+
+    # FIXME: move to feed.py?
+
+    DEFAULT_FETCH_LIMIT = 100
+
+    DEFAULT_MIN_ITEMS=10
+    DEFAULT_MAX_ITEMS=500
+    DEFAULT_MAX_AGE=90
+
+    items = Set(lambda: FeedMediaListing, reverse="feed")
+
+    @abc.abstractmethod
+    def fetch(self):
+        pass
+
+    @db_session
+    def update(self, *args, **kwargs):
+        for item in self.fetch(*args, **kwargs):
+            listing = self.provider.new_listing(
+                # feed = f.to_dict(),
+                **item.to_dict(
+                    exclude=["media_item_id", "feed", "classtype"],
+                    related_objects=True
+                )
+            )
+            listing.content = self.provider.MEDIA_SOURCE_CLASS.schema().loads(listing["content"], many=True)
+
+            self.provider.on_new_listing(listing)
+            self.updated = datetime.now()
+            commit()
+
+    @db_session
+    def mark_all_items_read(self):
+        for i in self.items.select():
+            i.read = datetime.now()
+
+    @classmethod
+    @db_session
+    def mark_all_feeds_read(cls):
+        for f in cls.select():
+            for i in f.items.select():
+                i.read = datetime.now()
+
+    @db_session
+    def reset(self):
+        delete(i for i in self.items)
+        commit()
+
+    @classmethod
+    @db_session
+    def purge_all(cls,
+                  min_items = DEFAULT_MIN_ITEMS,
+                  max_items = DEFAULT_MAX_ITEMS,
+                  max_age = DEFAULT_MAX_AGE):
+        for f in cls.select():
+            f.purge(min_items = min_items,
+                    max_items = max_items,
+                    max_age = max_age)
+
+    @db_session
+    def purge(self,
+              min_items = DEFAULT_MIN_ITEMS,
+              max_items = DEFAULT_MAX_ITEMS,
+              max_age = DEFAULT_MAX_AGE):
+        """
+        Delete items older than "max_age" days, keeping no fewer than
+        "min_items" and no more than "max_items"
+        """
+        for n, i in enumerate(
+                self.items.select().order_by(
+                    lambda i: desc(i.fetched)
+                )[min_items:]
+        ):
+            if (min_items + n >= max_items
+                or
+                i.time_since_fetched >= timedelta(days=max_age)):
+                i.delete()
+        commit()
+
+
+
+@model.attrclass
+class FeedMediaListing(model.TitledMediaListing):
+    """
+    An individual media clip, broadcast, episode, etc. within a particular
+    MediaFeed.
+    """
+    # FIXME: move MediaFeed here?
+    feed = Required(lambda: MediaFeed)
+    guid = Required(str, index=True)
+    content = Required(Json)
+    created = Required(datetime, default=datetime.now)
+    fetched = Required(datetime, default=datetime.now)
+    read = Optional(datetime)
+    watched = Optional(datetime)
+    downloaded = Optional(datetime)
+    # was_downloaded = Required(bool, default=False)
+
+    @db_session
+    def mark_read(self):
+        self.read = datetime.now()
+
+    @db_session
+    def mark_unread(self):
+        self.read = None
+
+    @db_session
+    def mark_part_read(self, index):
+        if not "parts_read" in self.attrs:
+            self.attrs["parts_read"] = dict()
+        self.attrs["parts_read"][str(index)] = True
+
+    @db_session
+    def mark_part_unread(self, index):
+        self.attrs["parts_read"].pop(str(index), None)
+
+    @property
+    def age(self):
+        return datetime.now() - self.created
+
+    @property
+    def time_since_fetched(self):
+        # return datetime.now() - dateutil.parser.parse(self.fetched)
+        return datetime.now() - self.fetched
+
+    @property
+    def locator(self):
+        return self.content
 
     @property
     def feed_name(self):
@@ -46,9 +167,17 @@ class FeedMediaListing(model.ContentMediaListing):
     def feed_locator(self):
         return self.feed.locator
 
+    # FIXME
     @property
     def timestamp(self):
         return self.created.strftime("%Y%m%d_%H%M%S")
+
+    # FIXME
+    @property
+    def created_timestamp(self):
+        return self.created.isoformat().split(".")[0]
+
+
 
 
 
@@ -287,7 +416,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     def mark_item_read(self, position):
         logger.info(f"mark_item_read: {position}")
         try:
-            if not isinstance(self[position].data, model.MediaListing):
+            if not isinstance(self[position].data, model.TitledMediaListing):
                 return
         except IndexError:
             return
@@ -328,7 +457,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     @db_session
     def mark_item_unread(self, position):
         logger.info(f"mark_item_unread: {position}")
-        if not isinstance(self[position].data, model.MediaListing):
+        if not isinstance(self[position].data, model.TitledMediaListing):
             return
         item = self.item_at_position(position)
         if not item:
@@ -351,7 +480,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     @db_session
     def toggle_item_read(self, position):
-        if not isinstance(self[position].data, model.MediaListing):
+        if not isinstance(self[position].data, model.TitledMediaListing):
             return
         # logger.info(self.get_value(position, "read"))
         if self.get_value(position, "read") is not None:
@@ -456,7 +585,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     @db_session
     def item_at_position(self, position):
-        return self.provider.ITEM_CLASS.get(
+        return self.provider.LISTING_CLASS.get(
             guid=self[position].data.get("guid")
         )
 
@@ -785,11 +914,14 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
 
     def init_config(self):
         super().init_config()
+        with db_session(optimistic=False):
+            MediaFeed.purge_all(
+                min_items = config.settings.profile.cache.min_items,
+                max_items = config.settings.profile.cache.max_items,
+                max_age = config.settings.profile.cache.max_age
+            )
 
 
-    @property
-    def ITEM_CLASS(self):
-        return self.FEED_CLASS.ITEM_CLASS
 
     @property
     def ATTRIBUTES(self):
@@ -962,7 +1094,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
             sort_fn = lambda i: getattr(i, sort_field)
 
         self.items_query = (
-            self.ITEM_CLASS.select()
+            self.LISTING_CLASS.select()
             .order_by(sort_fn)
             .filter(status_filters[self.filters.status.value])
                 # [offset:offset+limit]
@@ -992,14 +1124,14 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         with db_session:
 
             for item in self.items_query[offset:offset+limit]:
-                # raise Exception(self.ITEM_CLASS.attr_class.from_orm(item).__dict__)
+                # raise Exception(self.LISTING_CLASS.attr_class.from_orm(item).__dict__)
                 # raise Exception(item.to_dict())
                 # raise Exception(item, type(item))
                 # listing = self.item_to_listing(item)
                 # item.content = {}
                 listing = self.new_listing(
                     feed = AttrDict(item.feed.to_dict()),
-                    # **self.ITEM_CLASS.attr_class.from_orm(item).__dict__
+                    # **self.LISTING_CLASS.attr_class.from_orm(item).__dict__
                     **item.to_dict(
                         exclude=["feed", "classtype"],
                         related_objects=True
@@ -1014,7 +1146,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         logger.info(f"mark_items_read: {media_item_ids}")
         with db_session:
             try:
-                for item in self.ITEM_CLASS.select(
+                for item in self.LISTING_CLASS.select(
                     lambda i: i.media_item_id in media_item_ids
                 ):
                     item.read = datetime.now()

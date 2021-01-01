@@ -883,13 +883,13 @@ class BAMMediaListing(model.MediaListing):
     def has_audio(self):
         return "audio" in self.media_types
 
-    @property
-    def attrs(self):
-        return "".join([
-            f"{'V' if self.has_video else ' '}",
-            f"{'a' if self.has_audio else ' '}",
-            f"{'!' if self.is_free else '$'}",
-        ])
+    # @property
+    # def attrs(self):
+    #     return "".join([
+    #         f"{'V' if self.has_video else ' '}",
+    #         f"{'a' if self.has_audio else ' '}",
+    #         f"{'!' if self.is_free else '$'}",
+    #     ])
 
     @property
     def media_available(self):

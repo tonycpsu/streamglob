@@ -30,13 +30,13 @@ class PeriscopeMediaSource(model.MediaSource):
             ("mpv", None),
         ])
 
-class PeriscopeItem(model.MediaItem):
+class PeriscopeListing(model.TitledMediaListing):
 
     is_live = Required(bool)
 
-class PeriscopeFeed(model.MediaFeed):
+class PeriscopeFeed(MediaFeed):
 
-    ITEM_CLASS = PeriscopeItem
+    LISTING_CLASS = PeriscopeListing
 
     def fetch(self, limit=None):
 
@@ -49,7 +49,7 @@ class PeriscopeFeed(model.MediaFeed):
             ):
                 guid = item["id"]
                 with db_session:
-                    i = self.ITEM_CLASS.upsert(
+                    i = self.LISTING_CLASS.upsert(
                         dict(
                             feed = self.channel_id,
                             guid = guid

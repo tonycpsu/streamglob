@@ -6,7 +6,7 @@ from dataclasses import *
 import abc
 
 @dataclass
-class LiveStreamMediaListing(model.ContentMediaListing):
+class LiveStreamMediaListing(model.TitledMediaListing):
 
     channel: str = None
 

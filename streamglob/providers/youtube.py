@@ -175,13 +175,13 @@ class YouTubeChannelsFilter(FeedsFilter):
 
 
 
-class YouTubeItem(model.MediaItem):
+class YouTubeListing(model.TitledMediaListing):
     pass
 
 
-class YouTubeFeed(model.MediaFeed):
+class YouTubeFeed(MediaFeed):
 
-    ITEM_CLASS = YouTubeItem
+    LISTING_CLASS = YouTubeListing
 
     def fetch(self, limit = None):
 
@@ -194,7 +194,7 @@ class YouTubeFeed(model.MediaFeed):
 
                 url = item.pop("url")
                 if not i:
-                    i = self.ITEM_CLASS(
+                    i = self.LISTING_CLASS(
                         feed=self,
                         content = YouTubeMediaSource.schema().dumps(
                             [self.provider.new_media_source(url, media_type="video")],

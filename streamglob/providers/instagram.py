@@ -94,13 +94,13 @@ class InstagramSession(session.StreamSession):
         finally:
             pass
 
-class InstagramItem(model.MediaItem):
+class InstagramListing(model.TitledMediaListing):
 
     media_type = Required(str)
 
-class InstagramFeed(model.MediaFeed):
+class InstagramFeed(MediaFeed):
 
-    ITEM_CLASS = InstagramItem
+    LISTING_CLASS = InstagramListing
 
     POST_TYPE_MAP = {
         "GraphImage": "image",
@@ -253,7 +253,7 @@ class InstagramFeed(model.MediaFeed):
 
                 content = self.extract_content(post)
 
-                i = self.ITEM_CLASS(
+                i = self.LISTING_CLASS(
                     feed = self,
                     guid = post.shortcode,
                     title = (caption or "(no caption)").replace("\n", " "),

@@ -131,7 +131,7 @@ class BaseProvider(abc.ABC):
     """
 
     SESSION_CLASS = StreamSession
-    ITEM_CLASS = model.MediaItem
+    LISTING_CLASS = model.TitledMediaListing
     # VIEW_CLASS = SimpleProviderView
     FILTERS = AttrDict()
     ATTRIBUTES = AttrDict(title={"width": ("weight", 1)})
@@ -202,7 +202,7 @@ class BaseProvider(abc.ABC):
                 )
             except StopIteration:
                 continue
-        return model.MediaListing
+        return model.TitledMediaListing
 
     @property
     def MEDIA_SOURCE_CLASS(self):
