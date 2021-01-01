@@ -23,7 +23,7 @@ from .filters import *
 
 
 
-@model.attrclass
+@model.attrclass()
 class MediaFeed(model.MediaChannel):
     """
     A subclass of MediaChannel for providers that can distinguish between
@@ -111,7 +111,7 @@ class MediaFeed(model.MediaChannel):
 
 
 
-@model.attrclass
+@model.attrclass()
 class FeedMediaListing(model.TitledMediaListing):
     """
     An individual media clip, broadcast, episode, etc. within a particular
@@ -674,8 +674,8 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                     if self.provider.feed
                     else " ("
                 ) + f"{self.provider.status})",
-                content=self.provider.new_media_source(
-                    f"file://{m3u.name}",
+                content = self.provider.new_media_source(
+                    url = f"file://{m3u.name}",
                     media_type = "video"
                 ),
                 feed = self.provider.feed

@@ -6,6 +6,18 @@ import html2text
 import html.parser
 import pathvalidate
 
+
+def optional_arg_decorator(fn):
+    def wrapped_decorator(*args, **kwargs):
+        if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
+            return fn(args[0])
+        else:
+            def real_decorator(decoratee):
+                return fn(decoratee, *args, **kwargs)
+            return real_decorator
+    return wrapped_decorator
+
+
 FORMAT_DATETIME_12H_RE = re.compile("0*(\d+?:\d+\w)")
 def format_datetime_12h(dt):
     s = dt.strftime("%I:%M%p").lower()

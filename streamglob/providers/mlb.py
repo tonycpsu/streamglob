@@ -98,7 +98,7 @@ class MLBBAMTeamData(BAMTeamData):
     TEAM_URL_TEMPLATE = "http://statsapi.mlb.com/api/v1/teams/{team_id}"
 
 
-@dataclass
+@model.attrclass()
 class MLBMediaListing(BAMMediaListing):
 
     LINE_SCORE_DATA_TABLE_CLASS = MLBLineScoreDataTable
@@ -210,7 +210,7 @@ class MLBMediaListing(BAMMediaListing):
         except KeyError:
             return 0.0
 
-@dataclass
+@model.attrclass()
 class MLBMediaSource(BAMMediaSource):
 
     @property

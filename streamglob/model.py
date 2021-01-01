@@ -81,7 +81,7 @@ def parse_attr(attr):
     if attr.is_collection:
         # Would like to use the related entity class here, but the mapping
         # hasn't been generated yet, so these aren't available.
-        attr_type = typing.List[db.Entity]
+        attr_type = typing.List[typing.Union[db.Entity, BaseModel]]
         validator_fn = pony_set_validator
 
     elif attr.is_relation:
@@ -93,7 +93,7 @@ def parse_attr(attr):
     return (attr_type, validator_fn)
 
 
-def attrclass(cls):
+class attrclass(object):
     """
     Class decorator that uses pydantic's ORM mode functionality to create model
     classes that mirror those of Pony ORM for cases when we don't want to
@@ -104,52 +104,91 @@ def attrclass(cls):
     >>> pony_entity = PonyEntityClass.get(123)
     >>> attr_object = PonyEntityClass.from_orm(pony_entity)
     """
-    class_name = f"{cls.__name__}_Attr"
 
-    def attrclass_exec_body(ns):
+    def __init__(self, common_base=None):
+        self.common_base = common_base
 
-        def config_exec_body(ns):
+    def __call__(self, cls):
 
-            ns["orm_mode"] = True
-            ns["arbitrary_types_allowed"] = True
+
+        attr_class_name = f"{cls.__name__}_Attr"
+
+        def attrclass_exec_body(ns):
+
+            def config_exec_body(ns):
+
+                ns["orm_mode"] = True
+                ns["arbitrary_types_allowed"] = True
+                return ns
+
+            ns["Config"] = types.new_class(
+                "Config",
+                (object,),
+                exec_body = config_exec_body
+            )
+
+            ns["__annotations__"] = {}
+
+            # ns["ormclass"] = cls
+            for attr in cls._attrs_:
+                attr_type, validator_fn = parse_attr(attr)
+                if not attr_type:
+                    continue
+                # I don't know if there's a less hacky way to add type annotations
+                # to dynamically-created classes, but this seems to work
+                ns[attr.name] = None
+                ns["__annotations__"][attr.name] = attr_type
+                if validator_fn:
+                    val_func_name = f"validate_{attr.name}"
+                    ns[val_func_name] = validator(
+                        attr.name, pre=True, check_fields=False, allow_reuse=True
+                    )(validator_fn)
+
+                # print(getattr(cls, "__annotations__", None))
+
+            # if there are type annotations for other class attributes that (a)
+            # aren't entity attributes, (b) have type annotations, and (c)
+            # aren't already members of the attr class, we copy these
+            # attributes and annotations into the attr class
+
+            for attr, annotation in getattr(cls, "__annotations__", {}).items():
+                if attr in cls._attrs_ or attr in ns:
+                    continue
+                print(f"adding attr {attr} to {attr_class_name}")
+                ns[attr] = getattr(cls, attr, None)
+                ns["__annotations__"][attr] = annotation
             return ns
 
-        ns["Config"] = types.new_class(
-            "Config",
-            (object,),
-            exec_body = config_exec_body
+
+        # if there's an entity class in this entity class's hierarchy that has
+        # an attr class, make our attr class a subclass of it
+        bases = []
+
+        for c in cls.mro():
+            if hasattr(c, "attr_class"):
+                bases.append(c.attr_class)
+                break
+        else:
+            bases.append(BaseModel)
+
+        # if there's a base class we want to wedge into the class hierarchy of
+        # both the entity class and the attr class (e.g. mixins with methods or
+        # properties common to both) we do that here
+        if self.common_base:
+            bases.append(self.common_base)
+
+        print(bases)
+        attr_class = types.new_class(
+            attr_class_name,
+            tuple(bases),
+            exec_body = attrclass_exec_body
         )
-
-        ns["__annotations__"] = {}
-
-        for attr in cls._attrs_:
-            attr_type, validator_fn = parse_attr(attr)
-            if not attr_type:
-                continue
-            # I don't know if there's a less hacky way to add type annotations
-            # to dynamically-created classes, but this seems to work
-            ns[attr.name] = None
-            ns["__annotations__"][attr.name] = attr_type
-            if validator_fn:
-                val_func_name = f"validate_{attr.name}"
-                ns[val_func_name] = validator(
-                    attr.name, pre=True, check_fields=False, allow_reuse=True
-                )(validator_fn)
-        return ns
+        cls.attr_class = attr_class
+        cls.from_orm = attr_class.from_orm
+        return cls
 
 
-    attr_class = types.new_class(
-        class_name,
-        (BaseModel,),
-        exec_body = attrclass_exec_body
-    )
-    cls.attr_class = attr_class
-    cls.from_orm = attr_class.from_orm
-    return cls
-
-
-
-@attrclass
+@attrclass()
 class MediaChannel(db.Entity):
     """
     A streaming video channel, identified by some unique string (locator).  This
@@ -182,7 +221,7 @@ class MediaChannel(db.Entity):
 
 
 
-@attrclass
+@attrclass()
 class MediaListing(db.Entity):
 
     media_listing_id = PrimaryKey(int, auto=True)
@@ -199,22 +238,13 @@ class MediaListing(db.Entity):
         return providers.get(self.provider_id)
         # return self.provider.NAME.lower()
 
-@attrclass
+@attrclass()
 class TitledMediaListing(MediaListing):
 
     title = Required(str)
 
 
-
-@attrclass
-class MediaSource(db.Entity):
-
-    TEMPLATE_RE=re.compile("\{((?!(index|num|listing|feed))[^}]+)\}")
-
-    provider_id =  Required(str)
-    task = Optional(lambda: MediaTask, reverse="sources")
-    url: typing.Optional[str] = None # Pony also uses Optional
-    media_type: typing.Optional[str] = None
+class MediaSourceMixin(object):
 
     @property
     def provider(self):
@@ -305,10 +335,21 @@ class MediaSource(db.Entity):
         return self.locator
 
 
-@attrclass
+@attrclass(MediaSourceMixin)
+class MediaSource(db.Entity, MediaSourceMixin):
+
+    TEMPLATE_RE=re.compile("\{((?!(index|num|listing|feed))[^}]+)\}")
+
+    provider_id = Required(str)
+    task = Optional(lambda: MediaTask, reverse="sources")
+    url = Optional(str)
+    media_type = Optional(str)
+
+
+@attrclass()
 class InflatableMediaSource(MediaSource):
 
-    preview_url: typing.Optional[str] = None
+    preview_url = Optional(str)
 
     @property
     def preview_locator(self):
@@ -323,7 +364,7 @@ class InflatableMediaSource(MediaSource):
         pass
 
 
-@attrclass
+@attrclass()
 class MediaTask(db.Entity):
 
     provider = Required(str)
@@ -337,12 +378,12 @@ class MediaTask(db.Entity):
     def finalize(self):
         pass
 
-@attrclass
+@attrclass()
 class ProgramMediaTask(MediaTask):
 
-    program: typing.Optional[typing.Awaitable] = state.event_loop.create_future()
-    proc: typing.Optional[typing.Awaitable] = state.event_loop.create_future()
-    result: typing.Optional[typing.Awaitable] = state.event_loop.create_future()
+    program: typing.Optional[typing.Awaitable]
+    proc: typing.Optional[typing.Awaitable]
+    result: typing.Optional[typing.Awaitable]
     pid = Optional(int)
     started = Optional(datetime)
     elapsed = Optional(timedelta)
@@ -355,7 +396,7 @@ class ProgramMediaTask(MediaTask):
         self.result.set_result(self.proc.result().returncode)
 
 
-@attrclass
+@attrclass()
 class PlayMediaTask(ProgramMediaTask):
 
     async def load_sources(self, sources):
@@ -365,7 +406,7 @@ class PlayMediaTask(ProgramMediaTask):
         self.proc.set_result(proc)
 
 
-@attrclass
+@attrclass()
 class DownloadMediaTask(ProgramMediaTask):
 
     dest = Optional(str)
@@ -450,14 +491,8 @@ def init(filename=None, *args, **kwargs):
 
 def main():
 
-    init()
-    config.load(merge_default=True)
-
-    MediaFeed.purge_all(
-        min_items = config.settings.profile.cache.min_items,
-        max_items = config.settings.profile.cache.max_items,
-        max_age = config.settings.profile.cache.max_age
-    )
+    foo = MediaSource.attr_class()
+    raise Exception(foo.helper)
 
 
 if __name__ == "__main__":

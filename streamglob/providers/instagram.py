@@ -21,13 +21,12 @@ from pony.orm import *
 import limiter
 import json
 
-@dataclass
+@model.attrclass()
 class InstagramMediaSource(model.InflatableMediaSource):
 
     EXTENSION_RE = re.compile("\.(\w+)\?")
 
     shortcode: typing.Optional[str] = None
-    media_type: str = ""
 
     @property
     def ext(self):
@@ -58,10 +57,10 @@ class InstagramMediaSource(model.InflatableMediaSource):
         self.content = self.feed.extract_content(post)
 
 
-@dataclass
+@model.attrclass()
 class InstagramMediaListing(FeedMediaListing):
 
-    media_type: str = ""
+    media_type = Required(str)
 
 
 class InstagramSession(session.StreamSession):
@@ -94,13 +93,11 @@ class InstagramSession(session.StreamSession):
         finally:
             pass
 
-class InstagramListing(model.TitledMediaListing):
 
-    media_type = Required(str)
-
+@model.attrclass()
 class InstagramFeed(MediaFeed):
 
-    LISTING_CLASS = InstagramListing
+    LISTING_CLASS = InstagramMediaListing
 
     POST_TYPE_MAP = {
         "GraphImage": "image",

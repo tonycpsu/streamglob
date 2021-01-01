@@ -661,7 +661,7 @@ class BAMTeamData(model.db.Entity):
             # record = record
         )
 
-@dataclass
+@model.attrclass()
 class BAMMediaListing(model.MediaListing):
 
     FEED_TYPE_ORDER = [
@@ -1199,7 +1199,7 @@ class BAMMediaListing(model.MediaListing):
         return {}
 
 
-@dataclass
+@model.attrclass()
 class BAMMediaSource(model.MediaSource):
 
     # provider: typing.Optional[BaseProvider] = None

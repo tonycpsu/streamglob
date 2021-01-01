@@ -355,15 +355,15 @@ class BaseProvider(abc.ABC):
 
 
     def new_media_source(self, *args, **kwargs):
-        return self.MEDIA_SOURCE_CLASS(
-            self.IDENTIFIER,
+        return self.MEDIA_SOURCE_CLASS.attr_class(
+            provider_id = self.IDENTIFIER,
             *args,
             **kwargs
         )
 
     def new_listing(self, **kwargs):
-        return self.LISTING_CLASS(
-            self.IDENTIFIER,
+        return self.LISTING_CLASS.attr_class(
+            provider_id = self.IDENTIFIER,
             **kwargs
         )
 
@@ -472,7 +472,7 @@ class BaseProvider(abc.ABC):
         else:
             downloader_spec = getattr(self.config, "helpers", None) or sources[0].helper
 
-        task = model.PlayMediaTask(
+        task = model.PlayMediaTask.attr_class(
             provider=self.NAME,
             title=selection.title,
             sources = sources

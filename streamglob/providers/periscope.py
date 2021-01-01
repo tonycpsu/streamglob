@@ -11,7 +11,7 @@ class PeriscopeSession(session.StreamSession):
         self.peri = pyperi.Peri(session=self)
 
 
-@dataclass
+@model.attrclass()
 class PeriscopeMediaListing(FeedMediaListing):
 
     is_live: bool = False
@@ -20,7 +20,7 @@ class PeriscopeMediaListing(FeedMediaListing):
     def ext(self):
         return "mp4"
 
-@dataclass
+@model.attrclass()
 class PeriscopeMediaSource(model.MediaSource):
 
     @property

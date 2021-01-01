@@ -5,7 +5,7 @@ from .base import *
 from dataclasses import *
 import abc
 
-@dataclass
+@model.attrclass()
 class LiveStreamMediaListing(model.TitledMediaListing):
 
     channel: str = None
