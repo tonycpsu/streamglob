@@ -114,11 +114,11 @@ class TaskManager(Observable):
                     return
         async for task in get_tasks():
             logger.trace(f"task: {task}")
-            if isinstance(task, model.PlayMediaTask):
+            if isinstance(task, model.PlayMediaTask.attr_class):
                 # program = await player.Player.play(task, *task.args, **task.kwargs)
                 run_task = player.Player.play(task, *task.args, **task.kwargs)
                 # ret = state.event_loop.create_task(run_task)
-            elif isinstance(task, model.DownloadMediaTask):
+            elif isinstance(task, model.DownloadMediaTask.attr_class):
                 try:
                     outfile = task.stage_outfile
                     run_task = player.Downloader.download(task, outfile, *task.args, **task.kwargs)
@@ -127,7 +127,7 @@ class TaskManager(Observable):
                     logger.warn(e)
                     continue
             else:
-                logger.error(f"not implemented: {program}")
+                logger.error(f"not implemented: {task}")
                 raise NotImplementedError
 
             try:

@@ -49,17 +49,14 @@ class MediaFeed(model.MediaChannel):
     def update(self, *args, **kwargs):
         for item in self.fetch(*args, **kwargs):
             listing = self.provider.new_listing(
-                # feed = f.to_dict(),
-                **item.to_dict(
-                    exclude=["media_item_id", "feed", "classtype"],
-                    related_objects=True
-                )
+                **item.dict(exclude={"provider_id"})
             )
-            listing.content = self.provider.MEDIA_SOURCE_CLASS.schema().loads(listing["content"], many=True)
+            # listing.content = self.provider.MEDIA_SOURCE_CLASS.schema().loads(listing["content"], many=True)
 
             self.provider.on_new_listing(listing)
             self.updated = datetime.now()
-            commit()
+            listing.save()
+            # commit()
 
     @db_session
     def mark_all_items_read(self):
@@ -1124,21 +1121,17 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         with db_session:
 
             for item in self.items_query[offset:offset+limit]:
-                # raise Exception(self.LISTING_CLASS.attr_class.from_orm(item).__dict__)
-                # raise Exception(item.to_dict())
-                # raise Exception(item, type(item))
-                # listing = self.item_to_listing(item)
-                # item.content = {}
-                listing = self.new_listing(
-                    feed = AttrDict(item.feed.to_dict()),
-                    # **self.LISTING_CLASS.attr_class.from_orm(item).__dict__
-                    **item.to_dict(
-                        exclude=["feed", "classtype"],
-                        related_objects=True
-                    )
-                )
-                listing.content = self.MEDIA_SOURCE_CLASS.schema().loads(listing["content"], many=True)
-                yield(listing)
+                yield(item)
+                # listing = self.new_listing(
+                #     feed = AttrDict(item.feed.to_dict()),
+                #     # **self.LISTING_CLASS.attr_class.from_orm(item).__dict__
+                #     **item.to_dict(
+                #         exclude=["feed", "classtype"],
+                #         related_objects=True
+                #     )
+                # )
+                # listing.content = self.MEDIA_SOURCE_CLASS.schema().loads(listing["content"], many=True)
+                # yield(listing)
 
     @db_session
     def mark_items_read(self, request):

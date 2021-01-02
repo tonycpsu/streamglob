@@ -250,18 +250,13 @@ class InstagramFeed(MediaFeed):
 
                 content = self.extract_content(post)
 
-                i = self.LISTING_CLASS(
+                i = self.provider.new_listing(
                     feed = self,
                     guid = post.shortcode,
                     title = (caption or "(no caption)").replace("\n", " "),
                     created = created,
                     media_type = media_type,
-                    content =  InstagramMediaSource.schema().dumps(
-                        content
-                        if isinstance(content, list)
-                        else [content],
-                        many=True
-                    ),
+                    content =  content,
                     attrs = dict(
                         short_code = post.shortcode
                     )

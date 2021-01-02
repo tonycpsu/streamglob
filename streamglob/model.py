@@ -129,7 +129,7 @@ class attrclass(object):
 
             ns["__annotations__"] = {}
 
-            # ns["ormclass"] = cls
+            ns["ormclass"] = cls
             for attr in cls._attrs_:
                 attr_type, validator_fn = parse_attr(attr)
                 if not attr_type:
@@ -157,6 +157,15 @@ class attrclass(object):
                 print(f"adding attr {attr} to {attr_class_name}")
                 ns[attr] = getattr(cls, attr, None)
                 ns["__annotations__"][attr] = annotation
+
+            def save(self):
+
+                with db_session:
+                    saved = self.ormclass(
+                        **self.dict(exclude_unset = True, exclude_none = True)
+                    )
+            ns["save"] = save
+
             return ns
 
 
@@ -396,8 +405,7 @@ class ProgramMediaTask(MediaTask):
         self.result.set_result(self.proc.result().returncode)
 
 
-@attrclass()
-class PlayMediaTask(ProgramMediaTask):
+class PlayMediaTaskMixin(object):
 
     async def load_sources(self, sources):
         await self.program
@@ -405,6 +413,10 @@ class PlayMediaTask(ProgramMediaTask):
         self.proc = state.event_loop.create_future()
         self.proc.set_result(proc)
 
+
+@attrclass(PlayMediaTaskMixin)
+class PlayMediaTask(ProgramMediaTask, PlayMediaTaskMixin):
+    pass
 
 @attrclass()
 class DownloadMediaTask(ProgramMediaTask):
