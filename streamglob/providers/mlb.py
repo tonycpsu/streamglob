@@ -210,8 +210,8 @@ class MLBMediaListing(BAMMediaListing):
         except KeyError:
             return 0.0
 
-@model.attrclass()
-class MLBMediaSource(BAMMediaSource):
+
+class MLBMediaSourceMixin(object):
 
     @property
     def milestones(self):
@@ -301,6 +301,11 @@ class MLBMediaSource(BAMMediaSource):
         timestamps.update([("Live", None)])
 
         return timestamps
+
+    
+@model.attrclass(MLBMediaSourceMixin)
+class MLBMediaSource(MLBMediaSourceMixin, BAMMediaSource):
+    pass
 
 
 class MLBStreamSession(session.AuthenticatedStreamSession):

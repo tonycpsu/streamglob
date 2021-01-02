@@ -189,7 +189,7 @@ class attrclass(object):
         # both the entity class and the attr class (e.g. mixins with methods or
         # properties common to both) we do that here
         if self.common_base:
-            bases.append(self.common_base)
+            bases.insert(0, self.common_base)
 
         # print(bases)
         attr_class = types.new_class(
@@ -333,7 +333,7 @@ class MediaSourceMixin(object):
 
 
 @attrclass(MediaSourceMixin)
-class MediaSource(db.Entity, MediaSourceMixin):
+class MediaSource(MediaSourceMixin, db.Entity):
 
     provider_id = Required(str)
     listing = Optional(lambda: MultiSourceMediaListing)
@@ -375,7 +375,7 @@ class MediaListingMixin(object):
 
 
 @attrclass(MediaListingMixin)
-class MediaListing(db.Entity, MediaListingMixin):
+class MediaListing(MediaListingMixin, db.Entity):
 
     media_listing_id = PrimaryKey(int, auto=True)
     provider_id = Required(str, index=True)
@@ -436,7 +436,7 @@ class PlayMediaTaskMixin(object):
 
 
 @attrclass(PlayMediaTaskMixin)
-class PlayMediaTask(ProgramMediaTask, PlayMediaTaskMixin):
+class PlayMediaTask(PlayMediaTaskMixin, ProgramMediaTask):
     pass
 
 @attrclass()

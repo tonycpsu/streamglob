@@ -1067,11 +1067,11 @@ class BAMMediaListingMixin(object):
               for epg in epgs
               for item in epg["items"]],
             key = lambda i: (
-                i.get("media_type", "") != "video",
-                self.FEED_TYPE_ORDER.index(i.get("feed_type", "").lower())
-                if i.get("feed_type", "").lower() in self.FEED_TYPE_ORDER
+                getattr(i, "media_type", "") != "video",
+                self.FEED_TYPE_ORDER.index(getattr(i, "feed_type", "").lower())
+                if getattr(i, "feed_type", "").lower() in self.FEED_TYPE_ORDER
                 else len(self.FEED_TYPE_ORDER),
-                i.get("language", ""),
+                getattr(i, "language", ""),
             )
         )
         items = [
@@ -1158,12 +1158,12 @@ class BAMMediaListingMixin(object):
                 m for m in preferred_media
                 if (
                         (self.away_team.abbreviation.lower() in faves
-                         and m["feed_type"].lower() == "away")
+                         and getattr(m, "feed_type").lower() == "away")
                         or
                         (self.home_team.abbreviation in faves
-                         and m["feed_type"].lower() == "home")
+                         and getattr(m, "feed_type").lower() == "home")
                         or
-                        (feed_type and feed_type.lower() == m["feed_type"].lower())
+                        (feed_type and feed_type.lower() == getattr(m, "feed_type").lower())
                 )
            )
 
@@ -1176,9 +1176,9 @@ class BAMMediaListingMixin(object):
 
 
 @model.attrclass(BAMMediaListingMixin)
-class BAMMediaListing(model.MediaListing, BAMMediaListingMixin):
+class BAMMediaListing(BAMMediaListingMixin, model.MediaListing):
 
-    FEED_TYPE_ORDER = [
+    FEED_TYPE_ORDER : typing.List[str] = [
         "away",
         "in_market_away",
         "home",
@@ -1322,7 +1322,7 @@ class BAMMediaSourceMixin(object):
 
 
 @model.attrclass(BAMMediaSourceMixin)
-class BAMMediaSource(model.MediaSource, BAMMediaSourceMixin):
+class BAMMediaSource(BAMMediaSourceMixin, model.MediaSource):
 
     # provider: typing.Optional[BaseProvider] = None
     game_id = Required(str)
@@ -1334,6 +1334,7 @@ class BAMMediaSource(model.MediaSource, BAMMediaSourceMixin):
     language = Optional(str)
     feed_type = Optional(str)
     free = Required(bool, default=False)
+    playbacks = Required(Json)
     # playbacks: typing.List[dict] = field(default_factory=list)
 
 
@@ -1413,7 +1414,7 @@ class WatchDialog(BasePopUp):
                  watch_live=None):
 
         self.provider = provider
-        self.game_id = selection["game_id"]
+        self.game_id = selection.game_id
         self.media_title = media_title
         self.default_resolution = default_resolution
         self.watch_live = watch_live
@@ -1446,8 +1447,8 @@ class WatchDialog(BasePopUp):
 
         feed_map = [
             (
-                (f"""{m.media_type.title()}: {m.get("feed_type", "").title()} """
-                 f"""({m.get("call_letters", "")}{"/"+m.get("language") if m.get("language") else ""})"""),
+                (f"""{m.media_type.title()}: {getattr(m, "feed_type", "").title()} """
+                 f"""({getattr(m, "call_letters", "")}{"/" + getattr(m, "language") if getattr(m, "language") else ""})"""),
                 m
             )
             for m in media
@@ -1467,7 +1468,7 @@ class WatchDialog(BasePopUp):
             media_type = media_type
         )
 
-        self.live_stream = (preferred_media.get("state") == "live")
+        self.live_stream = (getattr(preferred_media, "state") == "live")
 
         self.feed_dropdown = Dropdown(
             feed_map,

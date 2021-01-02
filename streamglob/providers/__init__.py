@@ -30,13 +30,14 @@ URI_SPEC_RE=re.compile(r"(?:(\w+)://)?([^:/]*)(.*)")
 
 def parse_uri(uri):
 
-    action = "play"
     options = AttrDict()
 
     if not uri:
         uri = DEFAULT_PROVIDER
 
     (action, provider, spec) = URI_SPEC_RE.search(uri).groups()
+    if not action:
+        action = "play"
 
     if not provider:
         provider = DEFAULT_PROVIDER
