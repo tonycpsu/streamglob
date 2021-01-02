@@ -560,7 +560,7 @@ def run_gui(action, provider, **kwargs):
             try:
                 await site.start()
             except OSError as e:
-                logger.warn(e)
+                logger.warning(e)
 
         rpc = JsonRpc()
 

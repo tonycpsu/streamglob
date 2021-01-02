@@ -26,7 +26,7 @@ class InstagramMediaSource(model.InflatableMediaSource):
 
     EXTENSION_RE = re.compile("\.(\w+)\?")
 
-    shortcode: typing.Optional[str] = None
+    shortcode = Optional(str)
 
     @property
     def ext(self):
@@ -264,7 +264,7 @@ class InstagramFeed(MediaFeed):
                     title = (caption or "(no caption)").replace("\n", " "),
                     created = created,
                     media_type = media_type,
-                    content =  content,
+                    sources =  content,
                     attrs = dict(
                         short_code = post.shortcode
                     )

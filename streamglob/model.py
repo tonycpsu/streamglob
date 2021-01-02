@@ -63,7 +63,8 @@ db.Entity.upsert = classmethod(upsert)
 
 
 ATTRCLASS_TYPE_MAP = {
-    Json: typing.Any
+    Json: typing.Any,
+    IntArray: typing.List[int]
 }
 
 def parse_attr(attr):
@@ -81,9 +82,9 @@ def parse_attr(attr):
     if attr.is_collection:
         # It's not always possible to use the type of the collection, which may
         # not be defined yet, in which case we settle for db.Entity
-        rel_type = db.Entity if callable(attr.py_type) else attr.py_type
-        print(rel_type)
-        attr_type = typing.List[typing.Union[db.Entity, BaseModel]]
+        rel_type = db.Entity if not isinstance(attr.py_type, type) else attr.py_type
+        # print(attr.entity, attr, attr.py_type, rel_type)
+        attr_type = typing.List[typing.Union[rel_type, BaseModel]]
         validator_fn = pony_set_validator
 
     elif attr.is_relation:
@@ -238,32 +239,9 @@ class MediaChannel(db.Entity):
         return self.provider.session
 
 
-
-@attrclass()
-class MediaListing(db.Entity):
-
-    media_listing_id = PrimaryKey(int, auto=True)
-    provider_id = Required(str, index=True)
-    attrs = Required(Json, default={})
-    task = Optional(lambda: MediaTask, reverse="listing")
-
-    # def __getattr__(self, name, default=None):
-    #     if name != "_attrs":
-    #         return self._attrs.get(name, default)
-
-    @property
-    def provider(self):
-        return providers.get(self.provider_id)
-        # return self.provider.NAME.lower()
-
-
-@attrclass()
-class TitledMediaListing(MediaListing):
-
-    title = Required(str)
-
-
 class MediaSourceMixin(object):
+
+    TEMPLATE_RE=re.compile("\{((?!(index|num|listing|feed))[^}]+)\}")
 
     @property
     def provider(self):
@@ -357,18 +335,15 @@ class MediaSourceMixin(object):
 @attrclass(MediaSourceMixin)
 class MediaSource(db.Entity, MediaSourceMixin):
 
-    TEMPLATE_RE=re.compile("\{((?!(index|num|listing|feed))[^}]+)\}")
-
     provider_id = Required(str)
-    task = Optional(lambda: MediaTask, reverse="sources")
+    listing = Optional(lambda: MultiSourceMediaListing)
     url = Optional(str)
     media_type = Optional(str)
+    task = Optional(lambda: MediaTask, reverse="sources")
 
 
-@attrclass()
-class InflatableMediaSource(MediaSource):
 
-    preview_url = Optional(str)
+class InflatableMediaSourceMixin(object):
 
     @property
     def preview_locator(self):
@@ -381,6 +356,42 @@ class InflatableMediaSource(MediaSource):
     @abc.abstractmethod
     def inflate(self):
         pass
+
+
+
+@attrclass(InflatableMediaSourceMixin)
+class InflatableMediaSource(MediaSource):
+
+    preview_url = Optional(str)
+
+
+
+class MediaListingMixin(object):
+
+    @property
+    def provider(self):
+        return providers.get(self.provider_id)
+        # return self.provider.NAME.lower()
+
+
+@attrclass(MediaListingMixin)
+class MediaListing(db.Entity, MediaListingMixin):
+
+    media_listing_id = PrimaryKey(int, auto=True)
+    provider_id = Required(str, index=True)
+    attrs = Required(Json, default={})
+    task = Optional(lambda: MediaTask, reverse="listing")
+
+
+@attrclass()
+class MultiSourceMediaListing(MediaListing):
+
+    sources = Set(MediaSource)
+
+@attrclass()
+class TitledMediaListing(MediaListing):
+
+    title = Required(str)
 
 
 @attrclass()

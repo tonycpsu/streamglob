@@ -143,11 +143,12 @@ class TaskManager(Observable):
             task.started = datetime.now()
             task.elapsed = timedelta(0)
 
-            if isinstance(task, model.PlayMediaTask):
+            if isinstance(task, model.PlayMediaTask.attr_class):
                 self.playing.append(task)
-            elif isinstance(task, model.DownloadMediaTask):
+            elif isinstance(task, model.DownloadMediaTask.attr_class):
                 self.active.append(task)
             else:
+                logger.error(type(task))
                 raise NotImplementedError
 
     async def poller(self):

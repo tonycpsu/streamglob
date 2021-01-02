@@ -48,13 +48,16 @@ class MediaFeed(model.MediaChannel):
     @db_session
     def update(self, *args, **kwargs):
         for item in self.fetch(*args, **kwargs):
-            content = [
-                self.provider.new_media_source(**s).dict(exclude_unset = True, exclude_none = True)
-                for s in item["content"]
+            # content = [
+            #     self.provider.new_media_source(**s).dict(exclude_unset = True, exclude_none = True)
+            #     for s in item["content"]
+            # ]
+            # del item["content"]
+            item["sources"] = [
+                self.provider.new_media_source(**s).attach()
+                for s in item["sources"]
             ]
-            del item["content"]
             listing = self.provider.new_listing(
-                content = content,
                 **item
             )
             self.provider.on_new_listing(listing)
@@ -112,7 +115,7 @@ class MediaFeed(model.MediaChannel):
 
 
 @model.attrclass()
-class FeedMediaListing(model.TitledMediaListing):
+class FeedMediaListing(model.TitledMediaListing, model.MultiSourceMediaListing):
     """
     An individual media clip, broadcast, episode, etc. within a particular
     MediaFeed.
@@ -120,7 +123,6 @@ class FeedMediaListing(model.TitledMediaListing):
     # FIXME: move MediaFeed here?
     feed = Required(lambda: MediaFeed)
     guid = Required(str, index=True)
-    content = Required(Json)
     created = Required(datetime, default=datetime.now)
     fetched = Required(datetime, default=datetime.now)
     read = Optional(datetime)
@@ -212,19 +214,19 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     class DetailBox(urwid.WidgetWrap):
 
         def __init__(self, columns, data, *args, **kwargs):
-            # raise Exception(data.content)
+            # raise Exception(data.sources)
             self.table = CachedFeedProviderDataTable.DetailTable(
             columns=columns,
             data=[dict(
-                c,
+                source,
                 **dict(
-                    title=f"[{i+1}/{len(data.content)}] {data.title}",
+                    title=f"[{i+1}/{len(data.sources)}] {data.title}",
                     # title = f"[{i+1}] {data.title}",
                     feed = data.feed,
                     created = data.created,
                     read = data.attrs.get("parts_read", {}).get(i, False)
                 ))
-                  for i, c in enumerate(data.content)
+                  for i, source in enumerate(data.sources)
             ])
             self.box = urwid.BoxAdapter(self.table, 1)
             # self.pile = urwid.Pile([
@@ -307,7 +309,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     def detail_fn(self, data):
 
-        if not isinstance(data.content, list) or len(data.content) <= 1:
+        if not len(data.sources) <= 1:
             return
 
         columns = self.columns.copy()
@@ -637,21 +639,17 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 locator = row.data.feed.locator,
                 num = num+1,
                 row_num = row_num,
-                count = len(row.data.content),
+                count = len(row.data.sources),
                 url = source.locator or source.preview_locator
             )
             for (row_num, row, num, source) in [
                     (row_num, row, num, source) for row_num, row in enumerate(self)
-                    for num, source in enumerate(row.data.content)
+                    for num, source in enumerate(row.data.sources)
                     if not source.is_bad
             ]
         ]
 
-        # if not len(items):
-        #     return
-
         self.play_items = items
-        # raise Exception(items)
 
         with tempfile.NamedTemporaryFile(suffix=".m3u8", delete=False) as m3u:
             m3u.write(f"#EXTM3U\n".encode("utf-8"))
@@ -662,30 +660,18 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 ).encode("utf-8"))
             logger.info(m3u.name)
 
-            # listing = self.provider.LISTING_CLASS.attr_class(
-            #     self.provider.IDENTIFIER,
-            #     title=f"{self.provider.NAME} playlist" + (
-            #         f" ({self.provider.feed.name}/"
-            #         if self.provider.feed
-            #         else " ("
-            #     ) + f"{self.provider.status})",
-            #     content=self.provider.new_media_source(
-            #         f"file://{m3u.name}",
-            #         media_type = "video"
-            #     ),
-            #     feed = self.provider.feed
-            # )
-
             listing = self.provider.new_listing(
                 title=f"{self.provider.NAME} playlist" + (
                     f" ({self.provider.feed.name}/"
                     if self.provider.feed
                     else " ("
                 ) + f"{self.provider.status})",
-                content = self.provider.new_media_source(
-                    url = f"file://{m3u.name}",
-                    media_type = "video"
-                ),
+                sources = [
+                    self.provider.new_media_source(
+                        url = f"file://{m3u.name}",
+                        media_type = "video"
+                    ).attach()
+                ],
                 feed = self.provider.feed
             )
 
@@ -1135,7 +1121,12 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         with db_session:
 
             for item in self.items_query[offset:offset+limit]:
-                yield(item.detach())
+                listing = item.detach()
+                listing.sources = [ s.detach() for s in listing.sources ]
+                # raise Exception(listing.sources)
+                yield listing
+                # raise Exception(item.to_dict(related_objects=True, with_collections=True))
+                # raise Exception(type(item.detach().sources[0]))
                 # listing = self.new_listing(
                 #     feed = AttrDict(item.feed.to_dict()),
                 #     # **self.LISTING_CLASS.attr_class.from_orm(item).__dict__

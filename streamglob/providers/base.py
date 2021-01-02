@@ -438,7 +438,7 @@ class BaseProvider(abc.ABC):
         )
 
     def get_source(self, selection, **kwargs):
-        source = selection.content
+        source = selection.sources
         if not isinstance(source, list):
             source = [source]
         return source

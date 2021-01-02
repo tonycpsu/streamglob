@@ -661,32 +661,8 @@ class BAMTeamData(model.db.Entity):
             # record = record
         )
 
-@model.attrclass()
-class BAMMediaListing(model.MediaListing):
 
-    FEED_TYPE_ORDER = [
-        "away",
-        "in_market_away",
-        "home",
-        "in_market_home",
-        "national",
-        "multi-cam",
-        "condensed",
-        "recap",
-        "..."
-    ]
-
-    game_id: int = None
-    game_type: str = None
-    # away_team: BAMTeamData = None
-    # home_team: BAMTeamData = None
-    away_team_id: int = None
-    home_team_id: int = None
-    away_record: tuple = None
-    home_record: tuple = None
-    start: datetime = None
-    venue: str = None
-    # attrs: str = None
+class BAMMediaListingMixin(object):
 
     @property
     def line(self):
@@ -722,7 +698,7 @@ class BAMMediaListing(model.MediaListing):
                 pytz.timezone(config.settings.profile.time_zone)
             )
 
-        return cls(
+        return cls.attr_class(
             provider_id = provider,
             game_id = game_pk,
             game_type = game_type,
@@ -1062,7 +1038,7 @@ class BAMMediaListing(model.MediaListing):
             [ self.provider.new_media_source(
                 # mediaId and guid fields are both used to identify streams
                 # provider_id = self.provider_id,
-                listing = self,
+                # listing = self.attach(),
                 game_id = self.game_id,
                 media_id = item.get(
                     "mediaPlaybackId",
@@ -1199,22 +1175,35 @@ class BAMMediaListing(model.MediaListing):
         return {}
 
 
-@model.attrclass()
-class BAMMediaSource(model.MediaSource):
+@model.attrclass(BAMMediaListingMixin)
+class BAMMediaListing(model.MediaListing, BAMMediaListingMixin):
 
-    # provider: typing.Optional[BaseProvider] = None
-    listing: typing.Optional[BAMMediaListing] = None
-    game_id: str = ""
-    media_id: str = ""
-    title: str = ""
-    description: str = ""
-    state: str = "unknown"
-    call_letters: str = ""
-    language: str = ""
-    feed_type: str = ""
-    free: bool = False
-    playbacks: typing.List[dict] = field(default_factory=list)
+    FEED_TYPE_ORDER = [
+        "away",
+        "in_market_away",
+        "home",
+        "in_market_home",
+        "national",
+        "multi-cam",
+        "condensed",
+        "recap",
+        "..."
+    ]
 
+    game_id = Required(int)
+    game_type = Required(str)
+    away_team_id = Required(int)
+    home_team_id = Required(int)
+    away_record= Optional(IntArray)
+    home_record = Optional(IntArray)
+    start = Required(datetime)
+    venue = Optional(str)
+    # attrs: str = None
+    #
+    LINE_SCORE_DATA_TABLE_CLASS : typing.Type
+
+
+class BAMMediaSourceMixin(object):
 
     MEDIA_STATE_MAP = {
         "live": "!",
@@ -1329,6 +1318,24 @@ class BAMMediaSource(model.MediaSource):
     @property
     def ext(self):
         return "mp4"
+
+
+
+@model.attrclass(BAMMediaSourceMixin)
+class BAMMediaSource(model.MediaSource, BAMMediaSourceMixin):
+
+    # provider: typing.Optional[BaseProvider] = None
+    game_id = Required(str)
+    media_id = Required(str)
+    title = Optional(str)
+    description = Optional(str)
+    state = Optional(str)
+    call_letters = Optional(str)
+    language = Optional(str)
+    feed_type = Optional(str)
+    free = Required(bool, default=False)
+    # playbacks: typing.List[dict] = field(default_factory=list)
+
 
 
 def parse_int(n):
@@ -1893,7 +1900,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
                     self.GAME_STATUS_ORDER.index(l.state)
                     if l.state in self.GAME_STATUS_ORDER
                     else 0,
-                    l.start_time
+                    l.start
                 )
             )
         )
