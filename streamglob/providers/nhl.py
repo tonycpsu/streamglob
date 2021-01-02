@@ -49,7 +49,7 @@ class NHLDetailBox(BAMDetailBox):
             return None
 
 
-@dataclass
+@model.attrclass()
 class NHLMediaSource(BAMMediaSource):
 
     event_id: str = None

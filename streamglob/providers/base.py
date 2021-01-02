@@ -131,7 +131,7 @@ class BaseProvider(abc.ABC):
     """
 
     SESSION_CLASS = StreamSession
-    ITEM_CLASS = model.MediaItem
+    LISTING_CLASS = model.TitledMediaListing
     # VIEW_CLASS = SimpleProviderView
     FILTERS = AttrDict()
     ATTRIBUTES = AttrDict(title={"width": ("weight", 1)})
@@ -202,7 +202,7 @@ class BaseProvider(abc.ABC):
                 )
             except StopIteration:
                 continue
-        return model.MediaListing
+        return model.TitledMediaListing
 
     @property
     def MEDIA_SOURCE_CLASS(self):
@@ -355,17 +355,25 @@ class BaseProvider(abc.ABC):
 
 
     def new_media_source(self, *args, **kwargs):
-        return self.MEDIA_SOURCE_CLASS(
-            self.IDENTIFIER,
+        return self.MEDIA_SOURCE_CLASS.attr_class(
+            provider_id = self.IDENTIFIER,
             *args,
             **kwargs
         )
 
     def new_listing(self, **kwargs):
-        return self.LISTING_CLASS(
-            self.IDENTIFIER,
+        return self.LISTING_CLASS.attr_class(
+            provider_id = self.IDENTIFIER,
             **kwargs
         )
+
+
+    # def new_listing_attr(self, **kwargs):
+    #     return self.LISTING_CLASS.attr_class(
+    #         provider_id = self.IDENTIFIER,
+    #         **kwargs
+    #     )
+
 
     @abc.abstractmethod
     def listings(self, filters=None):
@@ -423,7 +431,7 @@ class BaseProvider(abc.ABC):
         )
 
     def get_source(self, selection, **kwargs):
-        source = selection.content
+        source = selection.sources
         if not isinstance(source, list):
             source = [source]
         return source
@@ -472,7 +480,7 @@ class BaseProvider(abc.ABC):
         else:
             downloader_spec = getattr(self.config, "helpers", None) or sources[0].helper
 
-        task = model.PlayMediaTask(
+        task = model.PlayMediaTask.attr_class(
             provider=self.NAME,
             title=selection.title,
             sources = sources
@@ -490,10 +498,14 @@ class BaseProvider(abc.ABC):
 
         if "num" not in kwargs:
             kwargs["num"] = len(sources)
-        for i, s in enumerate(sources):
+        for i, source in enumerate(sources):
 
             if index is not None and index != i:
                 continue
+
+            if not source.is_inflated:
+                source.inflate()
+
             try:
                 filename = s.download_filename(selection, index=index, **kwargs)
             except SGInvalidFilenameTemplate as e:
@@ -502,7 +514,7 @@ class BaseProvider(abc.ABC):
             task = model.DownloadMediaTask(
                 provider=self.NAME,
                 title=selection.title,
-                sources = [s],
+                sources = [source],
                 listing = selection,
                 dest=filename,
                 postprocessors = (self.config.get("postprocessors", []) or []).copy()

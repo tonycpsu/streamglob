@@ -113,12 +113,13 @@ class TaskManager(Observable):
                 else:
                     return
         async for task in get_tasks():
-            logger.trace(f"task: {task}")
-            if isinstance(task, model.PlayMediaTask):
+            logger.debug(f"task: {task}")
+            if isinstance(task, (model.PlayMediaTask, model.PlayMediaTask.attr_class)):
                 # program = await player.Player.play(task, *task.args, **task.kwargs)
                 run_task = player.Player.play(task, *task.args, **task.kwargs)
+                logger.info(run_task)
                 # ret = state.event_loop.create_task(run_task)
-            elif isinstance(task, model.DownloadMediaTask):
+            elif isinstance(task, (model.DownloadMediaTask, model.DownloadMediaTask.attr_class)):
                 try:
                     outfile = task.stage_outfile
                     run_task = player.Downloader.download(task, outfile, *task.args, **task.kwargs)
@@ -127,13 +128,14 @@ class TaskManager(Observable):
                     logger.warn(e)
                     continue
             else:
-                logger.error(f"not implemented: {program}")
+                logger.error(f"not implemented: {task}")
                 raise NotImplementedError
 
             try:
                 proc = await run_task
             except Exception as e:
                 task.result.set_result(e)
+                logger.error(e)
                 continue
             task.proc.set_result(proc)
             logger.debug(f"proc: {task.proc}")
@@ -143,11 +145,12 @@ class TaskManager(Observable):
             task.started = datetime.now()
             task.elapsed = timedelta(0)
 
-            if isinstance(task, model.PlayMediaTask):
+            if isinstance(task, model.PlayMediaTask.attr_class):
                 self.playing.append(task)
-            elif isinstance(task, model.DownloadMediaTask):
+            elif isinstance(task, model.DownloadMediaTask.attr_class):
                 self.active.append(task)
             else:
+                logger.error(type(task))
                 raise NotImplementedError
 
     async def poller(self):

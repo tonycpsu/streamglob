@@ -7,7 +7,7 @@ from dataclasses import *
 # there's also a TwitchHelix client, but most of that isn't implemented yet
 from twitch import TwitchClient
 
-@dataclass
+@model.attrclass()
 class TwitchMediaListing(LiveStreamMediaListing):
 
     @property

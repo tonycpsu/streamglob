@@ -98,7 +98,7 @@ class MLBBAMTeamData(BAMTeamData):
     TEAM_URL_TEMPLATE = "http://statsapi.mlb.com/api/v1/teams/{team_id}"
 
 
-@dataclass
+@model.attrclass()
 class MLBMediaListing(BAMMediaListing):
 
     LINE_SCORE_DATA_TABLE_CLASS = MLBLineScoreDataTable
@@ -210,8 +210,8 @@ class MLBMediaListing(BAMMediaListing):
         except KeyError:
             return 0.0
 
-@dataclass
-class MLBMediaSource(BAMMediaSource):
+
+class MLBMediaSourceMixin(object):
 
     @property
     def milestones(self):
@@ -301,6 +301,11 @@ class MLBMediaSource(BAMMediaSource):
         timestamps.update([("Live", None)])
 
         return timestamps
+
+    
+@model.attrclass(MLBMediaSourceMixin)
+class MLBMediaSource(MLBMediaSourceMixin, BAMMediaSource):
+    pass
 
 
 class MLBStreamSession(session.AuthenticatedStreamSession):

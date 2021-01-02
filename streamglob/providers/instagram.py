@@ -21,10 +21,12 @@ from pony.orm import *
 import limiter
 import json
 
-@dataclass
-class InstagramMediaSource(model.MediaSource):
+@model.attrclass()
+class InstagramMediaSource(model.InflatableMediaSource):
 
     EXTENSION_RE = re.compile("\.(\w+)\?")
+
+    shortcode = Optional(str)
 
     @property
     def ext(self):
@@ -44,17 +46,21 @@ class InstagramMediaSource(model.MediaSource):
 
     @property
     def is_bad(self):
-        return any(s in self.locator for s in ["0_0_0", "null.jpg"])
+        return any(s in (self.locator or self.preview_locator) for s in ["0_0_0", "null.jpg"])
 
     @property
     def download_helper(self):
         return lambda d: d.is_simple
 
+    def inflate(self):
+        post = self.feed.get_post_info(self.shortcode)
+        self.content = self.feed.extract_content(post)
 
-@dataclass
+
+@model.attrclass()
 class InstagramMediaListing(FeedMediaListing):
 
-    media_type: str = ""
+    media_type = Required(str)
 
 
 class InstagramSession(session.StreamSession):
@@ -87,13 +93,11 @@ class InstagramSession(session.StreamSession):
         finally:
             pass
 
-class InstagramItem(model.MediaItem):
 
-    media_type = Required(str)
+@model.attrclass()
+class InstagramFeed(MediaFeed):
 
-class InstagramFeed(model.MediaFeed):
-
-    ITEM_CLASS = InstagramItem
+    LISTING_CLASS = InstagramMediaListing
 
     POST_TYPE_MAP = {
         "GraphImage": "image",
@@ -120,6 +124,67 @@ class InstagramFeed(model.MediaFeed):
         return self._looter
 
 
+    def get_post_info(self, shortcode):
+
+        return self.looter.get_post_info(shortcode)
+
+    
+    def extract_content(self, post):
+
+        media_type = self.POST_TYPE_MAP[post["__typename"]]
+
+        if media_type == "image":
+            content = [
+                dict(
+                    url = post.display_url,
+                    media_type = media_type,
+                    shortcode = post.shortcode
+                )
+            ]
+        elif media_type == "video":
+            if post.get("video_url"):
+                content = [
+                    dict(
+                        url = post.video_url,
+                        media_type = media_type,
+                        shortcode = post.shortcode
+                    )
+                ]
+            else:
+                content = [
+                    dict(
+                        url = None,
+                        preview_url = post.display_url,
+                        media_type = media_type,
+                        shortcode = post.shortcode
+                    )
+                ]
+
+        elif media_type == "carousel":
+            if post.get('edge_sidecar_to_children'):
+                content = [
+                    dict(
+                        url = s.video_url if s.is_video else s.display_url,
+                        media_type = "video" if s.is_video else "image",
+                        shortcode = post.shortcode
+                    )
+                    for s in [AttrDict(e['node']) for e in post['edge_sidecar_to_children']['edges']]
+                ]
+            else:
+                content = [
+                    dict(
+                        url = None,
+                        preview_url = post.display_url,
+                        media_type = media_type
+                    )
+                ]
+
+        else:
+            raise Exception(f"invalid media type: {media_type}")
+
+        return content
+
+
     def fetch(self, resume=False):
 
         logger.info(f"fetching {self.locator}")
@@ -138,16 +203,18 @@ class InstagramFeed(model.MediaFeed):
             for page in pages:
                 cursor = page["edge_owner_to_timeline_media"]["page_info"]["end_cursor"]
                 for media in self.looter._medias(iter([page])):
-                    code = media["shortcode"]
-                    with self.session.limiter():
-                        post = self.looter.get_post_info(code)
-                        yield (cursor, AttrDict(post))
+                    yield (cursor, AttrDict(media))
+                    # code = media["shortcode"]
+                    # with self.session.limiter():
+                    #     post = self.get_post_info(code)
+                    #     yield (cursor, AttrDict(post))
 
         count = 0
         new_count = 0
 
         for end_cursor, post in get_posts(self.pages):
 
+            # raise Exception(post)
             count += 1
 
             logger.info(f"cursor: {end_cursor}")
@@ -156,31 +223,6 @@ class InstagramFeed(model.MediaFeed):
 
             if new_count >= limit or new_count == 0 and count >= limit:
                 break
-            try:
-                media_type = self.POST_TYPE_MAP[post["__typename"]]
-            except:
-                logger.warn(f"unknown post type: {post.__typename}")
-                continue
-
-            if media_type == "image":
-                content = self.provider.new_media_source(
-                    post.display_url, media_type = media_type
-                )
-            elif media_type == "video":
-                content = self.provider.new_media_source(
-                    post.video_url, media_type = media_type
-                )
-            elif media_type == "carousel":
-                content = [
-                    self.provider.new_media_source(
-                        s.video_url if s.is_video else s.display_url,
-                        media_type = "video" if s.is_video else "image"
-                    )
-                    for s in [AttrDict(e['node']) for e in post['edge_sidecar_to_children']['edges']]
-                ]
-            else:
-                logger.warn(f"unknown post type: {post.__typename}")
-                continue
 
             created_timestamp = post.get(
                 "date", post.get("taken_at_timestamp")
@@ -208,18 +250,21 @@ class InstagramFeed(model.MediaFeed):
                     else None
                 )
 
-                i = self.ITEM_CLASS(
+                try:
+                    media_type = self.POST_TYPE_MAP[post["__typename"]]
+                except:
+                    logger.warn(f"unknown post type: {post.__typename}")
+                    continue
+
+                content = self.extract_content(post)
+
+                i = dict(
                     feed = self,
                     guid = post.shortcode,
                     title = (caption or "(no caption)").replace("\n", " "),
                     created = created,
                     media_type = media_type,
-                    content =  InstagramMediaSource.schema().dumps(
-                        content
-                        if isinstance(content, list)
-                        else [content],
-                        many=True
-                    ),
+                    sources =  content,
                     attrs = dict(
                         short_code = post.shortcode
                     )

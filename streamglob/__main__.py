@@ -560,7 +560,7 @@ def run_gui(action, provider, **kwargs):
             try:
                 await site.start()
             except OSError as e:
-                logger.warn(e)
+                logger.warning(e)
 
         rpc = JsonRpc()
 
@@ -593,7 +593,7 @@ def run_cli(action, provider, selection, **kwargs):
             progress=False,
             stdout=sys.stdout, stderr=sys.stderr, **kwargs
         )
-        loop_result = asyncio.run(task.result)
+        loop_result = state.event_loop.run_until_complete(task.result)
         result = task.result.result()
         if isinstance(result, Exception):
             logger.exception(traceback.print_exception(type(result), result, result.__traceback__))
@@ -652,14 +652,6 @@ def main():
     state.logger = setup_logging(options.verbose - options.quiet, quiet_stdout=False)
 
     providers.load_config()
-
-    with db_session(optimistic=False):
-        model.MediaFeed.purge_all(
-            min_items = config.settings.profile.cache.min_items,
-            max_items = config.settings.profile.cache.max_items,
-            max_age = config.settings.profile.cache.max_age
-        )
-
     spec = None
 
     logger.debug(f"{PACKAGE_NAME} starting")
