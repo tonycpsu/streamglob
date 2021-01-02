@@ -361,11 +361,26 @@ class BaseProvider(abc.ABC):
             **kwargs
         )
 
+    # FIXME: too much magic?
     def new_listing(self, **kwargs):
-        return self.LISTING_CLASS.attr_class(
-            provider_id = self.IDENTIFIER,
-            **kwargs
-        )
+        try:
+            return self.LISTING_CLASS(
+                provider_id = self.IDENTIFIER,
+                **kwargs
+            )
+        except pony.orm.core.TransactionError:
+            return self.LISTING_CLASS.attr_class(
+                provider_id = self.IDENTIFIER,
+                **kwargs
+            )
+
+
+    # def new_listing_attr(self, **kwargs):
+    #     return self.LISTING_CLASS.attr_class(
+    #         provider_id = self.IDENTIFIER,
+    #         **kwargs
+    #     )
+
 
     @abc.abstractmethod
     def listings(self, filters=None):

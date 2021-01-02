@@ -48,15 +48,18 @@ class MediaFeed(model.MediaChannel):
     @db_session
     def update(self, *args, **kwargs):
         for item in self.fetch(*args, **kwargs):
+            content = [
+                self.provider.new_media_source(**s).dict(exclude_unset = True, exclude_none = True)
+                for s in item["content"]
+            ]
+            del item["content"]
             listing = self.provider.new_listing(
-                **item.dict(exclude={"provider_id"})
+                content = content,
+                **item
             )
-            # listing.content = self.provider.MEDIA_SOURCE_CLASS.schema().loads(listing["content"], many=True)
-
             self.provider.on_new_listing(listing)
             self.updated = datetime.now()
-            listing.save()
-            # commit()
+            commit()
 
     @db_session
     def mark_all_items_read(self):
@@ -209,6 +212,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     class DetailBox(urwid.WidgetWrap):
 
         def __init__(self, columns, data, *args, **kwargs):
+            # raise Exception(data.content)
             self.table = CachedFeedProviderDataTable.DetailTable(
             columns=columns,
             data=[dict(
@@ -241,7 +245,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     with_scrollbar=True
     sort_by = ("created", True)
-    index = "media_item_id"
+    # index = "media_listing_id"
     # no_load_on_init = True
     detail_auto_open = True
     detail_replace = True
@@ -297,13 +301,13 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         )
 
     def row_attr_fn(self, row):
-        if not (row.get("read") or list(self.check_parts(row))):
+        if not (row.read or list(self.check_parts(row))):
             return "unread"
         return None
 
     def detail_fn(self, data):
 
-        if len(data.content) <= 1:
+        if not isinstance(data.content, list) or len(data.content) <= 1:
             return
 
         columns = self.columns.copy()
@@ -322,13 +326,13 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     def row_to_playlist_pos(self, row):
         try:
-            media_item_id = self[row].data.media_item_id
+            media_listing_id = self[row].data.media_listing_id
         except IndexError:
             return None
         try:
             return next(
                 n for n, i in enumerate(self.play_items)
-                if i.media_item_id == media_item_id
+                if i.media_listing_id == media_listing_id
             )
         except StopIteration:
             return None
@@ -448,7 +452,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             item.mark_read()
             row.clear_attr("unread")
             self.set_value(position, "read", item.read)
-            self.invalidate_rows([self[position].data.media_item_id])
+            self.invalidate_rows([self[position].data.media_listing_id])
         return partial
 
     @db_session
@@ -472,7 +476,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             item.mark_unread()
             self[position].set_attr("unread")
             self.set_value(position, "read", item.read)
-        self.invalidate_rows([self[position].data.media_item_id])
+        self.invalidate_rows([self[position].data.media_listing_id])
 
 
     @db_session
@@ -542,7 +546,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             count += len(self)
             try:
                 idx = next(
-                    r.data.media_item_id
+                    r.data.media_listing_id
                     for r in self[self.focus_position+1:]
                     if not r.data.read
                 )
@@ -566,7 +570,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     async def prev_unread(self):
         try:
             idx = next(
-                r.data.media_item_id
+                r.data.media_listing_id
                 for r in self[self.focus_position-1::-1]
                 if not r.data.read
             )
@@ -616,10 +620,17 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         ITEM_TEMPLATE="""#EXTINF:1,{title}
 {url}
 """
+        # raise Exception([
+        #     source for (row_num, row, num, source) in [
+        #             (row_num, row, num, source) for row_num, row in enumerate(self)
+        #             for num, source in enumerate(row.data.content)
+        #             # if not source.is_bad
+        #     ]
+        # ])
 
         items = [
             AttrDict(
-                media_item_id = row.data.media_item_id,
+                media_listing_id = row.data.media_listing_id,
                 title = utils.sanitize_filename(row.data.title),
                 created = row.data.created,
                 feed = row.data.feed.name,
@@ -808,7 +819,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
 
     def decorate(self, row, column, value):
-        if column.name == "title" and len(row.get("content")) > 1:
+        if column.name == "title" and isinstance(row.content, list) and len(row.content) > 1:
             value = f"[{len(row.get('content'))}] {row.get('title')}"
 
         return super().decorate(row, column, value)
@@ -922,9 +933,12 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
 
     @property
     def ATTRIBUTES(self):
+        def format_feed(feed):
+            return feed.name if hasattr(feed, "name") else ""
+
         return AttrDict(
-            media_item_id = {"hide": True},
-            feed = {"width": 32, "format_fn": lambda f: f.name if hasattr(f, "name") else ""},
+            media_listing_id = {"hide": True},
+            feed = {"width": 32, "format_fn": format_feed },
             created = {"width": 19},
             title = {"width": ("weight", 1), "truncate": False},
         )
@@ -1121,7 +1135,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         with db_session:
 
             for item in self.items_query[offset:offset+limit]:
-                yield(item)
+                yield(item.detach())
                 # listing = self.new_listing(
                 #     feed = AttrDict(item.feed.to_dict()),
                 #     # **self.LISTING_CLASS.attr_class.from_orm(item).__dict__
@@ -1135,15 +1149,15 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
 
     @db_session
     def mark_items_read(self, request):
-        media_item_ids = list(set(request.params))
-        logger.info(f"mark_items_read: {media_item_ids}")
+        media_listing_ids = list(set(request.params))
+        logger.info(f"mark_items_read: {media_listing_ids}")
         with db_session:
             try:
                 for item in self.LISTING_CLASS.select(
-                    lambda i: i.media_item_id in media_item_ids
+                    lambda i: i.media_listing_id in media_listing_ids
                 ):
                     item.read = datetime.now()
                 commit()
                 self.reset()
             except pony.orm.core.ObjectNotFound:
-                logger.info(f("mark_item_read: item {media_item_id} not found"))
+                logger.info(f("mark_item_read: item {media_listing_id} not found"))

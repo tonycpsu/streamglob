@@ -79,8 +79,10 @@ def parse_attr(attr):
         return (None, None)
 
     if attr.is_collection:
-        # Would like to use the related entity class here, but the mapping
-        # hasn't been generated yet, so these aren't available.
+        # It's not always possible to use the type of the collection, which may
+        # not be defined yet, in which case we settle for db.Entity
+        rel_type = db.Entity if callable(attr.py_type) else attr.py_type
+        print(rel_type)
         attr_type = typing.List[typing.Union[db.Entity, BaseModel]]
         validator_fn = pony_set_validator
 
@@ -154,17 +156,19 @@ class attrclass(object):
             for attr, annotation in getattr(cls, "__annotations__", {}).items():
                 if attr in cls._attrs_ or attr in ns:
                     continue
-                print(f"adding attr {attr} to {attr_class_name}")
+                # print(f"adding attr {attr} to {attr_class_name}")
                 ns[attr] = getattr(cls, attr, None)
                 ns["__annotations__"][attr] = annotation
 
-            def save(self):
+            def attach(self):
 
                 with db_session:
                     saved = self.ormclass(
                         **self.dict(exclude_unset = True, exclude_none = True)
                     )
-            ns["save"] = save
+                    return saved
+
+            ns["attach"] = attach
 
             return ns
 
@@ -186,7 +190,7 @@ class attrclass(object):
         if self.common_base:
             bases.append(self.common_base)
 
-        print(bases)
+        # print(bases)
         attr_class = types.new_class(
             attr_class_name,
             tuple(bases),
@@ -194,6 +198,11 @@ class attrclass(object):
         )
         cls.attr_class = attr_class
         cls.from_orm = attr_class.from_orm
+
+        def detach(self):
+            # FIXME
+            return self.attr_class.from_orm(self)
+        cls.detach = detach
         return cls
 
 
@@ -246,6 +255,7 @@ class MediaListing(db.Entity):
     def provider(self):
         return providers.get(self.provider_id)
         # return self.provider.NAME.lower()
+
 
 @attrclass()
 class TitledMediaListing(MediaListing):

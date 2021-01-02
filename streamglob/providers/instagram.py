@@ -134,30 +134,36 @@ class InstagramFeed(MediaFeed):
         media_type = self.POST_TYPE_MAP[post["__typename"]]
 
         if media_type == "image":
-            content = self.provider.new_media_source(
-                url = post.display_url,
-                media_type = media_type,
-                shortcode = post.shortcode
-            )
+            content = [
+                dict(
+                    url = post.display_url,
+                    media_type = media_type,
+                    shortcode = post.shortcode
+                )
+            ]
         elif media_type == "video":
             if post.get("video_url"):
-                content = self.provider.new_media_source(
-                    url = post.video_url,
-                    media_type = media_type,
-                    shortcode = post.shortcode
-                )
+                content = [
+                    dict(
+                        url = post.video_url,
+                        media_type = media_type,
+                        shortcode = post.shortcode
+                    )
+                ]
             else:
-                content = self.provider.new_media_source(
-                    url = None,
-                    preview_url = post.display_url,
-                    media_type = media_type,
-                    shortcode = post.shortcode
-                )
+                content = [
+                    dict(
+                        url = None,
+                        preview_url = post.display_url,
+                        media_type = media_type,
+                        shortcode = post.shortcode
+                    )
+                ]
 
         elif media_type == "carousel":
             if post.get('edge_sidecar_to_children'):
                 content = [
-                    self.provider.new_media_source(
+                    dict(
                         url = s.video_url if s.is_video else s.display_url,
                         media_type = "video" if s.is_video else "image",
                         shortcode = post.shortcode
@@ -165,11 +171,13 @@ class InstagramFeed(MediaFeed):
                     for s in [AttrDict(e['node']) for e in post['edge_sidecar_to_children']['edges']]
                 ]
             else:
-                content = self.provider.new_media_source(
-                    url = None,
-                    preview_url = post.display_url,
-                    media_type = media_type
-                )
+                content = [
+                    dict(
+                        url = None,
+                        preview_url = post.display_url,
+                        media_type = media_type
+                    )
+                ]
 
         else:
             raise Exception(f"invalid media type: {media_type}")
@@ -250,7 +258,7 @@ class InstagramFeed(MediaFeed):
 
                 content = self.extract_content(post)
 
-                i = self.provider.new_listing(
+                i = dict(
                     feed = self,
                     guid = post.shortcode,
                     title = (caption or "(no caption)").replace("\n", " "),
