@@ -13,8 +13,11 @@ import shutil
 import unicodedata
 import tempfile
 
-from orderedattrdict import AttrDict
+import pony.options
+pony.options.CUT_TRACEBACK = False
 from pony.orm import *
+
+from orderedattrdict import AttrDict
 from pony.orm.core import EntityMeta
 from pydantic import BaseModel, Field, validator
 
@@ -77,23 +80,22 @@ def parse_attr(attr):
         return list(v)
 
     if attr.is_discriminator:
-        return (None, None)
+        return (None, None, None)
 
     if attr.is_collection:
         # It's not always possible to use the type of the collection, which may
         # not be defined yet, in which case we settle for db.Entity
         rel_type = db.Entity if not isinstance(attr.py_type, type) else attr.py_type
-        # print(attr.entity, attr, attr.py_type, rel_type)
         attr_type = typing.List[typing.Union[rel_type, BaseModel]]
         validator_fn = pony_set_validator
 
     elif attr.is_relation:
-        attr_type = db.Entity
+        attr_type = typing.Union[db.Entity, BaseModel]
 
     elif attr.is_required and not attr.auto and attr.default is None:
         attr_type = py_type
 
-    return (attr_type, validator_fn)
+    return (attr_type, validator_fn, attr.default)
 
 
 class attrclass(object):
@@ -134,12 +136,12 @@ class attrclass(object):
 
             ns["ormclass"] = cls
             for attr in cls._attrs_:
-                attr_type, validator_fn = parse_attr(attr)
+                attr_type, validator_fn, default = parse_attr(attr)
                 if not attr_type:
                     continue
                 # I don't know if there's a less hacky way to add type annotations
                 # to dynamically-created classes, but this seems to work
-                ns[attr.name] = None
+                ns[attr.name] = default
                 ns["__annotations__"][attr.name] = attr_type
                 if validator_fn:
                     val_func_name = f"validate_{attr.name}"
@@ -147,7 +149,6 @@ class attrclass(object):
                         attr.name, pre=True, check_fields=False, allow_reuse=True
                     )(validator_fn)
 
-                # print(getattr(cls, "__annotations__", None))
 
             # if there are type annotations for other class attributes that (a)
             # aren't entity attributes, (b) have type annotations, and (c)
@@ -157,17 +158,26 @@ class attrclass(object):
             for attr, annotation in getattr(cls, "__annotations__", {}).items():
                 if attr in cls._attrs_ or attr in ns:
                     continue
-                # print(f"adding attr {attr} to {attr_class_name}")
                 ns[attr] = getattr(cls, attr, None)
                 ns["__annotations__"][attr] = annotation
 
             def attach(self):
-
                 with db_session:
-                    saved = self.ormclass(
+
+                    keys = {
+                        k.name: getattr(self, k.name, None)
+                        for k in (self.ormclass._pk_
+                                  if isinstance(cls._pk_, tuple)
+                                  else (self.ormclass._pk_,))
+                    }
+
+                    attached = self.ormclass.get(**keys)
+
+                    if not attached:
+                        attached = self.ormclass(
                         **self.dict(exclude_unset = True, exclude_none = True)
                     )
-                    return saved
+                    return attached
 
             ns["attach"] = attach
 
@@ -190,8 +200,8 @@ class attrclass(object):
         # properties common to both) we do that here
         if self.common_base:
             bases.insert(0, self.common_base)
+            # bases.append(self.common_base)
 
-        # print(bases)
         attr_class = types.new_class(
             attr_class_name,
             tuple(bases),
@@ -203,12 +213,30 @@ class attrclass(object):
         def detach(self):
             # FIXME
             return self.attr_class.from_orm(self)
+            # for attr in dir(detached):
+            #     if attr.startswith("_") or isinsance():
+            #         continue
+            #     if isinstance(getattr(detached, attr), db.Entity):
+            #         setattr(detached, attr, None)
+            # return detached
         cls.detach = detach
         return cls
 
 
-@attrclass()
-class MediaChannel(db.Entity):
+class MediaChannelMixin(object):
+
+    @property
+    def provider(self):
+        return providers.get(self.provider_id)
+
+    @property
+    def session(self):
+        return self.provider.session
+
+
+
+@attrclass(MediaChannelMixin)
+class MediaChannel(MediaChannelMixin, db.Entity):
     """
     A streaming video channel, identified by some unique string (locator).  This
     may be a URL, username, or any other unique string, depending on the nature
@@ -230,14 +258,6 @@ class MediaChannel(db.Entity):
     update_interval = Required(int, default=DEFAULT_UPDATE_INTERVAL)
     attrs = Required(Json, default={})
 
-    @property
-    def provider(self):
-        return providers.get(self.provider_id)
-
-    @property
-    def session(self):
-        return self.provider.session
-
 
 class MediaSourceMixin(object):
 
@@ -247,11 +267,10 @@ class MediaSourceMixin(object):
     def provider(self):
         return providers.get(self.provider_id)
 
+    @property
     def is_inflated(self):
+        logger.info("MediaSourceMixin.is_inflated")
         return True
-
-    def inflate(self):
-        pass
 
     @property
     def helper(self):
@@ -296,13 +315,13 @@ class MediaSourceMixin(object):
         return f"{self.provider_id}_dl" # *shrug*
 
 
-    def download_filename(self, listing, index=0, num=None, **kwargs):
+    def download_filename(self, index=0, num=None, **kwargs):
 
         if "outfile" in kwargs:
             return kwargs.get("outfile")
 
         outpath = (
-            listing.provider.config.get_path("output.path")
+            self.provider.config.get_path("output.path")
             or
             config.settings.profile.get_path("output.path")
             or
@@ -310,7 +329,7 @@ class MediaSourceMixin(object):
         )
 
         template = (
-            listing.provider.config.get_path("output.template")
+            self.provider.config.get_path("output.template")
             or
             config.settings.profile.get_path("output.template")
         )
@@ -318,7 +337,7 @@ class MediaSourceMixin(object):
         if template:
             template = self.TEMPLATE_RE.sub(r"{self.\1}", template)
             try:
-                outfile = template.format(self=self, listing=listing, index=index+1, num=num)
+                outfile = template.format(self=self, listing=self.listing, index=index+1, num=num)
             except Exception as e:
                 logger.exception(e)
                 raise SGInvalidFilenameTemplate
@@ -336,12 +355,15 @@ class MediaSourceMixin(object):
 class MediaSource(MediaSourceMixin, db.Entity):
 
     provider_id = Required(str)
-    listing = Optional(lambda: MultiSourceMediaListing)
-    url = Optional(str)
+    listing = Optional(lambda: MultiSourceMediaListing, reverse="sources")
+    url = Optional(str, nullable=True, default=None)
     media_type = Optional(str)
     task = Optional(lambda: MediaTask, reverse="sources")
 
 
+    @property
+    def locator(self):
+        return self.url
 
 class InflatableMediaSourceMixin(object):
 
@@ -353,17 +375,14 @@ class InflatableMediaSourceMixin(object):
     def is_inflated(self):
         return self.locator is not None
 
-    @abc.abstractmethod
     def inflate(self):
-        pass
-
+        raise Exception("must override inflate method")
 
 
 @attrclass(InflatableMediaSourceMixin)
-class InflatableMediaSource(MediaSource):
+class InflatableMediaSource(InflatableMediaSourceMixin, MediaSource):
 
     preview_url = Optional(str)
-
 
 
 class MediaListingMixin(object):
@@ -388,10 +407,23 @@ class MultiSourceMediaListing(MediaListing):
 
     sources = Set(MediaSource)
 
+
 @attrclass()
 class TitledMediaListing(MediaListing):
 
     title = Required(str)
+
+
+class InflatableMediaListingMixin(object):
+
+    def inflate(self):
+        pass
+
+
+@attrclass(InflatableMediaListingMixin)
+class InflatableMediaListing(InflatableMediaListingMixin, MediaListing):
+
+    is_inflated = Required(bool, default=False)
 
 
 @attrclass()
@@ -400,7 +432,7 @@ class MediaTask(db.Entity):
     provider = Required(str)
     title =  Required(str)
     sources = Set(lambda: MediaSource, reverse="task")
-    listing = Required(lambda: MediaListing)
+    listing = Optional(lambda: MediaListing)
     task_id =  Optional(int)
     args = Required(Json, default=[])
     kwargs = Required(Json, default={})
@@ -408,23 +440,29 @@ class MediaTask(db.Entity):
     def finalize(self):
         pass
 
-@attrclass()
-class ProgramMediaTask(MediaTask):
 
-    program: typing.Optional[typing.Awaitable]
-    proc: typing.Optional[typing.Awaitable]
-    result: typing.Optional[typing.Awaitable]
-    pid = Optional(int)
-    started = Optional(datetime)
-    elapsed = Optional(timedelta)
+class ProgramMediaTaskMixin(object):
 
     def reset(self):
         self.program = state.event_loop.create_future()
         self.proc = state.event_loop.create_future()
 
     def finalize(self):
+        logger.debug(f"finalize program: {self.result} {self.proc} {self.proc.result().returncode}")
         self.result.set_result(self.proc.result().returncode)
+        logger.debug("-finalize program")
 
+
+@attrclass(ProgramMediaTaskMixin)
+class ProgramMediaTask(ProgramMediaTaskMixin, MediaTask):
+
+    pid = Optional(int)
+    started = Optional(datetime)
+    elapsed = Optional(timedelta)
+
+    program: typing.Optional[typing.Awaitable] = None
+    proc: typing.Optional[typing.Awaitable] = None
+    result: typing.Optional[typing.Awaitable] = None
 
 class PlayMediaTaskMixin(object):
 
@@ -439,17 +477,16 @@ class PlayMediaTaskMixin(object):
 class PlayMediaTask(PlayMediaTaskMixin, ProgramMediaTask):
     pass
 
-@attrclass()
-class DownloadMediaTask(ProgramMediaTask):
 
-    dest = Optional(str)
-    tempdir = Optional(str)
-    postprocessors = Required(Json, default=[])
-    stage_results = Required(Json, default=[])
+class DownloadMediaTaskMixin(object):
 
-    def __post_init__(self):
-        if len(self.postprocessors):
-            self.tempdir = tempfile.mkdtemp(prefix="streamglob")
+    tempdir_ :typing.Optional[str] = None
+
+    @property
+    def tempdir(self):
+        if not self.tempdir_:
+            self.tempdir_ = tempfile.mkdtemp(prefix="streamglob")
+        return self.tempdir_
 
     @property
     def stage(self):
@@ -480,6 +517,14 @@ class DownloadMediaTask(ProgramMediaTask):
             shutil.move(self.stage_results[-1], self.dest)
         shutil.rmtree(self.tempdir)
         super().finalize()
+
+
+@attrclass(DownloadMediaTaskMixin)
+class DownloadMediaTask(DownloadMediaTaskMixin, ProgramMediaTask):
+
+    dest = Optional(str)
+    postprocessors = Required(Json, default=[])
+    stage_results = Required(Json, default=[])
 
 
 class CacheEntry(db.Entity):
@@ -524,6 +569,7 @@ def init(filename=None, *args, **kwargs):
 def main():
 
     foo = MediaSource.attr_class()
+    config.init()
     raise Exception(foo.helper)
 
 

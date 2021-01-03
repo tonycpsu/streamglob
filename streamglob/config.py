@@ -225,7 +225,7 @@ class Config(ConfigTree):
 
 def load(config_dir=None, merge_default=False):
     global settings
-    settings = Config(config_dir, merge_default=merge_default)
+    settings = Config(os.path.expanduser(config_dir), merge_default=merge_default)
 
 # settings = Config(CONFIG_FILE, merge_default=True)
 

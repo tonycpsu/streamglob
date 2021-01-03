@@ -21,47 +21,6 @@ from pony.orm import *
 import limiter
 import json
 
-@model.attrclass()
-class InstagramMediaSource(model.InflatableMediaSource):
-
-    EXTENSION_RE = re.compile("\.(\w+)\?")
-
-    shortcode = Optional(str)
-
-    @property
-    def ext(self):
-        try:
-            return self.EXTENSION_RE.search(self.locator).groups()[0]
-        except IndexError:
-            return None
-        except AttributeError:
-            raise Exception(self.locator)
-
-    @property
-    def helper(self):
-        return AttrDict([
-            (None, "youtube-dl"),
-            ("mpv", None),
-        ])
-
-    @property
-    def is_bad(self):
-        return any(s in (self.locator or self.preview_locator) for s in ["0_0_0", "null.jpg"])
-
-    @property
-    def download_helper(self):
-        return lambda d: d.is_simple
-
-    def inflate(self):
-        post = self.feed.get_post_info(self.shortcode)
-        self.content = self.feed.extract_content(post)
-
-
-@model.attrclass()
-class InstagramMediaListing(FeedMediaListing):
-
-    media_type = Required(str)
-
 
 class InstagramSession(session.StreamSession):
 
@@ -94,8 +53,86 @@ class InstagramSession(session.StreamSession):
             pass
 
 
-@model.attrclass()
-class InstagramFeed(MediaFeed):
+class InstagramMediaSourceMixin(object):
+
+    EXTENSION_RE = re.compile("\.(\w+)\?")
+
+    @property
+    def ext(self):
+        try:
+            return self.EXTENSION_RE.search(self.locator).groups()[0]
+        except IndexError:
+            return None
+        except AttributeError:
+            raise Exception(self.locator)
+
+    @property
+    def helper(self):
+        return AttrDict([
+            (None, "youtube-dl"),
+            ("mpv", None),
+        ])
+
+    @property
+    def is_bad(self):
+        return any(s in (self.locator or self.preview_locator) for s in ["0_0_0", "null.jpg"])
+
+    @property
+    def download_helper(self):
+        return lambda d: d.is_simple
+
+
+@model.attrclass(InstagramMediaSourceMixin)
+class InstagramMediaSource(InstagramMediaSourceMixin, model.InflatableMediaSource):
+
+    shortcode = Optional(str)
+
+
+class InstagramMediaListingMixin(object):
+
+    @property
+    def shortcode(self):
+        return self.guid
+
+    def inflate(self):
+        logger.info("inflate")
+        with db_session:
+            # FIXME: for some reason I don't feel like digging into right now,
+            # self.feed is of type MediaFeed instead of InstagramMediaFeed, so
+            # we force the issue here
+            feed = self.provider.FEED_CLASS[self.feed.channel_id]
+            post = AttrDict(feed.get_post_info(self.shortcode))
+            delete(s for s in self.sources)
+            for source in feed.extract_content(post):
+                self.sources.add(self.provider.new_media_source(**source).attach())
+
+            self.is_inflated = True
+
+    @property
+    def should_inflate_on_focus(self):
+        return self.media_type == "carousel"
+
+    def on_focus(self, source_count=None):
+        logger.info("on_focus")
+        if (
+                not self.provider.config.view.get("inflate_on_focus", False)
+                or not self.should_inflate_on_focus
+                or self.is_inflated
+        ):
+            return False
+
+        self.inflate()
+        return True
+
+
+@model.attrclass(InstagramMediaListingMixin)
+class InstagramMediaListing(InstagramMediaListingMixin, FeedMediaListing, model.InflatableMediaListing):
+
+    media_type = Required(str)
+
+
+
+class InstagramMediaFeedMixin(object):
 
     LISTING_CLASS = InstagramMediaListing
 
@@ -104,6 +141,8 @@ class InstagramFeed(MediaFeed):
         "GraphVideo": "video",
         "GraphSidecar": "carousel"
     }
+
+    looter_ : typing.Any = None
 
     @property
     @db_session
@@ -117,18 +156,18 @@ class InstagramFeed(MediaFeed):
 
     @property
     def looter(self):
-        if not hasattr(self, "_looter") or not self._looter or self._looter._username != self.locator[1:]:
-            self._looter = ProfileLooter(self.locator[1:])
-            if self.provider.config.credentials and not self._looter.logged_in:
-                self._looter.login(**self.provider.session_params)
-        return self._looter
+        if not hasattr(self, "looter_") or not self.looter_ or self.looter_._username != self.locator[1:]:
+            self.looter_ = ProfileLooter(self.locator[1:])
+            if self.provider.config.credentials and not self.looter_.logged_in:
+                self.looter_.login(**self.provider.session_params)
+        return self.looter_
 
 
     def get_post_info(self, shortcode):
 
         return self.looter.get_post_info(shortcode)
 
-    
+
     def extract_content(self, post):
 
         media_type = self.POST_TYPE_MAP[post["__typename"]]
@@ -267,7 +306,8 @@ class InstagramFeed(MediaFeed):
                     sources =  content,
                     attrs = dict(
                         short_code = post.shortcode
-                    )
+                    ),
+                    is_inflated = media_type == "image"
                 )
                 new_count += 1
                 yield i
@@ -278,6 +318,11 @@ class InstagramFeed(MediaFeed):
         if "post_iter" in self.attrs:
             del self.attrs["post_iter"]
             commit()
+
+
+@model.attrclass(InstagramMediaFeedMixin)
+class InstagramMediaFeed(InstagramMediaFeedMixin, MediaFeed):
+    pass
 
 
 class InstagramDataTable(CachedFeedProviderDataTable):
@@ -305,7 +350,7 @@ class InstagramProviderView(SimpleProviderView):
 @with_view(InstagramProviderView)
 class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
 
-    FEED_CLASS = InstagramFeed
+    FEED_CLASS = InstagramMediaFeed
 
     SUBJECT_LABEL = "caption"
 

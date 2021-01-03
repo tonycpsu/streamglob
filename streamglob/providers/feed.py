@@ -58,7 +58,7 @@ class MediaFeed(model.MediaChannel):
             ]
             listing = self.provider.new_listing(
                 **item
-            )
+            ).attach()
             self.provider.on_new_listing(listing)
             self.updated = datetime.now()
             commit()
@@ -112,22 +112,7 @@ class MediaFeed(model.MediaChannel):
         commit()
 
 
-
-@model.attrclass()
-class FeedMediaListing(model.TitledMediaListing, model.MultiSourceMediaListing):
-    """
-    An individual media clip, broadcast, episode, etc. within a particular
-    MediaFeed.
-    """
-    # FIXME: move MediaFeed here?
-    feed = Required(lambda: MediaFeed)
-    guid = Required(str, index=True)
-    created = Required(datetime, default=datetime.now)
-    fetched = Required(datetime, default=datetime.now)
-    read = Optional(datetime)
-    watched = Optional(datetime)
-    downloaded = Optional(datetime)
-    # was_downloaded = Required(bool, default=False)
+class FeedMediaListingMixin(object):
 
     @db_session
     def mark_read(self):
@@ -178,8 +163,25 @@ class FeedMediaListing(model.TitledMediaListing, model.MultiSourceMediaListing):
     def created_timestamp(self):
         return self.created.isoformat().split(".")[0]
 
+    def on_focus(self):
+        pass
 
 
+@model.attrclass(FeedMediaListingMixin)
+class FeedMediaListing(FeedMediaListingMixin, model.MultiSourceMediaListing, model.TitledMediaListing):
+    """
+    An individual media clip, broadcast, episode, etc. within a particular
+    MediaFeed.
+    """
+    # FIXME: move MediaFeed here?
+    feed = Required(lambda: MediaFeed)
+    guid = Required(str, index=True)
+    created = Required(datetime, default=datetime.now)
+    fetched = Required(datetime, default=datetime.now)
+    read = Optional(datetime)
+    watched = Optional(datetime)
+    downloaded = Optional(datetime)
+    # was_downloaded = Required(bool, default=False)
 
 
 @keymapped()
@@ -213,13 +215,12 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     class DetailBox(urwid.WidgetWrap):
 
         def __init__(self, columns, data, *args, **kwargs):
-            # raise Exception(data.sources)
             self.table = CachedFeedProviderDataTable.DetailTable(
             columns=columns,
             data=[dict(
                 source,
                 **dict(
-                    title=f"[{i+1}/{len(data.sources)}] {data.title}",
+                    title=f"[{i+1}/{data.source_count}] {data.title}",
                     # title = f"[{i+1}] {data.title}",
                     feed = data.feed,
                     created = data.created,
@@ -246,11 +247,13 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     with_scrollbar=True
     sort_by = ("created", True)
-    # index = "media_listing_id"
+    index = "media_listing_id"
     # no_load_on_init = True
     detail_auto_open = True
     detail_replace = True
-    detail_selectable=True
+    detail_selectable = True
+    with_sidecar = True
+
 
     KEYMAP = {
         "any": {
@@ -310,7 +313,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
 
     def detail_fn(self, data):
 
-        if not len(data.sources) <= 1:
+        if data.source_count <= 1:
             return
 
         columns = self.columns.copy()
@@ -397,6 +400,14 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 delay,
                 self.run_queued_task
             )
+
+        if len(self):
+            listing = self[position].data_source.attach()
+            if listing.on_focus():
+                self.invalidate_rows([listing.media_listing_id])
+                self.selection.close_details()
+                self.selection.open_details()
+                self.refresh()
 
         # FIXME
         # if self.mark_read_on_focus:
@@ -711,10 +722,8 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                         key_func = asyncio.coroutine(functools.partial(self.player.command, *command))
                     logger.info(f"command: {command}, key_func: {key_func}")
                     if asyncio.iscoroutinefunction(key_func):
-                        logger.info("coro")
                         await key_func()
                     else:
-                        logger.info("not coro")
                         key_func()
 
             state.event_loop.create_task(
@@ -744,7 +753,8 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         else:
             row_num = self.focus_position
 
-        listing = self[row_num].data
+        listing = self[row_num].data_source
+        # raise Exception(type(listing.feed), type(listing.attach()).feed)
         # logger.debug(listing)
         url = await self.player.command(
             "get_property", f"playlist/{index}/filename"
@@ -815,14 +825,18 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             )
         else:
             return super().keypress(size, key)
-        return key
 
 
     def decorate(self, row, column, value):
-        if column.name == "title" and isinstance(row.content, list) and len(row.content) > 1:
-            value = f"[{len(row.get('content'))}] {row.get('title')}"
+
+        if column.name == "title":
+            listing = row.data_source.attach()
+            source_count = self.df[listing.media_listing_id, "source_count"]
+            if source_count > 1:
+                value = f"[{source_count}] {row.get('title')}"
 
         return super().decorate(row, column, value)
+
 
 
 class FeedsFilter(ConfigFilter):
@@ -955,7 +969,6 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
 
     @property
     def feed(self):
-
         if not self.selected_feed:
             return None
         with db_session:
@@ -1039,14 +1052,11 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
 
     async def update(self, force=False, resume=False):
         logger.info(f"update: force={force} resume={resume}")
-        self.refresh()
         self.create_feeds()
-        def update_feeds():
-            self.open_popup("Updating feeds...")
-            # self.update_feeds(force=force)
-            self.close_popup()
-            self.reset()
+        self.open_popup("Updating feeds...")
         await self.update_feeds(force=force)
+        self.close_popup()
+        self.reset()
         # update_task = state.event_loop.run_in_executor(None, update_feeds)
 
     async def update_feeds(self, force=False):
@@ -1138,9 +1148,11 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
 
             for item in self.items_query[offset:offset+limit]:
                 listing = item.detach()
+                listing.feed = listing.feed.detach()
+                listing.feed.items = None
                 listing.sources = [ s.detach() for s in listing.sources ]
-                # raise Exception(listing.sources)
-                yield listing
+                # import ipdb; ipdb.set_trace()
+                yield (listing, dict(source_count=len(listing.sources)))
                 # raise Exception(item.to_dict(related_objects=True, with_collections=True))
                 # raise Exception(type(item.detach().sources[0]))
                 # listing = self.new_listing(

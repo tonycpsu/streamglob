@@ -60,6 +60,8 @@ class TaskManager(Observable):
 
     def download(self, task, downloader_spec, **kwargs):
 
+        logger.info(f"download task: {task}")
+        logger.info(f"download listing: {task.listing}")
         self.current_task_id +=1
         task.task_id = self.current_task_id
         task.args = (downloader_spec,)
@@ -113,6 +115,8 @@ class TaskManager(Observable):
                 else:
                     return
         async for task in get_tasks():
+            # if isinstance(task, (model.DownloadMediaTask, model.DownloadMediaTask.attr_class)):
+            #     raise Exception(type(task), type(task.listing.feed))
             logger.debug(f"task: {task}")
             if isinstance(task, (model.PlayMediaTask, model.PlayMediaTask.attr_class)):
                 # program = await player.Player.play(task, *task.args, **task.kwargs)
@@ -187,6 +191,7 @@ class TaskManager(Observable):
         done_list = TaskList(itertools.chain(done, postprocessing_done))
 
         for task in done_list:
+            logger.debug(f"finalizing {task} {type(task)} {task.__class__.mro()}")
             task.finalize()
 
         self.active = active_list
@@ -207,7 +212,7 @@ class TaskManager(Observable):
                 program = task.program.result()
                 proc = task.proc.result()
                 if proc.returncode is not None:
-                    logger.debug("postprocessor done")
+                    logger.debug("postprocessor done: {task.stage_outfile}")
                     if not os.path.isfile(task.stage_outfile):
                         logger.warn(f"{task.provider} processing stage {task.stage} failed")
                         task.postprocessors = []
@@ -220,6 +225,7 @@ class TaskManager(Observable):
             elif len(task.postprocessors) > 0:
                 pp = task.postprocessors[0]
 
+                logger.info(task.listing)
                 proc = await player.Postprocessor.process(
                     task, pp,
                     task.stage_infile,

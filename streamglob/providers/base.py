@@ -431,10 +431,12 @@ class BaseProvider(abc.ABC):
         )
 
     def get_source(self, selection, **kwargs):
-        source = selection.sources
-        if not isinstance(source, list):
-            source = [source]
-        return source
+        sources = selection.sources
+        if not isinstance(sources, list):
+            sources = [sources]
+
+        return sources
+        # return [ source for source in sources ]
 
     def play_args(self, selection, **kwargs):
         source = self.get_source(selection, **kwargs)
@@ -491,7 +493,14 @@ class BaseProvider(abc.ABC):
 
     def download(self, selection, index=None, no_task_manager=False, **kwargs):
 
-        sources, kwargs = self.play_args(selection, **kwargs)
+        listing = selection
+        with db_session:
+            if not listing.is_inflated:
+                listing = selection.attach()
+                listing.inflate()
+                listing = listing.detach()
+
+        sources, kwargs = self.play_args(listing, **kwargs)
 
         if not isinstance(sources, list):
             sources = [sources]
@@ -502,22 +511,19 @@ class BaseProvider(abc.ABC):
 
             if index is not None and index != i:
                 continue
-
-            if not source.is_inflated:
-                source.inflate()
-
             try:
-                filename = s.download_filename(selection, index=index, **kwargs)
+                filename = source.download_filename(index=index, **kwargs)
             except SGInvalidFilenameTemplate as e:
                 logger.warn(f"filename template for provider {self.IDENTIFIER} is invalid: {e}")
-            downloader_spec = getattr(self.config, "helpers") or s.download_helper
-            task = model.DownloadMediaTask(
-                provider=self.NAME,
-                title=selection.title,
-                sources = [source],
+                raise
+            downloader_spec = getattr(self.config, "helpers") or source.download_helper
+            task = model.DownloadMediaTask.attr_class(
+                provider = self.NAME,
+                title = selection.title,
+                sources = sources,
                 listing = selection,
-                dest=filename,
-                postprocessors = (self.config.get("postprocessors", []) or []).copy()
+                dest = filename,
+                postprocessors = (self.config.get("postprocessors", None) or []).copy()
             )
             state.task_manager.download(task, downloader_spec, **kwargs)
 

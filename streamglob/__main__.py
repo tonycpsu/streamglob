@@ -63,7 +63,7 @@ class UrwidLoggingHandler(logging.Handler):
         if not self.pipe:
             return
         msg = self.format(rec)
-        (ignore, ready, ignore) = select.select([], [self.pipe], [])
+        (ignore, ready, ignore) = select.select([], [self.pipe], [], 0)
         if self.pipe in ready:
             msg = utils.format_str_truncated(511, msg, encoding="utf-8") + "\n"
             os.write(self.pipe, msg.encode("utf-8"))
