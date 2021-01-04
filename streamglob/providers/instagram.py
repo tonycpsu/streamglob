@@ -95,7 +95,8 @@ class InstagramMediaListingMixin(object):
         return self.guid
 
     def inflate(self):
-        logger.info("inflate")
+        if self.is_inflated:
+            return False
         with db_session:
             # FIXME: for some reason I don't feel like digging into right now,
             # self.feed is of type MediaFeed instead of InstagramMediaFeed, so
@@ -107,6 +108,7 @@ class InstagramMediaListingMixin(object):
                 self.sources.add(self.provider.new_media_source(**source).attach())
 
             self.is_inflated = True
+        return True
 
     @property
     def should_inflate_on_focus(self):

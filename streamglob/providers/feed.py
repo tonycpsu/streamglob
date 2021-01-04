@@ -53,8 +53,8 @@ class MediaFeed(model.MediaChannel):
             # ]
             # del item["content"]
             item["sources"] = [
-                self.provider.new_media_source(**s).attach()
-                for s in item["sources"]
+                self.provider.new_media_source(rank=i, **s).attach()
+                for i, s in enumerate(item["sources"])
             ]
             listing = self.provider.new_listing(
                 **item
@@ -116,11 +116,17 @@ class FeedMediaListingMixin(object):
 
     @db_session
     def mark_read(self):
-        self.read = datetime.now()
+        l = self.attach()
+        l.read = datetime.now()
+        commit()
 
     @db_session
     def mark_unread(self):
-        self.read = None
+        l = self.attach()
+        logger.info(type(l), l)
+        l.read = None
+        logger.info(type(l), l)
+        commit()
 
     @db_session
     def mark_part_read(self, index):
@@ -265,6 +271,7 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             "ctrl d": "download",
             "n": "next_unread",
             "p": "prev_unread",
+            "meta i": "inflate_selection",
             "meta r": ("update", [], {"force": True}),
             "meta f": ("update", [], {"force": True, "resume": True}),
             # "meta f": "fetch_more",
@@ -376,6 +383,19 @@ class CachedFeedProviderDataTable(ProviderDataTable):
             state.event_loop.create_task(self.queued_task())
             self.pending_event_task = None
 
+    @keymap_command()
+    def inflate_selection(self):
+        with db_session:
+            listing = self.selection.data_source.attach()
+            if listing.inflate():
+                position = self.focus_position
+                self.invalidate_rows([listing.media_listing_id])
+                self.selection.close_details()
+                self.selection.open_details()
+                self.refresh()
+                state.event_loop.create_task(self.play_all())
+                self.focus_position = position
+
     @db_session
     def on_focus(self, source, position):
 
@@ -408,6 +428,8 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 self.selection.close_details()
                 self.selection.open_details()
                 self.refresh()
+                state.event_loop.create_task(self.play_all())
+                self.focus_position = position
 
         # FIXME
         # if self.mark_read_on_focus:
@@ -430,11 +452,12 @@ class CachedFeedProviderDataTable(ProviderDataTable):
     @db_session
     def mark_item_read(self, position):
         logger.info(f"mark_item_read: {position}")
-        try:
-            if not isinstance(self[position].data, model.TitledMediaListing):
-                return
-        except IndexError:
-            return
+        # try:
+        #     if not isinstance(self[position].data_source, model.TitledMediaListing):
+        #         raise Exception(type(self[position].data_source))
+        #         return
+        # except IndexError:
+        #     return
         row = self[position]
         item = self.item_at_position(position)
         if not item:
@@ -615,10 +638,10 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         super().refresh(*args, **kwargs)
 
 
-    @keymap_command()
-    async def fetch_more(self):
-        await self.update(resume=True)
-        # fetch_task = state.event_loop.run_in_executor(None, self.fetch)
+    # @keymap_command()
+    # async def fetch_more(self):
+    #     await self.update(resume=True)
+    #     # fetch_task = state.event_loop.run_in_executor(None, self.fetch)
 
     @keymap_command()
     async def update(self, force=False, resume=False):
@@ -1054,13 +1077,13 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         logger.info(f"update: force={force} resume={resume}")
         self.create_feeds()
         self.open_popup("Updating feeds...")
-        await self.update_feeds(force=force)
+        await self.update_feeds(force=force, resume=resume)
         self.close_popup()
         self.reset()
         # update_task = state.event_loop.run_in_executor(None, update_feeds)
 
-    async def update_feeds(self, force=False):
-        logger.info(f"update_feeds: {force}")
+    async def update_feeds(self, force=False, resume=False):
+        logger.info(f"update_feeds: {force} {resume}")
         with db_session:
             if not self.feed:
                 feeds = self.FEED_CLASS.select()
@@ -1076,7 +1099,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
                 ):
                     logger.info(f"updating {feed.locator}")
                     with limit(self.limiter):
-                        await feed.update()
+                        await feed.update(resume=resume)
                         # f.updated = datetime.now()
                     # commit()
 
@@ -1146,11 +1169,15 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
 
         with db_session:
 
-            for item in self.items_query[offset:offset+limit]:
-                listing = item.detach()
+            for listing in self.items_query[offset:offset+limit]:
+                sources = [
+                    source.detach()
+                    for source in listing.sources.select().order_by(lambda s: s.rank)
+                ]
+                listing = listing.detach()
                 listing.feed = listing.feed.detach()
                 listing.feed.items = None
-                listing.sources = [ s.detach() for s in listing.sources ]
+                listing.sources = sources
                 # import ipdb; ipdb.set_trace()
                 yield (listing, dict(source_count=len(listing.sources)))
                 # raise Exception(item.to_dict(related_objects=True, with_collections=True))
