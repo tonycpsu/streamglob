@@ -180,6 +180,7 @@ class attrclass(object):
                     return attached
 
             ns["attach"] = attach
+            ns["detach"] = lambda self: self
 
             return ns
 
@@ -220,6 +221,7 @@ class attrclass(object):
             #         setattr(detached, attr, None)
             # return detached
         cls.detach = detach
+        cls.attach = lambda self: self
         return cls
 
 
@@ -358,6 +360,7 @@ class MediaSource(MediaSourceMixin, db.Entity):
     listing = Optional(lambda: MultiSourceMediaListing, reverse="sources")
     url = Optional(str, nullable=True, default=None)
     media_type = Optional(str)
+    rank = Required(int, default=0)
     task = Optional(lambda: MediaTask, reverse="sources")
 
 
