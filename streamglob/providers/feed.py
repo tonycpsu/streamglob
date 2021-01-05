@@ -3,6 +3,7 @@ logger = logging.getLogger(__name__)
 
 from datetime import datetime
 from dataclasses import *
+import textwrap
 import tempfile
 import pipes
 import functools
@@ -638,66 +639,17 @@ class CachedFeedProviderDataTable(ProviderDataTable):
         super().refresh(*args, **kwargs)
 
 
-    # @keymap_command()
-    # async def fetch_more(self):
-    #     await self.update(resume=True)
-    #     # fetch_task = state.event_loop.run_in_executor(None, self.fetch)
-
     @keymap_command()
     async def update(self, force=False, resume=False):
         await self.provider.update(force=force, resume=resume)
 
+    def make_playlist(self, items):
 
-    # @db_session(optimistic=False)
-    # async def fetch(self):
-    #     # self.provider.feed.update(resume=True)
-    #     async def fetch_async():
-    #         logger.debug("foo")
-    #         await self.provider.update(resume=True)
-    #         logger.debug("bar")
-    #         # self.refresh()
-    #         # logger.debug("baz")
-    #         # await self.play_all()
-    #         # logger.debug("qux")
-    #     asyncio.run(fetch_async())
-    #     # asyncio.run(self.play_all())
-
-    @keymap_command()
-    async def play_all(self):
-        logger.info("play_all")
-
-        ITEM_TEMPLATE="""#EXTINF:1,{title}
-{url}
-"""
-        # raise Exception([
-        #     source for (row_num, row, num, source) in [
-        #             (row_num, row, num, source) for row_num, row in enumerate(self)
-        #             for num, source in enumerate(row.data.content)
-        #             # if not source.is_bad
-        #     ]
-        # ])
-
-        items = [
-            AttrDict(
-                media_listing_id = row.data.media_listing_id,
-                title = utils.sanitize_filename(row.data.title),
-                created = row.data.created,
-                feed = row.data.feed.name,
-                locator = row.data.feed.locator,
-                num = num+1,
-                row_num = row_num,
-                count = len(row.data.sources),
-                url = source.locator or source.preview_locator
-            )
-            for (row_num, row, num, source) in [
-                    (row_num, row, num, source) for row_num, row in enumerate(self)
-                    for num, source in enumerate(row.data.sources)
-                    if not source.is_bad
-            ]
-        ]
-
-        self.play_items = items
-
+        ITEM_TEMPLATE=textwrap.dedent(
+        """\
+        #EXTINF:1,{title}
+        {url}
+        """)
         with tempfile.NamedTemporaryFile(suffix=".m3u8", delete=False) as m3u:
             m3u.write(f"#EXTM3U\n".encode("utf-8"))
             for item in items:
@@ -721,6 +673,35 @@ class CachedFeedProviderDataTable(ProviderDataTable):
                 ],
                 feed = self.provider.feed
             )
+
+        return listing
+
+        
+
+    @keymap_command()
+    async def play_all(self):
+        logger.info("play_all")
+
+        self.play_items = [
+            AttrDict(
+                media_listing_id = row.data.media_listing_id,
+                title = utils.sanitize_filename(row.data.title),
+                created = row.data.created,
+                feed = row.data.feed.name,
+                locator = row.data.feed.locator,
+                num = num+1,
+                row_num = row_num,
+                count = len(row.data.sources),
+                url = source.locator or source.preview_locator
+            )
+            for (row_num, row, num, source) in [
+                    (row_num, row, num, source) for row_num, row in enumerate(self)
+                    for num, source in enumerate(row.data.sources)
+                    if not source.is_bad
+            ]
+        ]
+
+        listing = self.make_playlist(self.play_items)
 
         if self.player_task:
             self.player = await self.player_task.program
