@@ -10,9 +10,10 @@ from itertools import chain
 
 from orderedattrdict import AttrDict, defaultdict
 from pony.orm import *
+from panwid.dialog import BaseView
+from panwid.keymap import *
 
 from .widgets import *
-from panwid.dialog import BaseView
 from .filters import *
 from ..session import *
 from ..state import *
@@ -490,7 +491,6 @@ class BaseProvider(abc.ABC):
 
         return state.task_manager.play(task, player_spec, downloader_spec, **kwargs)
 
-
     def download(self, selection, index=None, no_task_manager=False, **kwargs):
 
         listing = selection
@@ -623,3 +623,281 @@ class BackgroundTasksMixin(object):
         # if self._refresh_alarm:
         #     state.loop.remove_alarm(self._tasks[fn.__name__])
         # self._tasks[fn.__name__] = None
+
+
+class SynchronizedPlayerMixin(object):
+
+    def __init__(self, *args, **kwargs):
+
+        super().__init__(*args, **kwargs)
+        self.player = None
+        self.player_task = None
+        self.queued_task = None
+        self.pending_event_task = None
+        urwid.connect_signal(self, "focus", self.on_focus)
+
+    # def keypress(self, size, key):
+    #     key = super().keypress(size, key)
+
+    #     if key in self.KEYMAP.get("any", {}) and isinstance(self.KEYMAP.get("any", {})[key], list):
+    #         command = self.KEYMAP["any"][key]
+    #         state.event_loop.create_task(
+    #             self.player.command(*command)
+    #         )
+    #     else:
+    #         return key
+
+    def make_playlist(self, items):
+
+        ITEM_TEMPLATE=textwrap.dedent(
+        """\
+        #EXTINF:1,{title}
+        {url}
+        """)
+        with tempfile.NamedTemporaryFile(suffix=".m3u8", delete=False) as m3u:
+            m3u.write(f"#EXTM3U\n".encode("utf-8"))
+            for item in items:
+                m3u.write(ITEM_TEMPLATE.format(
+                    title = item.title.strip() or "(no title)",
+                    url=item.url
+                ).encode("utf-8"))
+            logger.info(m3u.name)
+
+            listing = self.provider.new_listing(
+                title=f"{self.provider.NAME} playlist" + (
+                    f" ({self.provider.feed.name}/"
+                    if self.provider.feed
+                    else " ("
+                ) + f"{self.provider.status})",
+                sources = [
+                    self.provider.new_media_source(
+                        url = f"file://{m3u.name}",
+                        media_type = "video"
+                    )
+                ],
+                feed = self.provider.feed
+            )
+
+        return listing
+
+
+    @keymap_command()
+    async def play_all(self):
+        logger.info("play_all")
+
+        self.play_items = [
+            AttrDict(
+                media_listing_id = row.data.media_listing_id,
+                title = utils.sanitize_filename(row.data.title),
+                created = row.data.created,
+                feed = row.data.feed.name,
+                locator = row.data.feed.locator,
+                num = num+1,
+                row_num = row_num,
+                count = len(row.data.sources),
+                url = source.locator or source.preview_locator
+            )
+            for (row_num, row, num, source) in [
+                    (row_num, row, num, source) for row_num, row in enumerate(self)
+                    for num, source in enumerate(row.data.sources)
+                    if not source.is_bad
+            ]
+        ]
+
+        listing = self.make_playlist(self.play_items)
+
+        if self.player_task:
+            self.player = await self.player_task.program
+            sources, kwargs = self.provider.play_args(listing)
+            state.event_loop.create_task(self.player_task.load_sources(sources))
+        else:
+            self.player_task = self.provider.play(listing)
+            logger.info(self.player_task)
+            self.player = await self.player_task.program
+            logger.info(self.player)
+            await self.player_task.proc
+
+            async def handle_mpv_key(key_state, key_name, key_string):
+                logger.info(f"debug: {key_name}")
+                key = self.player.key_to_urwid(key_name)
+                logger.debug(f"key: {key_name}, {key}")
+                if key in self.KEYMAP.get("any", {}):
+                    command = self.KEYMAP["any"][key]
+                    try:
+                        key_func = getattr(self, command)
+                    except (TypeError, AttributeError):
+                        key_func = asyncio.coroutine(functools.partial(self.player.command, *command))
+                    logger.info(f"command: {command}, key_func: {key_func}")
+                    if asyncio.iscoroutinefunction(key_func):
+                        await key_func()
+                    else:
+                        key_func()
+
+            state.event_loop.create_task(
+                self.player.controller.register_unbound_key_callback(handle_mpv_key)
+            )
+            # self.player_command("keybind", "UNMAPPED", "script-binding unampped-keypress")
+            def on_player_done(f):
+                logger.info("player done")
+                self.player = None
+                self.player_task = None
+
+            self.player_task.result.add_done_callback(on_player_done)
+            # logger.info(urls)
+
+    def playlist_pos_to_row(self, pos):
+        return self.play_items[pos].row_num
+
+    def row_to_playlist_pos(self, row):
+        try:
+            media_listing_id = self[row].data.media_listing_id
+        except IndexError:
+            return None
+        try:
+            return next(
+                n for n, i in enumerate(self.play_items)
+                if i.media_listing_id == media_listing_id
+            )
+        except StopIteration:
+            return None
+
+    async def set_playlist_pos(self, pos):
+        if not self.player:
+            return
+        await self.player.command(
+            "set_property", "playlist-pos", pos
+        )
+        # HACK to work around https://github.com/mpv-player/mpv/issues/7247
+        #
+        # await asyncio.sleep(0.5)
+        geom = await self.player.command(
+            "get_property", "geometry"
+        )
+        await self.player.command(
+            "set_property", "geometry", geom
+        )
+
+    def run_queued_task(self):
+
+        if self.pending_event_task:
+            state.event_loop.create_task(self.queued_task())
+            self.pending_event_task = None
+
+    def sync_playlist_position(self, position):
+
+        if self.player and len(self):
+            try:
+                index = self.row_to_playlist_pos(position)# + self.inner_focus
+            except (StopIteration, AttributeError, TypeError):
+                index = self.row_to_playlist_pos(position)
+
+            if index is None:
+                return
+
+            if self.pending_event_task:
+                logger.warn("canceling task")
+                self.pending_event_task.cancel()
+                delay = 1
+            else:
+                delay = 0
+            self.queued_task = lambda: self.set_playlist_pos(index)
+
+            self.pending_event_task = state.event_loop.call_later(
+                delay,
+                self.run_queued_task
+            )
+
+        if len(self):
+            listing = self[position].data_source.attach()
+            if listing.on_focus():
+                self.invalidate_rows([listing.media_listing_id])
+                self.selection.close_details()
+                self.selection.open_details()
+                self.refresh()
+                state.event_loop.create_task(self.play_all())
+                self.focus_position = position
+
+    def on_focus(self, source, position):
+
+        self.sync_playlist_position(position)
+
+
+    async def download(self):
+
+        # we could probably rely on focus position here, but let's be safe and
+        # go with what MPV has for playlist position first
+
+        if self.player:
+            # index = self.player.controller.playlist_pos
+            index = await self.player.command(
+                    "get_property", "playlist-pos"
+            )
+            row_num = self.playlist_pos_to_row(index)
+        else:
+            row_num = self.focus_position
+
+        listing = self[row_num].data_source
+        # raise Exception(type(listing.feed), type(listing.attach()).feed)
+        # logger.debug(listing)
+        url = await self.player.command(
+            "get_property", f"playlist/{index}/filename"
+        )
+        # source = next(
+        #     s for s in listing.content
+        #     if s.locator == url
+        # )
+
+        # FIXME inner_focus comes from MultiSourceListingMixin
+        self.provider.download(listing, index = self.inner_focus or 0)
+
+    @keymap_command("reset")
+    def reset(self, *args, **kwargs):
+        logger.info("datatable reset")
+        state.foo = state.event_loop.create_task(self.play_all())
+        super().reset()
+
+    def quit_player(self):
+        try:
+            state.event_loop.create_task(self.player.quit())
+        except BrokenPipeError:
+            pass
+
+
+class MultiSourceListingMixin(object):
+
+    def detail_fn(self, data):
+
+        if data.source_count <= 1:
+            return
+
+        columns = self.columns.copy()
+        next(c for c in columns if c.name=="title").truncate = True
+
+        box = self.DetailBox(columns, data)
+        # urwid.connect_signal(box.table, "focus", lambda s, i: self.on_focus(s, self.focus_position))
+        urwid.connect_signal(box.table, "focus", lambda s, i: self._emit("focus", s, i))
+
+        def on_inner_focus(source, position):
+            logger.info(position)
+
+        return box
+
+    def on_focus(self, source, position):
+
+        super().on_focus(source, position)
+
+    @property
+    def inner_table(self):
+        if self.selection.details_open and self.selection.details:
+            return self.selection.details.contents.table
+        return None
+
+    @property
+    def inner_focus(self):
+        if self.inner_table:
+            return self.inner_table.focus_position
+        return 0
+
+    def row_to_playlist_pos(self, row):
+
+        return super().row_to_playlist_pos(row) + self.inner_focus
