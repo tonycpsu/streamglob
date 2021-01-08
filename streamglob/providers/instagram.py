@@ -97,6 +97,7 @@ class InstagramMediaListingMixin(object):
     def inflate(self):
         if self.is_inflated:
             return False
+        logger.debug("inflate")
         with db_session:
             # FIXME: for some reason I don't feel like digging into right now,
             # self.feed is of type MediaFeed instead of InstagramMediaFeed, so
@@ -106,7 +107,6 @@ class InstagramMediaListingMixin(object):
             delete(s for s in self.sources)
             for source in feed.extract_content(post):
                 self.sources.add(self.provider.new_media_source(**source).attach())
-
             self.is_inflated = True
         return True
 

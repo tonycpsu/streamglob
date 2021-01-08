@@ -3,9 +3,6 @@ logger = logging.getLogger(__name__)
 
 from datetime import datetime
 from dataclasses import *
-import textwrap
-import tempfile
-import pipes
 import functools
 
 from orderedattrdict import AttrDict
@@ -192,7 +189,7 @@ class FeedMediaListing(FeedMediaListingMixin, model.MultiSourceMediaListing, mod
 
 
 @keymapped()
-class CachedFeedProviderDataTable(MultiSourceListingMixin, ProviderDataTable):
+class CachedFeedProviderDataTable(SynchronizedPlayerMixin, MultiSourceListingMixin, ProviderDataTable):
 
     class DetailTable(BaseDataTable):
 
@@ -517,6 +514,16 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, ProviderDataTable):
     def refresh(self, *args, **kwargs):
         logger.info("datatable refresh")
         super().refresh(*args, **kwargs)
+
+    def reset(self, *args, **kwargs):
+        super().reset(*args, **kwargs)
+        # SynchronizedPlayerMixin.reset(self, *args, **kwargs)
+    # @keymap_command("reset")
+    # def reset(self, *args, **kwargs):
+    #     logger.info("datatable reset")
+        state.foo = state.event_loop.create_task(self.play_all())
+
+
 
     @keymap_command()
     async def update(self, force=False, resume=False):

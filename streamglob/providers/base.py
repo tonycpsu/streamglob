@@ -850,12 +850,6 @@ class SynchronizedPlayerMixin(object):
         # FIXME inner_focus comes from MultiSourceListingMixin
         self.provider.download(listing, index = self.inner_focus or 0)
 
-    @keymap_command("reset")
-    def reset(self, *args, **kwargs):
-        logger.info("datatable reset")
-        state.foo = state.event_loop.create_task(self.play_all())
-        super().reset()
-
     def quit_player(self):
         try:
             state.event_loop.create_task(self.player.quit())
@@ -875,7 +869,7 @@ class MultiSourceListingMixin(object):
 
         box = self.DetailBox(columns, data)
         # urwid.connect_signal(box.table, "focus", lambda s, i: self.on_focus(s, self.focus_position))
-        urwid.connect_signal(box.table, "focus", lambda s, i: self._emit("focus", s, i))
+        urwid.connect_signal(box.table, "focus", lambda s, pos: self._emit("focus", pos))
 
         def on_inner_focus(source, position):
             logger.info(position)
