@@ -189,7 +189,7 @@ class FeedMediaListing(FeedMediaListingMixin, model.MultiSourceMediaListing, mod
 
 
 @keymapped()
-class CachedFeedProviderDataTable(SynchronizedPlayerMixin, MultiSourceListingMixin, ProviderDataTable):
+class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMixin, ProviderDataTable):
 
     class DetailTable(BaseDataTable):
 
@@ -516,12 +516,12 @@ class CachedFeedProviderDataTable(SynchronizedPlayerMixin, MultiSourceListingMix
         super().refresh(*args, **kwargs)
 
     def reset(self, *args, **kwargs):
+        state.foo = state.event_loop.create_task(self.play_all())
         super().reset(*args, **kwargs)
         # SynchronizedPlayerMixin.reset(self, *args, **kwargs)
     # @keymap_command("reset")
     # def reset(self, *args, **kwargs):
     #     logger.info("datatable reset")
-        state.foo = state.event_loop.create_task(self.play_all())
 
 
 

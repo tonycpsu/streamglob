@@ -7,6 +7,8 @@ import asyncio
 import dataclasses
 import re
 from itertools import chain
+import textwrap
+import tempfile
 
 from orderedattrdict import AttrDict, defaultdict
 from pony.orm import *
@@ -636,17 +638,6 @@ class SynchronizedPlayerMixin(object):
         self.pending_event_task = None
         urwid.connect_signal(self, "focus", self.on_focus)
 
-    # def keypress(self, size, key):
-    #     key = super().keypress(size, key)
-
-    #     if key in self.KEYMAP.get("any", {}) and isinstance(self.KEYMAP.get("any", {})[key], list):
-    #         command = self.KEYMAP["any"][key]
-    #         state.event_loop.create_task(
-    #             self.player.command(*command)
-    #         )
-    #     else:
-    #         return key
-
     def make_playlist(self, items):
 
         ITEM_TEMPLATE=textwrap.dedent(
@@ -680,31 +671,7 @@ class SynchronizedPlayerMixin(object):
 
         return listing
 
-
-    @keymap_command()
-    async def play_all(self):
-        logger.info("play_all")
-
-        self.play_items = [
-            AttrDict(
-                media_listing_id = row.data.media_listing_id,
-                title = utils.sanitize_filename(row.data.title),
-                created = row.data.created,
-                feed = row.data.feed.name,
-                locator = row.data.feed.locator,
-                num = num+1,
-                row_num = row_num,
-                count = len(row.data.sources),
-                url = source.locator or source.preview_locator
-            )
-            for (row_num, row, num, source) in [
-                    (row_num, row, num, source) for row_num, row in enumerate(self)
-                    for num, source in enumerate(row.data.sources)
-                    if not source.is_bad
-            ]
-        ]
-
-        listing = self.make_playlist(self.play_items)
+    async def play_listing(self, listing):
 
         if self.player_task:
             self.player = await self.player_task.program
@@ -743,7 +710,36 @@ class SynchronizedPlayerMixin(object):
                 self.player_task = None
 
             self.player_task.result.add_done_callback(on_player_done)
-            # logger.info(urls)
+
+    @keymap_command()
+    async def play_all(self):
+        logger.info("play_all")
+
+        self.play_items = [
+            AttrDict(
+                media_listing_id = row.data.media_listing_id,
+                title = utils.sanitize_filename(row.data.title),
+                created = row.data.created,
+                feed = row.data.feed.name,
+                locator = row.data.feed.locator,
+                num = num+1,
+                row_num = row_num,
+                count = len(row.data.sources),
+                url = source.locator or source.preview_locator
+            )
+            for (row_num, row, num, source) in [
+                    (row_num, row, num, source) for row_num, row in enumerate(self)
+                    for num, source in enumerate(row.data.sources)
+                    if not source.is_bad
+            ]
+        ]
+
+        listing = self.make_playlist(self.play_items)
+        await self.play_listing(listing)
+
+    async def play_empty(self):
+        listing = self.make_playlist([])
+        await self.play_listing(listing)
 
     def playlist_pos_to_row(self, pos):
         return self.play_items[pos].row_num
@@ -783,13 +779,16 @@ class SynchronizedPlayerMixin(object):
             state.event_loop.create_task(self.queued_task())
             self.pending_event_task = None
 
-    def sync_playlist_position(self, position):
+    def sync_playlist_position(self, position, inner_focus=0):
+
+        if position is None:
+            return
 
         if self.player and len(self):
-            try:
-                index = self.row_to_playlist_pos(position)# + self.inner_focus
-            except (StopIteration, AttributeError, TypeError):
-                index = self.row_to_playlist_pos(position)
+            playlist_pos = self.row_to_playlist_pos(position)
+            if playlist_pos is None:
+                return
+            index = playlist_pos + inner_focus
 
             if index is None:
                 return
@@ -807,20 +806,23 @@ class SynchronizedPlayerMixin(object):
                 self.run_queued_task
             )
 
-        if len(self):
-            listing = self[position].data_source.attach()
-            if listing.on_focus():
-                self.invalidate_rows([listing.media_listing_id])
-                self.selection.close_details()
-                self.selection.open_details()
-                self.refresh()
-                state.event_loop.create_task(self.play_all())
-                self.focus_position = position
-
     def on_focus(self, source, position):
-
         self.sync_playlist_position(position)
+        if len(self):
+            with db_session:
+                listing = self[position].data_source.attach()
+                if listing.on_focus():
+                    state.event_loop.create_task(self.play_empty())
+                    self.invalidate_rows([listing.media_listing_id])
+                    self.selection.close_details()
+                    self.selection.open_details()
+                    self.refresh()
+                    state.event_loop.create_task(self.play_all())
+                    # self.focus_position = position
 
+    def on_inner_focus(self, position):
+        logger.info(f"on_inner_focus: {position}")
+        self.sync_playlist_position(self.focus_position, inner_focus=position)
 
     async def download(self):
 
@@ -869,16 +871,16 @@ class MultiSourceListingMixin(object):
 
         box = self.DetailBox(columns, data)
         # urwid.connect_signal(box.table, "focus", lambda s, i: self.on_focus(s, self.focus_position))
-        urwid.connect_signal(box.table, "focus", lambda s, pos: self._emit("focus", pos))
+        urwid.connect_signal(box.table, "focus", lambda s, pos: self.on_inner_focus(pos))
 
         def on_inner_focus(source, position):
             logger.info(position)
 
         return box
 
-    def on_focus(self, source, position):
+    # def on_focus(self, source, position):
 
-        super().on_focus(source, position)
+    #     super().on_focus(source, position)
 
     @property
     def inner_table(self):
@@ -892,6 +894,8 @@ class MultiSourceListingMixin(object):
             return self.inner_table.focus_position
         return 0
 
-    def row_to_playlist_pos(self, row):
+    # def row_to_playlist_pos(self, row):
 
-        return super().row_to_playlist_pos(row) + self.inner_focus
+    #     logger.info(f"row_to_playlist_pos inner: {self.inner_focus}")
+    #     outer = super().row_to_playlist_pos(row)
+    #     return (outer if outer is not None else 0) + self.inner_focus
