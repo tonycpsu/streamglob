@@ -638,7 +638,24 @@ class SynchronizedPlayerMixin(object):
         self.player_task = None
         self.queued_task = None
         self.pending_event_task = None
-        urwid.connect_signal(self, "focus", self.on_focus)
+        self.on_focus_handler = None
+
+    def reset(self, *args, **kwargs):
+        logger.info("sync reset")
+        self.disable_focus_handler()
+        super().reset(*args, **kwargs)
+        self.enable_focus_handler()
+
+    def enable_focus_handler(self):
+        if self.on_focus_handler:
+            return
+            # urwid.disconnect_by_key(self, "focus", self.on_focus_handler)
+        self.on_focus_handler = urwid.connect_signal(self, "focus", self.on_focus)
+
+    def disable_focus_handler(self):
+        if not self.on_focus_handler:
+            return
+        urwid.signals.disconnect_signal_by_key(self, "focus", self.on_focus_handler)
 
     def make_playlist(self, items):
 
@@ -745,14 +762,14 @@ class SynchronizedPlayerMixin(object):
         try:
             media_listing_id = self[row].data.media_listing_id
         except IndexError:
-            return None
+            return 0
         try:
             return next(
                 n for n, i in enumerate(self.play_items)
                 if i.media_listing_id == media_listing_id
             )
         except StopIteration:
-            return None
+            return 0
 
     async def set_playlist_pos(self, pos):
         if not self.player:

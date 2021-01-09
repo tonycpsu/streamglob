@@ -238,7 +238,15 @@ class InstagramMediaFeedMixin(object):
             end_cursor = None
 
         logger.info(f"cursor: {end_cursor}")
-        self.pages = self.looter.pages(cursor = end_cursor)
+        try:
+            self.pages = self.looter.pages(cursor = end_cursor)
+        except ValueError:
+            self.looter_.logout()
+            self.looter_.login(
+                username = self.provider.session_params["username"],
+                password = self.provider.session_params["password"],
+            )
+            self.pages = self.looter.pages(cursor = end_cursor)
 
         def get_posts(pages):
             for page in pages:

@@ -121,9 +121,9 @@ class FeedMediaListingMixin(object):
     @db_session
     def mark_unread(self):
         l = self.attach()
-        logger.info(type(l), l)
+        # logger.info(type(l), l)
         l.read = None
-        logger.info(type(l), l)
+        # logger.info(type(l), l)
         commit()
 
     @db_session
@@ -205,18 +205,30 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
             "unread focused": "unread highlight focused",
         }
 
-        def keypress(self, size, key):
-            if key == ".":
-                raise Exception(self.selection.__class__.__name__, self.selection.ATTR, self.selection.focus_map)
-            else:
-                return super().keypress(size, key)
+        # def keypress(self, size, key):
+        #     if key == ".":
+        #         raise Exception(self.selection.__class__.__name__, self.selection.ATTR, self.selection.focus_map)
+        #     else:
+        #         return super().keypress(size, key)
 
         def row_attr_fn(self, row):
-            if not row.get("read"):
-                return "unread"
+            # raise Exception(row)
+            if not getattr(row.listing, "read", False):
+                try:
+                    if not row.listing.attrs["parts_read"][str(self.focus_position)]:
+                        return "unread"
+                except (IndexError, KeyError):
+                    pass
             return None
 
+    @keymapped()
     class DetailBox(urwid.WidgetWrap):
+
+        KEYMAP = {
+            "any": {
+                "N": "toggle_selection_read"
+            }
+        }
 
         def __init__(self, columns, data, *args, **kwargs):
             self.table = CachedFeedProviderDataTable.DetailTable(
@@ -245,6 +257,11 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
         def focus_position(self):
             return self.table.focus_position
 
+        @keymap_command
+        def toggle_selection_read(self):
+            self.selection.toggle_selection_read()
+
+
     signals = ["focus"]
 
     HOVER_DELAY = 0.25
@@ -269,6 +286,7 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
             "ctrl d": "download",
             "n": "next_unread",
             "p": "prev_unread",
+            "N": "toggle_selection_read",
             "meta i": "inflate_selection",
             "meta r": ("update", [], {"force": True}),
             "meta f": ("update", [], {"force": True, "resume": True}),
@@ -378,8 +396,8 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
     @db_session
     def mark_item_unread(self, position):
         logger.info(f"mark_item_unread: {position}")
-        if not isinstance(self[position].data, model.TitledMediaListing):
-            return
+        # if not isinstance(self[position].data, model.TitledMediaListing):
+        #     return
         item = self.item_at_position(position)
         if not item:
             return
@@ -401,13 +419,18 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
 
     @db_session
     def toggle_item_read(self, position):
-        if not isinstance(self[position].data, model.TitledMediaListing):
-            return
+        # if not isinstance(self[position].data, model.TitledMediaListing):
+        #     return
         # logger.info(self.get_value(position, "read"))
         if self.get_value(position, "read") is not None:
             self.mark_item_unread(position)
         else:
             self.mark_item_read(position)
+        self.invalidate_rows([self[position].data.media_listing_id])
+
+    @keymap_command
+    def toggle_selection_read(self):
+        self.toggle_item_read(self.focus_position)
 
 
     def mark_all_read(self):
