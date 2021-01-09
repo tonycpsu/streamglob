@@ -272,7 +272,6 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
             "meta i": "inflate_selection",
             "meta r": ("update", [], {"force": True}),
             "meta f": ("update", [], {"force": True, "resume": True}),
-            # "meta f": "fetch_more",
             "meta p": "play_all",
             "f": ["cycle", "fullscreen"],
             "q": "quit_app"
@@ -524,8 +523,7 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
     #     logger.info("datatable reset")
 
 
-
-    @keymap_command()
+    @keymap_command
     async def update(self, force=False, resume=False):
         await self.provider.update(force=force, resume=resume)
 

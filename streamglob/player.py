@@ -592,6 +592,7 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
 
     async def command(self, *args, **kwargs):
         try:
+            # logger.debug(f"player command: {args} {kwargs}")
             return await self.controller.command(*args, **kwargs)
         except AttributeError:
             pass

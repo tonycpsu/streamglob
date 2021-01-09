@@ -331,17 +331,17 @@ class InstagramDataTable(CachedFeedProviderDataTable):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        urwid.connect_signal(
-            self, "end",
-            self.on_end
-        )
+        # urwid.connect_signal(
+        #     self, "end",
+        #     self.on_end
+        # )
 
 
-    @db_session
-    def on_end(self, source, count):
-        logger.info("on_end")
-        # self.fetch_more()
-        state.event_loop.create_task(self.fetch_more())
+    # @db_session
+    # def on_end(self, source, count):
+    #     logger.info("on_end")
+    #     # self.fetch_more()
+    #     state.event_loop.create_task(self.fetch_more())
 
 
 class InstagramProviderView(SimpleProviderView):

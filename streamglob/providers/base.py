@@ -685,21 +685,16 @@ class SynchronizedPlayerMixin(object):
             await self.player_task.proc
 
             async def handle_mpv_key(key_state, key_name, key_string):
-                logger.info(f"debug: {key_name}")
                 key = self.player.key_to_urwid(key_name)
-                logger.debug(f"key: {key_name}, {key}")
+                logger.info(f"debug: {key_name}")
                 if key in self.KEYMAP.get("any", {}):
-                    command = self.KEYMAP["any"][key]
-                    try:
-                        key_func = getattr(self, command)
-                    except (TypeError, AttributeError):
+                    command = self.KEYMAP["any"].get(key)
+                    if not self.call_keymap_command(command):
                         key_func = asyncio.coroutine(functools.partial(self.player.command, *command))
-                    logger.info(f"command: {command}, key_func: {key_func}")
-                    if asyncio.iscoroutinefunction(key_func):
-                        await key_func()
-                    else:
-                        key_func()
-
+                        if asyncio.iscoroutinefunction(key_func):
+                            await key_func()
+                        else:
+                            key_func()
             state.event_loop.create_task(
                 self.player.controller.register_unbound_key_callback(handle_mpv_key)
             )
