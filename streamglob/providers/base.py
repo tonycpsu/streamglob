@@ -628,7 +628,7 @@ class BackgroundTasksMixin(object):
         #     state.loop.remove_alarm(self._tasks[fn.__name__])
         # self._tasks[fn.__name__] = None
 
-
+@keymapped()
 class SynchronizedPlayerMixin(object):
 
     def __init__(self, *args, **kwargs):
@@ -865,6 +865,97 @@ class SynchronizedPlayerMixin(object):
 
 class MultiSourceListingMixin(object):
 
+    with_sidecar = True
+
+    @keymapped()
+    class DetailBox(urwid.WidgetWrap):
+
+        def __init__(self, parent, columns, data, *args, **kwargs):
+            self.parent = parent
+            data = [
+                dict(
+                    source,
+                    **dict(
+                        title=f"[{i+1}/{data.source_count}] {data.title}",
+                        # title = f"[{i+1}] {data.title}",
+                    feed = data.feed,
+                        created = data.created,
+                        read = data.attrs.get("parts_read", {}).get(i, False)
+                    ))
+                  for i, source in enumerate(data.sources)
+            ]
+
+            # header = dict(listing = self.parent.selection.data, **{
+            #     k: v
+            #     for k, v in self.parent.selection.data.items()
+            #     if k in ["title", "feed"]
+            # })
+
+            # data.insert(
+            #     0,
+            #     header
+            # )
+
+            self.table = MultiSourceListingMixin.DetailTable(
+                columns=columns,
+                data = data
+            )
+            self.box = urwid.BoxAdapter(self.table, 1)
+            super().__init__(self.box)
+
+        @property
+        def focus_position(self):
+            return self.table.focus_position
+
+
+    class DetailTable(BaseDataTable):
+
+        with_header = False
+        # cell_selection = True
+
+        attr_map = {
+            # None: "table_row_body",
+            "table_row_body focused": "table_row_body highlight",
+            # "table_row_body highlight": "table_row_body highlight focused",
+            # "unread": "unread highlight column_focused",
+            "unread": "unread highlight",
+            "unread focused": "unread highlight focused",
+        }
+
+        # def keypress(self, size, key):
+        #     if key == ".":
+        #         raise Exception(self.selection.__class__.__name__, self.selection.ATTR, self.selection.focus_map)
+        #     else:
+        #         return super().keypress(size, key)
+
+        def row_attr_fn(self, row):
+            # raise Exception(row)
+            if not getattr(row.listing, "read", False):
+                try:
+                    if not row.listing.attrs["parts_read"][str(self.focus_position)]:
+                        return "unread"
+                except (IndexError, KeyError):
+                    pass
+            return None
+
+
+    def listings(self, offset=None, limit=None, *args, **kwargs):
+        for listing in super().listings(offset=offset, limit=limit, *args, **kwargs):
+            yield (listing, dict(source_count=len(listing.sources)))
+
+    def decorate(self, row, column, value):
+
+        if column.name == "title":
+            listing = row.data_source.attach()
+            source_count = self.df[listing.media_listing_id, "source_count"]
+            if source_count > 1:
+                value = f"[{source_count}] {row.get('title')}"
+
+        return super().decorate(row, column, value)
+
+    def detail_box(self, columns, data):
+       return self.DetailBox(columns, data)
+
     def detail_fn(self, data):
 
         if data.source_count <= 1:
@@ -873,7 +964,7 @@ class MultiSourceListingMixin(object):
         columns = self.columns.copy()
         next(c for c in columns if c.name=="title").truncate = True
 
-        box = self.DetailBox(columns, data)
+        box = self.detail_box(self, columns, data)
         # urwid.connect_signal(box.table, "focus", lambda s, i: self.on_focus(s, self.focus_position))
         urwid.connect_signal(box.table, "focus", lambda s, pos: self.on_inner_focus(pos))
 

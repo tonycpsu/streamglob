@@ -188,41 +188,10 @@ class FeedMediaListing(FeedMediaListingMixin, model.MultiSourceMediaListing, mod
     # was_downloaded = Required(bool, default=False)
 
 
-@keymapped()
 class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMixin, ProviderDataTable):
 
-    class DetailTable(BaseDataTable):
-
-        with_header = False
-        # cell_selection = True
-
-        attr_map = {
-            # None: "table_row_body",
-            "table_row_body focused": "table_row_body highlight",
-            # "table_row_body highlight": "table_row_body highlight focused",
-            # "unread": "unread highlight column_focused",
-            "unread": "unread highlight",
-            "unread focused": "unread highlight focused",
-        }
-
-        # def keypress(self, size, key):
-        #     if key == ".":
-        #         raise Exception(self.selection.__class__.__name__, self.selection.ATTR, self.selection.focus_map)
-        #     else:
-        #         return super().keypress(size, key)
-
-        def row_attr_fn(self, row):
-            # raise Exception(row)
-            if not getattr(row.listing, "read", False):
-                try:
-                    if not row.listing.attrs["parts_read"][str(self.focus_position)]:
-                        return "unread"
-                except (IndexError, KeyError):
-                    pass
-            return None
-
     @keymapped()
-    class DetailBox(urwid.WidgetWrap):
+    class CachedFeedProviderDetailBox(MultiSourceListingMixin.DetailBox):
 
         KEYMAP = {
             "any": {
@@ -230,36 +199,10 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
             }
         }
 
-        def __init__(self, columns, data, *args, **kwargs):
-            self.table = CachedFeedProviderDataTable.DetailTable(
-            columns=columns,
-            data=[dict(
-                source,
-                **dict(
-                    title=f"[{i+1}/{data.source_count}] {data.title}",
-                    # title = f"[{i+1}] {data.title}",
-                    feed = data.feed,
-                    created = data.created,
-                    read = data.attrs.get("parts_read", {}).get(i, False)
-                ))
-                  for i, source in enumerate(data.sources)
-            ])
-            self.box = urwid.BoxAdapter(self.table, 1)
-            # self.pile = urwid.Pile([
-            #     (1, urwid.SolidFill(" ")),
-            #     # ("pack", urwid.BoxAdapter(self.table, len(data.content)+1))
-            #     ("pack", urwid.BoxAdapter(self.table, 1))
-            # ])
-            # ]
-            super().__init__(self.box)
-
-        @property
-        def focus_position(self):
-            return self.table.focus_position
-
         @keymap_command
         def toggle_selection_read(self):
             self.selection.toggle_selection_read()
+
 
 
     signals = ["focus"]
@@ -273,7 +216,6 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
     detail_auto_open = True
     detail_replace = True
     detail_selectable = True
-    with_sidecar = True
 
 
     KEYMAP = {
@@ -301,6 +243,9 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
         # self.mark_read_on_focus = False
         # self.mark_read_task = None
         self.update_count = True
+
+    def detail_box(self, parent, columns, data):
+       return self.CachedFeedProviderDetailBox(self, columns, data)
 
 
     def query_result_count(self):
@@ -594,18 +539,6 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
             state.event_loop.create_task(self.download())
         else:
             return super().keypress(size, key)
-
-
-    def decorate(self, row, column, value):
-
-        if column.name == "title":
-            listing = row.data_source.attach()
-            source_count = self.df[listing.media_listing_id, "source_count"]
-            if source_count > 1:
-                value = f"[{source_count}] {row.get('title')}"
-
-        return super().decorate(row, column, value)
-
 
 
 class FeedsFilter(ConfigFilter):
@@ -922,20 +855,9 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
                 listing.feed = listing.feed.detach()
                 listing.feed.items = None
                 listing.sources = sources
-                # import ipdb; ipdb.set_trace()
-                yield (listing, dict(source_count=len(listing.sources)))
-                # raise Exception(item.to_dict(related_objects=True, with_collections=True))
-                # raise Exception(type(item.detach().sources[0]))
-                # listing = self.new_listing(
-                #     feed = AttrDict(item.feed.to_dict()),
-                #     # **self.LISTING_CLASS.attr_class.from_orm(item).__dict__
-                #     **item.to_dict(
-                #         exclude=["feed", "classtype"],
-                #         related_objects=True
-                #     )
-                # )
-                # listing.content = self.MEDIA_SOURCE_CLASS.schema().loads(listing["content"], many=True)
-                # yield(listing)
+                yield listing
+
+                # yield (listing, dict(source_count=len(listing.sources)))
 
     @db_session
     def mark_items_read(self, request):

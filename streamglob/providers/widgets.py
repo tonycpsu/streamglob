@@ -67,7 +67,7 @@ class ProviderDataTable(BaseDataTable):
 
     def query(self, *args, **kwargs):
         try:
-            for l in self.provider.listings(*args, **kwargs):
+            for l in self.listings(*args, **kwargs):
                 # FIXME
                 # l._provider = self.provider
 
@@ -77,6 +77,9 @@ class ProviderDataTable(BaseDataTable):
         except SGException as e:
             logger.exception(e)
             return []
+
+    def listings(self, *args, **kwargs):
+        yield from self.provider.listings(*args, **kwargs)
 
     @property
     def translator(self):
