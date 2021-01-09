@@ -434,7 +434,10 @@ class BaseProvider(abc.ABC):
         )
 
     def get_source(self, selection, **kwargs):
-        sources = selection.sources
+        sources = sorted(
+            selection.sources,
+            key = lambda  s: s.rank
+        )
         if not isinstance(sources, list):
             sources = [sources]
 
@@ -503,7 +506,6 @@ class BaseProvider(abc.ABC):
                 listing = listing.detach()
 
         sources, kwargs = self.play_args(listing, **kwargs)
-
         if not isinstance(sources, list):
             sources = [sources]
 
@@ -522,7 +524,7 @@ class BaseProvider(abc.ABC):
             task = model.DownloadMediaTask.attr_class(
                 provider = self.NAME,
                 title = selection.title,
-                sources = sources,
+                sources = [source],
                 listing = selection,
                 dest = filename,
                 postprocessors = (self.config.get("postprocessors", None) or []).copy()
@@ -774,16 +776,16 @@ class SynchronizedPlayerMixin(object):
             state.event_loop.create_task(self.queued_task())
             self.pending_event_task = None
 
-    def sync_playlist_position(self, position, inner_focus=0):
+    @property
+    def playlist_position(self):
+        return self.row_to_playlist_pos(self.focus_position)
 
-        if position is None:
-            return
+    # FIXME: inner_focus comes from MultiSourceListingMixin
+    def sync_playlist_position(self):
 
         if self.player and len(self):
-            playlist_pos = self.row_to_playlist_pos(position)
-            if playlist_pos is None:
-                return
-            index = playlist_pos + inner_focus
+
+            index = self.playlist_position
 
             if index is None:
                 return
@@ -802,7 +804,7 @@ class SynchronizedPlayerMixin(object):
             )
 
     def on_focus(self, source, position):
-        self.sync_playlist_position(position)
+        self.sync_playlist_position()
         if len(self):
             with db_session:
                 listing = self[position].data_source.attach()
@@ -815,34 +817,24 @@ class SynchronizedPlayerMixin(object):
                     state.event_loop.create_task(self.play_all())
                     # self.focus_position = position
 
-    def on_inner_focus(self, position):
-        logger.info(f"on_inner_focus: {position}")
-        self.sync_playlist_position(self.focus_position, inner_focus=position)
-
     async def download(self):
 
-        # we could probably rely on focus position here, but let's be safe and
-        # go with what MPV has for playlist position first
-
-        if self.player:
-            # index = self.player.controller.playlist_pos
-            index = await self.player.command(
-                    "get_property", "playlist-pos"
-            )
-            row_num = self.playlist_pos_to_row(index)
-        else:
-            row_num = self.focus_position
-
+        # if self.player:
+        #     # index = self.player.controller.playlist_pos
+        #     index = await self.player.command(
+        #             "get_property", "playlist-pos"
+        #     )
+        #     row_num = self.playlist_pos_to_row(index)
+        # else:
+        row_num = self.focus_position
         listing = self[row_num].data_source
+        index = self.playlist_position
         # raise Exception(type(listing.feed), type(listing.attach()).feed)
         # logger.debug(listing)
-        url = await self.player.command(
-            "get_property", f"playlist/{index}/filename"
-        )
-        # source = next(
-        #     s for s in listing.content
-        #     if s.locator == url
+        # url = await self.player.command(
+        #     "get_property", f"playlist/{index}/filename"
         # )
+        # raise Exception(index, url)
 
         # FIXME inner_focus comes from MultiSourceListingMixin
         self.provider.download(listing, index = self.inner_focus or 0)
@@ -873,9 +865,13 @@ class MultiSourceListingMixin(object):
 
         return box
 
-    # def on_focus(self, source, position):
+    def on_inner_focus(self, position):
+        logger.info(f"on_inner_focus: {position}")
+        self.sync_playlist_position()
 
-    #     super().on_focus(source, position)
+    @property
+    def playlist_position(self):
+        return self.row_to_playlist_pos(self.focus_position) + self.inner_focus
 
     @property
     def inner_table(self):
