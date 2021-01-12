@@ -22,8 +22,8 @@ import tempfile
 import shutil
 import json
 import time
-# from python_mpv_jsonipc import MPV
 from aio_mpv_jsonipc import MPV
+from aio_mpv_jsonipc.MPV import MPVError
 if platform.system() != "Windows":
     import termios, fcntl, struct, pty
 
@@ -600,6 +600,8 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
             logger.warn("player connection reset")
         except BrokenPipeError:
             logger.warn("player broken pipe")
+        except MPVError as e:
+            logger.warn(f"MPV error: {e}")
 
     async def quit(self):
         await self.command("quit")

@@ -655,7 +655,7 @@ class SynchronizedPlayerMixin(object):
     def disable_focus_handler(self):
         if not self.on_focus_handler:
             return
-        urwid.signals.disconnect_signal_by_key(self, "focus", self.on_focus_handler)
+        self.on_focus_handler = urwid.signals.disconnect_signal_by_key(self, "focus", self.on_focus_handler)
 
     def make_playlist(self, items):
 
@@ -836,22 +836,9 @@ class SynchronizedPlayerMixin(object):
 
     async def download(self):
 
-        # if self.player:
-        #     # index = self.player.controller.playlist_pos
-        #     index = await self.player.command(
-        #             "get_property", "playlist-pos"
-        #     )
-        #     row_num = self.playlist_pos_to_row(index)
-        # else:
         row_num = self.focus_position
         listing = self[row_num].data_source
         index = self.playlist_position
-        # raise Exception(type(listing.feed), type(listing.attach()).feed)
-        # logger.debug(listing)
-        # url = await self.player.command(
-        #     "get_property", f"playlist/{index}/filename"
-        # )
-        # raise Exception(index, url)
 
         # FIXME inner_focus comes from MultiSourceListingMixin
         self.provider.download(listing, index = self.inner_focus or 0)
@@ -863,81 +850,70 @@ class SynchronizedPlayerMixin(object):
             pass
 
 
+@keymapped()
+class DetailBox(urwid.WidgetWrap):
+
+    def __init__(self, parent_table):
+        self.parent_table = parent_table
+        self.table = self.detail_table()
+        self.box = urwid.BoxAdapter(self.table, 1)
+        super().__init__(self.box)
+
+    def detail_table(self):
+        columns = self.parent_table.columns.copy()
+        next(c for c in columns if c.name=="title").truncate = True
+        return DetailDataTable(self.parent_table.selection.data_source, columns=columns)
+
+    @property
+    def focus_position(self):
+        return self.table.focus_position
+
+
+class DetailDataTable(BaseDataTable):
+
+    with_header = False
+    # cell_selection = True
+
+    attr_map = {
+        # None: "table_row_body",
+        "table_row_body focused": "table_row_body highlight",
+        # "table_row_body highlight": "table_row_body highlight focused",
+        # "unread": "unread highlight column_focused",
+        "unread": "unread highlight",
+        "unread focused": "unread highlight focused",
+    }
+
+    def __init__(self, listing, columns=None):
+        self.listing = listing
+        super().__init__(columns=columns)
+
+    def query(self, *args, **kwargs):
+        return [
+            dict(
+                source,
+                **dict(
+                    title=f"[{i+1}/{len(source.listing.sources)}] {source.listing.title}",
+                    feed = source.listing.feed,
+                    created = source.listing.created,
+                    read = source.listing.attrs.get("parts_read", {}).get(i, False)
+                ))
+              for i, source in enumerate(self.listing.sources)
+        ]
+
+    def row_attr_fn(self, row):
+        # raise Exception(row)
+        if not getattr(row.listing, "read", False):
+            try:
+                if not row.listing.attrs["parts_read"][str(self.focus_position)]:
+                    return "unread"
+            except (IndexError, KeyError):
+                pass
+        return None
+
+@keymapped()
 class MultiSourceListingMixin(object):
 
     with_sidecar = True
-
-    @keymapped()
-    class DetailBox(urwid.WidgetWrap):
-
-        def __init__(self, parent, columns, data, *args, **kwargs):
-            self.parent = parent
-            data = [
-                dict(
-                    source,
-                    **dict(
-                        title=f"[{i+1}/{data.source_count}] {data.title}",
-                        # title = f"[{i+1}] {data.title}",
-                    feed = data.feed,
-                        created = data.created,
-                        read = data.attrs.get("parts_read", {}).get(i, False)
-                    ))
-                  for i, source in enumerate(data.sources)
-            ]
-
-            # header = dict(listing = self.parent.selection.data, **{
-            #     k: v
-            #     for k, v in self.parent.selection.data.items()
-            #     if k in ["title", "feed"]
-            # })
-
-            # data.insert(
-            #     0,
-            #     header
-            # )
-
-            self.table = MultiSourceListingMixin.DetailTable(
-                columns=columns,
-                data = data
-            )
-            self.box = urwid.BoxAdapter(self.table, 1)
-            super().__init__(self.box)
-
-        @property
-        def focus_position(self):
-            return self.table.focus_position
-
-
-    class DetailTable(BaseDataTable):
-
-        with_header = False
-        # cell_selection = True
-
-        attr_map = {
-            # None: "table_row_body",
-            "table_row_body focused": "table_row_body highlight",
-            # "table_row_body highlight": "table_row_body highlight focused",
-            # "unread": "unread highlight column_focused",
-            "unread": "unread highlight",
-            "unread focused": "unread highlight focused",
-        }
-
-        # def keypress(self, size, key):
-        #     if key == ".":
-        #         raise Exception(self.selection.__class__.__name__, self.selection.ATTR, self.selection.focus_map)
-        #     else:
-        #         return super().keypress(size, key)
-
-        def row_attr_fn(self, row):
-            # raise Exception(row)
-            if not getattr(row.listing, "read", False):
-                try:
-                    if not row.listing.attrs["parts_read"][str(self.focus_position)]:
-                        return "unread"
-                except (IndexError, KeyError):
-                    pass
-            return None
-
 
     def listings(self, offset=None, limit=None, *args, **kwargs):
         for listing in super().listings(offset=offset, limit=limit, *args, **kwargs):
@@ -953,18 +929,13 @@ class MultiSourceListingMixin(object):
 
         return super().decorate(row, column, value)
 
-    def detail_box(self, columns, data):
-       return self.DetailBox(columns, data)
 
     def detail_fn(self, data):
 
         if data.source_count <= 1:
             return
 
-        columns = self.columns.copy()
-        next(c for c in columns if c.name=="title").truncate = True
-
-        box = self.detail_box(self, columns, data)
+        box = DetailBox(self)
         # urwid.connect_signal(box.table, "focus", lambda s, i: self.on_focus(s, self.focus_position))
         urwid.connect_signal(box.table, "focus", lambda s, pos: self.on_inner_focus(pos))
 
@@ -974,7 +945,7 @@ class MultiSourceListingMixin(object):
         return box
 
     def on_inner_focus(self, position):
-        logger.info(f"on_inner_focus: {position}")
+        logger.debug(f"on_inner_focus: {position}")
         self.sync_playlist_position()
 
     @property
@@ -992,9 +963,3 @@ class MultiSourceListingMixin(object):
         if self.inner_table:
             return self.inner_table.focus_position
         return 0
-
-    # def row_to_playlist_pos(self, row):
-
-    #     logger.info(f"row_to_playlist_pos inner: {self.inner_focus}")
-    #     outer = super().row_to_playlist_pos(row)
-    #     return (outer if outer is not None else 0) + self.inner_focus

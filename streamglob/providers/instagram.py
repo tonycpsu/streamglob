@@ -83,7 +83,7 @@ class InstagramMediaSourceMixin(object):
 
 
 @model.attrclass(InstagramMediaSourceMixin)
-class InstagramMediaSource(InstagramMediaSourceMixin, model.InflatableMediaSource):
+class InstagramMediaSource(InstagramMediaSourceMixin, model.InflatableMediaSource, FeedMediaSource):
 
     shortcode = Optional(str)
 

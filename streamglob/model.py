@@ -356,6 +356,7 @@ class MediaSourceMixin(object):
 @attrclass(MediaSourceMixin)
 class MediaSource(MediaSourceMixin, db.Entity):
 
+    media_source_id = PrimaryKey(int, auto=True)
     provider_id = Required(str)
     listing = Optional(lambda: MultiSourceMediaListing, reverse="sources")
     url = Optional(str, nullable=True, default=None)
