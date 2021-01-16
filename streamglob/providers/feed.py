@@ -65,7 +65,9 @@ class MediaFeed(model.MediaChannel):
     @db_session
     def mark_all_items_read(self):
         for i in self.items.select():
-            i.read = datetime.now()
+            pass
+            # i.mark_read()
+            # i.read = datetime.now()
 
     @classmethod
     @db_session
@@ -115,16 +117,19 @@ class FeedMediaListingMixin(object):
 
     @db_session
     def mark_read(self):
+        now = datetime.now()
         l = self.attach()
-        l.read = datetime.now()
+        l.read = now
+        for s in l.sources:
+            s.seen = now
         commit()
 
     @db_session
     def mark_unread(self):
         l = self.attach()
-        # logger.info(type(l), l)
         l.read = None
-        # logger.info(type(l), l)
+        for s in l.sources:
+            s.seen = None
         commit()
 
     # @db_session
@@ -181,6 +186,7 @@ class FeedMediaListingMixin(object):
         pass
 
 
+
 @model.attrclass(FeedMediaListingMixin)
 class FeedMediaListing(FeedMediaListingMixin, model.MultiSourceMediaListing, model.TitledMediaListing):
     """
@@ -196,6 +202,12 @@ class FeedMediaListing(FeedMediaListingMixin, model.MultiSourceMediaListing, mod
     watched = Optional(datetime)
     downloaded = Optional(datetime)
     # was_downloaded = Required(bool, default=False)
+    #
+#     @property
+#     def read(self):
+#         seen = self.sources.seen.select()
+#         return all(seen)
+# #
 
 class FeedMediaSourceMixin(object):
 
@@ -206,7 +218,6 @@ class FeedMediaSourceMixin(object):
     def mark_unseen(self):
         with db_session:
             self.seen = None
-
 
 @model.attrclass(FeedMediaSourceMixin)
 class FeedMediaSource(FeedMediaSourceMixin, model.MediaSource):
@@ -219,27 +230,30 @@ class CachedFeedProviderDetailBox(DetailBox):
     def detail_table(self):
         columns = self.parent_table.columns.copy()
         next(c for c in columns if c.name=="title").truncate = True
-        return CachedFeedProviderDetailDataTable(self.parent_table, columns=columns)
+        return CachedFeedProviderDetailDataTable(self.listing, self.parent_table, columns=columns)
 
 
 @keymapped()
 class CachedFeedProviderDetailDataTable(DetailDataTable):
 
-    signals = ["next_unread"]
+    signals = ["next_unseen"]
 
     KEYMAP = {
         "cached_feed_provider_detail_data_table": {
-            "N": "toggle_seen",
-            "n": "next_unread"
+            "N": "toggle_selection_seen",
+            "n": "next_unseen"
         }
     }
 
     def keypress(self, size, key):
         return super().keypress(size, key)
 
-    def row_attr_fn(self, row):
+    def row_attr_fn(self, position, data, row):
         # if not getattr(row, "seen", False):
-        if not row.seen:
+        with db_session:
+            source = FeedMediaSource[data.media_source_id]
+        if not source.seen:
+            logger.info("detail unread")
             return "unread"
         return None
 
@@ -248,30 +262,43 @@ class CachedFeedProviderDetailDataTable(DetailDataTable):
             source = FeedMediaSource[self.selection.data.media_source_id]
             source.mark_seen()
         self.selection.clear_attr("unread")
+        logger.info("mark seen")
 
     async def mark_selection_unseen(self):
         with db_session:
             source = FeedMediaSource[self.selection.data.media_source_id]
             source.mark_unseen()
         self.selection.set_attr("unread")
+        logger.info("mark unseen")
 
 
-    async def toggle_seen(self):
-        if self.selection.data.seen:
+    async def toggle_selection_seen(self):
+        with db_session:
+            source = FeedMediaSource[self.selection.data.media_source_id]
+
+        if source.seen:
             await self.mark_selection_unseen()
         else:
             await self.mark_selection_seen()
 
     @keymap_command
-    async def next_unread(self):
-        # await self.parent_table.next_unread()
+    async def next_unseen(self):
+        # await self.parent_table.next_unseen()
 
         if self.selection:
             await self.mark_selection_seen()
-        if self.focus_position < len(self)-1:
-            self.focus_position += 1
-        else:
-            await self.parent_table.next_unread()
+
+        with db_session:
+            # raise Exception(self.listing)
+            listing = self.listing.attach()
+            next_unseen =  select(s for s in listing.sources
+                       if not s.seen).order_by(lambda s: s.rank).first()
+            if next_unseen:
+                self.focus_position = next_unseen.rank
+            else:
+                await self.parent_table.next_unread()
+
+
 
 
 @keymapped()
@@ -289,6 +316,7 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
     detail_replace = True
     detail_selectable = True
 
+    DETAIL_BOX_CLASS = CachedFeedProviderDetailBox
 
     KEYMAP = {
         "cached_feed_provider_data_table": {
@@ -316,8 +344,8 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
         # self.mark_read_task = None
         self.update_count = True
 
-    def detail_box(self):
-       return CachedFeedProviderDetailBox(self)
+    # def detail_box(self):
+    #    return CachedFeedProviderDetailBox(self)
 
     def detail_table(self, *args, **kwargs):
         return self.CachedFeedProvideDetailTable(self, *args, **kwargs)
@@ -333,18 +361,41 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
                 self.update_count = False
         return self._row_count
 
+    def unseen_sources(self, row):
+        with db_session:
+            listing = row.attach()
+            logger.info(listing)
+            logger.info(len([s for s in listing.sources if not s.seen]))
+            return len([s for s in listing.sources if not s.seen])
 
     # def check_parts(self, row):
     #     return (
     #         k for k, v in row.attrs.get("parts_read", {}).items() if v
     #     )
 
-    def row_attr_fn(self, row):
-        if len(row.sources) > 1:
-            return None
-        if not row.read:
-            return "unread"
-        return None
+    def row_attr_fn(self, position, data, row):
+        # logger.info(self.inner_table)
+        if len(data.sources) > 1:
+            box = row.details.contents
+            with db_session:
+                listing = box.listing
+                sources = sorted(listing.sources, key=lambda s: s.rank)
+                source = sources[box.table.focus_position].attach()
+            # raise Exception(source)
+            logger.info(f"hack attr:{'unread' if not source.seen else None}")
+            return "unread" if not source.seen else None
+            # raise Exception(self.detail_fn(data))
+            # logger.info(f"{position}, {len(data.sources)}")
+            # source = data.sources[position].attach()
+            # return None
+            # return "unread" if not source.seen else None
+            # return None
+        #     # return "unread" if not all(s.seen for s in row.sources) else None
+        #     # return "unread" if self.unseen_sources(row) else None
+        #     # return None
+        #     # return "unread" if not self.selection.details.table.selection.seen else None
+        else:
+            return "unread" if not data.attach().read else None
 
     @keymap_command()
     def inflate_selection(self):
@@ -383,36 +434,7 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
         row.clear_attr("unread")
         self.set_value(position, "read", item.read)
         self.invalidate_rows([self[position].data.media_listing_id])
-        return self.inner_table is not None
-
-    #     partial = self.inner_table is not None
-    #     # FIXME: HACK until there's a better UI for marking parts read
-    #     # partial = False
-    #     if partial:
-    #         pos = self.inner_focus
-    #         logger.info(f"mark part read: {pos}, {len(self.inner_table)}")
-    #         item.mark_part_read(pos)
-    #         # row.clear_attr("unread")
-    #         self.inner_table.set_value(pos, "read", True)
-    #         self.inner_table[pos].clear_attr("unread")
-    #         logger.info(f"{item.attrs}, {len(self.inner_table)}")
-    #         if pos == len(self.inner_table)-1 and len(list(self.check_parts(item))) == len(self.inner_table):
-    #             partial = False
-    #             logger.info("all parts read")
-    #             item.mark_read()
-    #             row.clear_attr("unread")
-    #             self.set_value(position, "read", item.read)
-    #             # row.close_details()
-    #         else:
-    #             self.inner_table.focus_position += 1
-    #         # self.inner_table.reset()
-    #     else:
-    #         logger.info("mark item read")
-    #         item.mark_read()
-    #         row.clear_attr("unread")
-    #         self.set_value(position, "read", item.read)
-    #         self.invalidate_rows([self[position].data.media_listing_id])
-    #     return partial
+        # return self.inner_table is not None
 
     @db_session
     def mark_item_unread(self, position):
@@ -447,7 +469,8 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
         # if not isinstance(self[position].data, model.TitledMediaListing):
         #     return
         # logger.info(self.get_value(position, "read"))
-        if self.get_value(position, "read") is not None:
+        if self[position].data_source.read:
+        # if self.get_value(position, "read") is not None:
             self.mark_item_unread(position)
         else:
             self.mark_item_read(position)
@@ -504,6 +527,14 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
 
         if len(self.selection.data.sources) == 1:
             rc = self.mark_item_read(self.focus_position)
+        else:
+            with db_session:
+                self.selection.data_source.attach().read = datetime.now()
+            self.selection.close_details()
+            self.selection.clear_attr("unread")
+            # self.refresh()
+            # self.invalidate_selection()
+
         # else:
         #     self.selection.close_details()
         #     self.focus_position += 1
@@ -521,10 +552,10 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
                 idx = next(
                     r.data.media_listing_id
                     for r in self[self.focus_position+1:]
-                    if not r.data.read
+                    if not r.data_source.attach().read
                 )
                 break
-            except StopIteration:
+            except (StopIteration, AttributeError):
                 if len(self) >= self.query_result_count():
                     return
                 self.focus_position = len(self)-1
@@ -534,6 +565,7 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
         if idx:
             pos = self.index_to_position(idx)
             logger.info(pos)
+            focus_position_orig = self.focus_position
             self.focus_position = pos
             self.mark_read_on_focus = True
             self._modified()

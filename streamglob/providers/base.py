@@ -804,8 +804,10 @@ class SynchronizedPlayerMixin(object):
 
         if self.player and len(self):
 
-            index = self.playlist_position
-
+            try:
+                index = self.playlist_position
+            except AttributeError:
+                return
             if index is None:
                 return
 
@@ -854,7 +856,8 @@ class SynchronizedPlayerMixin(object):
 
 class DetailBox(urwid.WidgetWrap):
 
-    def __init__(self, parent_table):
+    def __init__(self, listing, parent_table):
+        self.listing = listing
         self.parent_table = parent_table
         self.table = self.detail_table()
         self.box = urwid.BoxAdapter(self.table, 1)
@@ -863,7 +866,10 @@ class DetailBox(urwid.WidgetWrap):
     def detail_table(self):
         columns = self.parent_table.columns.copy()
         next(c for c in columns if c.name=="title").truncate = True
-        return DetailDataTable(self.parent_table, columns=columns)
+        return DetailDataTable(
+            self.listing,
+            self.parent_table, columns=columns
+        )
 
     @property
     def focus_position(self):
@@ -877,20 +883,10 @@ class DetailBox(urwid.WidgetWrap):
 class DetailDataTable(BaseDataTable):
 
     with_header = False
-    # cell_selection = True
 
-    attr_map = {
-        # None: "table_row_body",
-        "table_row_body focused": "table_row_body highlight",
-        # "table_row_body highlight": "table_row_body highlight focused",
-        # "unread": "unread highlight column_focused",
-        "unread": "unread highlight",
-        "unread focused": "unread highlight focused",
-    }
-
-    def __init__(self, parent_table, columns=None):
+    def __init__(self, listing, parent_table, columns=None):
+        self.listing = listing
         self.parent_table = parent_table
-        self.listing = self.parent_table.selection.data_source
         super().__init__(columns=columns)
 
     def keypress(self, size, key):
@@ -924,6 +920,8 @@ class MultiSourceListingMixin(object):
 
     with_sidecar = True
 
+    DETAIL_BOX_CLASS = DetailBox
+
     def listings(self, offset=None, limit=None, *args, **kwargs):
         for listing in super().listings(offset=offset, limit=limit, *args, **kwargs):
             yield (listing, dict(source_count=len(listing.sources)))
@@ -932,7 +930,9 @@ class MultiSourceListingMixin(object):
 
         if column.name == "title":
             listing = row.data_source.attach()
-            source_count = self.df[listing.media_listing_id, "source_count"]
+            # source_count = self.df[listing.media_listing_id, "source_count"]
+            source_count = len(row.get("sources"))
+            logger.info(source_count)
             if source_count > 1:
                 value = f"[{source_count}] {row.get('title')}"
 
@@ -940,20 +940,27 @@ class MultiSourceListingMixin(object):
 
     def detail_fn(self, data):
 
-        if data.source_count <= 1:
+        if len(data.sources) <= 1:
             return
-
-        box = self.detail_box()
         # urwid.connect_signal(box.table, "focus", lambda s, i: self.on_focus(s, self.focus_position))
-        urwid.connect_signal(box.table, "focus", lambda s, pos: self.on_inner_focus(pos))
 
-        def on_inner_focus(source, position):
-            logger.info(position)
-
+        # def on_inner_focus(source, position):
+        #     logger.info(position)
+        box = self.DETAIL_BOX_CLASS(data, self)
+        urwid.connect_signal(box.table, "focus", lambda s, i: self.on_focus(s, self.focus_position))
         return box
+        # return self.detail_box
 
-    def detail_box(self):
-       return CachedFeedProviderDetailBox(self)
+    # @property
+    # def detail_box(self):
+    #     if not getattr(self, "_detail_box", None):
+    #         box = self.DETAIL_BOX_CLASS(self)
+    #         urwid.connect_signal(box.table, "focus", lambda s, pos: self.on_inner_focus(pos))
+    #         self._detail_box = box
+    #     return self._detail_box
+
+    # def detail_box(self):
+    #    return CachedFeedProviderDetailBox(self)
 
     def on_inner_focus(self, position):
         logger.debug(f"on_inner_focus: {position}")

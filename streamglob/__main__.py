@@ -433,7 +433,7 @@ def load_palette():
     state.palette_entries = {}
     # FIXME: move to provider config
     for (n, f, b) in  [
-            ("unread", "light red", "black"),
+            ("unread", "white", "black"),
     ]:
         state.palette_entries[n] = PaletteEntry(
             name=n,
