@@ -644,6 +644,8 @@ class SynchronizedPlayerMixin(object):
         logger.info("sync reset")
         self.disable_focus_handler()
         super().reset(*args, **kwargs)
+        if len(self):
+            self.on_focus(self, self.focus_position)
         self.enable_focus_handler()
 
     def enable_focus_handler(self):
@@ -708,7 +710,7 @@ class SynchronizedPlayerMixin(object):
                 logger.info(f"debug: {key_name}")
                 if key in self.KEYMAP.get("any", {}):
                     command = self.KEYMAP["any"].get(key)
-                    if not self.call_keymap_command(command):
+                    if not self._keymap_command(command):
                         key_func = asyncio.coroutine(functools.partial(self.player.command, *command))
                         if asyncio.iscoroutinefunction(key_func):
                             await key_func()
@@ -850,7 +852,6 @@ class SynchronizedPlayerMixin(object):
             pass
 
 
-@keymapped()
 class DetailBox(urwid.WidgetWrap):
 
     def __init__(self, parent_table):
@@ -862,13 +863,17 @@ class DetailBox(urwid.WidgetWrap):
     def detail_table(self):
         columns = self.parent_table.columns.copy()
         next(c for c in columns if c.name=="title").truncate = True
-        return DetailDataTable(self.parent_table.selection.data_source, columns=columns)
+        return DetailDataTable(self.parent_table, columns=columns)
 
     @property
     def focus_position(self):
         return self.table.focus_position
 
+    def keypress(self, size, key):
+        return super().keypress(size, key)
 
+
+@keymapped()
 class DetailDataTable(BaseDataTable):
 
     with_header = False
@@ -883,9 +888,13 @@ class DetailDataTable(BaseDataTable):
         "unread focused": "unread highlight focused",
     }
 
-    def __init__(self, listing, columns=None):
-        self.listing = listing
+    def __init__(self, parent_table, columns=None):
+        self.parent_table = parent_table
+        self.listing = self.parent_table.selection.data_source
         super().__init__(columns=columns)
+
+    def keypress(self, size, key):
+        return super().keypress(size, key)
 
     def query(self, *args, **kwargs):
         return [
@@ -929,13 +938,12 @@ class MultiSourceListingMixin(object):
 
         return super().decorate(row, column, value)
 
-
     def detail_fn(self, data):
 
         if data.source_count <= 1:
             return
 
-        box = DetailBox(self)
+        box = self.detail_box()
         # urwid.connect_signal(box.table, "focus", lambda s, i: self.on_focus(s, self.focus_position))
         urwid.connect_signal(box.table, "focus", lambda s, pos: self.on_inner_focus(pos))
 
@@ -943,6 +951,9 @@ class MultiSourceListingMixin(object):
             logger.info(position)
 
         return box
+
+    def detail_box(self):
+       return CachedFeedProviderDetailBox(self)
 
     def on_inner_focus(self, position):
         logger.debug(f"on_inner_focus: {position}")

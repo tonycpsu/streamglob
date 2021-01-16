@@ -127,24 +127,24 @@ class FeedMediaListingMixin(object):
         # logger.info(type(l), l)
         commit()
 
-    @db_session
-    def mark_part_read(self, index):
-        logger.info(f"mark_part_read {index}")
-        if not "parts_read" in self.attrs:
-            self.attrs["parts_read"] = dict()
-        self.attrs["parts_read"][str(index)] = True
+    # @db_session
+    # def mark_part_read(self, index):
+    #     logger.info(f"mark_part_read {index}")
+    #     if not "parts_read" in self.attrs:
+    #         self.attrs["parts_read"] = dict()
+    #     self.attrs["parts_read"][str(index)] = True
 
-    @db_session
-    def mark_part_unread(self, index):
-        logger.info(f"mark_part_unread {index}")
-        self.attrs["parts_read"].pop(str(index), None)
+    # @db_session
+    # def mark_part_unread(self, index):
+    #     logger.info(f"mark_part_unread {index}")
+    #     self.attrs["parts_read"].pop(str(index), None)
 
-    @db_session
-    def part_is_read(self, index):
-        try:
-            return self.attrs.get("parts_read", {})[str(index)]
-        except:
-            return False
+    # @db_session
+    # def part_is_read(self, index):
+    #     try:
+    #         return self.attrs.get("parts_read", {})[str(index)]
+    #     except:
+    #         return False
 
     @property
     def age(self):
@@ -197,69 +197,81 @@ class FeedMediaListing(FeedMediaListingMixin, model.MultiSourceMediaListing, mod
     downloaded = Optional(datetime)
     # was_downloaded = Required(bool, default=False)
 
+class FeedMediaSourceMixin(object):
+
+    def mark_seen(self):
+        with db_session:
+            self.seen = datetime.now()
+
+    def mark_unseen(self):
+        with db_session:
+            self.seen = None
 
 
-@model.attrclass()
-class FeedMediaSource(model.MediaSource):
+@model.attrclass(FeedMediaSourceMixin)
+class FeedMediaSource(FeedMediaSourceMixin, model.MediaSource):
 
     seen = Optional(datetime)
 
 
 class CachedFeedProviderDetailBox(DetailBox):
 
-
-
-    # @keymap_command
-    # def toggle_selection_read(self):
-    #     with db_session:
-    #         listing = self.parent.selection.data_source.attach()
-    #         # raise Exception(dir(listing))
-    #         # logger.info("CachedFeedProviderDetailBox.toggle_selection_read")
-    #         # raise Exception(listing)
-    #         if listing.part_is_read(self.focus_position):
-    #             listing.mark_part_unread(self.focus_position)
-    #         else:
-    #             listing.mark_part_read(self.focus_position)
-
-    def detail_table(self, *args, **kwargs):
-        return CachedFeedProviderDetailDataTable(*args, **kwargs)
+    def detail_table(self):
+        columns = self.parent_table.columns.copy()
+        next(c for c in columns if c.name=="title").truncate = True
+        return CachedFeedProviderDetailDataTable(self.parent_table, columns=columns)
 
 
 @keymapped()
 class CachedFeedProviderDetailDataTable(DetailDataTable):
 
+    signals = ["next_unread"]
+
     KEYMAP = {
         "cached_feed_provider_detail_data_table": {
-            "N": "toggle_seen"
+            "N": "toggle_seen",
+            "n": "next_unread"
         }
     }
 
-    @keymap_command
-    def mark_seen(self):
-        logger.info("mark_seen")
-        with db_session:
-            source = self.table.provider.MEDIA_SOURCE_CLASS[self.table.selection.data.media_source_id]
-            logger.info(source)
-            source.seen = datetime.now()
-            commit()
+    def keypress(self, size, key):
+        return super().keypress(size, key)
 
-    @keymap_command
-    def mark_unseen(self):
-        logger.info("mark_unseen")
-        with db_session:
-            source = self.MEDIA_SOURCE_CLASS[self.table.selection.data.media_source_id]
-            source.seen = datetime.now()
-            commit()
+    def row_attr_fn(self, row):
+        # if not getattr(row, "seen", False):
+        if not row.seen:
+            return "unread"
+        return None
 
-    @keymap_command
-    def toggle_seen(self):
-        logger.info(self.parent)
-        logger.info(self.parent.provider.MEDIA_SOURCE_CLASS)
-        logger.info(self.parent.selection.data.media_source_id)
-        if self.table.selection.data.seen:
-            self.mark_unseen()
+    async def mark_selection_seen(self):
+        with db_session:
+            source = FeedMediaSource[self.selection.data.media_source_id]
+            source.mark_seen()
+        self.selection.clear_attr("unread")
+
+    async def mark_selection_unseen(self):
+        with db_session:
+            source = FeedMediaSource[self.selection.data.media_source_id]
+            source.mark_unseen()
+        self.selection.set_attr("unread")
+
+
+    async def toggle_seen(self):
+        if self.selection.data.seen:
+            await self.mark_selection_unseen()
         else:
-            self.mark_seen()
+            await self.mark_selection_seen()
+
+    @keymap_command
+    async def next_unread(self):
+        # await self.parent_table.next_unread()
+
+        if self.selection:
+            await self.mark_selection_seen()
+        if self.focus_position < len(self)-1:
+            self.focus_position += 1
+        else:
+            await self.parent_table.next_unread()
 
 
 @keymapped()
@@ -288,7 +300,7 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
             "ctrl d": "download",
             "n": "next_unread",
             "p": "prev_unread",
-            # "N": "toggle_selection_read",
+            "N": "toggle_selection_read",
             "meta i": "inflate_selection",
             "meta r": ("update", [], {"force": True}),
             "meta f": ("update", [], {"force": True, "resume": True}),
@@ -322,13 +334,15 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
         return self._row_count
 
 
-    def check_parts(self, row):
-        return (
-            k for k, v in row.attrs.get("parts_read", {}).items() if v
-        )
+    # def check_parts(self, row):
+    #     return (
+    #         k for k, v in row.attrs.get("parts_read", {}).items() if v
+    #     )
 
     def row_attr_fn(self, row):
-        if not (row.read or list(self.check_parts(row))):
+        if len(row.sources) > 1:
+            return None
+        if not row.read:
             return "unread"
         return None
 
@@ -488,11 +502,16 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
         count = 0
         last_count = None
 
-        rc = self.mark_item_read(self.focus_position)
-        logger.info(rc)
-        if rc:
-            logger.info("mark was partial")
-            return
+        if len(self.selection.data.sources) == 1:
+            rc = self.mark_item_read(self.focus_position)
+        # else:
+        #     self.selection.close_details()
+        #     self.focus_position += 1
+        #     return
+        #     logger.info(rc)
+        # if rc:
+        #     logger.info("mark was partial")
+        #     return
 
         while True:
             if count == last_count:
@@ -587,6 +606,8 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
         # elif key == "p":
         #     # self.prev_unread()
         #     state.event_loop.create_task(self.prev_unread())
+        logger.info(super().keypress)
+        key = super().keypress(size, key)
         if key == "A":
             self.mark_all_read()
         elif key == "ctrl a":
@@ -604,7 +625,7 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
         elif key == "ctrl d":
             state.event_loop.create_task(self.download())
         else:
-            return super().keypress(size, key)
+            return key
 
 
 class FeedsFilter(ConfigFilter):
