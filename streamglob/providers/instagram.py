@@ -105,8 +105,8 @@ class InstagramMediaListingMixin(object):
             feed = self.provider.FEED_CLASS[self.feed.channel_id]
             post = AttrDict(feed.get_post_info(self.shortcode))
             delete(s for s in self.sources)
-            for source in feed.extract_content(post):
-                self.sources.add(self.provider.new_media_source(**source).attach())
+            for i, source in enumerate(feed.extract_content(post)):
+                self.sources.add(self.provider.new_media_source(rank=i, **source).attach())
             self.is_inflated = True
         return True
 
