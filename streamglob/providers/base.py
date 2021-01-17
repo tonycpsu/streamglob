@@ -875,16 +875,10 @@ class SynchronizedPlayerMixin(object):
             if self.pending_event_task:
                 logger.warn("canceling task")
                 self.pending_event_task.cancel()
-                delay = 1
-            else:
-                delay = 0
-            self.queued_task = lambda: self.set_playlist_pos(index)
 
-            self.pending_event_task = state.event_loop.call_later(
-                delay,
-                self.run_queued_task
+            self.pending_event_task = state.event_loop.create_task(
+                self.set_playlist_pos(index)
             )
-
 
     def on_focus(self, source, position):
         self.sync_playlist_position()
