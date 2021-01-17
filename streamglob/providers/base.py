@@ -628,6 +628,12 @@ class BackgroundTasksMixin(object):
         #     state.loop.remove_alarm(self._tasks[fn.__name__])
         # self._tasks[fn.__name__] = None
 
+BLANK_IMAGE_URI = """\
+data://image/png;base64,\
+iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAA\
+AAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=\
+"""
+
 @keymapped()
 class SynchronizedPlayerMixin(object):
 
@@ -647,7 +653,9 @@ class SynchronizedPlayerMixin(object):
         if len(self):
             self.on_focus(self, self.focus_position)
         self.enable_focus_handler()
-
+        state.event_loop.create_task(
+            self.play_all() if len(self) else self.play_empty()
+        )
     def enable_focus_handler(self):
         if self.on_focus_handler:
             return
@@ -716,16 +724,23 @@ class SynchronizedPlayerMixin(object):
                             await key_func()
                         else:
                             key_func()
-            state.event_loop.create_task(
-                self.player.controller.register_unbound_key_callback(handle_mpv_key)
-            )
-            # self.player_command("keybind", "UNMAPPED", "script-binding unampped-keypress")
+            await self.player.controller.register_unbound_key_callback(handle_mpv_key)
+            # )
             def on_player_done(f):
                 logger.info("player done")
                 self.player = None
                 self.player_task = None
-
             self.player_task.result.add_done_callback(on_player_done)
+
+        async def load_sources():
+            self.player = await self.player_task.program
+            sources, kwargs = self.provider.play_args(listing)
+            await self.player_task.load_sources(sources)
+
+        if getattr(self, "player_task", None):
+            await load_sources()
+        else:
+            await start_player()
 
     @keymap_command()
     async def play_all(self):
@@ -753,9 +768,22 @@ class SynchronizedPlayerMixin(object):
         listing = self.make_playlist(self.play_items)
         await self.play_listing(listing)
 
+    @property
+    def empty_listing(self):
+        return self.provider.new_listing(
+            title=f"{self.provider.NAME} empty",
+            sources = [
+                self.provider.new_media_source(
+                    url=BLANK_IMAGE_URI,
+                    media_type = "image"
+                )
+            ],
+            feed = self.provider.feed
+        )
+
     async def play_empty(self):
-        listing = self.make_playlist([])
-        await self.play_listing(listing)
+
+        await self.play_listing(self.empty_listing)
 
     def playlist_pos_to_row(self, pos):
         return self.play_items[pos].row_num
@@ -811,6 +839,7 @@ class SynchronizedPlayerMixin(object):
             if index is None:
                 return
 
+            logger.info(index)
             if self.pending_event_task:
                 logger.warn("canceling task")
                 self.pending_event_task.cancel()
@@ -826,6 +855,7 @@ class SynchronizedPlayerMixin(object):
 
     def on_focus(self, source, position):
         self.sync_playlist_position()
+        logger.info("sync_playlist_position")
         if len(self):
             with db_session:
                 listing = self[position].data_source.attach()
@@ -951,23 +981,16 @@ class MultiSourceListingMixin(object):
         return box
         # return self.detail_box
 
-    # @property
-    # def detail_box(self):
-    #     if not getattr(self, "_detail_box", None):
-    #         box = self.DETAIL_BOX_CLASS(self)
-    #         urwid.connect_signal(box.table, "focus", lambda s, pos: self.on_inner_focus(pos))
-    #         self._detail_box = box
-    #     return self._detail_box
+    def sync_playlist_position(self):
+        super().sync_playlist_position()
 
-    # def detail_box(self):
-    #    return CachedFeedProviderDetailBox(self)
 
     def on_inner_focus(self, position):
-        logger.debug(f"on_inner_focus: {position}")
         self.sync_playlist_position()
 
     @property
     def playlist_position(self):
+        logger.info(self.inner_focus)
         return self.row_to_playlist_pos(self.focus_position) + self.inner_focus
 
     @property

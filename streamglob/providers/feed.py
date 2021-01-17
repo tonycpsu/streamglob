@@ -253,7 +253,7 @@ class CachedFeedProviderDetailDataTable(DetailDataTable):
         with db_session:
             source = FeedMediaSource[data.media_source_id]
         if not source.seen:
-            logger.info("detail unread")
+            # logger.info("detail unread")
             return "unread"
         return None
 
@@ -262,14 +262,14 @@ class CachedFeedProviderDetailDataTable(DetailDataTable):
             source = FeedMediaSource[self.selection.data.media_source_id]
             source.mark_seen()
         self.selection.clear_attr("unread")
-        logger.info("mark seen")
+        # logger.info("mark seen")
 
     async def mark_selection_unseen(self):
         with db_session:
             source = FeedMediaSource[self.selection.data.media_source_id]
             source.mark_unseen()
         self.selection.set_attr("unread")
-        logger.info("mark unseen")
+        # logger.info("mark unseen")
 
 
     async def toggle_selection_seen(self):
@@ -364,8 +364,8 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
     def unseen_sources(self, row):
         with db_session:
             listing = row.attach()
-            logger.info(listing)
-            logger.info(len([s for s in listing.sources if not s.seen]))
+            # logger.info(listing)
+            # logger.info(len([s for s in listing.sources if not s.seen]))
             return len([s for s in listing.sources if not s.seen])
 
     # def check_parts(self, row):
@@ -381,19 +381,7 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
                 listing = box.listing
                 sources = sorted(listing.sources, key=lambda s: s.rank)
                 source = sources[box.table.focus_position].attach()
-            # raise Exception(source)
-            logger.info(f"hack attr:{'unread' if not source.seen else None}")
             return "unread" if not source.seen else None
-            # raise Exception(self.detail_fn(data))
-            # logger.info(f"{position}, {len(data.sources)}")
-            # source = data.sources[position].attach()
-            # return None
-            # return "unread" if not source.seen else None
-            # return None
-        #     # return "unread" if not all(s.seen for s in row.sources) else None
-        #     # return "unread" if self.unseen_sources(row) else None
-        #     # return None
-        #     # return "unread" if not self.selection.details.table.selection.seen else None
         else:
             return "unread" if not data.attach().read else None
 
@@ -598,15 +586,6 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
     def refresh(self, *args, **kwargs):
         logger.info("datatable refresh")
         super().refresh(*args, **kwargs)
-
-    def reset(self, *args, **kwargs):
-        state.foo = state.event_loop.create_task(self.play_all())
-        super().reset(*args, **kwargs)
-        # SynchronizedPlayerMixin.reset(self, *args, **kwargs)
-    # @keymap_command("reset")
-    # def reset(self, *args, **kwargs):
-    #     logger.info("datatable reset")
-
 
     @keymap_command
     async def update(self, force=False, resume=False):
