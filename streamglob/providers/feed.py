@@ -47,11 +47,6 @@ class MediaFeed(model.MediaChannel):
 
     async def update(self, *args, **kwargs):
         for item in self.fetch(*args, **kwargs):
-            # content = [
-            #     self.provider.new_media_source(**s).dict(exclude_unset = True, exclude_none = True)
-            #     for s in item["content"]
-            # ]
-            # del item["content"]
             with db_session:
                 old = self.provider.LISTING_CLASS.get(guid=item["guid"])
                 if old:
@@ -79,9 +74,7 @@ class MediaFeed(model.MediaChannel):
     @db_session
     def mark_all_items_read(self):
         for i in self.items.select():
-            pass
-            # i.mark_read()
-            # i.read = datetime.now()
+            i.mark_read()
 
     @classmethod
     @db_session
@@ -486,23 +479,23 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
 
 
     def mark_all_read(self):
-            with db_session:
-                if self.provider.feed:
-                    self.provider.feed.mark_all_items_read()
-                else:
-                    self.provider.FEED_CLASS.mark_all_feeds_read()
-            self.reset()
+        with db_session:
+            if self.provider.feed:
+                self.provider.feed.mark_all_items_read()
+            else:
+                self.provider.FEED_CLASS.mark_all_feeds_read()
+        self.reset()
 
 
     def mark_visible_read(self, direction=None):
-            for n, item in enumerate(self):
-                if direction and (
-                        direction < 0 and n > self.focus_position
-                        or direction> 0 and n < self.focus_position
-                ):
-                    continue
-                self.mark_item_read(n)
-            self.reset()
+        for n, item in enumerate(self):
+            if direction and (
+                    direction < 0 and n > self.focus_position
+                    or direction> 0 and n < self.focus_position
+            ):
+                continue
+            self.mark_item_read(n)
+        self.reset()
 
     @keymap_command
     async def prev_item(self):
