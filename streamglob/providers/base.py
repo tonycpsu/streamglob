@@ -673,9 +673,9 @@ class SynchronizedPlayerMixin(object):
             self.enable_focus_handler()
         state.event_loop.create_task(reset_async())
 
-    def load_more(self, position):
-        super().load_more(position)
-        self.refresh()
+    # def load_more(self, position):
+    #     super().load_more(position)
+    #     self.refresh()
 
     def enable_focus_handler(self):
         if self.on_focus_handler:

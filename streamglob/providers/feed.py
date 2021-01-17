@@ -44,6 +44,7 @@ class MediaFeed(model.MediaChannel):
     def fetch(self):
         pass
 
+
     async def update(self, *args, **kwargs):
         for item in self.fetch(*args, **kwargs):
             # content = [
@@ -51,16 +52,29 @@ class MediaFeed(model.MediaChannel):
             #     for s in item["content"]
             # ]
             # del item["content"]
-            item["sources"] = [
-                self.provider.new_media_source(rank=i, **s).attach()
-                for i, s in enumerate(item["sources"])
-            ]
-            listing = self.provider.new_listing(
-                **item
-            ).attach()
-            self.provider.on_new_listing(listing)
-            self.updated = datetime.now()
-            commit()
+            with db_session:
+                old = self.provider.LISTING_CLASS.get(guid=item["guid"])
+                if old:
+                    old.delete()
+                item["sources"] = [
+                    self.provider.new_media_source(rank=i, **s).attach()
+                    for i, s in enumerate(item["sources"])
+                ]
+
+                listing = self.provider.new_listing(
+                    **item
+                ).attach()
+                commit()
+                if self.provider.config.get("inflate_on_fetch") and not listing.is_inflated:
+                    logger.info("inflating on fetch")
+                    listing.inflate()
+            with db_session:
+                try:
+                    listing = self.provider.LISTING_CLASS[listing.media_listing_id]
+                except ObjectNotFound:
+                    continue
+                self.provider.on_new_listing(listing)
+                self.updated = datetime.now()
 
     @db_session
     def mark_all_items_read(self):
@@ -331,7 +345,9 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
             "N": "toggle_selection_read",
             "meta i": "inflate_selection",
             "meta r": ("update", [], {"force": True}),
+            "meta R": ("update", [], {"force": True, "replace": True}),
             "meta f": ("update", [], {"force": True, "resume": True}),
+            "meta F": ("update", [], {"force": True, "resume": True, "replace": True}),
             "meta p": "play_all",
             "f": ["cycle", "fullscreen"],
             "q": "quit_app"
@@ -588,8 +604,8 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
         super().refresh(*args, **kwargs)
 
     @keymap_command
-    async def update(self, force=False, resume=False):
-        await self.provider.update(force=force, resume=resume)
+    async def update(self, force=False, resume=False, replace=False):
+        await self.provider.update(force=force, resume=resume, replace=replace)
 
 
     # FIXME: move to base view
@@ -848,16 +864,16 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
     def close_popup(self):
         self.view.close_popup()
 
-    async def update(self, force=False, resume=False):
+    async def update(self, force=False, resume=False, replace=False):
         logger.info(f"update: force={force} resume={resume}")
         self.create_feeds()
         self.open_popup("Updating feeds...")
-        await self.update_feeds(force=force, resume=resume)
+        await self.update_feeds(force=force, resume=resume, replace=replace)
         self.close_popup()
         self.reset()
         # update_task = state.event_loop.run_in_executor(None, update_feeds)
 
-    async def update_feeds(self, force=False, resume=False):
+    async def update_feeds(self, force=False, resume=False, replace=False):
         logger.info(f"update_feeds: {force} {resume}")
         with db_session:
             if not self.feed:
@@ -874,7 +890,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
                 ):
                     logger.info(f"updating {feed.locator}")
                     with limit(self.limiter):
-                        await feed.update(resume=resume)
+                        await feed.update(resume=resume, replace=replace)
                         # f.updated = datetime.now()
                     # commit()
 

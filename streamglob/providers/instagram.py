@@ -103,7 +103,9 @@ class InstagramMediaListingMixin(object):
             # self.feed is of type MediaFeed instead of InstagramMediaFeed, so
             # we force the issue here
             feed = self.provider.FEED_CLASS[self.feed.channel_id]
-            post = AttrDict(feed.get_post_info(self.shortcode))
+            with self.provider.session.limiter():
+                post_info = feed.get_post_info(self.shortcode)
+                post = AttrDict(post_info)
             delete(s for s in self.sources)
             for i, source in enumerate(feed.extract_content(post)):
                 self.sources.add(self.provider.new_media_source(rank=i, **source).attach())
@@ -226,7 +228,7 @@ class InstagramMediaFeedMixin(object):
         return content
 
 
-    def fetch(self, resume=False):
+    def fetch(self, resume=False, replace=False):
 
         logger.info(f"fetching {self.locator}")
 
@@ -285,7 +287,7 @@ class InstagramMediaFeedMixin(object):
 
             i = self.items.select(lambda i: i.guid == post.shortcode).first()
 
-            if i:
+            if i and not replace:
                 logger.debug(f"old: {created}")
                 continue
             else:
