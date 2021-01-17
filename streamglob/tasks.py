@@ -119,10 +119,8 @@ class TaskManager(Observable):
             #     raise Exception(type(task), type(task.listing.feed))
             logger.debug(f"task: {task}")
             if isinstance(task, (model.PlayMediaTask, model.PlayMediaTask.attr_class)):
-                # program = await player.Player.play(task, *task.args, **task.kwargs)
                 run_task = player.Player.play(task, *task.args, **task.kwargs)
-                logger.info(run_task)
-                # ret = state.event_loop.create_task(run_task)
+
             elif isinstance(task, (model.DownloadMediaTask, model.DownloadMediaTask.attr_class)):
                 try:
                     outfile = task.stage_outfile

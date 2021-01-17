@@ -470,9 +470,9 @@ class ProgramMediaTask(ProgramMediaTaskMixin, MediaTask):
 
 class PlayMediaTaskMixin(object):
 
-    async def load_sources(self, sources):
+    async def load_sources(self, sources, **options):
         await self.program
-        proc = await self.program.result().load_source(sources)
+        proc = await self.program.result().load_source(sources, **options)
         self.proc = state.event_loop.create_future()
         self.proc.set_result(proc)
 

@@ -390,13 +390,13 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
         with db_session:
             listing = self.selection.data_source.attach()
             if listing.inflate():
-                position = self.focus_position
+                # position = self.focus_position
                 self.invalidate_rows([listing.media_listing_id])
                 self.selection.close_details()
                 self.selection.open_details()
                 self.refresh()
-                state.event_loop.create_task(self.play_all())
-                self.focus_position = position
+                # state.event_loop.create_task(self.play_all(playlist_position = position))
+                # self.focus_position = position
 
     # FIXME
     # def on_focus(self, source, position):

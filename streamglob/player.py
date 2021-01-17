@@ -115,6 +115,8 @@ class Program(object):
         '.+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$)'
     )
 
+    ARG_MAP = {}
+
     with_progress = False
 
     def __init__(self, path, args=[], output_args=None,
@@ -357,8 +359,19 @@ class Program(object):
         return self.source_is_program and self.source.PLAYER_INTEGRATED
 
     def process_kwargs(self, kwargs):
-        pass
+        logger.info(kwargs)
+        program_args = {
+            self.ARG_MAP.get(k): v
+            for k, v in kwargs.items()
+            if k in self.ARG_MAP
+        }
+        logger.info(program_args)
 
+        self.extra_args_pre += [
+            f"{k}={v}"
+            for k, v in program_args.items()
+        ]
+        logger.info(self.extra_args_pre)
 
     async def get_output(self):
 
@@ -427,6 +440,7 @@ class Program(object):
 
 
     async def run(self, source=None, **kwargs):
+
         if source:
             self.source = source
 
@@ -531,7 +545,9 @@ class Player(Program):
         task.program.set_result(player)
         player.source = source
         logger.info(f"player: {player.cmd}: downloader={downloader.cmd if downloader else downloader}, playing {source}")
-        proc = await player.run(**kwargs)
+        proc = await player.run(
+            **kwargs
+        )
         return proc
 
     async def load_source(self, sources):
@@ -555,6 +571,10 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
         "DOWN": "cursor down",
         "LEFT": "cursor left",
         "RIGHT": "cursor right"
+    }
+
+    ARG_MAP = {
+        "playlist_position": "--playlist-start"
     }
 
     def __init__(self, *args, **kwargs):
@@ -611,11 +631,24 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
         while not os.path.exists(self.ipc_socket_name):
             time.sleep(0.5)
 
-    async def load_source(self, sources):
+    async def load_source(self, sources, **options):
+        logger.info("load_source")
         await self.ready
         self.source = sources
         for i, s in enumerate(self.source_args):
-            await self.command("loadfile", s, "replace" if i==0 else "append")
+            loadfile_options = ",".join([
+                f"{k.replace('_', '-')}={v}"
+                for k,v in options.items()
+            ])
+            # logger.info(loadfile_options)
+            cmd = [
+                "loadfile",
+                s,
+                "replace" if i==0 else "append",
+            ] + ([loadfile_options] if loadfile_options else [])
+            logger.info(cmd)
+            await self.command(*cmd)
+
         return self.proc
 
     def key_to_urwid(self, key):
@@ -724,8 +757,9 @@ class YouTubeDLDownloader(Downloader):
         return False
 
     def process_kwargs(self, kwargs):
-        if "format" in kwargs:
-            self.extra_args_post += ["-f", str(kwargs["format"])]
+        format = kwargs.pop("format")
+        if format:
+            self.extra_args_post += ["-f", str(format)]
 
     def pipe_to_dst(self):
         self.extra_args_post += ["-o", "-"]

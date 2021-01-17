@@ -112,7 +112,7 @@ class InstagramMediaListingMixin(object):
 
     @property
     def should_inflate_on_focus(self):
-        return self.media_type == "carousel"
+        return self.media_type in ["carousel", "video"]
 
     def on_focus(self, source_count=None):
         logger.info("on_focus")
@@ -413,7 +413,7 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
     def play_args(self, selection, **kwargs):
 
         source, kwargs = super().play_args(selection, **kwargs)
-        kwargs["media_type"] = selection.media_type
+        # kwargs["media_type"] = selection.media_type
         return (source, kwargs)
 
     # def feed_attrs(self, feed_name):

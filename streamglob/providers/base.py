@@ -646,16 +646,37 @@ class SynchronizedPlayerMixin(object):
         self.pending_event_task = None
         self.on_focus_handler = None
 
+    # def refresh(self, reset=False, *args, **kwargs):
+    #     self.disable_focus_handler()
+    #     super().refresh(*args, **kwargs)
+    #     async def refresh_async():
+    #         # await self.play_empty()
+    #         if len(self):
+    #             await self.play_all()
+    #             # self.on_focus(self, self.focus_position)
+    #         else:
+    #              await self.play_empty()
+    #         self.enable_focus_handler()
+    #     state.event_loop.create_task(refresh_async())
+
+
     def reset(self, *args, **kwargs):
-        logger.info("sync reset")
         self.disable_focus_handler()
         super().reset(*args, **kwargs)
-        if len(self):
-            self.on_focus(self, self.focus_position)
-        self.enable_focus_handler()
-        state.event_loop.create_task(
-            self.play_all() if len(self) else self.play_empty()
-        )
+        async def reset_async():
+            # await self.play_empty()
+            if len(self):
+                await self.play_all()
+                self.on_focus(self, self.focus_position)
+            else:
+                 await self.play_empty()
+            self.enable_focus_handler()
+        state.event_loop.create_task(reset_async())
+
+    def load_more(self, position):
+        super().load_more(position)
+        self.refresh()
+
     def enable_focus_handler(self):
         if self.on_focus_handler:
             return
@@ -700,14 +721,10 @@ class SynchronizedPlayerMixin(object):
 
         return listing
 
-    async def play_listing(self, listing):
+    async def play_listing(self, listing, playlist_position=0):
 
-        if self.player_task:
-            self.player = await self.player_task.program
-            sources, kwargs = self.provider.play_args(listing)
-            state.event_loop.create_task(self.player_task.load_sources(sources))
-        else:
-            self.player_task = self.provider.play(listing)
+        async def start_player():
+            self.player_task = self.provider.play(listing, playlist_position=0)
             logger.info(self.player_task)
             self.player = await self.player_task.program
             logger.info(self.player)
@@ -718,14 +735,14 @@ class SynchronizedPlayerMixin(object):
                 logger.info(f"debug: {key_name}")
                 if key in self.KEYMAP.get("any", {}):
                     command = self.KEYMAP["any"].get(key)
-                    if not self._keymap_command(command):
+                    if not self.call_keymap_command(command):
                         key_func = asyncio.coroutine(functools.partial(self.player.command, *command))
                         if asyncio.iscoroutinefunction(key_func):
                             await key_func()
                         else:
                             key_func()
             await self.player.controller.register_unbound_key_callback(handle_mpv_key)
-            # )
+
             def on_player_done(f):
                 logger.info("player done")
                 self.player = None
@@ -735,7 +752,7 @@ class SynchronizedPlayerMixin(object):
         async def load_sources():
             self.player = await self.player_task.program
             sources, kwargs = self.provider.play_args(listing)
-            await self.player_task.load_sources(sources)
+            await self.player_task.load_sources(sources, playlist_start=playlist_position)
 
         if getattr(self, "player_task", None):
             await load_sources()
@@ -743,7 +760,7 @@ class SynchronizedPlayerMixin(object):
             await start_player()
 
     @keymap_command()
-    async def play_all(self):
+    async def play_all(self, playlist_position=0):
         logger.info("play_all")
 
         self.play_items = [
@@ -766,7 +783,7 @@ class SynchronizedPlayerMixin(object):
         ]
 
         listing = self.make_playlist(self.play_items)
-        await self.play_listing(listing)
+        await self.play_listing(listing, playlist_position=playlist_position)
 
     @property
     def empty_listing(self):
@@ -782,7 +799,6 @@ class SynchronizedPlayerMixin(object):
         )
 
     async def play_empty(self):
-
         await self.play_listing(self.empty_listing)
 
     def playlist_pos_to_row(self, pos):
@@ -839,7 +855,6 @@ class SynchronizedPlayerMixin(object):
             if index is None:
                 return
 
-            logger.info(index)
             if self.pending_event_task:
                 logger.warn("canceling task")
                 self.pending_event_task.cancel()
@@ -853,20 +868,25 @@ class SynchronizedPlayerMixin(object):
                 self.run_queued_task
             )
 
+
     def on_focus(self, source, position):
         self.sync_playlist_position()
         logger.info("sync_playlist_position")
         if len(self):
             with db_session:
-                listing = self[position].data_source.attach()
+                try:
+                    listing = self[position].data_source.attach()
+                except IndexError:
+                    return
+                # listing.on_focus()
                 if listing.on_focus():
-                    state.event_loop.create_task(self.play_empty())
-                    self.invalidate_rows([listing.media_listing_id])
-                    self.selection.close_details()
-                    self.selection.open_details()
-                    self.refresh()
-                    state.event_loop.create_task(self.play_all())
-                    # self.focus_position = position
+                    async def reload():
+                        self.invalidate_rows([listing.media_listing_id])
+                        self.selection.close_details()
+                        self.selection.open_details()
+                        self.refresh()
+                        await self.play_all(playlist_position=self.playlist_position)
+                    state.event_loop.create_task(reload())
 
     async def download(self):
 
@@ -962,7 +982,6 @@ class MultiSourceListingMixin(object):
             listing = row.data_source.attach()
             # source_count = self.df[listing.media_listing_id, "source_count"]
             source_count = len(row.get("sources"))
-            logger.info(source_count)
             if source_count > 1:
                 value = f"[{source_count}] {row.get('title')}"
 
@@ -990,7 +1009,6 @@ class MultiSourceListingMixin(object):
 
     @property
     def playlist_position(self):
-        logger.info(self.inner_focus)
         return self.row_to_playlist_pos(self.focus_position) + self.inner_focus
 
     @property
