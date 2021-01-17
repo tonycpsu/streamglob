@@ -743,6 +743,23 @@ class SynchronizedPlayerMixin(object):
                             key_func()
             await self.player.controller.register_unbound_key_callback(handle_mpv_key)
 
+            async def on_playlist_pos(name, value):
+
+                if not self.player:
+                    return
+
+                row = self.playlist_pos_to_row(value)
+                # async def sync_mpv_playist_pos():
+                self.disable_focus_handler()
+                self.focus_position = row
+                if self[row].details:
+                    index = self.play_items[value].index
+                    self[row].open_details()
+                    self[row].details.contents.table.focus_position = index
+                self.enable_focus_handler()
+
+            self.player.controller.bind_property_observer("playlist-pos", on_playlist_pos)
+
             def on_player_done(f):
                 logger.info("player done")
                 self.player = None
@@ -770,14 +787,14 @@ class SynchronizedPlayerMixin(object):
                 created = row.data.created,
                 feed = row.data.feed.name,
                 locator = row.data.feed.locator,
-                num = num+1,
+                index = index,
                 row_num = row_num,
                 count = len(row.data.sources),
                 url = source.locator or source.preview_locator
             )
-            for (row_num, row, num, source) in [
-                    (row_num, row, num, source) for row_num, row in enumerate(self)
-                    for num, source in enumerate(row.data.sources)
+            for (row_num, row, index, source) in [
+                    (row_num, row, index, source) for row_num, row in enumerate(self)
+                    for index, source in enumerate(row.data.sources)
                     if not source.is_bad
             ]
         ]
