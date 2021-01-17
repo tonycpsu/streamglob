@@ -41,12 +41,12 @@ class MediaFeed(model.MediaChannel):
     items = Set(lambda: FeedMediaListing, reverse="feed")
 
     @abc.abstractmethod
-    def fetch(self):
+    async def fetch(self):
         pass
 
 
     async def update(self, *args, **kwargs):
-        for item in self.fetch(*args, **kwargs):
+        async for item in self.fetch(*args, **kwargs):
             with db_session:
                 old = self.provider.LISTING_CLASS.get(guid=item["guid"])
                 if old:

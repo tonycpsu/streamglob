@@ -228,7 +228,7 @@ class InstagramMediaFeedMixin(object):
         return content
 
 
-    def fetch(self, resume=False, replace=False):
+    async def fetch(self, resume=False, replace=False):
 
         logger.info(f"fetching {self.locator}")
 
