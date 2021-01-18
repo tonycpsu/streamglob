@@ -249,10 +249,8 @@ class CachedFeedProviderDetailDataTable(DetailDataTable):
     signals = ["next_unseen"]
 
     KEYMAP = {
-        "cached_feed_provider_detail_data_table": {
-            "N": "toggle_selection_seen",
-            "n": "next_unseen"
-        }
+        "N": "toggle_selection_seen",
+        "n": "next_unseen"
     }
 
     def keypress(self, size, key):
@@ -329,25 +327,23 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
     DETAIL_BOX_CLASS = CachedFeedProviderDetailBox
 
     KEYMAP = {
-        "cached_feed_provider_data_table": {
-            "home": "first_item",
-            "end": "last_item",
-            "cursor up": "prev_item",
-            "cursor down": "next_item",
-            "ctrl r": "reset",
-            "ctrl d": "download",
-            "n": "next_unread",
-            "p": "prev_unread",
-            "N": "toggle_selection_read",
-            "meta i": "inflate_selection",
-            "meta r": ("update", [], {"force": True}),
-            "meta R": ("update", [], {"force": True, "replace": True}),
-            "meta f": ("update", [], {"force": True, "resume": True}),
-            "meta F": ("update", [], {"force": True, "resume": True, "replace": True}),
-            "meta p": "play_all",
-            "f": ["cycle", "fullscreen"],
-            "q": "quit_app"
-        }
+        "home": "first_item",
+        "end": "last_item",
+        "cursor up": "prev_item",
+        "cursor down": "next_item",
+        "ctrl r": "reset",
+        "ctrl d": "download",
+        "n": "next_unread",
+        "p": "prev_unread",
+        "N": "toggle_selection_read",
+        "meta i": "inflate_selection",
+        "meta r": ("update", [], {"force": True}),
+        "meta R": ("update", [], {"force": True, "replace": True}),
+        "meta f": ("update", [], {"force": True, "resume": True}),
+        "meta F": ("update", [], {"force": True, "resume": True, "replace": True}),
+        "meta p": "play_all",
+        "f": ["cycle", "fullscreen"],
+        "q": "quit_app"
     }
 
     def __init__(self, *args, **kwargs):
@@ -473,17 +469,18 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
         # if not isinstance(self[position].data, model.TitledMediaListing):
         #     return
         # logger.info(self.get_value(position, "read"))
-        if position not in self:
+        if position >= len(self):
             return
         if self[position].data_source.read:
         # if self.get_value(position, "read") is not None:
             self.mark_item_unread(position)
         else:
             self.mark_item_read(position)
-        self.invalidate_rows([self[position].data.media_listing_id])
+        # self.invalidate_rows([self[position].data.media_listing_id])
 
     @keymap_command
     def toggle_selection_read(self):
+        logger.info("toggle_selection_read")
         self.toggle_item_read(self.focus_position)
 
 
@@ -637,7 +634,6 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
         # elif key == "p":
         #     # self.prev_unread()
         #     state.event_loop.create_task(self.prev_unread())
-        logger.info(super().keypress)
         key = super().keypress(size, key)
         if key == "A":
             self.mark_all_read()

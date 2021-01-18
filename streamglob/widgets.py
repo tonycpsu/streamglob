@@ -179,7 +179,7 @@ class BaseDropdown(Observable, panwid.Dropdown):
 
     auto_complete = True
 
-    KEYMAP = {
+    KEYMAP_GLOBAL = {
         "dropdown": {
             "k": "up",
             "j": "down",
