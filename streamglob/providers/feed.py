@@ -466,6 +466,8 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
         # if not isinstance(self[position].data, model.TitledMediaListing):
         #     return
         # logger.info(self.get_value(position, "read"))
+        if position not in self:
+            return
         if self[position].data_source.read:
         # if self.get_value(position, "read") is not None:
             self.mark_item_unread(position)
@@ -522,6 +524,8 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
         count = 0
         last_count = None
 
+        if not self.selection:
+            return
         if len(self.selection.data.sources) == 1:
             rc = self.mark_item_read(self.focus_position)
         else:
