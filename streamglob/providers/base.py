@@ -32,22 +32,33 @@ class BaseProviderView(StreamglobView):
     def refresh(self):
         pass
 
-    def init_config(self, config):
-        pass
+    # def init_config(self, config):
+    #     pass
+
+    def selectable(self):
+        return True
 
 
-class InvalidConfigView(BaseProviderView):
+class TabularProviderMixin(object):
 
-    def __init__(self, name, required_config):
-        super().__init__(
-            urwid.Filler(urwid.Pile(
-            [("pack", urwid.Text(
-                f"The {name} provider requires additional configuration.\n"
-                "Please ensure that the following settings are valid:\n")),
-             ("pack", urwid.Text("    " + ", ".join(required_config)))
-            ]), valign="top")
-        )
-
+    def init_config(self):
+        super().init_config()
+        logger.warn("init_config")
+        # raise Exception(self.provider.ATTRIBUTES)
+        # for name, attrs in config.columns.items():
+        #     for attr, value in attrs.items():
+        #         col = next(c for c in self._columns if c.name == name)
+        #         logger.warning(f"set {col}.{attr}={value}")
+        #         setattr(col, attr, value)
+        # for name, options in self.provider.ATTRIBUTES.items():
+            # if name == "title":
+            #
+        attrs = self.ATTRIBUTES
+        for name, opts in self.config.view.columns.items():
+            for optname, optvalue in opts.items():
+                print(name, optname, optvalue)
+                attr = next(a for a in self.ATTRIBUTES if a == name)
+                self.ATTRIBUTES[attr].update({optname: optvalue})
 
 class SimpleProviderView(BaseProviderView):
 
@@ -94,15 +105,22 @@ class SimpleProviderView(BaseProviderView):
         else:
             return key
 
-    def selectable(self):
-        return True
+    def __getattr__(self, attr):
+        return getattr(self.body, attr)
 
-    def init_config(self, config):
-        for name, attrs in config.columns.items():
-            for attr, value in attrs.items():
-                col = next(c for c in self.body._columns if c.name == name)
-                setattr(col, attr, value)
-                # config.view.columns[name][attr] = value
+
+class InvalidConfigView(BaseProviderView):
+
+    def __init__(self, name, required_config):
+        super().__init__(
+            urwid.Filler(urwid.Pile(
+            [("pack", urwid.Text(
+                f"The {name} provider requires additional configuration.\n"
+                "Please ensure that the following settings are valid:\n")),
+             ("pack", urwid.Text("    " + ", ".join(required_config)))
+            ]), valign="top")
+        )
+
 
 def with_view(view):
     def inner(cls):
@@ -171,10 +189,11 @@ class BaseProvider(abc.ABC):
                 self.provider_data = model.ProviderData.get(name=self.IDENTIFIER).settings
             except AttributeError:
                 self.provider_data = model.ProviderData(name=self.IDENTIFIER).settings
-        try:
-            self.view.init_config(self.config.view)
-        except:
-            logger.warn(f"couldn't initialize configuration for {self.IDENTIFIER}")
+        # try:
+        #     self.view.init_config(self.config.view)
+        # except:
+        #     raise
+        #     logger.warn(f"couldn't initialize configuration for {self.IDENTIFIER}")
 
 
     @db_session
@@ -507,7 +526,7 @@ class BaseProvider(abc.ABC):
             try:
                 filename = source.download_filename(index=index, **kwargs)
             except SGInvalidFilenameTemplate as e:
-                logger.warn(f"filename template for provider {self.IDENTIFIER} is invalid: {e}")
+                logger.warning(f"filename template for provider {self.IDENTIFIER} is invalid: {e}")
                 raise
             downloader_spec = getattr(self.config, "helpers") or source.download_helper
             task = model.DownloadMediaTask.attr_class(
@@ -629,12 +648,18 @@ class SynchronizedPlayerMixin(object):
     def __init__(self, *args, **kwargs):
 
         super().__init__(*args, **kwargs)
+        urwid.connect_signal(self, "requery", self.on_requery)
         self.player = None
         self.player_task = None
         self.queued_task = None
         self.pending_event_task = None
         self.on_focus_handler = None
         self.play_items = []
+        self.sync_player_playlist = False
+
+    def on_requery(self, source, count):
+        self.sync_player_playlist = True
+
 
     # def refresh(self, reset=False, *args, **kwargs):
     #     self.disable_focus_handler()
@@ -651,6 +676,7 @@ class SynchronizedPlayerMixin(object):
 
 
     def reset(self, *args, **kwargs):
+        self.sync_player_playlist = False
         self.disable_focus_handler()
         super().reset(*args, **kwargs)
         async def reset_async():
@@ -735,9 +761,10 @@ class SynchronizedPlayerMixin(object):
 
             async def on_playlist_pos(name, value):
 
-                if not (self.player and self.play_items)    :
+                if not (self.player and self.play_items and self.sync_player_playlist):
                     return
 
+                logger.info("on_playlist_pos: {value}")
                 position = self.playlist_pos_to_row(value)
                 # async def sync_mpv_playist_pos():
                 self.disable_focus_handler()
@@ -867,7 +894,6 @@ class SynchronizedPlayerMixin(object):
                 return
 
             if self.pending_event_task:
-                logger.warn("canceling task")
                 self.pending_event_task.cancel()
 
             self.pending_event_task = state.event_loop.create_task(

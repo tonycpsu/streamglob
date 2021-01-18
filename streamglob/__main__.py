@@ -643,15 +643,13 @@ def main():
 
     logging.captureWarnings(True)
     logger = logging.getLogger()
-
-    providers.load()
-
-    model.init()
-
     sh = logging.StreamHandler()
     state.logger = setup_logging(options.verbose - options.quiet, quiet_stdout=False)
 
+    providers.load()
+    model.init()
     providers.load_config()
+
     spec = None
 
     logger.debug(f"{PACKAGE_NAME} starting")

@@ -354,9 +354,9 @@ class InstagramDataTable(CachedFeedProviderDataTable):
     #     state.event_loop.create_task(self.fetch_more())
 
 
-class InstagramProviderView(SimpleProviderView):
-
-    PROVIDER_BODY_CLASS = InstagramDataTable
+class InstagramProviderView(CachedFeedProviderView):
+    pass
+    # PROVIDER_BODY_CLASS = InstagramDataTable
 
 
 @with_view(InstagramProviderView)
@@ -387,11 +387,30 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
             **self.config.get("rate_limit", {})
         )
     
-    @property
-    def ATTRIBUTES(self):
-        attrs = list(super().ATTRIBUTES.items())
+    # @property
+    # def ATTRIBUTES(self):
+    #     raise Exception(super().ATTRIBUTES)
+    #     attrs = list(super().ATTRIBUTES.items())
+    #     idx = next(i for i, a in enumerate(attrs) if a[0] == "title")
+    #     return AttrDict(
+    #         attrs[:idx]
+    #         + [
+    #             ("media_type", {
+    #                 "label": "type",
+    #                 "width": 4,
+    #                 "format_fn": lambda t: self.POST_TYPE_MAP.get(t, t),
+    #                 "align": "right",
+    #                 "sort_icon": False,
+    #             })
+    #         ]
+    #         + attrs[idx:]
+    #     )
+
+    def init_config(self):
+        super().init_config()
+        attrs = list(self.ATTRIBUTES.items())
         idx = next(i for i, a in enumerate(attrs) if a[0] == "title")
-        return AttrDict(
+        self.ATTRIBUTES = AttrDict(
             attrs[:idx]
             + [
                 ("media_type", {
@@ -405,8 +424,6 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
             + attrs[idx:]
         )
 
-    def init_config(self):
-        super().init_config()
         if not "user_map" in self.provider_data:
             self.provider_data["user_map"] = {}
             self.save_provider_data()

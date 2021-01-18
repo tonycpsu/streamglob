@@ -235,8 +235,11 @@ class FeedMediaSource(FeedMediaSourceMixin, model.MediaSource):
 class CachedFeedProviderDetailBox(DetailBox):
 
     def detail_table(self):
-        columns = self.parent_table.columns.copy()
-        next(c for c in columns if c.name=="title").truncate = True
+        columns = [
+            c for c in  self.parent_table._columns.copy()
+            if not isinstance(c, DataTableDivider)
+        ]
+        # next(c for c in columns if c.name=="title").truncate = True
         return CachedFeedProviderDetailDataTable(self.listing, self.parent_table, columns=columns)
 
 
@@ -351,6 +354,10 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
         super().__init__(*args, **kwargs)
         # self.mark_read_on_focus = False
         # self.mark_read_task = None
+        self.update_count = True
+        urwid.connect_signal(self, "requery", self.on_requery)
+
+    def on_requery(self, source, count):
         self.update_count = True
 
     # def detail_box(self):
@@ -721,12 +728,51 @@ class FeedProvider(BaseProvider):
 
 
 
+class CachedFeedProviderView2(urwid.WidgetWrap):
+
+    signals = ["select", "cycle_filter"]
+
+    def __init__(self, provider, view):
+        self.table = CachedFeedProviderDataTable(provider, self)
+        self.footer_text = urwid.Text("", align="center")
+        self.footer = urwid.Filler(
+            urwid.AttrMap(
+                urwid.Padding(
+                    self.footer_text
+                ),
+                "footer"
+            )
+        )
+        self.pile = urwid.Pile([
+            ("weight", 1, self.table),
+            (1, self.footer),
+        ])
+
+        super().__init__(self.pile)
+        # urwid.connect_signal(self.table, "select", lambda *args: self._emit(*args))
+        # urwid.connect_signal(self.table, "cycle_filter", lambda *args: self._emit(*args))
+        urwid.connect_signal(self.table, "requery", self.update_count)
+        # self.provider.filters["feed"].connect("changed", self.update_count)
+
+    def update_count(self, source, count):
+        self.footer_text.set_text(f"{len(self)}/{self.table.query_result_count()} items")
+
+    def __iter__(self):
+        return iter(self.table)
+
+    def __len__(self):
+        return len(self.table)
+
+    def __getattr__(self, attr):
+        return getattr(self.table, attr)
+
+
 class CachedFeedProviderView(SimpleProviderView):
 
-    PROVIDER_BODY_CLASS = CachedFeedProviderDataTable
+    PROVIDER_BODY_CLASS = CachedFeedProviderView2
 
 @with_view(CachedFeedProviderView)
-class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
+class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvider):
 
     UPDATE_INTERVAL = (60 * 60 * 4)
 
@@ -755,17 +801,26 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
                 max_age = config.settings.profile.cache.max_age
             )
 
-    @property
-    def ATTRIBUTES(self):
-        def format_feed(feed):
-            return feed.name if hasattr(feed, "name") else ""
+    def format_feed(feed):
+        return feed.name if hasattr(feed, "name") else ""
 
-        return AttrDict(
-            media_listing_id = {"hide": True},
-            feed = {"width": 32, "format_fn": format_feed },
-            created = {"width": 19},
-            title = {"width": ("weight", 1), "truncate": False},
-        )
+    ATTRIBUTES = AttrDict(
+        media_listing_id = {"hide": True},
+        feed = {"width": 30, "format_fn": format_feed },
+        created = {"width": 19},
+        title = {"width": ("weight", 1), "truncate": False},
+    )
+    # @property
+    # def ATTRIBUTES(self):
+    #     def format_feed(feed):
+    #         return feed.name if hasattr(feed, "name") else ""
+
+    #     return AttrDict(
+    #         media_listing_id = {"hide": True},
+    #         feed = {"width": 32, "format_fn": format_feed },
+    #         created = {"width": 19},
+    #         title = {"width": ("weight", 1), "truncate": False},
+    #     )
 
     @property
     def RPC_METHODS(self):
@@ -831,10 +886,11 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         else:
             self.provider_data["selected_feed"] = None
         self.save_provider_data()
-        self.view.body.translate_src = getattr(feed, "translate", None)
+        self.view.translate_src = getattr(feed, "translate", None)
 
         if not self.is_active:
             return
+        self.update_count = True
         self.reset()
 
     def on_status_change(self, status, *args):
@@ -894,7 +950,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
     def refresh(self):
         logger.info("+feed provider refresh")
         self.update_query()
-        self.view.body.refresh()
+        self.view.refresh()
         # state.loop.draw_screen()
         logger.info("-feed provider refresh")
 
@@ -908,8 +964,8 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         self.refresh()
 
     def on_deactivate(self):
-        if self.view.body.player:
-            self.view.body.quit_player()
+        if self.view.player:
+            self.view.quit_player()
 
     @db_session
     def  update_query(self):
@@ -920,7 +976,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
             "not_downloaded": lambda i: i.downloaded is None
         }
 
-        (sort_field, sort_desc) = self.view.body.sort_by
+        (sort_field, sort_desc) = self.view.sort_by
         if sort_desc:
             sort_fn = lambda i: desc(getattr(i, sort_field))
         else:
@@ -941,7 +997,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
             self.items_query = self.items_query.filter(
                 lambda i: i.feed == self.feed
             )
-        self.view.body.update_count = True
+        self.view.update_count = True
 
 
     def listings(self, offset=None, limit=None, *args, **kwargs):

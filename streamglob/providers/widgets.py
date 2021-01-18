@@ -54,12 +54,17 @@ class ProviderDataTable(BaseDataTable):
 
         self.provider = provider
         self.view = view
-        self.columns = [ panwid.DataTableColumn(k, **v if v else {})
-                         for k, v in self.provider.ATTRIBUTES.items() ]
         self.translate = False
         self.translate_src = None
         self._translator = None
         super(ProviderDataTable,  self).__init__(*args, **kwargs)
+
+    @property
+    def columns(self):
+        return [
+            panwid.DataTableColumn(k, **v if v else {})
+            for k, v in self.provider.ATTRIBUTES.items()
+        ]
 
     @property
     def limit(self):
