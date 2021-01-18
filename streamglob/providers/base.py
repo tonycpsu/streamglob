@@ -523,7 +523,7 @@ class BaseProvider(abc.ABC):
             downloader_spec = getattr(self.config, "helpers") or source.download_helper
             task = model.DownloadMediaTask.attr_class(
                 provider = self.NAME,
-                title = selection.title,
+                title = sanitize_filename(selection.title),
                 sources = [source],
                 listing = selection,
                 dest = filename,
