@@ -1696,7 +1696,7 @@ class BAMProviderDataTable(ProviderDataTable):
 
 class BAMProviderView(SimpleProviderView):
 
-    PROVIDER_DATA_TABLE_CLASS = BAMProviderDataTable
+    PROVIDER_BODY_CLASS = BAMProviderDataTable
 
 @with_view(BAMProviderView)
 class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):

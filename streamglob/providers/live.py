@@ -30,7 +30,7 @@ class LiveStreamProviderDataTable(ProviderDataTable):
 
 class LiveStreamProviderView(SimpleProviderView):
 
-    PROVIDER_DATA_TABLE_CLASS = LiveStreamProviderDataTable
+    PROVIDER_BODY_CLASS = LiveStreamProviderDataTable
 
 
 @with_view(LiveStreamProviderView)

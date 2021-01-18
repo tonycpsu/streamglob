@@ -723,8 +723,7 @@ class FeedProvider(BaseProvider):
 
 class CachedFeedProviderView(SimpleProviderView):
 
-    PROVIDER_DATA_TABLE_CLASS = CachedFeedProviderDataTable
-
+    PROVIDER_BODY_CLASS = CachedFeedProviderDataTable
 
 @with_view(CachedFeedProviderView)
 class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
@@ -832,7 +831,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         else:
             self.provider_data["selected_feed"] = None
         self.save_provider_data()
-        self.view.table.translate_src = getattr(feed, "translate", None)
+        self.view.body.translate_src = getattr(feed, "translate", None)
 
         if not self.is_active:
             return
@@ -895,7 +894,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
     def refresh(self):
         logger.info("+feed provider refresh")
         self.update_query()
-        self.view.table.refresh()
+        self.view.body.refresh()
         # state.loop.draw_screen()
         logger.info("-feed provider refresh")
 
@@ -909,8 +908,8 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         self.refresh()
 
     def on_deactivate(self):
-        if self.view.table.player:
-            self.view.table.quit_player()
+        if self.view.body.player:
+            self.view.body.quit_player()
 
     @db_session
     def  update_query(self):
@@ -921,7 +920,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
             "not_downloaded": lambda i: i.downloaded is None
         }
 
-        (sort_field, sort_desc) = self.view.table.sort_by
+        (sort_field, sort_desc) = self.view.body.sort_by
         if sort_desc:
             sort_fn = lambda i: desc(getattr(i, sort_field))
         else:
@@ -942,7 +941,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
             self.items_query = self.items_query.filter(
                 lambda i: i.feed == self.feed
             )
-        self.view.table.update_count = True
+        self.view.body.update_count = True
 
 
     def listings(self, offset=None, limit=None, *args, **kwargs):

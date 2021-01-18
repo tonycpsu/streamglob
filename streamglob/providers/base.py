@@ -51,49 +51,38 @@ class InvalidConfigView(BaseProviderView):
 
 class SimpleProviderView(BaseProviderView):
 
-    PROVIDER_DATA_TABLE_CLASS = ProviderDataTable
+    PROVIDER_BODY_CLASS = ProviderDataTable
 
     def __init__(self, provider):
         self.provider = provider
         self.toolbar = FilterToolbar(self.provider.filters)
-        self.table = self.PROVIDER_DATA_TABLE_CLASS(self.provider, self)
+        self.body = self.PROVIDER_BODY_CLASS(self.provider, self)
         # urwid.connect_signal(self.toolbar, "filter_change", self.filter_change)
-        urwid.connect_signal(self.table, "select", self.provider.on_select)
-        urwid.connect_signal(self.table, "cycle_filter", self.cycle_filter)
+        urwid.connect_signal(self.body, "select", self.provider.on_select)
+        urwid.connect_signal(self.body, "cycle_filter", self.cycle_filter)
 
         self.pile  = urwid.Pile([
             ("pack", self.toolbar),
-            ("weight", 1, self.table)
+            ("weight", 1, self.body)
         ])
         self.pile.focus_position = 1
         super().__init__(self.pile)
-
-    # def filter_change(self, f, name, *args):
-    #     logger.debug(f"filter_change: {name}, {args}")
-    #     func = getattr(self.provider, f"on_{name}_change", None)
-    #     if func:
-    #         func(*args)
-    #     # self.table.refresh()
-    #     # self.table.reset()
 
     def cycle_filter(self, n, step):
         self.toolbar.cycle_filter(n, step)
 
     def refresh(self):
-        self.table.refresh()
+        self.body.refresh()
 
     def reset(self):
         logger.info("reset")
-        self.table.reset()
+        self.body.reset()
 
     def keypress(self, size, key):
 
         key = super().keypress(size, key)
         if key == "ctrl r":
             self.reset()
-            # state.event_loop.create_task(self.provider.refresh())
-        # elif key == "d":
-        #     self.download(self.table.selection.data)
         elif key in ["[", "]", "meta left", "meta right"]:
             self.cycle_filter(0, -1 if key in ["[", "meta left"] else 1)
         elif key in ["{", "}", "shift left", "shift right"]:
@@ -111,7 +100,7 @@ class SimpleProviderView(BaseProviderView):
     def init_config(self, config):
         for name, attrs in config.columns.items():
             for attr, value in attrs.items():
-                col = next(c for c in self.table._columns if c.name == name)
+                col = next(c for c in self.body._columns if c.name == name)
                 setattr(col, attr, value)
                 # config.view.columns[name][attr] = value
 

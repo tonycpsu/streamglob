@@ -356,7 +356,7 @@ class InstagramDataTable(CachedFeedProviderDataTable):
 
 class InstagramProviderView(SimpleProviderView):
 
-    PROVIDER_DATA_TABLE_CLASS = InstagramDataTable
+    PROVIDER_BODY_CLASS = InstagramDataTable
 
 
 @with_view(InstagramProviderView)
