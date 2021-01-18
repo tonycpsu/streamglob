@@ -268,7 +268,7 @@ def sanitize_filename(t):
         .replace("\n", " ")
         # forward slash isn't legal in filenames for UNIX or Windows,
         # so use a Unicode homoglyph instead
-        .replace("/", "u\N{FRACTION SLASH}")
+        .replace("/", u"\N{FRACTION SLASH}")
         # let the pathvalidate module handle the rest for the current platform
         , platform=pathvalidate.normalize_platform(os.name).name
     )
