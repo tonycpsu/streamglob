@@ -60,9 +60,21 @@ class TabularProviderMixin(object):
                 attr = next(a for a in self.ATTRIBUTES if a == name)
                 self.ATTRIBUTES[attr].update({optname: optvalue})
 
+@keymapped()
 class SimpleProviderView(BaseProviderView):
 
     PROVIDER_BODY_CLASS = ProviderDataTable
+
+    KEYMAP = {
+        "[": ("cycle_filter", [0, -1]),
+        "]": ("cycle_filter", [0, 1]),
+        "{": ("cycle_filter", [1, -1]),
+        "}": ("cycle_filter", [1, 1]),
+        "-": ("cycle_filter", [2, -1]),
+        "=": ("cycle_filter", [2, 1]),
+        "_": ("cycle_filter", [3, -1]),
+        "+": ("cycle_filter", [3, 1]),
+    }
 
     def __init__(self, provider):
         self.provider = provider
@@ -71,6 +83,7 @@ class SimpleProviderView(BaseProviderView):
         # urwid.connect_signal(self.toolbar, "filter_change", self.filter_change)
         urwid.connect_signal(self.body, "select", self.provider.on_select)
         urwid.connect_signal(self.body, "cycle_filter", self.cycle_filter)
+        urwid.connect_signal(self.body, "keypress", self.on_keypress)
 
         self.pile  = urwid.Pile([
             ("pack", self.toolbar),
@@ -79,6 +92,7 @@ class SimpleProviderView(BaseProviderView):
         self.pile.focus_position = 1
         super().__init__(self.pile)
 
+    @keymap_command
     def cycle_filter(self, n, step):
         self.toolbar.cycle_filter(n, step)
 
@@ -89,21 +103,12 @@ class SimpleProviderView(BaseProviderView):
         logger.info("reset")
         self.body.reset()
 
-    def keypress(self, size, key):
+    def on_keypress(self, source, key):
+        self.keypress((1, 1), key)
 
-        key = super().keypress(size, key)
-        if key == "ctrl r":
-            self.reset()
-        elif key in ["[", "]", "meta left", "meta right"]:
-            self.cycle_filter(0, -1 if key in ["[", "meta left"] else 1)
-        elif key in ["{", "}", "shift left", "shift right"]:
-            self.cycle_filter(1, -1 if key in ["{", "shift left"] else 1)
-        elif key in ["-", "=", "ctrl left", "ctrl right"]:
-            self.cycle_filter(2, -1 if key in ["-", "ctrl left"] else 1)
-        elif key in ["_", "+", "shift meta left", "shift meta right"]:
-            self.cycle_filter(3, -1 if key in ["_", "shift meta left"] else 1)
-        else:
-            return key
+
+    def keypress(self, size, key):
+        return super().keypress(size, key)
 
     def __getattr__(self, attr):
         return getattr(self.body, attr)
@@ -645,6 +650,8 @@ AAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=\
 @keymapped()
 class SynchronizedPlayerMixin(object):
 
+    signals = ["keypress"]
+
     def __init__(self, *args, **kwargs):
 
         super().__init__(*args, **kwargs)
@@ -748,15 +755,19 @@ class SynchronizedPlayerMixin(object):
 
             async def handle_mpv_key(key_state, key_name, key_string):
                 key = self.player.key_to_urwid(key_name)
+                # raise Exception(self.view)
                 logger.info(f"debug: {key_name}")
-                if key in self.KEYMAP.get("any", {}):
-                    command = self.KEYMAP["any"].get(key)
-                    if not self.call_keymap_command(command):
-                        key_func = asyncio.coroutine(functools.partial(self.player.command, *command))
-                        if asyncio.iscoroutinefunction(key_func):
-                            await key_func()
-                        else:
-                            key_func()
+                key = self.view.keypress((1, 1), key)
+                if key:
+                    self._emit("keypress", key)
+                # if key in self.KEYMAP:
+                #     command = self.KEYMAP.get(key)
+                #     if not self._keymap_command(command):
+                #         key_func = asyncio.coroutine(functools.partial(self.player.command, *command))
+                #         if asyncio.iscoroutinefunction(key_func):
+                #             await key_func()
+                #         else:
+                #             key_func()
             await self.player.controller.register_unbound_key_callback(handle_mpv_key)
 
             async def on_playlist_pos(name, value):

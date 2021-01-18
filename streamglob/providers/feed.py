@@ -312,7 +312,7 @@ class CachedFeedProviderDetailDataTable(DetailDataTable):
 @keymapped()
 class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMixin, ProviderDataTable):
 
-    signals = ["focus"]
+    signals = ["focus", "keypress"]
 
     HOVER_DELAY = 0.25
 
@@ -343,7 +343,7 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
         "meta F": ("update", [], {"force": True, "resume": True, "replace": True}),
         "meta p": "play_all",
         "f": ["cycle", "fullscreen"],
-        "q": "quit_app"
+        # "q": "quit_app"
     }
 
     def __init__(self, *args, **kwargs):
@@ -609,10 +609,10 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
         await self.provider.update(force=force, resume=resume, replace=replace)
 
 
-    # FIXME: move to base view
-    @keymap_command
-    def quit_app(self):
-        self.view.quit_app()
+    # # FIXME: move to base view
+    # @keymap_command
+    # def quit_app(self):
+    #     self.view.quit_app()
 
     @db_session
     def kill_all(self):
@@ -623,7 +623,7 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
         self.reset()
 
     def keypress(self, size, key):
-
+        logger.info(f"feed keypress: {key} {super().keypress}")
         # if key == "meta r":
         #     state.event_loop.create_task(self.provider.update(force=True))
         # elif key == "meta p":
@@ -723,10 +723,9 @@ class FeedProvider(BaseProvider):
         #     pass
 
 
-
 class CachedFeedProviderView2(urwid.WidgetWrap):
 
-    signals = ["select", "cycle_filter"]
+    signals = ["select", "cycle_filter", "keypress"]
 
     def __init__(self, provider, view):
         self.table = CachedFeedProviderDataTable(provider, self)
@@ -744,11 +743,19 @@ class CachedFeedProviderView2(urwid.WidgetWrap):
             (1, self.footer),
         ])
 
+
         super().__init__(self.pile)
+        self.pile.focus_position = 0
         # urwid.connect_signal(self.table, "select", lambda *args: self._emit(*args))
         # urwid.connect_signal(self.table, "cycle_filter", lambda *args: self._emit(*args))
         urwid.connect_signal(self.table, "requery", self.update_count)
+        urwid.connect_signal(self.table, "keypress", lambda *args: self._emit(*args))
         # self.provider.filters["feed"].connect("changed", self.update_count)
+
+    # def keypress(self, size, key):
+    #     # raise Exception(super().keypress)
+    #     return super().keypress(size, key)
+
 
     def update_count(self, source, count):
         self.footer_text.set_text(f"{len(self)}/{self.table.query_result_count()} items")
@@ -766,6 +773,9 @@ class CachedFeedProviderView2(urwid.WidgetWrap):
 class CachedFeedProviderView(SimpleProviderView):
 
     PROVIDER_BODY_CLASS = CachedFeedProviderView2
+
+    # def keypress(self, size, key):
+    #     raise Exception
 
 @with_view(CachedFeedProviderView)
 class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvider):

@@ -3,12 +3,19 @@ logger = logging.getLogger(__name__)
 
 import urwid
 import panwid
+from panwid.keymap import *
 from orderedattrdict import AttrDict, DefaultAttrDict
 
 from .state import *
 
+@keymapped()
 class StreamglobView(panwid.BaseView):
 
+    KEYMAP = {
+        "q": "quit_app"
+    }
+
+    @keymap_command
     def quit_app(self):
 
         state.browser_view.provider.deactivate()
