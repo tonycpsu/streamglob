@@ -645,6 +645,7 @@ class SynchronizedPlayerMixin(object):
         self.queued_task = None
         self.pending_event_task = None
         self.on_focus_handler = None
+        self.play_items = []
 
     # def refresh(self, reset=False, *args, **kwargs):
     #     self.disable_focus_handler()
@@ -745,17 +746,21 @@ class SynchronizedPlayerMixin(object):
 
             async def on_playlist_pos(name, value):
 
-                if not self.player:
+                if not (self.player and self.play_items)    :
                     return
 
-                row = self.playlist_pos_to_row(value)
+                position = self.playlist_pos_to_row(value)
                 # async def sync_mpv_playist_pos():
                 self.disable_focus_handler()
-                self.focus_position = row
-                if self[row].details:
+                self.focus_position = position
+                try:
+                    row = self[position]
+                except IndexError:
+                    return
+                if row.details:
                     index = self.play_items[value].index
-                    self[row].open_details()
-                    self[row].details.contents.table.focus_position = index
+                    row.open_details()
+                    row.details.contents.table.focus_position = index
                 self.enable_focus_handler()
 
             self.player.controller.bind_property_observer("playlist-pos", on_playlist_pos)
