@@ -24,7 +24,14 @@ from .. import model
 from .. import config
 from  ..utils import *
 
+@keymapped()
 class BaseProviderView(StreamglobView):
+
+    KEYMAP = {
+        "p": "play",
+        "l": "download"
+    }
+
 
     def update(self):
         pass
@@ -74,6 +81,7 @@ class SimpleProviderView(BaseProviderView):
         "=": ("cycle_filter", [2, 1]),
         "_": ("cycle_filter", [3, -1]),
         "+": ("cycle_filter", [3, 1]),
+        "ctrl d": "download"
     }
 
     def __init__(self, provider):
@@ -81,7 +89,7 @@ class SimpleProviderView(BaseProviderView):
         self.toolbar = FilterToolbar(self.provider.filters)
         self.body = self.PROVIDER_BODY_CLASS(self.provider, self)
         # urwid.connect_signal(self.toolbar, "filter_change", self.filter_change)
-        urwid.connect_signal(self.body, "select", self.provider.on_select)
+        # urwid.connect_signal(self.body, "select", self.provider.on_select)
         urwid.connect_signal(self.body, "cycle_filter", self.cycle_filter)
         urwid.connect_signal(self.body, "keypress", self.on_keypress)
 
@@ -104,10 +112,11 @@ class SimpleProviderView(BaseProviderView):
         self.body.reset()
 
     def on_keypress(self, source, key):
-        self.keypress((1, 1), key)
+        self.keypress((100, 100), key)
 
 
     def keypress(self, size, key):
+        logger.debug(key)
         return super().keypress(size, key)
 
     def __getattr__(self, attr):
@@ -545,7 +554,8 @@ class BaseProvider(abc.ABC):
             state.task_manager.download(task, downloader_spec, **kwargs)
 
     def on_select(self, widget, selection):
-        self.play(selection)
+        # self.play(selection)
+        self.download(selection)
 
     @property
     def limit(self):
@@ -755,11 +765,14 @@ class SynchronizedPlayerMixin(object):
 
             async def handle_mpv_key(key_state, key_name, key_string):
                 key = self.player.key_to_urwid(key_name)
+                if key.startswith("mbtn"):
+                    return
                 # raise Exception(self.view)
                 logger.info(f"debug: {key_name}")
-                key = self.view.keypress((1, 1), key)
-                if key:
-                    self._emit("keypress", key)
+                # key = self.view.keypress((100, 100), key)
+                state.loop.process_input([key])
+                # if not state.loop.process_input([key]):
+                # self._emit("keypress", key)
                 # if key in self.KEYMAP:
                 #     command = self.KEYMAP.get(key)
                 #     if not self._keymap_command(command):
@@ -974,6 +987,11 @@ class DetailBox(urwid.WidgetWrap):
 @keymapped()
 class DetailDataTable(BaseDataTable):
 
+    KEYMAP = {
+        "j": "keypress down",
+        "k": "keypress up",
+    }
+
     with_header = False
 
     def __init__(self, listing, parent_table, columns=None):
@@ -1010,6 +1028,9 @@ class DetailDataTable(BaseDataTable):
 @keymapped()
 class MultiSourceListingMixin(object):
 
+    KEYMAP = {
+
+    }
     with_sidecar = True
 
     DETAIL_BOX_CLASS = DetailBox

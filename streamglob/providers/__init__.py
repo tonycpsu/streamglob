@@ -4,6 +4,7 @@ logger = logging.getLogger(__name__)
 import abc
 import re
 from functools import wraps
+import traceback
 
 from stevedore import extension
 from orderedattrdict import AttrDict
@@ -66,7 +67,8 @@ def load_config():
         DEFAULT_PROVIDER = list(PROVIDERS.keys())[0]
 
 def log_plugin_exception(manager, entrypoint, exception):
-    logger.error('Failed to load %s: %s' % (entrypoint, exception))
+    logger.error("Failed to load {entrypoint}")
+    logger.error("".join(traceback.format_exc(exception)))
 
 def load():
     global PROVIDERS

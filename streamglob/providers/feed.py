@@ -254,6 +254,7 @@ class CachedFeedProviderDetailDataTable(DetailDataTable):
     }
 
     def keypress(self, size, key):
+        logger.debug(key)
         return super().keypress(size, key)
 
     def row_attr_fn(self, position, data, row):
@@ -332,7 +333,8 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
         "cursor up": "prev_item",
         "cursor down": "next_item",
         "ctrl r": "reset",
-        "ctrl d": "download",
+        # "ctrl d": "download",
+        "A": "mark_all_read",
         "n": "next_unread",
         "p": "prev_unread",
         "N": "toggle_selection_read",
@@ -483,7 +485,7 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
         logger.info("toggle_selection_read")
         self.toggle_item_read(self.focus_position)
 
-
+    @keymap_command
     def mark_all_read(self):
         with db_session:
             if self.provider.feed:
@@ -623,7 +625,7 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
         self.reset()
 
     def keypress(self, size, key):
-        logger.info(f"feed keypress: {key} {super().keypress}")
+        # logger.debug(f"feed keypress: {key} {super().keypress}")
         # if key == "meta r":
         #     state.event_loop.create_task(self.provider.update(force=True))
         # elif key == "meta p":
@@ -646,11 +648,11 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
         elif key == "m":
             self.toggle_item_read(self.focus_position)
             self.ignore_blur = True
-        elif key == "meta ctrl d":
+        elif key == "meta ctrl k":
             self.kill_all()
             self.mark_visible_read(direction=-1)
-        elif key == "ctrl d":
-            state.event_loop.create_task(self.download())
+        # elif key == "ctrl d":
+        #     state.event_loop.create_task(self.download())
         else:
             return key
 

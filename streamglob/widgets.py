@@ -39,7 +39,13 @@ class SquareButton(urwid.Button):
 
         return ( cols, )
 
+@keymapped()
 class BaseDataTable(panwid.DataTable):
+
+    KEYMAP = {
+        "j": "keypress down",
+        "k": "keypress up",
+    }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
