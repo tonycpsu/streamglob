@@ -18,7 +18,7 @@ class StreamglobView(panwid.BaseView):
     @keymap_command
     def quit_app(self):
 
-        state.browser_view.provider.deactivate()
+        state.listings_view.provider.deactivate()
         state.event_loop.create_task(state.task_manager.stop())
         state.task_manager_task.cancel()
         raise urwid.ExitMainLoop()
