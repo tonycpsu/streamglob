@@ -50,7 +50,6 @@ class TabularProviderMixin(object):
 
     def init_config(self):
         super().init_config()
-        logger.warn("init_config")
         # raise Exception(self.provider.ATTRIBUTES)
         # for name, attrs in config.columns.items():
         #     for attr, value in attrs.items():
@@ -677,21 +676,6 @@ class SynchronizedPlayerMixin(object):
     def on_requery(self, source, count):
         self.sync_player_playlist = True
 
-
-    # def refresh(self, reset=False, *args, **kwargs):
-    #     self.disable_focus_handler()
-    #     super().refresh(*args, **kwargs)
-    #     async def refresh_async():
-    #         # await self.play_empty()
-    #         if len(self):
-    #             await self.play_all()
-    #             # self.on_focus(self, self.focus_position)
-    #         else:
-    #              await self.play_empty()
-    #         self.enable_focus_handler()
-    #     state.event_loop.create_task(refresh_async())
-
-
     def reset(self, *args, **kwargs):
         self.sync_player_playlist = False
         self.disable_focus_handler()
@@ -767,20 +751,11 @@ class SynchronizedPlayerMixin(object):
                 key = self.player.key_to_urwid(key_name)
                 if key.startswith("mbtn"):
                     return
-                # raise Exception(self.view)
                 logger.info(f"debug: {key_name}")
                 # key = self.view.keypress((100, 100), key)
                 state.loop.process_input([key])
                 # if not state.loop.process_input([key]):
                 # self._emit("keypress", key)
-                # if key in self.KEYMAP:
-                #     command = self.KEYMAP.get(key)
-                #     if not self._keymap_command(command):
-                #         key_func = asyncio.coroutine(functools.partial(self.player.command, *command))
-                #         if asyncio.iscoroutinefunction(key_func):
-                #             await key_func()
-                #         else:
-                #             key_func()
             await self.player.controller.register_unbound_key_callback(handle_mpv_key)
 
             async def on_playlist_pos(name, value):
@@ -828,7 +803,7 @@ class SynchronizedPlayerMixin(object):
         self.play_items = [
             AttrDict(
                 media_listing_id = row.data.media_listing_id,
-                title = utils.sanitize_filename(row.data.title),
+                title = f"{self.playlist_title} {utils.sanitize_filename(row.data.title)}",
                 created = row.data.created,
                 feed = row.data.feed.name,
                 locator = row.data.feed.locator,
@@ -848,17 +823,31 @@ class SynchronizedPlayerMixin(object):
         await self.play_listing(listing, playlist_position=playlist_position)
 
     @property
+    def playlist_title(self):
+        return "[{self.provider.IDENTIFIER}]"
+
+    @property
     def empty_listing(self):
-        return self.provider.new_listing(
-            title=f"{self.provider.NAME} empty",
-            sources = [
-                self.provider.new_media_source(
+        return self.make_playlist(
+            [
+                AttrDict(
+                    title=self.playlist_title,
                     url=BLANK_IMAGE_URI,
-                    media_type = "image"
+                    media_type="image"
                 )
-            ],
-            feed = self.provider.feed
+            ]
         )
+
+        # return self.provider.new_listing(
+        #     title=f"{self.provider.NAME} empty",
+        #     sources = [
+        #         self.provider.new_media_source(
+        #             url=BLANK_IMAGE_URI,
+        #             media_type = "image"
+        #         )
+        #     ],
+        #     feed = self.provider.feed
+        # )
 
     async def play_empty(self):
         await self.play_listing(self.empty_listing)

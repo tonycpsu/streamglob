@@ -335,10 +335,14 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
         "ctrl r": "reset",
         # "ctrl d": "download",
         "A": "mark_all_read",
+        "ctrl a": "mark_visible_read",
+        "meta a": ("mark_visible_read", [-1]),
+        "meta A": ("mark_visible_read", [1]),
         "n": "next_unread",
-        "p": "prev_unread",
-        "N": "toggle_selection_read",
+        "N": "prev_unread",
+        "m": "toggle_selection_read",
         "meta i": "inflate_selection",
+        "meta ctrl k": "kill_all",
         "meta r": ("update", [], {"force": True}),
         "meta R": ("update", [], {"force": True, "replace": True}),
         "meta f": ("update", [], {"force": True, "resume": True}),
@@ -412,6 +416,12 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
                 # state.event_loop.create_task(self.play_all(playlist_position = position))
                 # self.focus_position = position
 
+    @property
+    def playlist_title(self):
+        # return f"[{self.provider}]"
+        return f"[{self.provider.IDENTIFIER}/{self.provider.feed.locator}]"
+
+
     # FIXME
     # def on_focus(self, source, position):
     #     if self.mark_read_on_focus:
@@ -426,7 +436,7 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
 
     @db_session
     def mark_item_read(self, position):
-        logger.info(f"mark_item_read: {position}")
+        logger.debug(f"mark_item_read: {position}")
 
         row = self[position]
         item = self.item_at_position(position)
@@ -440,7 +450,7 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
 
     @db_session
     def mark_item_unread(self, position):
-        logger.info(f"mark_item_unread: {position}")
+        logger.debug(f"mark_item_unread: {position}")
         # if not isinstance(self[position].data, model.TitledMediaListing):
         #     return
         item = self.item_at_position(position)
@@ -625,36 +635,39 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
         self.reset()
 
     def keypress(self, size, key):
-        # logger.debug(f"feed keypress: {key} {super().keypress}")
-        # if key == "meta r":
-        #     state.event_loop.create_task(self.provider.update(force=True))
-        # elif key == "meta p":
-        #     state.event_loop.create_task(self.play_all())
-        # elif key == "n":
-        #     # self.next_unread()
-        #     state.event_loop.create_task(self.next_unread())
-        # elif key == "p":
-        #     # self.prev_unread()
-        #     state.event_loop.create_task(self.prev_unread())
-        key = super().keypress(size, key)
-        if key == "A":
-            self.mark_all_read()
-        elif key == "ctrl a":
-            self.mark_visible_read()
-        elif key == "meta a":
-            self.mark_visible_read(direction=-1)
-        elif key == "meta A":
-            self.mark_visible_read(direction=1)
-        elif key == "m":
-            self.toggle_item_read(self.focus_position)
-            self.ignore_blur = True
-        elif key == "meta ctrl k":
-            self.kill_all()
-            self.mark_visible_read(direction=-1)
-        # elif key == "ctrl d":
-        #     state.event_loop.create_task(self.download())
-        else:
-            return key
+        return super().keypress(size, key)
+
+    # def keypress(self, size, key):
+    #     # logger.debug(f"feed keypress: {key} {super().keypress}")
+    #     # if key == "meta r":
+    #     #     state.event_loop.create_task(self.provider.update(force=True))
+    #     # elif key == "meta p":
+    #     #     state.event_loop.create_task(self.play_all())
+    #     # elif key == "n":
+    #     #     # self.next_unread()
+    #     #     state.event_loop.create_task(self.next_unread())
+    #     # elif key == "p":
+    #     #     # self.prev_unread()
+    #     #     state.event_loop.create_task(self.prev_unread())
+    #     key = super().keypress(size, key)
+    #     # if key == "A":
+    #     #     self.mark_all_read()
+    #     # elif key == "ctrl a":
+    #     #     self.mark_visible_read()
+    #     # elif key == "meta a":
+    #     #     self.mark_visible_read(direction=-1)
+    #     # elif key == "meta A":
+    #     #     self.mark_visible_read(direction=1)
+    #     # elif key == "m":
+    #     #     self.toggle_item_read(self.focus_position)
+    #     #     self.ignore_blur = True
+    #     elif key == "meta ctrl k":
+    #         self.kill_all()
+    #         self.mark_visible_read(direction=-1)
+    #     # elif key == "ctrl d":
+    #     #     state.event_loop.create_task(self.download())
+    #     else:
+    #         return key
 
 
 class FeedsFilter(ConfigFilter):
