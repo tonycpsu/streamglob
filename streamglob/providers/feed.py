@@ -939,7 +939,6 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
 
     async def update(self, force=False, resume=False, replace=False):
         logger.info(f"update: force={force} resume={resume}")
-        self.create_feeds()
         self.open_popup("Updating feeds...")
         await self.update_feeds(force=force, resume=resume, replace=replace)
         self.close_popup()
@@ -982,6 +981,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
 
     def on_activate(self):
         super().on_activate()
+        self.create_feeds()
         self.refresh()
 
     def on_deactivate(self):
