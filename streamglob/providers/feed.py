@@ -418,9 +418,10 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
 
     @property
     def playlist_title(self):
-        # return f"[{self.provider}]"
-        return f"[{self.provider.IDENTIFIER}/{self.provider.feed.locator}]"
-
+        return (
+            f"[{self.provider.IDENTIFIER}/"
+            f"{self.provider.feed.locator if self.provider.feed else 'all'}]"
+        )
 
     # FIXME
     # def on_focus(self, source, position):
