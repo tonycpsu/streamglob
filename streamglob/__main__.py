@@ -51,24 +51,6 @@ urwid.AsyncioEventLoop._idle_emulation_delay = 1/20
 
 PACKAGE_NAME=__name__.split('.')[0]
 
-class UrwidLoggingHandler(logging.Handler):
-
-    pipe = None
-
-    def connect(self, pipe):
-        self.pipe = pipe
-
-    def emit(self, rec):
-
-        if not self.pipe:
-            return
-        msg = self.format(rec)
-        (ignore, ready, ignore) = select.select([], [self.pipe], [], 0)
-        if self.pipe in ready:
-            msg = utils.format_str_truncated(511, msg, encoding="utf-8") + "\n"
-            os.write(self.pipe, msg.encode("utf-8"))
-
-
 class BaseTabView(TabView):
 
     CHANGE_TAB_KEYS = "!@#$%^&*()"
@@ -513,13 +495,15 @@ def run_gui(action, provider, **kwargs):
     ])
 
     set_stdout_level(logging.CRITICAL)
-    log_console = ConsoleWindow()
 
-    ulh = UrwidLoggingHandler()
+    state.log_buffer = LogBuffer()
+    log_console = LogViewer(state.event_loop, state.log_buffer)
 
-    add_log_handler(ulh)
+    add_log_handler(state.log_buffer)
+
     pile.contents.append(
         (urwid.LineBox(log_console), pile.options("weight", 2))
+        # (log_console, pile.options("given", 20))
     )
 
 
@@ -539,8 +523,6 @@ def run_gui(action, provider, **kwargs):
         unhandled_input=global_input,
         pop_ups=True
     )
-
-    ulh.connect(state.loop.watch_pipe(log_console.log_message))
 
     if options.verbose:
         logger.setLevel(logging.DEBUG)

@@ -1,5 +1,11 @@
 import logging
 logger = logging.getLogger(__name__)
+import asyncio
+import typing
+from typing import (
+    Any, Awaitable, Callable, Iterable, Iterator, Dict, List, Tuple, Union
+)
+import heapq
 
 import urwid
 import panwid
@@ -7,6 +13,7 @@ from panwid.keymap import *
 from orderedattrdict import AttrDict, DefaultAttrDict
 
 from .state import *
+from . import utils
 
 @keymapped()
 class StreamglobView(panwid.BaseView):
@@ -278,27 +285,204 @@ class ScrollbackListBox(panwid.listbox.ScrollingListBox):
     def selectable(self):
         return True
 
+# Logging widget (c) Ben Niemann, https://github.com/odahoda/noisicaa, with
+# modifications to strip emoji as a workaround to urwid/urwid#225
 
-class ConsoleWindow(urwid.WidgetWrap):
+class LogBuffer(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__()
+        self.__records = {}  # type: Dict[int, List[Tuple[int, logging.LogRecord]]]
+        self.__next_record_num = 0
+        self.__listeners = {}  # type: Dict[str, Callable[[logging.LogRecord], None]]
 
-    def __init__(self, verbose=False):
+    @property
+    def records(self) -> Iterator[logging.LogRecord]:
+        # pylint: disable=protected-access
+        heappop = heapq.heappop
+        siftup = heapq._siftup  # type: ignore[attr-defined]
+        _StopIteration = StopIteration
 
-        self.verbose = verbose
-        self.listbox =  ScrollbackListBox([], with_scrollbar=True)
-        super(ConsoleWindow, self).__init__(self.listbox)
+        h = []  # type: List[Any]
+        h_append = h.append
+        for it in map(iter, self.__records.values()):  # type: ignore[arg-type]
+            try:
+                h_append([next(it), it])
+            except _StopIteration:
+                pass
+        heapq.heapify(h)
 
-    def log_message(self, msg):
-        self.listbox.append(msg.rstrip())
-        self.listbox._modified()
+        while 1:
+            try:
+                while 1:
+                    (_, record), it = s = h[0]
+                    yield record
+                    s[0] = next(it)
+                    siftup(h, 0)
+            except _StopIteration:
+                heappop(h)
+            except IndexError:
+                return
 
-    def mark(self):
-        self.log_message("-" * 80)
+    def emit(self, record: logging.LogRecord) -> None:
+        with self.lock:
+            records = self.__records.setdefault(record.levelno, [])
+            records.append((self.__next_record_num, record))
+            if len(records) > 10000:
+                del records[:1]
+            self.__next_record_num += 1
 
-    def selectable(self):
-        return False
+            for listener in self.__listeners.values():
+                listener(record)
 
-    def keypress(self, size, key):
-        if key == "m":
-            self.mark()
-        # return super(ConsoleWindow, self).kepyress(size, key)
+    def add_listener(self, name: str, listener: Callable[[logging.LogRecord], None]) -> None:
+        with self.lock:
+            assert name not in self.__listeners
+            self.__listeners[name] = listener
+
+    def remove_listener(self, name: str) -> None:
+        with self.lock:
+            self.__listeners.pop(name, None)
+
+
+class LogViewer(urwid.Widget):
+    _sizing = frozenset(['box'])
+    _selectable = True
+    ignore_focus = True
+
+    def __init__(self, event_loop: asyncio.AbstractEventLoop, log_buffer: LogBuffer) -> None:
+        super().__init__()
+
+        self.__mode = 'tail'
+        self.__min_loglevel = logging.INFO
+
+        self.__cols = 80
+        self.__rows = 20
+        self.__lines = []  # type: List[str]
+        self.__cursor = 0
+
+        self.__formatter = logging.Formatter(
+            "%(asctime)s [%(module)16s:%(lineno)-4d] [%(levelname)8s] %(message)s"
+        )
+
+        self.__event_loop = event_loop
+        self.__log_buffer = log_buffer
+        self.__log_buffer.add_listener('viewer', self.__new_record_threadsafe)
+
+    async def cleanup(self) -> None:
+        self.__log_buffer.remove_listener('viewer')
+
+    def __new_record_threadsafe(self, record: logging.LogRecord) -> None:
+        self.__event_loop.call_soon_threadsafe(self.__new_record, record)
+
+    def __new_record(self, record: logging.LogRecord) -> None:
+        if self.__mode != 'tail':
+            return
+
+        if not self.__filter(record):
+            return
+
+        for line in self.__format(record):
+            # self.__lines.append(utils.strip_emoji(line))
+            self.__lines.append(line)
+        if len(self.__lines) > 10000:
+            del self.__lines[:len(self.__lines) - 10000]
+
+        self._invalidate()
+
+    def __filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno < self.__min_loglevel:
+            return False
+
+        return True
+
+    def __format(self, record: logging.LogRecord) -> Iterator[str]:
+        formatted = self.__formatter.format(record)
+        for line in formatted.split('\n'):
+            for c in range(0, len(line), self.__cols):
+                yield line[c:c+self.__cols]
+
+    def __populate(self) -> None:
+        self.__lines = []
+
+        with self.__log_buffer.lock:
+            for record in self.__log_buffer.records:
+                if not self.__filter(record):
+                     continue
+
+                for line in self.__format(record):
+                    # self.__lines.append(utils.strip_emoji(line))
+                    self.__lines.append(line)
+
+    def render(self, size: Tuple[int, ...], focus: bool = False) -> urwid.Canvas:
+        if (self.__cols, self.__rows) != size:
+            self.__populate()
+
+        self.__cols, self.__rows = size
+
+        if self.__mode == 'tail':
+            lines = self.__lines[-self.__rows:]
+        else:
+            lines = self.__lines[self.__cursor:self.__cursor + self.__rows]
+
+        lines.extend([''] * (self.__rows - len(lines)))
+
+        e = []
+        c = []
+        for line in lines:
+            line = line[:self.__cols]
+            line += ' ' * (self.__cols - len(line))
+            text, cs = urwid.apply_target_encoding(line)
+            e.append(text)
+            c.append(cs)
+
+        return urwid.TextCanvas(e, None, c)
+
+    def keypress(self, size: Tuple[int, ...], key: str) -> typing.Optional[str]:
+        _, rows = size
+
+        if key in ('d', 'i', 'w', 'e'):
+            self.__min_loglevel = {
+                'd': logging.DEBUG,
+                'i': logging.INFO,
+                'w': logging.WARNING,
+                'e': logging.ERROR,
+            }[key]
+            self.__populate()
+            if self.__mode == 'scroll':
+                self.__cursor = max(0, len(self.__lines) - rows)
+            self._invalidate()
+            return None
+
+        if key == 'p':
+            if self.__mode == 'tail':
+                self.__mode = 'scroll'
+                self.__cursor = max(0, len(self.__lines) - rows)
+            else:
+                self.__mode = 'tail'
+                self.__populate()
+            self._invalidate()
+            return None
+
+        if key in ('up', 'down', 'page up', 'page down', 'home', 'end'):
+            if self.__mode != 'scroll':
+                self.__mode = 'scroll'
+                self.__cursor = max(0, len(self.__lines) - rows)
+
+            if key == 'up':
+                self.__cursor = max(self.__cursor - 1, 0)
+            elif key == 'down':
+                self.__cursor = min(self.__cursor + 1, max(0, len(self.__lines) - self.__rows))
+            elif key == 'page up':
+                self.__cursor = max(self.__cursor - self.__rows, 0)
+            elif key == 'page down':
+                self.__cursor = min(
+                    self.__cursor + self.__rows, max(0, len(self.__lines) - self.__rows))
+            elif key == 'home':
+                self.__cursor = 0
+            elif key == 'end':
+                self.__cursor = max(0, len(self.__lines) - self.__rows)
+
+            self._invalidate()
+            return None
+
         return key
