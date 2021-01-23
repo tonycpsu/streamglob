@@ -37,7 +37,7 @@ from aiohttp_json_rpc import JsonRpc
 
 from .state import *
 from .widgets import *
-from .browser import DirectoryBrowser
+from .browser import FileBrowser
 
 from . import config
 from . import model
@@ -231,7 +231,7 @@ class FilesView(StreamglobView):
 
     def __init__(self):
 
-        self.browser = DirectoryBrowser(config.settings.profile.get_path("output.path"), ignore_files=False)
+        self.browser = FileBrowser(config.settings.profile.get_path("output.path"), ignore_files=False)
         self.pile  = urwid.Pile([
             ('weight', 1, self.browser),
         ])

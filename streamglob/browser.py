@@ -4,7 +4,7 @@ import os
 
 import urwid
 
-class DirectoryBrowserTreeWidget(urwid.TreeWidget):
+class FileBrowserTreeWidget(urwid.TreeWidget):
     indent_cols = 2
     # unexpanded_icon = urwid.Text("")
     # expanded_icon = urwid.Text("")
@@ -13,7 +13,6 @@ class DirectoryBrowserTreeWidget(urwid.TreeWidget):
 
         if self.is_leaf:
             return key
-
         if key == "right":
             self.expanded = True
             self.update_expanded_icon()
@@ -26,7 +25,7 @@ class DirectoryBrowserTreeWidget(urwid.TreeWidget):
             return key
 
 
-class DirectoryBrowserTreeListBox(urwid.ListBox):
+class FileBrowserTreeListBox(urwid.ListBox):
 
     def unhandled_input(self, size, input):
         """Handle macro-navigation keys"""
@@ -37,11 +36,12 @@ class DirectoryBrowserTreeListBox(urwid.ListBox):
         else:
             return input
 
-class FlagFileWidget(DirectoryBrowserTreeWidget):
+
+class FlagFileWidget(FileBrowserTreeWidget):
     # apply an attribute to the expand/unexpand icons
-    unexpanded_icon = urwid.AttrMap(DirectoryBrowserTreeWidget.unexpanded_icon,
+    unexpanded_icon = urwid.AttrMap(FileBrowserTreeWidget.unexpanded_icon,
         'browser_dirmark')
-    expanded_icon = urwid.AttrMap(DirectoryBrowserTreeWidget.expanded_icon,
+    expanded_icon = urwid.AttrMap(FileBrowserTreeWidget.expanded_icon,
         'browser_dirmark')
 
     def __init__(self, node):
@@ -94,14 +94,13 @@ class FileTreeWidget(FlagFileWidget):
         return self.get_node().get_key()
 
 
-
-class EmptyWidget(DirectoryBrowserTreeWidget):
+class EmptyWidget(FileBrowserTreeWidget):
     """A marker for expanded directories with no contents."""
     def get_display_text(self):
         return ('flag', '(empty directory)')
 
 
-class ErrorWidget(DirectoryBrowserTreeWidget):
+class ErrorWidget(FileBrowserTreeWidget):
     """A marker for errors reading directories."""
 
     def get_display_text(self):
@@ -129,6 +128,7 @@ class FileNode(urwid.TreeNode):
     """Metadata storage for individual files"""
 
     def __init__(self, path, parent=None):
+        self.parent = parent
         depth = path.count(dir_sep()) - parent.tree.root.count(dir_sep())
         key = os.path.basename(path)
         urwid.TreeNode.__init__(self, path, key=key, parent=parent, depth=depth)
@@ -141,6 +141,17 @@ class FileNode(urwid.TreeNode):
 
     def load_widget(self):
         return FileTreeWidget(self)
+
+    def full_path(self):
+        path = []
+        root = self
+        while root.get_parent() is not None:
+            path.append(root.get_key())
+            root = root.get_parent()
+        path.append(self.parent.tree.root)
+        return dir_sep().join(reversed(path))
+
+
 
 
 class EmptyNode(urwid.TreeNode):
@@ -220,7 +231,17 @@ class DirectoryNode(urwid.ParentNode):
     def load_widget(self):
         return DirectoryWidget(self)
 
-class DirectoryBrowser(urwid.WidgetWrap):
+    def full_path(self):
+        path = []
+        root = self
+        while root.get_parent() is not None:
+            path.append(root.get_key())
+            root = root.get_parent()
+        path.append(self.tree.root)
+        return dir_sep().join(reversed(path))
+
+
+class FileBrowser(urwid.WidgetWrap):
 
     palette = [
         ('body', 'black', 'light gray'),
@@ -269,6 +290,19 @@ class DirectoryBrowser(urwid.WidgetWrap):
     def starts_expanded(self, node):
         return node.get_depth() < 1
         # return len(path.split(os.path.sep)) <= 1
+
+    @property
+    def body(self):
+        return self.listbox.body
+
+    # @property
+    # def focus_position(self):
+    #     return self.listbox.focus_position
+
+    @property
+    def selection(self):
+        return self.body.get_focus()[1].full_path()
+        # return dir_sep().join(w.get_display_text() for w in self.body.get_focus())
 
 
 
