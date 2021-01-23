@@ -245,7 +245,10 @@ class DirectoryNode(urwid.ParentNode):
         # for c in self._children:
         #     self._children.pop(c)
         self.get_child_keys(reload=True)
-        self.get_parent().load_widget()
+        parent = self.get_parent()
+        if not parent:
+            return
+        parent.load_widget()
 
 
 SPLIT_RE = re.compile(r'[a-zA-Z]+|\d+')
@@ -333,7 +336,7 @@ class FileBrowser(urwid.WidgetWrap):
     def on_modified(self):
 
         if isinstance(self.selection, DirectoryNode):
-            if self.last_selection:
+            if self.last_selection and self.last_selection.get_node().get_parent():
                 self.last_selection.expanded = False
                 self.last_selection.update_expanded_icon()
             self.last_selection = self.selection_widget

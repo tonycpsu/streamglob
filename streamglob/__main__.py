@@ -127,15 +127,11 @@ def run_gui(action, provider, **kwargs):
 
     state.views = [
         Tab("Listings", state.listings_view, locked=True),
-        Tab("Files", state.files_view, locked=True),
-        Tab("Tasks", state.tasks_view, locked=True)
+        # Tab("Files", state.files_view, locked=True),
+        # Tab("Tasks", state.tasks_view, locked=True)
     ]
 
     state.main_view = BaseTabView(state.views)
-
-    pile = urwid.Pile([
-        ("weight", 5, urwid.LineBox(state.main_view)),
-    ])
 
     set_stdout_level(logging.CRITICAL)
 
@@ -144,10 +140,28 @@ def run_gui(action, provider, **kwargs):
 
     add_log_handler(state.log_buffer)
 
-    pile.contents.append(
-        (urwid.LineBox(log_console), pile.options("weight", 2))
-        # (log_console, pile.options("given", 20))
-    )
+    pile = urwid.Pile([
+        ("weight", 5,
+         urwid.Columns([
+             ("weight", 1, urwid.LineBox(
+                 urwid.Pile([
+                     ("weight", 1, urwid.LineBox(state.main_view)),
+                     ("weight", 1, urwid.LineBox(log_console))
+                 ])
+             )),
+             ("weight", 1, urwid.LineBox(
+                 urwid.Pile([
+                     ("weight", 1, urwid.LineBox((urwid.Filler(urwid.Text(""))))),
+                     ("weight", 1, urwid.LineBox(state.files_view))
+                 ])
+             )),
+         ])
+        )
+    ])
+    # pile.contents.append(
+    #     (urwid.LineBox(log_console), pile.options("weight", 1))
+    #     # (log_console, pile.options("given", 20))
+    # )
 
 
     def global_input(key):
