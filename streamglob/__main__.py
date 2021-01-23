@@ -140,28 +140,33 @@ def run_gui(action, provider, **kwargs):
 
     add_log_handler(state.log_buffer)
 
-    pile = urwid.Pile([
-        ("weight", 5,
-         urwid.Columns([
-             ("weight", 1, urwid.LineBox(
-                 urwid.Pile([
-                     ("weight", 1, urwid.LineBox(state.main_view)),
-                     ("weight", 1, urwid.LineBox(log_console))
-                 ])
-             )),
-             ("weight", 1, urwid.LineBox(
-                 urwid.Pile([
-                     ("weight", 1, urwid.LineBox((urwid.Filler(urwid.Text(""))))),
-                     ("weight", 1, urwid.LineBox(state.files_view))
-                 ])
-             )),
-         ])
-        )
+    left_column = urwid.Pile([
+        ("weight", 3, state.listings_view),
+        (1, urwid.SolidFill(u"\N{BOX DRAWINGS LIGHT HORIZONTAL}")),
+        ("weight", 3, state.tasks_view)
     ])
-    # pile.contents.append(
-    #     (urwid.LineBox(log_console), pile.options("weight", 1))
-    #     # (log_console, pile.options("given", 20))
-    # )
+
+    right_column = urwid.Pile([
+        ("weight", 3, urwid.Filler(urwid.Text(""))),
+        (1, urwid.SolidFill(u"\N{BOX DRAWINGS LIGHT HORIZONTAL}")),
+        ("weight", 3, state.files_view)
+    ])
+
+    columns = urwid.Columns([
+        ("weight", 1, left_column),
+        (1, urwid.SolidFill(u"\N{BOX DRAWINGS LIGHT VERTICAL}")),
+        ("weight", 1, right_column),
+    ])
+
+    pile = urwid.Pile([
+        ("weight", 5, columns)
+    ])
+
+    if options.verbose:
+        left_column.contents.append(
+            (urwid.LineBox(log_console), pile.options("weight", 1))
+            # (log_console, pile.options("given", 20))
+        )
 
 
     def global_input(key):
