@@ -738,7 +738,10 @@ class SynchronizedPlayerMixin(object):
     async def on_playlist_pos(self, name, value):
 
         logger.info("on_playlist_pos: {value}")
-        position = self.playlist_pos_to_row(value)
+        try:
+            position = self.playlist_pos_to_row(value)
+        except IndexError:
+            return
         # async def sync_mpv_playist_pos():
         self.disable_focus_handler()
         self.focus_position = position

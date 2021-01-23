@@ -10,10 +10,44 @@ import heapq
 import urwid
 import panwid
 from panwid.keymap import *
+from panwid.tabview import *
 from orderedattrdict import AttrDict, DefaultAttrDict
 
-from .state import *
-from . import utils
+from ..state import *
+from .. import utils
+
+from .browser import *
+
+
+class BaseTabView(TabView):
+
+    CHANGE_TAB_KEYS = "!@#$%^&*()"
+
+    last_refresh = None
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        urwid.connect_signal(self, "activate", self.on_activate)
+
+    def on_activate(self, source, tab):
+        self.active_tab.content.on_view_activate()
+
+    def keypress(self, size, key):
+
+        if key in self.CHANGE_TAB_KEYS:
+            idx = int(self.CHANGE_TAB_KEYS.index(key))
+            if idx < 0:
+                idx += 10
+            self.set_active_tab(idx)
+
+        elif key == 'tab':
+            self.set_active_next()
+
+        elif key == 'shift tab':
+            self.set_active_prev()
+
+        else:
+            return super(BaseTabView, self).keypress(size, key)
 
 @keymapped()
 class StreamglobView(panwid.BaseView):
@@ -384,8 +418,7 @@ class LogViewer(urwid.Widget):
             return
 
         for line in self.__format(record):
-            # self.__lines.append(utils.strip_emoji(line))
-            self.__lines.append(line)
+            self.__lines.append(utils.strip_emoji(line))
         if len(self.__lines) > 10000:
             del self.__lines[:len(self.__lines) - 10000]
 
@@ -410,10 +443,8 @@ class LogViewer(urwid.Widget):
             for record in self.__log_buffer.records:
                 if not self.__filter(record):
                      continue
-
                 for line in self.__format(record):
-                    # self.__lines.append(utils.strip_emoji(line))
-                    self.__lines.append(line)
+                    self.__lines.append(utils.strip_emoji(line))
 
     def render(self, size: Tuple[int, ...], focus: bool = False) -> urwid.Canvas:
         if (self.__cols, self.__rows) != size:

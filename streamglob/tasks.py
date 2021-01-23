@@ -199,7 +199,7 @@ class TaskManager(Observable):
                 else:
                     return
         async for task in get_tasks():
-            self.start_task(task)
+            await self.start_task(task)
             if isinstance(task, model.PlayMediaTask.attr_class):
                 self.playing.append(task)
             elif isinstance(task, model.DownloadMediaTask.attr_class):
