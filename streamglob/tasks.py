@@ -46,11 +46,11 @@ class TaskManager(Observable):
     def max_concurrent_tasks(self):
         return config.settings.tasks.max or self.DEFAULT_MAX_CONCURRENT_TASKS
 
-    def play(self, task, player_spec, downloader_spec, **kwargs):
+    def play(self, task, **kwargs):
 
         self.current_task_id +=1
         task.task_id = self.current_task_id
-        task.args = (player_spec, downloader_spec)
+        # task.args = (player_spec, downloader_spec)
         task.kwargs = kwargs
         task.program = state.event_loop.create_future()
         task.proc = state.event_loop.create_future()
@@ -212,7 +212,7 @@ class TaskManager(Observable):
                 if proc.returncode is not None:
                     logger.debug("postprocessor done: {task.stage_outfile}")
                     if not os.path.isfile(task.stage_outfile):
-                        logger.warn(f"{task.provider} processing stage {task.stage} failed")
+                        logger.warn(f"processing stage {task.stage} failed")
                         task.postprocessors = []
                     task.stage_results.append(task.stage_outfile)
                     task.postprocessors.pop(0)

@@ -195,7 +195,7 @@ class FeedMediaListingMixin(object):
 
 
 @model.attrclass(FeedMediaListingMixin)
-class FeedMediaListing(FeedMediaListingMixin, model.MultiSourceMediaListing, model.TitledMediaListing):
+class FeedMediaListing(FeedMediaListingMixin, model.TitledMediaListing):
     """
     An individual media clip, broadcast, episode, etc. within a particular
     MediaFeed.
@@ -311,7 +311,7 @@ class CachedFeedProviderDetailDataTable(DetailDataTable):
 
 
 @keymapped()
-class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMixin, ProviderDataTable):
+class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerProviderMixin, ProviderDataTable):
 
     signals = ["focus", "keypress"]
 
@@ -415,11 +415,6 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
                 self.refresh()
                 # state.event_loop.create_task(self.play_all(playlist_position = position))
                 # self.focus_position = position
-
-    @property
-    def playlist_title(self):
-        # return f"[{self.provider}]"
-        return f"[{self.provider.IDENTIFIER}/{self.provider.feed.locator}]"
 
 
     # FIXME
@@ -1060,3 +1055,8 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                 self.reset()
             except pony.orm.core.ObjectNotFound:
                 logger.info(f("mark_item_read: item {media_listing_id} not found"))
+
+    @property
+    def playlist_title(self):
+        # return f"[{self.provider}]"
+        return f"[{self.IDENTIFIER}/{self.feed.locator}]"

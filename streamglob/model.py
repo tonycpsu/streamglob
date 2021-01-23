@@ -413,7 +413,7 @@ class MultiSourceMediaListing(MediaListing):
 
 
 @attrclass()
-class TitledMediaListing(MediaListing):
+class TitledMediaListing(MultiSourceMediaListing):
 
     title = Required(str)
 
@@ -433,10 +433,10 @@ class InflatableMediaListing(InflatableMediaListingMixin, MediaListing):
 @attrclass()
 class MediaTask(db.Entity):
 
-    provider = Required(str)
     title =  Required(str)
     sources = Set(lambda: MediaSource, reverse="task")
     listing = Optional(lambda: MediaListing)
+    provider = Optional(str)
     task_id =  Optional(int)
     args = Required(Json, default=[])
     kwargs = Required(Json, default={})

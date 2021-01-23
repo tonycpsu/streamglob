@@ -38,6 +38,7 @@ from aiohttp_json_rpc import JsonRpc
 from .state import *
 from .widgets import *
 from .browser import FileBrowser
+from .providers.base import SynchronizedPlayerMixin
 
 from . import config
 from . import model
@@ -226,8 +227,18 @@ class ListingsView(StreamglobView):
         else:
             return super().keypress(size, key)
 
+class Dummy(object):
+    def __init__(self, data):
+        self.data = data
 
-class FilesView(StreamglobView):
+@keymapped()
+class FilesView(SynchronizedPlayerMixin, StreamglobView):
+
+    signals = ["requery"]
+
+    KEYMAP = {
+        "meta p": "play_all"
+    }
 
     def __init__(self):
 
@@ -236,6 +247,56 @@ class FilesView(StreamglobView):
             ('weight', 1, self.browser),
         ])
         super().__init__(self.pile)
+        # self._emit("requery", self)
+
+    @property
+    def play_items(self):
+        return [
+            AttrDict(
+                title = "foo",
+                url = self.browser.selection
+            )
+        ]
+
+    # def reset(self):
+    #     super().reset()
+
+    # @property
+    # def provider(self):
+    #     return AttrDict(
+    #         IDENTIFER="foo",
+    #         NAME="foo",
+    #         feed=AttrDict(name="foo", locator="bar"),
+    #         new_listing = lambda **kwargs: AttrDict(**kwargs),
+    #         new_media_source = lambda **kwargs: AttrDict(**kwargs),
+    #         status="foo"
+    #     )
+
+    # @property
+    # def new_listing(self, **kwargs):
+    #     return AttrDict(**kwargs)
+    #
+    def __iter__(self):
+        return iter(self.browser.selection)
+
+    # def __iter__(self):
+    #     return iter([
+    #         Dummy(
+    #             AttrDict(
+    #                 media_listing_id=0,
+    #                 title="foo",
+    #                 created=datetime.now(),
+    #                 feed=AttrDict(name="foo", locator="bar"),
+    #                 # locator=self.browser.selection,
+    #                 sources=[
+    #                     AttrDict(
+    #                         locator=self.browser.selection,
+    #                         is_bad = False
+    #                     )
+    #                 ]
+    #             )
+    #         )
+    #     ])
 
 
 
@@ -516,8 +577,8 @@ def run_gui(action, provider, **kwargs):
     state.tasks_view = TasksView()
 
     state.views = [
-        # Tab("Listings", state.listings_view, locked=True),
         Tab("Files", state.files_view, locked=True),
+        Tab("Listings", state.listings_view, locked=True),
         # Tab("Tasks", state.tasks_view, locked=True)
     ]
 
