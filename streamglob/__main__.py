@@ -37,6 +37,8 @@ from aiohttp_json_rpc import JsonRpc
 
 from .state import *
 from .widgets import *
+from .browser import FileBrowser, DirectoryNode, FileNode
+from .providers.base import SynchronizedPlayerMixin
 
 from . import config
 from . import model
@@ -57,6 +59,13 @@ class BaseTabView(TabView):
 
     last_refresh = None
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        urwid.connect_signal(self, "activate", self.on_activate)
+
+    def on_activate(self, source, tab):
+        self.active_tab.content.on_view_activate()
+
     def keypress(self, size, key):
 
         if key in self.CHANGE_TAB_KEYS:
@@ -73,6 +82,7 @@ class BaseTabView(TabView):
 
         else:
             return super(BaseTabView, self).keypress(size, key)
+
 
 class MainToolbar(urwid.WidgetWrap):
 
@@ -154,7 +164,7 @@ class MainToolbar(urwid.WidgetWrap):
         return (self.provider_dropdown.selected_label)
 
 
-class BrowserView(StreamglobView):
+class ListingsView(StreamglobView):
 
     def __init__(self, provider):
 
@@ -174,14 +184,14 @@ class BrowserView(StreamglobView):
             lambda w, p: profile_change(p)
         )
 
-        self.browser_view_placeholder = urwid.WidgetPlaceholder(
+        self.listings_view_placeholder = urwid.WidgetPlaceholder(
             urwid.Filler(urwid.Text(""))
         )
 
         self.pile  = urwid.Pile([
             (1, self.toolbar),
             (1, urwid.Filler(urwid.Divider("-"))),
-            ('weight', 1, self.browser_view_placeholder),
+            ('weight', 1, self.listings_view_placeholder),
         ])
         super().__init__(self.pile)
 
@@ -189,7 +199,7 @@ class BrowserView(StreamglobView):
 
         self.provider.deactivate()
         self.provider = providers.get(provider)
-        self.browser_view_placeholder.original_widget = self.provider.view
+        self.listings_view_placeholder.original_widget = self.provider.view
         if self.provider.config_is_valid:
             self.pile.focus_position = 2
         else:
@@ -199,6 +209,9 @@ class BrowserView(StreamglobView):
     def activate(self):
         self.set_provider(self.provider.IDENTIFIER)
 
+    def on_view_activate(self):
+        self.provider.reset()
+
     def keypress(self, size, key):
 
         if key in ["meta up", "meta down"]:
@@ -206,6 +219,90 @@ class BrowserView(StreamglobView):
 
         else:
             return super().keypress(size, key)
+
+class Dummy(object):
+    def __init__(self, data):
+        self.data = data
+
+@keymapped()
+class FilesView(SynchronizedPlayerMixin, StreamglobView):
+
+    signals = ["requery"]
+
+    KEYMAP = {
+        "meta p": "preview_all"
+    }
+
+    def __init__(self):
+
+        self.browser = FileBrowser(config.settings.profile.get_path("output.path"), ignore_files=False)
+        self.pile  = urwid.Pile([
+            ('weight', 1, self.browser),
+        ])
+        super().__init__(self.pile)
+        urwid.connect_signal(self.browser, "focus", self.on_focus)
+        # self._emit("requery", self)
+
+    def on_focus(self, source, selection):
+        if isinstance(selection, DirectoryNode):
+            return
+        elif isinstance(selection, FileNode):
+            state.event_loop.create_task(self.preview_all())
+
+    @property
+    def play_items(self):
+        return [
+            AttrDict(
+                title = "foo",
+                url = self.browser.selection
+            )
+        ]
+
+    def on_view_activate(self):
+        state.event_loop.create_task(self.play_empty())
+
+    # def reset(self):
+    #     super().reset()
+
+    # @property
+    # def provider(self):
+    #     return AttrDict(
+    #         IDENTIFER="foo",
+    #         NAME="foo",
+    #         feed=AttrDict(name="foo", locator="bar"),
+    #         new_listing = lambda **kwargs: AttrDict(**kwargs),
+    #         new_media_source = lambda **kwargs: AttrDict(**kwargs),
+    #         status="foo"
+    #     )
+
+    # @property
+    # def new_listing(self, **kwargs):
+    #     return AttrDict(**kwargs)
+
+    def __len__(self):
+        return 1
+    def __iter__(self):
+        return iter(self.browser.selection)
+
+    # def __iter__(self):
+    #     return iter([
+    #         Dummy(
+    #             AttrDict(
+    #                 media_listing_id=0,
+    #                 title="foo",
+    #                 created=datetime.now(),
+    #                 feed=AttrDict(name="foo", locator="bar"),
+    #                 # locator=self.browser.selection,
+    #                 sources=[
+    #                     AttrDict(
+    #                         locator=self.browser.selection,
+    #                         is_bad = False
+    #                     )
+    #                 ]
+    #             )
+    #         )
+    #     ])
+
 
 
 class TasksDataTable(BaseDataTable):
@@ -480,11 +577,13 @@ def run_gui(action, provider, **kwargs):
 
     state.screen.set_terminal_properties(get_colors())
 
-    state.browser_view = BrowserView(provider)
+    state.listings_view = ListingsView(provider)
+    state.files_view = FilesView()
     state.tasks_view = TasksView()
 
     state.views = [
-        Tab("Browser", state.browser_view, locked=True),
+        Tab("Listings", state.listings_view, locked=True),
+        Tab("Files", state.files_view, locked=True),
         Tab("Tasks", state.tasks_view, locked=True)
     ]
 
@@ -509,7 +608,7 @@ def run_gui(action, provider, **kwargs):
 
     def global_input(key):
         if key in ('q', 'Q'):
-            state.browser_view.quit_app()
+            state.listings_view.quit_app()
         elif key == "meta C":
             reload_config()
         else:
@@ -528,7 +627,7 @@ def run_gui(action, provider, **kwargs):
         logger.setLevel(logging.DEBUG)
 
     def activate_view(loop, user_data):
-        state.browser_view.activate()
+        state.listings_view.activate()
 
 
     def start_server(loop, user_data):

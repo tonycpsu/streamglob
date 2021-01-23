@@ -413,7 +413,7 @@ class MultiSourceMediaListing(MediaListing):
 
 
 @attrclass()
-class TitledMediaListing(MediaListing):
+class TitledMediaListing(MultiSourceMediaListing):
 
     title = Required(str)
 
@@ -433,10 +433,10 @@ class InflatableMediaListing(InflatableMediaListingMixin, MediaListing):
 @attrclass()
 class MediaTask(db.Entity):
 
-    provider = Required(str)
     title =  Required(str)
     sources = Set(lambda: MediaSource, reverse="task")
     listing = Optional(lambda: MediaListing)
+    provider = Optional(str)
     task_id =  Optional(int)
     args = Required(Json, default=[])
     kwargs = Required(Json, default={})
@@ -446,6 +446,12 @@ class MediaTask(db.Entity):
 
 
 class ProgramMediaTaskMixin(object):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.program = state.event_loop.create_future()
+        self.proc = state.event_loop.create_future()
+        self.result = state.event_loop.create_future()
 
     def reset(self):
         self.program = state.event_loop.create_future()

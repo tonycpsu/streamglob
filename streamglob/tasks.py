@@ -33,6 +33,8 @@ class TaskManager(Observable):
     def __init__(self):
 
         super().__init__()
+        self.preview_task = None
+        self.preview_player = None
         self.to_play = TaskList()
         self.to_download = TaskList()
         self.playing = TaskList()
@@ -46,15 +48,66 @@ class TaskManager(Observable):
     def max_concurrent_tasks(self):
         return config.settings.tasks.max or self.DEFAULT_MAX_CONCURRENT_TASKS
 
-    def play(self, task, player_spec, downloader_spec, **kwargs):
+    async def preview(self, listing, caller, **kwargs):
+
+        sources, kwargs = caller.extract_sources(listing, **kwargs)
+        task = caller.create_task(listing, sources)
+
+        async def start_player():
+            self.preview_task = task
+            await self.start_task(self.preview_task)
+            logger.info(self.preview_task)
+            self.preview_player = await self.preview_task.program
+            logger.info(self.preview_player)
+            await self.preview_task.proc
+
+            async def handle_mpv_key(key_state, key_name, key_string):
+                key = self.preview_player.key_to_urwid(key_name)
+                if key.startswith("mbtn"):
+                    return
+                logger.info(f"debug: {key_name}")
+                # key = self.view.keypress((100, 100), key)
+                state.loop.process_input([key])
+                # if not state.loop.process_input([key]):
+                # self._emit("keypress", key)
+
+            await self.preview_player.controller.register_unbound_key_callback(handle_mpv_key)
+
+            async def on_playlist_pos(name, value):
+                # if not (self.player and self.play_items and self.sync_player_playlist):
+                #     return
+                await caller.on_playlist_pos(name, value)
+
+            self.preview_player.controller.bind_property_observer("playlist-pos", on_playlist_pos)
+
+            def on_player_done(f):
+                logger.info("player done")
+                self.preview_task = None
+                self.preview_player = None
+
+            self.preview_task.result.add_done_callback(on_player_done)
+
+        async def load_sources():
+            # self.preview_player = await self.preview_task.program
+            # sources, kwargs = self.provider.play_args(listing)
+            # sources, kwargs = caller.extract_sources(listing)
+            logger.info(sources)
+            await self.preview_task.load_sources(sources, **kwargs)
+
+        if self.preview_player:
+            await load_sources()
+        else:
+            await start_player()
+
+    def play(self, task, **kwargs):
 
         self.current_task_id +=1
         task.task_id = self.current_task_id
-        task.args = (player_spec, downloader_spec)
-        task.kwargs = kwargs
-        task.program = state.event_loop.create_future()
-        task.proc = state.event_loop.create_future()
-        task.result = state.event_loop.create_future()
+        # task.args = (player_spec, downloader_spec)
+        # task.kwargs = kwargs
+        # task.program = state.event_loop.create_future()
+        # task.proc = state.event_loop.create_future()
+        # task.result = state.event_loop.create_future()
         self.to_play.append(task)
         return task
 
@@ -103,6 +156,37 @@ class TaskManager(Observable):
                 self.poller_task
             )
 
+    async def start_task(self, task):
+        logger.debug(f"task: {task}")
+        if isinstance(task, (model.PlayMediaTask, model.PlayMediaTask.attr_class)):
+            run_task = player.Player.play(task, *task.args, **task.kwargs)
+
+        elif isinstance(task, (model.DownloadMediaTask, model.DownloadMediaTask.attr_class)):
+            try:
+                outfile = task.stage_outfile
+                run_task = player.Downloader.download(task, outfile, *task.args, **task.kwargs)
+                task.stage_results.append(outfile)
+            except SGFileExists as e:
+                logger.warn(e)
+                return
+        else:
+            logger.error(f"not implemented: {task}")
+            raise NotImplementedError
+
+        try:
+            proc = await run_task
+        except Exception as e:
+            task.result.set_result(e)
+            logger.error(e)
+            return
+        task.proc.set_result(proc)
+        logger.debug(f"proc: {task.proc}")
+        task.pid = proc.pid
+        logger.debug(f"pid: {task.pid}")
+
+        task.started = datetime.now()
+        task.elapsed = timedelta(0)
+
     async def worker(self):
 
         logger.trace("worker")
@@ -115,38 +199,7 @@ class TaskManager(Observable):
                 else:
                     return
         async for task in get_tasks():
-            # if isinstance(task, (model.DownloadMediaTask, model.DownloadMediaTask.attr_class)):
-            #     raise Exception(type(task), type(task.listing.feed))
-            logger.debug(f"task: {task}")
-            if isinstance(task, (model.PlayMediaTask, model.PlayMediaTask.attr_class)):
-                run_task = player.Player.play(task, *task.args, **task.kwargs)
-
-            elif isinstance(task, (model.DownloadMediaTask, model.DownloadMediaTask.attr_class)):
-                try:
-                    outfile = task.stage_outfile
-                    run_task = player.Downloader.download(task, outfile, *task.args, **task.kwargs)
-                    task.stage_results.append(outfile)
-                except SGFileExists as e:
-                    logger.warn(e)
-                    continue
-            else:
-                logger.error(f"not implemented: {task}")
-                raise NotImplementedError
-
-            try:
-                proc = await run_task
-            except Exception as e:
-                task.result.set_result(e)
-                logger.error(e)
-                continue
-            task.proc.set_result(proc)
-            logger.debug(f"proc: {task.proc}")
-            task.pid = proc.pid
-            logger.debug(f"pid: {task.pid}")
-
-            task.started = datetime.now()
-            task.elapsed = timedelta(0)
-
+            self.start_task(task)
             if isinstance(task, model.PlayMediaTask.attr_class):
                 self.playing.append(task)
             elif isinstance(task, model.DownloadMediaTask.attr_class):
@@ -154,6 +207,7 @@ class TaskManager(Observable):
             else:
                 logger.error(type(task))
                 raise NotImplementedError
+
 
     async def poller(self):
 
@@ -212,7 +266,7 @@ class TaskManager(Observable):
                 if proc.returncode is not None:
                     logger.debug("postprocessor done: {task.stage_outfile}")
                     if not os.path.isfile(task.stage_outfile):
-                        logger.warn(f"{task.provider} processing stage {task.stage} failed")
+                        logger.warn(f"processing stage {task.stage} failed")
                         task.postprocessors = []
                     task.stage_results.append(task.stage_outfile)
                     task.postprocessors.pop(0)

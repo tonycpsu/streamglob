@@ -497,6 +497,9 @@ class Program(object):
 
         return self.proc
 
+    async def terminate(self):
+        self.proc.terminate()
+
     async def kill(self):
         self.proc.kill()
 

@@ -195,7 +195,7 @@ class FeedMediaListingMixin(object):
 
 
 @model.attrclass(FeedMediaListingMixin)
-class FeedMediaListing(FeedMediaListingMixin, model.MultiSourceMediaListing, model.TitledMediaListing):
+class FeedMediaListing(FeedMediaListingMixin, model.TitledMediaListing):
     """
     An individual media clip, broadcast, episode, etc. within a particular
     MediaFeed.
@@ -311,7 +311,7 @@ class CachedFeedProviderDetailDataTable(DetailDataTable):
 
 
 @keymapped()
-class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMixin, ProviderDataTable):
+class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerProviderMixin, ProviderDataTable):
 
     signals = ["focus", "keypress"]
 
@@ -347,7 +347,6 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
         "meta R": ("update", [], {"force": True, "replace": True}),
         "meta f": ("update", [], {"force": True, "resume": True}),
         "meta F": ("update", [], {"force": True, "resume": True, "replace": True}),
-        "meta p": "play_all",
         "f": ["cycle", "fullscreen"],
         # "q": "quit_app"
     }
@@ -413,15 +412,7 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
                 self.selection.close_details()
                 self.selection.open_details()
                 self.refresh()
-                # state.event_loop.create_task(self.play_all(playlist_position = position))
                 # self.focus_position = position
-
-    @property
-    def playlist_title(self):
-        return (
-            f"[{self.provider.IDENTIFIER}/"
-            f"{self.provider.feed.locator if self.provider.feed else 'all'}]"
-        )
 
     # FIXME
     # def on_focus(self, source, position):
@@ -637,38 +628,6 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerMix
 
     def keypress(self, size, key):
         return super().keypress(size, key)
-
-    # def keypress(self, size, key):
-    #     # logger.debug(f"feed keypress: {key} {super().keypress}")
-    #     # if key == "meta r":
-    #     #     state.event_loop.create_task(self.provider.update(force=True))
-    #     # elif key == "meta p":
-    #     #     state.event_loop.create_task(self.play_all())
-    #     # elif key == "n":
-    #     #     # self.next_unread()
-    #     #     state.event_loop.create_task(self.next_unread())
-    #     # elif key == "p":
-    #     #     # self.prev_unread()
-    #     #     state.event_loop.create_task(self.prev_unread())
-    #     key = super().keypress(size, key)
-    #     # if key == "A":
-    #     #     self.mark_all_read()
-    #     # elif key == "ctrl a":
-    #     #     self.mark_visible_read()
-    #     # elif key == "meta a":
-    #     #     self.mark_visible_read(direction=-1)
-    #     # elif key == "meta A":
-    #     #     self.mark_visible_read(direction=1)
-    #     # elif key == "m":
-    #     #     self.toggle_item_read(self.focus_position)
-    #     #     self.ignore_blur = True
-    #     elif key == "meta ctrl k":
-    #         self.kill_all()
-    #         self.mark_visible_read(direction=-1)
-    #     # elif key == "ctrl d":
-    #     #     state.event_loop.create_task(self.download())
-    #     else:
-    #         return key
 
 
 class FeedsFilter(ConfigFilter):
@@ -1061,3 +1020,8 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                 self.reset()
             except pony.orm.core.ObjectNotFound:
                 logger.info(f("mark_item_read: item {media_listing_id} not found"))
+
+    @property
+    def playlist_title(self):
+        # return f"[{self.provider}]"
+        return f"[{self.IDENTIFIER}/{self.feed.locator}]"
