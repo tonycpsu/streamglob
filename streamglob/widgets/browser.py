@@ -330,13 +330,9 @@ class FileBrowser(urwid.WidgetWrap):
         )
         super().__init__(self.listbox)
 
-    def reset(self):
-        # del self.listbox.body.contents[:]
+    def refresh(self):
         self.selection.refresh()
         self.listbox.body._modified()
-        # self.selection.get_widget(reload=True)
-        # self.body._modified()
-        # self.listbox.body = urwid.TreeWalker(DirectoryNode(self, self.root))
 
     @property
     def dir_sort_key(self):
