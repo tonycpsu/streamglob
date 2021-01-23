@@ -37,7 +37,7 @@ from aiohttp_json_rpc import JsonRpc
 
 from .state import *
 from .widgets import *
-from .browser import FileBrowser
+from .browser import FileBrowser, DirectoryNode, FileNode
 from .providers.base import SynchronizedPlayerMixin
 
 from . import config
@@ -77,6 +77,13 @@ class BaseTabView(TabView):
 
     last_refresh = None
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        urwid.connect_signal(self, "activate", self.on_activate)
+
+    def on_activate(self, source, tab):
+        self.active_tab.content.on_view_activate()
+
     def keypress(self, size, key):
 
         if key in self.CHANGE_TAB_KEYS:
@@ -93,6 +100,7 @@ class BaseTabView(TabView):
 
         else:
             return super(BaseTabView, self).keypress(size, key)
+
 
 class MainToolbar(urwid.WidgetWrap):
 
@@ -219,6 +227,9 @@ class ListingsView(StreamglobView):
     def activate(self):
         self.set_provider(self.provider.IDENTIFIER)
 
+    def on_view_activate(self):
+        self.provider.reset()
+
     def keypress(self, size, key):
 
         if key in ["meta up", "meta down"]:
@@ -237,7 +248,7 @@ class FilesView(SynchronizedPlayerMixin, StreamglobView):
     signals = ["requery"]
 
     KEYMAP = {
-        "meta p": "play_all"
+        "meta p": "preview_all"
     }
 
     def __init__(self):
@@ -247,7 +258,14 @@ class FilesView(SynchronizedPlayerMixin, StreamglobView):
             ('weight', 1, self.browser),
         ])
         super().__init__(self.pile)
+        urwid.connect_signal(self.browser, "focus", self.on_focus)
         # self._emit("requery", self)
+
+    def on_focus(self, source, selection):
+        if isinstance(selection, DirectoryNode):
+            return
+        elif isinstance(selection, FileNode):
+            state.event_loop.create_task(self.preview_all())
 
     @property
     def play_items(self):
@@ -257,6 +275,9 @@ class FilesView(SynchronizedPlayerMixin, StreamglobView):
                 url = self.browser.selection
             )
         ]
+
+    def on_view_activate(self):
+        state.event_loop.create_task(self.play_empty())
 
     # def reset(self):
     #     super().reset()
@@ -275,7 +296,9 @@ class FilesView(SynchronizedPlayerMixin, StreamglobView):
     # @property
     # def new_listing(self, **kwargs):
     #     return AttrDict(**kwargs)
-    #
+
+    def __len__(self):
+        return 1
     def __iter__(self):
         return iter(self.browser.selection)
 
@@ -577,9 +600,9 @@ def run_gui(action, provider, **kwargs):
     state.tasks_view = TasksView()
 
     state.views = [
-        Tab("Files", state.files_view, locked=True),
         Tab("Listings", state.listings_view, locked=True),
-        # Tab("Tasks", state.tasks_view, locked=True)
+        Tab("Files", state.files_view, locked=True),
+        Tab("Tasks", state.tasks_view, locked=True)
     ]
 
     state.main_view = BaseTabView(state.views)

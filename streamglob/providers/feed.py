@@ -347,7 +347,6 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerPro
         "meta R": ("update", [], {"force": True, "replace": True}),
         "meta f": ("update", [], {"force": True, "resume": True}),
         "meta F": ("update", [], {"force": True, "resume": True, "replace": True}),
-        "meta p": "play_all",
         "f": ["cycle", "fullscreen"],
         # "q": "quit_app"
     }
@@ -413,7 +412,6 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerPro
                 self.selection.close_details()
                 self.selection.open_details()
                 self.refresh()
-                # state.event_loop.create_task(self.play_all(playlist_position = position))
                 # self.focus_position = position
 
 
@@ -631,38 +629,6 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerPro
 
     def keypress(self, size, key):
         return super().keypress(size, key)
-
-    # def keypress(self, size, key):
-    #     # logger.debug(f"feed keypress: {key} {super().keypress}")
-    #     # if key == "meta r":
-    #     #     state.event_loop.create_task(self.provider.update(force=True))
-    #     # elif key == "meta p":
-    #     #     state.event_loop.create_task(self.play_all())
-    #     # elif key == "n":
-    #     #     # self.next_unread()
-    #     #     state.event_loop.create_task(self.next_unread())
-    #     # elif key == "p":
-    #     #     # self.prev_unread()
-    #     #     state.event_loop.create_task(self.prev_unread())
-    #     key = super().keypress(size, key)
-    #     # if key == "A":
-    #     #     self.mark_all_read()
-    #     # elif key == "ctrl a":
-    #     #     self.mark_visible_read()
-    #     # elif key == "meta a":
-    #     #     self.mark_visible_read(direction=-1)
-    #     # elif key == "meta A":
-    #     #     self.mark_visible_read(direction=1)
-    #     # elif key == "m":
-    #     #     self.toggle_item_read(self.focus_position)
-    #     #     self.ignore_blur = True
-    #     elif key == "meta ctrl k":
-    #         self.kill_all()
-    #         self.mark_visible_read(direction=-1)
-    #     # elif key == "ctrl d":
-    #     #     state.event_loop.create_task(self.download())
-    #     else:
-    #         return key
 
 
 class FeedsFilter(ConfigFilter):

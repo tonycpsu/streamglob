@@ -23,6 +23,8 @@ class StreamglobView(panwid.BaseView):
         state.task_manager_task.cancel()
         raise urwid.ExitMainLoop()
 
+    def on_view_activate(self):
+        pass
 
 class SquareButton(urwid.Button):
 

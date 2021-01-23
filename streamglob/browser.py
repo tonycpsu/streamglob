@@ -25,18 +25,6 @@ class FileBrowserTreeWidget(urwid.TreeWidget):
             return key
 
 
-class FileBrowserTreeListBox(urwid.ListBox):
-
-    def unhandled_input(self, size, input):
-        """Handle macro-navigation keys"""
-        if input == 'left':
-            self.move_focus_to_parent(size)
-        elif input == '-':
-            self.collapse_focus_parent(size)
-        else:
-            return input
-
-
 class FlagFileWidget(FileBrowserTreeWidget):
     # apply an attribute to the expand/unexpand icons
     unexpanded_icon = urwid.AttrMap(FileBrowserTreeWidget.unexpanded_icon,
@@ -243,6 +231,8 @@ class DirectoryNode(urwid.ParentNode):
 
 class FileBrowser(urwid.WidgetWrap):
 
+    signals = ["focus"]
+
     palette = [
         ('body', 'black', 'light gray'),
         ('flagged', 'black', 'dark green', ('bold','underline')),
@@ -284,7 +274,10 @@ class FileBrowser(urwid.WidgetWrap):
         cwd = os.getcwd()
         self.listbox = urwid.TreeListBox(urwid.TreeWalker(DirectoryNode(self, self.root)))
         self.listbox.offset_rows = 1
-
+        urwid.connect_signal(
+            self.listbox.body, "modified",
+            lambda: self._emit("focus", self.focus_position)
+        )
         super().__init__(self.listbox)
 
     def starts_expanded(self, node):
@@ -294,6 +287,10 @@ class FileBrowser(urwid.WidgetWrap):
     @property
     def body(self):
         return self.listbox.body
+
+    @property
+    def focus_position(self):
+        return self.listbox.focus_position
 
     # @property
     # def focus_position(self):

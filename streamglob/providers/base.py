@@ -32,7 +32,6 @@ class BaseProviderView(StreamglobView):
         "l": "download"
     }
 
-
     def update(self):
         pass
 
@@ -120,7 +119,6 @@ class SimpleProviderView(BaseProviderView):
 
     def __getattr__(self, attr):
         return getattr(self.body, attr)
-
 
 class InvalidConfigView(BaseProviderView):
 
@@ -503,12 +501,6 @@ class BaseProvider(abc.ABC):
 
         return sources, kwargs
 
-    # def play(self, listing, no_task_manager=False, **kwargs):
-
-    #     sources = self.extract_sources(listing)
-    #     task = self.create_task(listing, sources)
-
-    #     return state.task_manager.play(task, **kwargs)
 
     def download(self, selection, index=None, no_task_manager=False, **kwargs):
 
@@ -654,6 +646,10 @@ class SynchronizedPlayerMixin(object):
 
     signals = ["keypress"]
 
+    KEYMAP = {
+        "p": "preview_all"
+    }
+
     def __init__(self, *args, **kwargs):
 
         super().__init__(*args, **kwargs)
@@ -715,7 +711,7 @@ class SynchronizedPlayerMixin(object):
         return model.MediaSource.attr_class(**kwargs)
 
     def play(self, listing, **kwargs):
-
+        raise Exception(listing)
         sources, kwargs = self.extract_sources(listing, **kwargs)
         task = self.create_task(listing, sources)
         return state.task_manager.play(task, **kwargs)
@@ -723,20 +719,6 @@ class SynchronizedPlayerMixin(object):
 
     def on_requery(self, source, count):
         self.sync_player_playlist = True
-
-    def reset(self, *args, **kwargs):
-        self.sync_player_playlist = False
-        self.disable_focus_handler()
-        super().reset(*args, **kwargs)
-        async def reset_async():
-            # await self.play_empty()
-            if len(self):
-                await self.play_all()
-                self.on_focus(self, self.focus_position)
-            else:
-                 await self.play_empty()
-            self.enable_focus_handler()
-        state.event_loop.create_task(reset_async())
 
     def enable_focus_handler(self):
         if self.on_focus_handler:
@@ -749,72 +731,35 @@ class SynchronizedPlayerMixin(object):
             return
         self.on_focus_handler = urwid.signals.disconnect_signal_by_key(self, "focus", self.on_focus_handler)
 
-    async def play_listing(self, listing, playlist_position=0):
+    async def preview_listing(self, listing, playlist_position=0):
 
-        async def start_player():
-            self.player_task = self.play(listing, playlist_position=0)
-            logger.info(self.player_task)
-            self.player = await self.player_task.program
-            logger.info(self.player)
-            await self.player_task.proc
+        await state.task_manager.preview(listing, self, playlist_position=playlist_position)
 
-            async def handle_mpv_key(key_state, key_name, key_string):
-                key = self.player.key_to_urwid(key_name)
-                if key.startswith("mbtn"):
-                    return
-                logger.info(f"debug: {key_name}")
-                # key = self.view.keypress((100, 100), key)
-                state.loop.process_input([key])
-                # if not state.loop.process_input([key]):
-                # self._emit("keypress", key)
-            await self.player.controller.register_unbound_key_callback(handle_mpv_key)
+    async def on_playlist_pos(self, name, value):
 
-            async def on_playlist_pos(name, value):
+        logger.info("on_playlist_pos: {value}")
+        position = self.playlist_pos_to_row(value)
+        # async def sync_mpv_playist_pos():
+        self.disable_focus_handler()
+        self.focus_position = position
+        try:
+            row = self[position]
+        except IndexError:
+            return
+        if row.details:
+            index = self.play_items[value].index
+            row.open_details()
+            row.details.contents.table.focus_position = index
+        self.enable_focus_handler()
 
-                if not (self.player and self.play_items and self.sync_player_playlist):
-                    return
 
-                logger.info("on_playlist_pos: {value}")
-                position = self.playlist_pos_to_row(value)
-                # async def sync_mpv_playist_pos():
-                self.disable_focus_handler()
-                self.focus_position = position
-                try:
-                    row = self[position]
-                except IndexError:
-                    return
-                if row.details:
-                    index = self.play_items[value].index
-                    row.open_details()
-                    row.details.contents.table.focus_position = index
-                self.enable_focus_handler()
-
-            self.player.controller.bind_property_observer("playlist-pos", on_playlist_pos)
-
-            def on_player_done(f):
-                logger.info("player done")
-                self.player = None
-                self.player_task = None
-            self.player_task.result.add_done_callback(on_player_done)
-
-        async def load_sources():
-            self.player = await self.player_task.program
-            # sources, kwargs = self.provider.play_args(listing)
-            sources, kwargs = self.extract_sources(listing)
-            logger.info(sources)
-            await self.player_task.load_sources(sources, playlist_start=playlist_position)
-
-        if getattr(self, "player_task", None):
-            await load_sources()
-        else:
-            await start_player()
 
     @keymap_command()
-    async def play_all(self, playlist_position=0):
-        logger.info("play_all")
+    async def preview_all(self, playlist_position=0):
+        logger.info("preview_all")
 
         listing = self.make_playlist(self.play_items)
-        await self.play_listing(listing, playlist_position=playlist_position)
+        await self.preview_listing(listing, playlist_position=playlist_position)
 
     @property
     def play_items(self):
@@ -865,7 +810,7 @@ class SynchronizedPlayerMixin(object):
         # )
 
     async def play_empty(self):
-        await self.play_listing(self.empty_listing)
+        await self.preview_listing(self.empty_listing)
 
     def playlist_pos_to_row(self, pos):
         return self.play_items[pos].row_num
@@ -884,18 +829,18 @@ class SynchronizedPlayerMixin(object):
             return 0
 
     async def set_playlist_pos(self, pos):
-        if not self.player:
+        if not state.task_manager.preview_player:
             return
-        await self.player.command(
+        await state.task_manager.preview_player.command(
             "set_property", "playlist-pos", pos
         )
         # HACK to work around https://github.com/mpv-player/mpv/issues/7247
         #
         # await asyncio.sleep(0.5)
-        geom = await self.player.command(
+        geom = await state.task_manager.preview_player.command(
             "get_property", "geometry"
         )
-        await self.player.command(
+        await state.task_manager.preview_player.command(
             "set_property", "geometry", geom
         )
 
@@ -912,7 +857,7 @@ class SynchronizedPlayerMixin(object):
     # FIXME: inner_focus comes from MultiSourceListingMixin
     def sync_playlist_position(self):
 
-        if self.player and len(self):
+        if state.task_manager.preview_player and len(self):
 
             try:
                 index = self.playlist_position
@@ -944,7 +889,7 @@ class SynchronizedPlayerMixin(object):
                         self.selection.close_details()
                         self.selection.open_details()
                         self.refresh()
-                        await self.play_all(playlist_position=self.playlist_position)
+                        await self.preview_all(playlist_position=self.playlist_position)
                     state.event_loop.create_task(reload())
 
     async def download(self):
@@ -995,8 +940,20 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
     def extract_sources(self, listing, **kwargs):
         return self.provider.extract_sources(listing, **kwargs)
 
-    # def play(self, listing, playlist_position=0):
-    #     return self.provider.play(listing, playlist_position=0)
+    def reset(self, *args, **kwargs):
+        self.sync_player_playlist = False
+        self.disable_focus_handler()
+        super().reset(*args, **kwargs)
+        async def reset_async():
+            # await self.play_empty()
+            if len(self):
+                await self.preview_all()
+                self.on_focus(self, self.focus_position)
+            else:
+                 await self.play_empty()
+            self.enable_focus_handler()
+        state.event_loop.create_task(reset_async())
+
 
 
 class DetailBox(urwid.WidgetWrap):

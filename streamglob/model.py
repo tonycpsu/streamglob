@@ -447,6 +447,12 @@ class MediaTask(db.Entity):
 
 class ProgramMediaTaskMixin(object):
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.program = state.event_loop.create_future()
+        self.proc = state.event_loop.create_future()
+        self.result = state.event_loop.create_future()
+
     def reset(self):
         self.program = state.event_loop.create_future()
         self.proc = state.event_loop.create_future()
