@@ -13,12 +13,17 @@ class FilesView(SynchronizedPlayerMixin, StreamglobView):
     signals = ["requery"]
 
     KEYMAP = {
-        "meta p": "preview_all"
+        "meta p": "preview_all",
+        "ctrl r": "reset"
     }
 
     def __init__(self):
 
-        self.browser = FileBrowser(config.settings.profile.get_path("output.path"), ignore_files=False)
+        self.browser = FileBrowser(
+            config.settings.profile.get_path("output.path"),
+            dir_sort=("mtime", True), file_sort=("alpha", True),
+            ignore_files=False
+        )
         self.pile  = urwid.Pile([
             ('weight', 1, self.browser),
         ])
@@ -37,9 +42,12 @@ class FilesView(SynchronizedPlayerMixin, StreamglobView):
         return [
             AttrDict(
                 title = "foo",
-                url = self.browser.selection
+                url = self.browser.selection.full_path
             )
         ]
+
+    def reset(self):
+        self.browser.reset()
 
     def on_view_activate(self):
         state.event_loop.create_task(self.play_empty())
@@ -47,4 +55,4 @@ class FilesView(SynchronizedPlayerMixin, StreamglobView):
     def __len__(self):
         return 1
     def __iter__(self):
-        return iter(self.browser.selection)
+        return iter(self.browser.selection.full_path)

@@ -1,6 +1,10 @@
+import logging
+logger = logging.getLogger(__name__)
+
 import itertools
 import re
 import os
+from functools import partial
 
 import urwid
 
@@ -130,6 +134,7 @@ class FileNode(urwid.TreeNode):
     def load_widget(self):
         return FileTreeWidget(self)
 
+    @property
     def full_path(self):
         path = []
         root = self
@@ -139,7 +144,8 @@ class FileNode(urwid.TreeNode):
         path.append(self.parent.tree.root)
         return dir_sep().join(reversed(path))
 
-
+    def refresh(self):
+        self.get_parent().refresh()
 
 
 class EmptyNode(urwid.TreeNode):
@@ -190,8 +196,14 @@ class DirectoryNode(urwid.ParentNode):
             return [None]
 
         # sort dirs and files
-        dirs.sort(key=alphabetize)
-        files.sort(key=alphabetize)
+        dirs.sort(
+            key=partial(self.tree.dir_sort_key, self.full_path),
+            reverse=self.tree.dir_sort_reverse
+        )
+        files.sort(
+            key=partial(self.tree.file_sort_key, self.full_path),
+            reverse=self.tree.file_sort_reverse
+        )
         # store where the first file starts
         self.dir_count = len(dirs)
         # collect dirs and files together again
@@ -219,6 +231,7 @@ class DirectoryNode(urwid.ParentNode):
     def load_widget(self):
         return DirectoryWidget(self)
 
+    @property
     def full_path(self):
         path = []
         root = self
@@ -228,10 +241,37 @@ class DirectoryNode(urwid.ParentNode):
         path.append(self.tree.root)
         return dir_sep().join(reversed(path))
 
+    def refresh(self):
+        # for c in self._children:
+        #     self._children.pop(c)
+        self.get_child_keys(reload=True)
+        self.get_parent().load_widget()
+
+
+SPLIT_RE = re.compile(r'[a-zA-Z]+|\d+')
+def sort_alpha(root, s):
+    L = []
+    for isdigit, group in itertools.groupby(SPLIT_RE.findall(s), key=lambda x: x.isdigit()):
+        if isdigit:
+            for n in group:
+                L.append(('', int(n)))
+        else:
+            L.append((''.join(group).lower(), 0))
+    return L
+
+def sort_mtime(root, s):
+    # logger.info(f"{root}, {s}")
+    return os.stat(os.path.join(root, s)).st_mtime
 
 class FileBrowser(urwid.WidgetWrap):
 
     signals = ["focus"]
+
+    SORT_KEY_MAP = {
+        "alpha": sort_alpha,
+        "mtime": sort_mtime,
+    }
+
 
     palette = [
         ('body', 'black', 'light gray'),
@@ -264,10 +304,20 @@ class FileBrowser(urwid.WidgetWrap):
 
 
     def __init__(self, root=None,
+                 dir_sort=None,
+                 file_sort=None,
                  ignore_files=False,
                  ignore_directories=False,
                  expand_empty=False):
         self.root = root or os.getcwd()
+        if not isinstance(dir_sort, tuple):
+            dir_sort = (dir_sort, False)
+        if not isinstance(file_sort, tuple):
+            file_sort = (file_sort, False)
+
+        self.dir_sort = dir_sort
+        self.file_sort = file_sort
+
         self.ignore_files = ignore_files
         self.ignore_directories = ignore_directories
         self.expand_empty = expand_empty
@@ -279,6 +329,30 @@ class FileBrowser(urwid.WidgetWrap):
             lambda: self._emit("focus", self.focus_position)
         )
         super().__init__(self.listbox)
+
+    def reset(self):
+        # del self.listbox.body.contents[:]
+        self.selection.refresh()
+        self.listbox.body._modified()
+        # self.selection.get_widget(reload=True)
+        # self.body._modified()
+        # self.listbox.body = urwid.TreeWalker(DirectoryNode(self, self.root))
+
+    @property
+    def dir_sort_key(self):
+        return self.SORT_KEY_MAP[self.dir_sort[0] or "alpha"]
+
+    @property
+    def file_sort_key(self):
+        return self.SORT_KEY_MAP[self.file_sort[0] or "alpha"]
+
+    @property
+    def dir_sort_reverse(self):
+        return self.dir_sort[1]
+
+    @property
+    def file_sort_reverse(self):
+        return self.file_sort[1]
 
     def starts_expanded(self, node):
         return node.get_depth() < 1
@@ -298,7 +372,7 @@ class FileBrowser(urwid.WidgetWrap):
 
     @property
     def selection(self):
-        return self.body.get_focus()[1].full_path()
+        return self.body.get_focus()[1]
         # return dir_sep().join(w.get_display_text() for w in self.body.get_focus())
 
 
@@ -336,7 +410,7 @@ def store_initial_cwd(name):
 def starts_expanded(name):
     """Return True if directory is a parent of initial cwd."""
 
-    if name is '/':
+    if name == '/':
         return True
 
     l = name.split(dir_sep())
@@ -381,17 +455,6 @@ def escape_filename_sh_ansic(name):
 
     # slap them back together in an ansi-c quote  $'...'
     return "$'" + "".join(out) + "'"
-
-SPLIT_RE = re.compile(r'[a-zA-Z]+|\d+')
-def alphabetize(s):
-    L = []
-    for isdigit, group in itertools.groupby(SPLIT_RE.findall(s), key=lambda x: x.isdigit()):
-        if isdigit:
-            for n in group:
-                L.append(('', int(n)))
-        else:
-            L.append((''.join(group).lower(), 0))
-    return L
 
 def dir_sep():
     """Return the separator used in this os."""
