@@ -54,9 +54,7 @@ class FilesView(SynchronizedPlayerMixin, StreamglobView):
 
     async def check_updated(self):
         while True:
-            logger.info("check_updated")
             if self.updated:
-                logger.info("updated")
                 self.refresh()
                 self.updated = False
             await asyncio.sleep(1)

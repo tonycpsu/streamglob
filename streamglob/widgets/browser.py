@@ -317,18 +317,28 @@ class FileBrowser(urwid.WidgetWrap):
 
         self.dir_sort = dir_sort
         self.file_sort = file_sort
-
         self.ignore_files = ignore_files
         self.ignore_directories = ignore_directories
         self.expand_empty = expand_empty
+        self.last_selection = None
         cwd = os.getcwd()
         self.listbox = urwid.TreeListBox(urwid.TreeWalker(DirectoryNode(self, self.root)))
         self.listbox.offset_rows = 1
         urwid.connect_signal(
-            self.listbox.body, "modified",
-            lambda: self._emit("focus", self.focus_position)
+            self.listbox.body, "modified", self.on_modified
         )
         super().__init__(self.listbox)
+
+
+    def on_modified(self):
+
+        if isinstance(self.selection, DirectoryNode):
+            if self.last_selection:
+                self.last_selection.expanded = False
+                self.last_selection.update_expanded_icon()
+            self.last_selection = self.selection_widget
+
+        self._emit("focus", self.focus_position)
 
     def refresh(self):
         self.selection.refresh()
@@ -367,9 +377,15 @@ class FileBrowser(urwid.WidgetWrap):
     #     return self.listbox.focus_position
 
     @property
+    def selection_widget(self):
+        return self.body.get_focus()[0]
+
+    @property
     def selection(self):
         return self.body.get_focus()[1]
-        # return dir_sep().join(w.get_display_text() for w in self.body.get_focus())
+
+
+    # return dir_sep().join(w.get_display_text() for w in self.body.get_focus())
 
 
 
