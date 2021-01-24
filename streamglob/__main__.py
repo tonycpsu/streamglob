@@ -106,6 +106,83 @@ def reload_config():
     state.screen.register_palette(state.palette)
 
 
+intersperse = lambda e,l: sum([[x, e] for x in l],[])[:-1]
+
+class TiledView(urwid.WidgetWrap):
+
+    def __init__(self, widgets, weight=1, dividers=False):
+
+        self.widgets = widgets
+        self.weight = weight
+        self.dividers = dividers
+
+        self.focused_pane = 0
+
+        self.columns = urwid.Columns([
+            ("weight", self.weight[i][0], urwid.Pile([
+                ("weight", self.weight[i][1][j]
+                 if isinstance(self.weight, list)
+                 else self.weight, w)
+                for j, w in enumerate(col)
+            ]))
+            for i, col in enumerate(zip(*self.widgets))
+        ])
+        for i in range(len(self.columns.contents)):
+            pile = self.columns.contents[i][0]
+            pile.contents = intersperse(
+                ( urwid.SolidFill(u"\N{BOX DRAWINGS LIGHT HORIZONTAL}"),
+                  pile.options("given", 1)
+                 ),
+                pile.contents
+            )
+
+        if self.dividers:
+            self.columns.contents = intersperse(
+                ( urwid.SolidFill(u"\N{BOX DRAWINGS LIGHT VERTICAL}"),
+                  self.columns.options("given", 1)
+                 ),
+                self.columns.contents
+            )
+
+        super().__init__(self.columns)
+        self.focus_paths = [
+            [0, x*2 if self.dividers else x, y*2 if self.dividers else y]
+            for y in range(len(self.widgets))
+            for x in range(len(self.widgets[y]))
+            if self.widgets[x][y].selectable()
+        ]
+
+    def cycle_focus(self, step=1):
+        self.focused_pane += step
+        if self.focused_pane >= len(self.focus_paths):
+            self.focused_pane = 0
+        elif self.focused_pane < 0:
+            self.focused_pane = len(self.focus_paths) - 1
+        self._w.set_focus_path(self.focus_paths[self.focused_pane][1:])
+
+    def set_focus(x, y):
+        self._w.set_focus_path(
+            0,
+            x*2 if self.dividers else x,
+            y*2 if self.dividers else y
+        )
+
+    def keypress(self, size, key):
+        key = super().keypress(size, key)
+
+        if key == "meta .":
+            self.cycle_focus()
+        else:
+            return key
+
+    def get_column(self, y):
+        return self.columns.contents[y][0]
+
+    def get_widget(self, x, y):
+        return self.columns.contents[y][0].contents[x][0]
+
+
+
 def run_gui(action, provider, **kwargs):
 
     state.palette = load_palette()
@@ -125,14 +202,6 @@ def run_gui(action, provider, **kwargs):
     state.files_view = FilesView()
     state.tasks_view = TasksView()
 
-    state.views = [
-        Tab("Listings", state.listings_view, locked=True),
-        # Tab("Files", state.files_view, locked=True),
-        # Tab("Tasks", state.tasks_view, locked=True)
-    ]
-
-    state.main_view = BaseTabView(state.views)
-
     set_stdout_level(logging.CRITICAL)
 
     state.log_buffer = LogBuffer()
@@ -140,28 +209,30 @@ def run_gui(action, provider, **kwargs):
 
     add_log_handler(state.log_buffer)
 
-    pile = urwid.Pile([
-        ("weight", 5,
-         urwid.Columns([
-             ("weight", 1, urwid.LineBox(
-                 urwid.Pile([
-                     ("weight", 1, urwid.LineBox(state.main_view)),
-                     ("weight", 1, urwid.LineBox(log_console))
-                 ])
-             )),
-             ("weight", 1, urwid.LineBox(
-                 urwid.Pile([
-                     ("weight", 1, urwid.LineBox((urwid.Filler(urwid.Text(""))))),
-                     ("weight", 1, urwid.LineBox(state.files_view))
-                 ])
-             )),
-         ])
+    class VideoPlaceholder(urwid.WidgetWrap):
+
+        def __init__(self):
+            super().__init__(urwid.Filler(urwid.Text("")))
+
+        def selectable(self):
+            return False
+
+    state.main_view = TiledView([
+        [ state.tasks_view, state.listings_view ],
+        [ state.files_view, VideoPlaceholder() ]
+    ], weight=[
+        [ 1, [2, 3] ],
+        [ 2, [1, 2] ]
+    ], dividers=True)
+
+    # raise Exception(state.main_view.get_widget(0, 0))
+
+    if options.verbose:
+        left_column = state.main_view.get_column(0)
+        left_column.contents.append(
+            (urwid.LineBox(log_console), left_column.options("weight", 1))
+            # (log_console, pile.options("given", 20))
         )
-    ])
-    # pile.contents.append(
-    #     (urwid.LineBox(log_console), pile.options("weight", 1))
-    #     # (log_console, pile.options("given", 20))
-    # )
 
 
     def global_input(key):
@@ -169,11 +240,13 @@ def run_gui(action, provider, **kwargs):
             state.listings_view.quit_app()
         elif key == "meta C":
             reload_config()
+        elif key == "meta .":
+            logger.info(state.main_view.get_focus_path())
         else:
             return False
 
     state.loop = urwid.MainLoop(
-        pile,
+        state.main_view,
         state.palette,
         screen=state.screen,
         event_loop = urwid.AsyncioEventLoop(loop=state.event_loop),
