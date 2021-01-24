@@ -149,7 +149,7 @@ class Program(object):
         self.extra_args_pre = []
         self.extra_args_post = []
 
-        self.source = None
+        self._source = None
         self.listing = None
         self.stdin = stdin
         if self.with_progress:
@@ -319,14 +319,19 @@ class Program(object):
         return self._source
 
     @source.setter
-    def source(self, value):
-        self._source = value
-        if isinstance(self.source, Program):
-            if self.source.PLAYER_INTEGRATED:
-                self.source.integrate_player(self)
+    def source(self, source):
+        if isinstance(source, Program):
+            self._source = source
+            if self._source.PLAYER_INTEGRATED and self._source.player_integrated:
+                self._source.integrate_player(self)
             else:
                 self.pipe_from_source()
                 self.source.pipe_to_dst()
+        elif source and not isinstance(source, list):
+            logger.error(source)
+            self._source = [source]
+        else:
+            self._source = source
 
     def pipe_from_source(self):
         self.extra_args_pre += ["-"]
@@ -356,7 +361,9 @@ class Program(object):
 
     @property
     def source_integrated(self):
-        return self.source_is_program and self.source.PLAYER_INTEGRATED
+        if not self.source_is_program:
+            return False
+        return self.source.PLAYER_INTEGRATED and self.source.player_integrated
 
     def process_kwargs(self, kwargs):
         logger.info(kwargs)
@@ -423,9 +430,6 @@ class Program(object):
 
         if not self.source:
             raise RuntimeError("source not available")
-
-        if not isinstance(self.source, list):
-            self.source = [self.source]
 
         cmd = (
             self.executable_path
@@ -691,6 +695,10 @@ class ElinksPlayer(Player, cmd="elinks", MEDIA_TYPES={"text"}, FOREGROUND=True):
 
 class Downloader(Program):
 
+    def __init__(self, path, player_integrated=False, *args, **kwargs):
+        super().__init__(path, *args, **kwargs)
+        self.player_integrated = player_integrated
+
     @classmethod
     async def download(cls, task, outfile, downloader_spec=None, **kwargs):
         # FIXME: downloader may handle file naming
@@ -865,6 +873,10 @@ class StreamlinkDownloader(Downloader):
                 for c in cookies
             ]))
         # super().process_kwargs(kwargs)
+
+    def pipe_to_dst(self):
+        self.extra_args_pre += ["-O"]
+
 
     @classmethod
     def supports_url(cls, url):
