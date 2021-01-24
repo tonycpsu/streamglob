@@ -351,13 +351,15 @@ def run_cli(action, provider, selection, **kwargs):
         loop_result = state.event_loop.run_until_complete(task.result)
         result = task.result.result()
         if isinstance(result, Exception):
-            logger.exception(traceback.print_exception(type(result), result, result.__traceback__))
+            logger.exception("".join(traceback.format_exception(type(result), result, result.__traceback__)))
         if task.proc.done():
             proc = task.proc.result()
         else:
             proc = None
     except KeyboardInterrupt:
         logger.info("Exiting on keyboard interrupt")
+        proc = None
+
     if proc:
         rc = proc.returncode
     else:
