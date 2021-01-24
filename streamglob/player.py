@@ -313,7 +313,6 @@ class Program(object):
                         cfg = AttrDict()
                     )
 
-
     @property
     def source(self):
         return self._source
@@ -322,8 +321,10 @@ class Program(object):
     def source(self, source):
         if isinstance(source, Program):
             self._source = source
-            if self._source.PLAYER_INTEGRATED and self._source.player_integrated:
+            if self._source.player_integrated:
                 self._source.integrate_player(self)
+            elif self._source.use_fifo:
+                self.source.pipe_to_fifo()
             else:
                 self.pipe_from_source()
                 self.source.pipe_to_dst()
@@ -363,7 +364,7 @@ class Program(object):
     def source_integrated(self):
         if not self.source_is_program:
             return False
-        return self.source.PLAYER_INTEGRATED and self.source.player_integrated
+        return self.source.player_integrated
 
     def process_kwargs(self, kwargs):
         logger.info(kwargs)
@@ -443,6 +444,12 @@ class Program(object):
         return cmd
 
 
+    @property
+    def tmp_dir(self):
+        if not getattr(self, "_tmp_dir", False):
+            self._tmp_dir = tempfile.mkdtemp()
+        return self._tmp_dir
+
     async def run(self, source=None, **kwargs):
 
         if source:
@@ -451,12 +458,16 @@ class Program(object):
         self.process_kwargs(kwargs)
 
         if self.source_is_program:
-            read, write = os.pipe()
-            self.source.stdout = write
-            self.proc = await self.source.run(**kwargs)
-            os.close(write)
-            self.stdin = read
-            self.stdout = subprocess.PIPE
+            if self.source.use_fifo:
+                self.proc = await self.source.run(**kwargs)
+                self.source = self._source.fifo
+            else:
+                read, write = os.pipe()
+                self.source.stdout = write
+                self.proc = await self.source.run(**kwargs)
+                os.close(write)
+                self.stdin = read
+                self.stdout = subprocess.PIPE
 
         else:
             logger.info(f"full cmd: {' '.join(self.full_command)}")
@@ -589,7 +600,6 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
         self.ready = asyncio.Future()
         super().__init__(*args, **kwargs)
         self.ipc_socket_name = None
-        self.tmp_dir = None
         self._ipc_socket = None
         self.extra_args_pre += ["--title=streamglob: ${media-title}"]
         self.create_socket()
@@ -601,7 +611,6 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
         return self.ready.result()
 
     def create_socket(self):
-        self.tmp_dir = tempfile.mkdtemp()
         self.ipc_socket_name = os.path.join(self.tmp_dir, "mpv_socket")
         self.extra_args_pre += [f"--input-ipc-server={self.ipc_socket_name}"]
 
@@ -681,8 +690,8 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
     #     return setattr(self.controller, attr, value)
 
     def __del__(self):
-        if self.tmp_dir:
-            shutil.rmtree(self.tmp_dir)
+        if getattr(self, "_tmp_dir", False):
+            shutil.rmtree(self._tmp_dir)
 
 
 class VLCPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
@@ -695,9 +704,21 @@ class ElinksPlayer(Player, cmd="elinks", MEDIA_TYPES={"text"}, FOREGROUND=True):
 
 class Downloader(Program):
 
-    def __init__(self, path, player_integrated=False, *args, **kwargs):
+    def __init__(self, path,
+                 player_integrated=False,
+                 use_fifo=False, *args, **kwargs):
         super().__init__(path, *args, **kwargs)
         self.player_integrated = player_integrated
+        self.use_fifo = use_fifo
+
+    @property
+    def fifo(self):
+        if not getattr(self, "_fifo", False):
+            fifo_name = os.path.join(self.tmp_dir, "fifo")
+            logger.debug(fifo_name)
+            os.mkfifo(fifo_name)
+            self._fifo = fifo_name
+        return self._fifo
 
     @classmethod
     async def download(cls, task, outfile, downloader_spec=None, **kwargs):
@@ -876,6 +897,9 @@ class StreamlinkDownloader(Downloader):
 
     def pipe_to_dst(self):
         self.extra_args_pre += ["-O"]
+
+    def pipe_to_fifo(self):
+        self.extra_args_pre += ["-o", self.fifo]
 
 
     @classmethod
