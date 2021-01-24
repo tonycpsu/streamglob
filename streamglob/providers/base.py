@@ -690,7 +690,7 @@ class SynchronizedPlayerMixin(object):
         self.sync_player_playlist = False
 
     def extract_sources(self, listing, **kwargs):
-        return (listing.sources, kwargs)
+        return (listing.sources if listing else [], kwargs)
 
     def create_task(self, listing, sources, *args, **kwargs):
         return model.PlayMediaTask.attr_class(
@@ -792,9 +792,6 @@ class SynchronizedPlayerMixin(object):
         #     ],
         #     feed = self.provider.feed
         # )
-
-    async def play_empty(self):
-        await self.preview_listing(self.empty_listing)
 
     def playlist_pos_to_row(self, pos):
         return self.play_items[pos].row_num
@@ -933,27 +930,18 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
 
 
     def extract_sources(self, listing, **kwargs):
+        if not listing:
+            return ([], kwargs)
         return self.provider.extract_sources(listing, **kwargs)
 
     def reset(self, *args, **kwargs):
         self.sync_player_playlist = False
         self.disable_focus_handler()
         super().reset(*args, **kwargs)
-        # async def reset_async():
-        #     if len(self):
-        #         await self.preview_all()
-        #         self.on_focus(self, self.focus_position)
-        #     else:
-        #          await self.play_empty()
-        #     self.enable_focus_handler()
-        # state.event_loop.create_task(reset_async())
 
         if self.provider.auto_preview:
-            if len(self):
-                state.event_loop.create_task(self.preview_all())
-                self.on_focus(self, self.focus_position)
-            else:
-                state.event_loop.create_task(self.play_empty())
+            state.event_loop.create_task(self.preview_all())
+
         self.enable_focus_handler()
 
 
