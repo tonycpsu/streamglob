@@ -640,6 +640,7 @@ class BackgroundTasksMixin(object):
         #     state.loop.remove_alarm(self._tasks[fn.__name__])
         # self._tasks[fn.__name__] = None
 
+
 BLANK_IMAGE_URI = """\
 data://image/png;base64,\
 iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAA\
@@ -664,12 +665,10 @@ class SynchronizedPlayerMixin(object):
         self.queued_task = None
         self.pending_event_task = None
         self.on_focus_handler = None
-        # self.play_items = []
         self.sync_player_playlist = False
 
     def extract_sources(self, listing, **kwargs):
         return (listing.sources, kwargs)
-
 
     def create_task(self, listing, sources):
         return model.PlayMediaTask.attr_class(
@@ -709,21 +708,15 @@ class SynchronizedPlayerMixin(object):
             )
         return listing
 
+    @property
+    def play_items(self):
+        return []
+
     def new_listing(self, **kwargs):
         return model.TitledMediaListing.attr_class(**kwargs)
 
     def new_media_source(self, **kwargs):
         return model.MediaSource.attr_class(**kwargs)
-
-    # def play(self, listing, **kwargs):
-    #     raise Exception(listing)
-    #     sources, kwargs = self.extract_sources(listing, **kwargs)
-    #     task = self.create_task(listing, sources)
-    #     return state.task_manager.play(task, **kwargs)
-
-
-    # def on_requery(self, source, count):
-    #     self.sync_player_playlist = True
 
     def enable_focus_handler(self):
         if self.on_focus_handler:
@@ -736,32 +729,11 @@ class SynchronizedPlayerMixin(object):
             return
         self.on_focus_handler = urwid.signals.disconnect_signal_by_key(self, "focus", self.on_focus_handler)
 
-    async def preview_listing(self, listing, playlist_position=0):
+    async def preview_listing(self, listing, **kwargs):
 
         await state.task_manager.preview(
-            listing, self, playlist_position=playlist_position
+            listing, self, **kwargs
         )
-
-    # async def on_playlist_pos(self, name, value):
-    #     return
-    #     try:
-    #         position = self.playlist_pos_to_row(value)
-    #     except IndexError:
-    #         return
-    #     # async def sync_mpv_playist_pos():
-    #     self.disable_focus_handler()
-    #     self.focus_position = position
-    #     try:
-    #         row = self[position]
-    #     except IndexError:
-    #         return
-    #     if row.details:
-    #         index = self.play_items[value].index
-    #         row.open_details()
-    #         row.details.contents.table.focus_position = index
-    #     self.enable_focus_handler()
-
-
 
     @keymap_command()
     async def preview_all(self, playlist_position=0):
@@ -769,27 +741,6 @@ class SynchronizedPlayerMixin(object):
 
         listing = self.make_playlist(self.play_items)
         await self.preview_listing(listing, playlist_position=playlist_position)
-
-    @property
-    def play_items(self):
-        return [
-            AttrDict(
-                media_listing_id = row.data.media_listing_id,
-                title = f"{self.playlist_title} {utils.sanitize_filename(row.data.title)}",
-                created = row.data.created,
-                feed = row.data.feed.name,
-                locator = row.data.feed.locator,
-                index = index,
-                row_num = row_num,
-                count = len(row.data.sources),
-                url = source.locator or source.preview_locator
-            )
-            for (row_num, row, index, source) in [
-                    (row_num, row, index, source) for row_num, row in enumerate(self)
-                    for index, source in enumerate(row.data.sources)
-                    if not source.is_bad
-            ]
-        ]
 
     @property
     def playlist_title(self):
@@ -888,7 +839,7 @@ class SynchronizedPlayerMixin(object):
             with db_session:
                 try:
                     listing = self[position].data_source.attach()
-                except IndexError:
+                except (TypeError, IndexError): # FIXME
                     return
                 # listing.on_focus()
                 if listing.on_focus():
@@ -931,6 +882,27 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
 
     def new_media_source(self, **kwargs):
         return self.provider.new_media_source(**kwargs)
+
+    @property
+    def play_items(self):
+        return [
+            AttrDict(
+                media_listing_id = row.data.media_listing_id,
+                title = f"{self.playlist_title} {utils.sanitize_filename(row.data.title)}",
+                created = row.data.created,
+                feed = row.data.feed.name,
+                locator = row.data.feed.locator,
+                index = index,
+                row_num = row_num,
+                count = len(row.data.sources),
+                url = source.locator or source.preview_locator
+            )
+            for (row_num, row, index, source) in [
+                    (row_num, row, index, source) for row_num, row in enumerate(self)
+                    for index, source in enumerate(row.data.sources)
+                    if not source.is_bad
+            ]
+        ]
 
     def update_preview(self):
 

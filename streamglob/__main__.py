@@ -151,6 +151,8 @@ class TiledView(urwid.WidgetWrap):
             for x in range(len(self.widgets[y]))
         ]
 
+        self.set_focus(1, 0)
+
     def __getitem__(self, index):
         return self.widgets[index//len(self.widgets)][index%len(self.widgets)]
 
@@ -189,11 +191,12 @@ class TiledView(urwid.WidgetWrap):
         return self[self.focused_index]
         # return self[self.focused_pane]
 
-    def set_focus(x, y):
+    def set_focus(self, x, y):
         self._w.set_focus_path(
-            0,
-            x*2 if self.dividers else x,
-            y*2 if self.dividers else y
+            [
+                x*2 if self.dividers else x,
+                y*2 if self.dividers else y
+            ]
         )
 
     def keypress(self, size, key):
