@@ -1496,12 +1496,15 @@ class WatchDialog(BasePopUp):
                       if media.is_complete
                       else None)
 
-            self.provider.play(
-                selection,
-                media_id = media.media_id,
-                offset=offset,
-                resolution=self.resolution_dropdown.selected_label
+            state.event_loop.create_task(
+                self.provider.view.body.preview_listing( # FIXME
+                    selection,
+                    media_id = media.media_id,
+                    offset=offset,
+                    resolution=self.resolution_dropdown.selected_label
+                )
             )
+            # self.provider.preview_listing
             self._emit("close_popup")
 
         def download(s):
@@ -1624,7 +1627,8 @@ class LiveStreamFilter(ListingFilter):
     def default(self):
         return "start" if self.provider.config.defaults.live_from_start else "live"
 
-class BAMProviderDataTable(ProviderDataTable):
+@keymapped()
+class BAMProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataTable):
 
     index = "game_id"
     ui_sort = False
@@ -1632,6 +1636,14 @@ class BAMProviderDataTable(ProviderDataTable):
     detail_selectable = True
     detail_hanging_indent = "away_team_box"
     # no_load_on_init = True
+
+    KEYMAP = {
+        "enter": "watch_selected"
+    }
+
+    @property
+    def play_items(self):
+        return []
 
     @property
     def empty_message(self):
@@ -1691,6 +1703,23 @@ class BAMProviderDataTable(ProviderDataTable):
             # logger.info(f"{self.selection.details_disabled}")
         else:
             return key
+
+    def watch_selected(self):
+        self.open_watch_dialog(self.selection)
+
+    def open_watch_dialog(self, selection):
+        # media = list(self.get_media(selection["game_id"]))
+        try:
+            dialog = WatchDialog(
+                self.provider,
+                selection.data_source,
+                media_title = self.provider.MEDIA_TITLE,
+                default_resolution = self.provider.filters.resolution.value,
+                watch_live = self.provider.filters.live_stream.value == "live"
+            )
+            self.view.open_popup(dialog, width=80, height=15)
+        except SGStreamNotFound:
+            logger.warn(f"no stream found for game {selection['game_id']}")
 
 
 
@@ -1892,7 +1921,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         return iter(
             sorted(
                 (
-                    self.LISTING_CLASS.from_json(self.IDENTIFIER, g)
+                    self.LISTING_CLASS.from_json(self.IDENTIFIER, g).detach()
                     for g in self.game_map.values()
                 ),
                 key = lambda l:
@@ -2091,8 +2120,9 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
 
         return (g, (date,), dict(feed_type=feed_type))
 
-    def on_select(self, widget, selection):
-        self.open_watch_dialog(selection)
+
+    # def on_select(self, widget, selection):
+    #     self.open_watch_dialog(selection)
 
     # def on_activate(self):
     #     super().on_activate()
@@ -2102,20 +2132,6 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         # if not self.filters.date.value:
         #     raise Exception
         #     self.filters.date.value = datetime.now()
-
-    def open_watch_dialog(self, selection):
-        # media = list(self.get_media(selection["game_id"]))
-        try:
-            dialog = WatchDialog(
-                self,
-                selection,
-                media_title = self.MEDIA_TITLE,
-                default_resolution = self.filters.resolution.value,
-                watch_live = self.filters.live_stream.value == "live"
-            )
-            self.view.open_popup(dialog, width=80, height=15)
-        except SGStreamNotFound:
-            logger.warn(f"no stream found for game {selection['game_id']}")
 
 
     def get_playback_url(self, playbacks, formats=None):
@@ -2133,6 +2149,11 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         return next(
             p["url"] for p in playbacks
         )
+
+    @property
+    def playlist_title(self):
+        # return f"[{self.provider}]"
+        return f"[{self.IDENTIFIER}"
 
     def get_details(self, listing):
 

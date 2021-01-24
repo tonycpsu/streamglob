@@ -51,7 +51,7 @@ class TaskManager(Observable):
     async def preview(self, listing, caller, **kwargs):
 
         sources, kwargs = caller.extract_sources(listing, **kwargs)
-        task = caller.create_task(listing, sources)
+        task = caller.create_task(listing, sources, **kwargs)
 
         async def start_player():
             self.preview_task = task

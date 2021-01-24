@@ -108,6 +108,7 @@ class SimpleProviderView(BaseProviderView):
 
     def reset(self):
         logger.info("reset")
+        import traceback; logger.info("".join(traceback.format_stack()))
         self.body.reset()
 
     def on_keypress(self, source, key):
@@ -502,6 +503,27 @@ class BaseProvider(abc.ABC):
 
         return sources, kwargs
 
+    def create_task(self, listing, sources, *args, **kwargs):
+
+        media_types = set([s.media_type for s in sources if s.media_type])
+        player_spec = {"media_types": media_types}
+        if media_types == {"image"}:
+            downloader_spec = {None: None}
+        else:
+            downloader_spec = getattr(self.config, "helpers", None) or sources[0].helper
+
+        return ListingsPlayMediaTask.attr_class(
+            provider=self.NAME,
+            title=listing.title,
+            sources = sources,
+            args = (player_spec, downloader_spec, *args),
+            kwargs = kwargs
+        )
+
+    def play(self, listing, **kwargs):
+        sources, kwargs = self.extract_sources(listing, **kwargs)
+        task = self.create_task(listing, sources, **kwargs)
+        return state.task_manager.play(task)
 
     def download(self, selection, index=None, no_task_manager=False, **kwargs):
 
@@ -670,10 +692,12 @@ class SynchronizedPlayerMixin(object):
     def extract_sources(self, listing, **kwargs):
         return (listing.sources, kwargs)
 
-    def create_task(self, listing, sources):
+    def create_task(self, listing, sources, *args, **kwargs):
         return model.PlayMediaTask.attr_class(
             title=listing.title,
-            sources=sources
+            sources=sources,
+            args=args,
+            kwargs=kwargs
         )
 
     def make_playlist(self, items):
@@ -904,31 +928,9 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
             ]
         ]
 
-    def update_preview(self):
+    def create_task(self, listing, sources, *args, **kwargs):
+        return self.provider.create_task(listing, sources, *args, **kwargs)
 
-        if not isinstance(state.task_manager.preview_task, ListingsPlayMediaTask.attr_class):
-            self.provider.reset()
-
-    def keypress(self, size, key):
-
-        self.update_preview()
-        return super().keypress(size, key)
-
-    def create_task(self, listing, sources):
-
-        media_types = set([s.media_type for s in sources if s.media_type])
-        player_spec = {"media_types": media_types}
-        if media_types == {"image"}:
-            downloader_spec = {None: None}
-        else:
-            downloader_spec = getattr(self.provider.config, "helpers", None) or sources[0].helper
-
-        return ListingsPlayMediaTask.attr_class(
-            provider=self.provider.NAME,
-            title=listing.title,
-            sources = sources,
-            args = (player_spec, downloader_spec)
-        )
 
     def extract_sources(self, listing, **kwargs):
         return self.provider.extract_sources(listing, **kwargs)
