@@ -428,13 +428,12 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
             self.provider_data["user_map"] = {}
             self.save_provider_data()
 
-
     def play_args(self, selection, **kwargs):
 
         source, kwargs = super().play_args(selection, **kwargs)
         # kwargs["media_type"] = selection.media_type
         return (source, kwargs)
 
-    # def feed_attrs(self, feed_name):
-
-    #     return dict(locator=self.filters.feed[feed_name])
+    @property
+    def auto_preview(self):
+        return True

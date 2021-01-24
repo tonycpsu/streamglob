@@ -133,7 +133,8 @@ class ListingsView(StreamglobView):
 
     def on_view_activate(self):
         async def activate_async():
-            await self.provider.view.preview_all()
+            if self.provider.auto_preview:
+                await self.provider.view.preview_all()
         state.event_loop.create_task(activate_async())
         # pos = self.provider.view.focus_position
         # self.provider.reset()

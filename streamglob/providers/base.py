@@ -558,6 +558,10 @@ class BaseProvider(abc.ABC):
     def __repr__(self):
         return f"<{type(self)}: {self.NAME}>"
 
+    @property
+    def auto_preview(self):
+        return False
+
 class PaginatedProviderMixin(object):
 
     DEFAULT_PAGE_SIZE = 50
@@ -970,11 +974,12 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
         #     self.enable_focus_handler()
         # state.event_loop.create_task(reset_async())
 
-        if len(self):
-            state.event_loop.create_task(self.preview_all())
-            self.on_focus(self, self.focus_position)
-        else:
-            state.event_loop.create_task(self.play_empty())
+        if self.provider.auto_preview:
+            if len(self):
+                state.event_loop.create_task(self.preview_all())
+                self.on_focus(self, self.focus_position)
+            else:
+                state.event_loop.create_task(self.play_empty())
         self.enable_focus_handler()
 
 
