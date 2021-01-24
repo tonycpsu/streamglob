@@ -71,6 +71,8 @@ class FilesView(SynchronizedPlayerMixin, StreamglobView):
             state.event_loop.create_task(self.preview_all())
 
     def monitor_path(self, path):
+        # FIXME: broken -- spurious updates when files haven't changed
+        return
         if path == self.root:
             return
         logger.info(f"monitor_path: {path}")
