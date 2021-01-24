@@ -314,7 +314,7 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
 
     MLB_API_KEY_URL = "https://www.mlb.com/tv/g490865/"
 
-    API_KEY_RE = re.compile(r'"apiKey":"([^"]+)"')
+    API_KEY_RE = re.compile(r'"x-api-key","value":"([^"]+)"')
 
     CLIENT_API_KEY_RE = re.compile(r'"clientApiKey":"([^"]+)"')
 
@@ -436,6 +436,10 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
 
     def update_api_keys(self):
 
+        logger.debug("updating Okta api keys")
+        content = self.get(self.MLB_OKTA_URL).text
+        self._state.okta_client_id = self.OKTA_CLIENT_ID_RE.search(content).groups()[0]
+
         logger.debug("updating MLB api keys")
         content = self.get(self.MLB_API_KEY_URL).text
         parser = lxml.etree.HTMLParser()
@@ -443,14 +447,18 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
 
         scripts = data.xpath(".//script")
         for script in scripts:
-            if script.text and "apiKey" in script.text:
-                self._state.api_key = self.API_KEY_RE.search(script.text).groups()[0]
+            if script.text and "x-api-key" in script.text:
+                logger.debug("found x-api-key")
+                try:
+                    self._state.api_key = self.API_KEY_RE.search(script.text).groups()[0]
+                except (AttributeError, IndexError):
+                    logger.warning("couldn't get x-api-key")
             if script.text and "clientApiKey" in script.text:
-                self._state.client_api_key = self.CLIENT_API_KEY_RE.search(script.text).groups()[0]
-
-        logger.debug("updating Okta api keys")
-        content = self.get(self.MLB_OKTA_URL).text
-        self._state.okta_client_id = self.OKTA_CLIENT_ID_RE.search(content).groups()[0]
+                logger.debug("found clientApiKey")
+                try:
+                    self._state.client_api_key = self.CLIENT_API_KEY_RE.search(script.text).groups()[0]
+                except (AttributeError, IndexError):
+                    logger.warning("couldn't get clientApiKey")
         self.save()
 
     @property
