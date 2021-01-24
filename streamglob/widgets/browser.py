@@ -18,6 +18,7 @@ class FileBrowserTreeWidget(urwid.TreeWidget):
         if self.is_leaf:
             return key
         if key == "right":
+            self.get_node().tree.collapse_all()
             self.expanded = True
             self.update_expanded_icon()
         if key == "left":
@@ -325,7 +326,8 @@ class FileBrowser(urwid.WidgetWrap):
         self.expand_empty = expand_empty
         self.last_selection = None
         cwd = os.getcwd()
-        self.listbox = urwid.TreeListBox(urwid.TreeWalker(DirectoryNode(self, self.root)))
+        self.tree_root = DirectoryNode(self, self.root)
+        self.listbox = urwid.TreeListBox(urwid.TreeWalker(self.tree_root))
         self.listbox.offset_rows = 1
         urwid.connect_signal(
             self.listbox.body, "modified", self.on_modified
@@ -335,11 +337,11 @@ class FileBrowser(urwid.WidgetWrap):
 
     def on_modified(self):
 
-        if isinstance(self.selection, DirectoryNode):
-            if self.last_selection and self.last_selection.get_node().get_parent():
-                self.last_selection.expanded = False
-                self.last_selection.update_expanded_icon()
-            self.last_selection = self.selection_widget
+        # if isinstance(self.selection, DirectoryNode):
+        #     if self.last_selection and self.last_selection.get_node().get_parent():
+        #         self.last_selection.expanded = False
+        #         self.last_selection.update_expanded_icon()
+        #     self.last_selection = self.selection_widget
 
         self._emit("focus", self.focus_position)
 
@@ -387,6 +389,15 @@ class FileBrowser(urwid.WidgetWrap):
     def selection(self):
         return self.body.get_focus()[1]
 
+    def collapse_all(self):
+
+        node = self.tree_root.get_first_child()
+        while True:
+            node.get_widget().expanded = False
+            node.get_widget().update_expanded_icon()
+            node = node.next_sibling()
+            if not node:
+                break
 
     # return dir_sep().join(w.get_display_text() for w in self.body.get_focus())
 
