@@ -56,7 +56,7 @@ setup(name=name,
           "tzlocal",
           "urwid @ git+https://github.com/urwid/urwid",
           "urwid_utils==0.1.3.dev0",
-          "urwidtrees"
+          "urwidtrees",
           "watchdog==1.0.2",
           "youtube_dl",
           # see https://github.com/ping/instagram_private_api/pull/269/commits
