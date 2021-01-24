@@ -7,8 +7,8 @@ import asyncio
 import dataclasses
 import re
 from itertools import chain
-import textwrap
-import tempfile
+# import textwrap
+# import tempfile
 
 from orderedattrdict import AttrDict, defaultdict
 from pony.orm import *
@@ -462,6 +462,7 @@ class BaseProvider(abc.ABC):
         if not isinstance(sources, list):
             sources = [sources]
 
+        logger.error(sources)
         return sources
         # return [ source for source in sources ]
 
@@ -503,8 +504,9 @@ class BaseProvider(abc.ABC):
 
         return sources, kwargs
 
-    def create_task(self, listing, sources, *args, **kwargs):
+    def create_task(self, listing, *args, **kwargs):
 
+        sources, kwargs = self.extract_sources(listing, **kwargs)
         media_types = set([s.media_type for s in sources if s.media_type])
         player_spec = {"media_types": media_types}
         if media_types == {"image"}:
@@ -521,8 +523,8 @@ class BaseProvider(abc.ABC):
         )
 
     def play(self, listing, **kwargs):
-        sources, kwargs = self.extract_sources(listing, **kwargs)
-        task = self.create_task(listing, sources, **kwargs)
+        # sources, kwargs = self.extract_sources(listing, **kwargs)
+        task = self.create_task(listing, **kwargs)
         return state.task_manager.play(task)
 
     def download(self, selection, index=None, no_task_manager=False, **kwargs):
@@ -663,11 +665,11 @@ class BackgroundTasksMixin(object):
         # self._tasks[fn.__name__] = None
 
 
-BLANK_IMAGE_URI = """\
-data://image/png;base64,\
-iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAA\
-AAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=\
-"""
+# BLANK_IMAGE_URI = """\
+# data://image/png;base64,\
+# iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAA\
+# AAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=\
+# """
 
 @keymapped()
 class SynchronizedPlayerMixin(object):
@@ -692,7 +694,7 @@ class SynchronizedPlayerMixin(object):
     def extract_sources(self, listing, **kwargs):
         return (listing.sources if listing else [], kwargs)
 
-    def create_task(self, listing, sources, *args, **kwargs):
+    def create_task(self, listing, *args, **kwargs):
         return model.PlayMediaTask.attr_class(
             title=listing.title,
             sources=sources,
@@ -700,37 +702,38 @@ class SynchronizedPlayerMixin(object):
             kwargs=kwargs
         )
 
-    def make_playlist(self, items):
+    # def make_playlist(self, items):
 
-        ITEM_TEMPLATE=textwrap.dedent(
-        """\
-        #EXTINF:1,{title}
-        {url}
-        """)
-        with tempfile.NamedTemporaryFile(suffix=".m3u8", delete=False) as m3u:
-            m3u.write(f"#EXTM3U\n".encode("utf-8"))
-            for item in items:
-                m3u.write(ITEM_TEMPLATE.format(
-                    title = item.title.strip() or "(no title)",
-                    url=item.url
-                ).encode("utf-8"))
-            logger.info(m3u.name)
+    #     ITEM_TEMPLATE=textwrap.dedent(
+    #     """\
+    #     #EXTINF:1,{title}
+    #     {url}
+    #     """)
+    #     with tempfile.NamedTemporaryFile(suffix=".m3u8", delete=False) as m3u:
+    #         m3u.write(f"#EXTM3U\n".encode("utf-8"))
+    #         for item in items:
+    #             m3u.write(ITEM_TEMPLATE.format(
+    #                 title = item.title.strip() or "(no title)",
+    #                 url=item.url
+    #             ).encode("utf-8"))
+    #         logger.info(m3u.name)
 
-            listing = self.new_listing(
-                # title=f"{self.provider.NAME} playlist" + (
-                #     f" ({self.provider.feed.name}/"
-                #     if self.provider.feed
-                #     else " ("
-                # ) + f"{self.provider.status})",
-                title = self.playlist_title,
-                sources = [
-                    self.new_media_source(
-                        url = f"file://{m3u.name}",
-                        media_type = "video" # FIXME
-                    )
-                ],
-            )
-        return listing
+    #         # listing = self.new_listing(
+    #         listing = AttrDict(
+    #             # title=f"{self.provider.NAME} playlist" + (
+    #             #     f" ({self.provider.feed.name}/"
+    #             #     if self.provider.feed
+    #             #     else " ("
+    #             # ) + f"{self.provider.status})",
+    #             title = self.playlist_title,
+    #             sources = [
+    #                 self.new_media_source(
+    #                     url = f"file://{m3u.name}",
+    #                     media_type = "video" # FIXME
+    #                 )
+    #             ],
+    #         )
+    #     return listing
 
     @property
     def play_items(self):
@@ -754,7 +757,6 @@ class SynchronizedPlayerMixin(object):
         self.on_focus_handler = urwid.signals.disconnect_signal_by_key(self, "focus", self.on_focus_handler)
 
     async def preview_listing(self, listing, **kwargs):
-
         await state.task_manager.preview(
             listing, self, **kwargs
         )
@@ -762,8 +764,11 @@ class SynchronizedPlayerMixin(object):
     @keymap_command()
     async def preview_all(self, playlist_position=0):
         logger.info("preview_all")
+        if len(self.play_items):
+            listing = self.make_playlist(self.play_items)
+        else:
+            listing = None
 
-        listing = self.make_playlist(self.play_items)
         await self.preview_listing(listing, playlist_position=playlist_position)
 
     @property
@@ -925,8 +930,10 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
             ]
         ]
 
-    def create_task(self, listing, sources, *args, **kwargs):
-        return self.provider.create_task(listing, sources, *args, **kwargs)
+    def create_task(self, listing, *args, **kwargs):
+        if not listing:
+            listing = self.empty_listing
+        return self.provider.create_task(listing, *args, **kwargs)
 
 
     def extract_sources(self, listing, **kwargs):

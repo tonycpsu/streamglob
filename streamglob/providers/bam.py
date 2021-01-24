@@ -698,6 +698,9 @@ class BAMMediaListingMixin(object):
                 pytz.timezone(config.settings.profile.time_zone)
             )
 
+        if not g["teams"]["away"]["team"]["id"] and g["teams"]["home"]["team"]["id"]:
+            raise Exception(g["teams"]["away"]["team"]["id"], g["teams"]["home"]["team"]["id"])
+
         return cls.attr_class(
             provider_id = provider,
             game_id = game_pk,
@@ -715,6 +718,8 @@ class BAMMediaListingMixin(object):
     @property
     @db_session
     def away_team(self):
+        # if not self.away_team_id:
+        #     raise Exception
         return self.provider.TEAM_DATA_CLASS.get(
             provider_id=self.provider.IDENTIFIER,
             bam_team_id=self.away_team_id
@@ -805,10 +810,14 @@ class BAMMediaListingMixin(object):
 
     @property
     def away_team_box(self):
+        if not self.away_team_id:
+            raise Exception(self)
         return self.team_box(self.away_team_id)
 
     @property
     def home_team_box(self):
+        if not self.home_team_id:
+            raise Exception(self)
         return self.team_box(self.home_team_id)
 
     @property
@@ -1918,6 +1927,12 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
 
     def listings(self, offset=None, limit=None, *args, **kwargs):
 
+        # raise Exception(
+        #     [
+        #         self.LISTING_CLASS.from_json(self.IDENTIFIER, g).detach()
+        #         for g in self.game_map.values()
+        #     ]
+        # )
         return iter(
             sorted(
                 (
@@ -2201,7 +2216,6 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
 
         source, kwargs = super().play_args(selection, **kwargs)
         # filter_args = self.filter_args()
-
         media_type = source.media_type
 
         if media_type == "video":

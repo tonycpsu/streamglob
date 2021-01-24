@@ -6,6 +6,8 @@ from datetime import datetime, timedelta
 from orderedattrdict import AttrDict
 import dataclasses
 import itertools
+import textwrap
+import tempfile
 
 from . import player
 from .state import *
@@ -24,6 +26,12 @@ class TaskList(list):
         for i, t in enumerate(self):
             if t.task_id == task_id:
                 del self[i]
+
+BLANK_IMAGE_URI = """\
+data://image/png;base64,\
+iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAA\
+AAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=\
+"""
 
 class TaskManager(Observable):
 
@@ -48,10 +56,70 @@ class TaskManager(Observable):
     def max_concurrent_tasks(self):
         return config.settings.tasks.max or self.DEFAULT_MAX_CONCURRENT_TASKS
 
+
+    def make_playlist(self, title, items):
+
+        ITEM_TEMPLATE=textwrap.dedent(
+        """\
+        #EXTINF:1,{title}
+        {url}
+        """)
+        with tempfile.NamedTemporaryFile(suffix=".m3u8", delete=False) as m3u:
+            m3u.write(f"#EXTM3U\n".encode("utf-8"))
+            for item in items:
+                m3u.write(ITEM_TEMPLATE.format(
+                    title = item.title.strip() or "(no title)",
+                    url=item.url
+                ).encode("utf-8"))
+            logger.info(m3u.name)
+
+            # listing = self.new_listing(
+            listing = AttrDict(
+                # title=f"{self.provider.NAME} playlist" + (
+                #     f" ({self.provider.feed.name}/"
+                #     if self.provider.feed
+                #     else " ("
+                # ) + f"{self.provider.status})",
+                title = title,
+                sources = [
+                    model.MediaSource.attr_class(
+                        provider_id = "tasks",
+                        url = f"file://{m3u.name}",
+                        media_type = "video" # FIXME
+                    )
+                ],
+            )
+        return listing
+
+    def empty_listing(self, title):
+        return self.make_playlist(
+            title,
+            [
+                AttrDict(
+                    title=title,
+                    url=BLANK_IMAGE_URI,
+                    media_type="image"
+                )
+            ]
+        )
+
+
     async def preview(self, listing, caller, **kwargs):
 
-        sources, kwargs = caller.extract_sources(listing, **kwargs)
-        task = caller.create_task(listing, sources, **kwargs)
+        # if not listing:
+        #     listing = caller.empty_listing
+        #     sources = listing.sources
+        # else:
+        #     sources, kwargs = caller.extract_sources(listing, **kwargs)
+
+        if listing:
+            task = caller.create_task(listing, **kwargs)
+        else:
+            listing = self.empty_listing(caller.playlist_title)
+            task = model.PlayMediaTask.attr_class(
+                title = listing.title,
+                sources = listing.sources
+            )
 
         async def start_player():
             self.preview_task = task
@@ -86,8 +154,7 @@ class TaskManager(Observable):
             # self.preview_player = await self.preview_task.program
             # sources, kwargs = self.provider.play_args(listing)
             # sources, kwargs = caller.extract_sources(listing)
-            logger.info(sources)
-            await self.preview_task.load_sources(sources, **kwargs)
+            await self.preview_task.load_sources(task.sources, **kwargs)
 
         if self.preview_player:
             await load_sources()

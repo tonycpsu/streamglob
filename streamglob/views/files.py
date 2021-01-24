@@ -114,8 +114,8 @@ class FilesView(SynchronizedPlayerMixin, StreamglobView):
     def refresh(self):
         self.browser.refresh()
 
-    def on_view_activate(self):
-        state.event_loop.create_task(self.play_empty())
+    # def on_view_activate(self):
+    #     state.event_loop.create_task(self.play_empty())
 
     def __len__(self):
         return 1
