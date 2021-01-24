@@ -12,6 +12,7 @@ import time
 import re
 import asyncio
 import functools
+import itertools
 import signal
 
 import urwid
@@ -115,8 +116,7 @@ class TiledView(urwid.WidgetWrap):
         self.widgets = widgets
         self.weight = weight
         self.dividers = dividers
-
-        self.focused_pane = 0
+        self.last_focused_index = None
 
         self.columns = urwid.Columns([
             ("weight", self.weight[i][0], urwid.Pile([
@@ -146,19 +146,48 @@ class TiledView(urwid.WidgetWrap):
 
         super().__init__(self.columns)
         self.focus_paths = [
-            [0, x*2 if self.dividers else x, y*2 if self.dividers else y]
+            [x*2 if self.dividers else x, y*2 if self.dividers else y]
             for y in range(len(self.widgets))
             for x in range(len(self.widgets[y]))
-            if self.widgets[x][y].selectable()
         ]
 
+    def __getitem__(self, index):
+        return self.widgets[index//len(self.widgets)][index%len(self.widgets)]
+
+    def __len__(self):
+        return len(self.widgets)*(len(self.widgets[0]))
+
     def cycle_focus(self, step=1):
-        self.focused_pane += step
-        if self.focused_pane >= len(self.focus_paths):
-            self.focused_pane = 0
-        elif self.focused_pane < 0:
-            self.focused_pane = len(self.focus_paths) - 1
-        self._w.set_focus_path(self.focus_paths[self.focused_pane][1:])
+
+        if step > 0:
+            c = itertools.cycle(range(0, len(self), step))
+        else:
+            c = itertools.cycle(range(len(self)-1, 0, step))
+
+        while next(c) != self.focused_index:
+            pass
+
+        indexes = [ next(c) for i in range(len(self)) ]
+
+        for i in indexes:
+            if not self[i].selectable():
+                continue
+            break
+        self._w.set_focus_path(self.focus_paths[i])
+        self.focused_widget.on_view_activate()
+        self.last_focused_index = self.focused_index
+
+    @property
+    def focused_index(self):
+        return next(
+            i for i, p in enumerate(self.focus_paths)
+            if p == self._w.get_focus_path()
+        )
+
+    @property
+    def focused_widget(self):
+        return self[self.focused_index]
+        # return self[self.focused_pane]
 
     def set_focus(x, y):
         self._w.set_focus_path(
@@ -168,12 +197,25 @@ class TiledView(urwid.WidgetWrap):
         )
 
     def keypress(self, size, key):
-        key = super().keypress(size, key)
 
-        if key == "meta .":
+        key = super().keypress(size, key)
+        if self.last_focused_index != self.focused_index and hasattr(self.focused_widget, "on_view_activate"):
+            self.focused_widget.on_view_activate()
+        self.last_focused_index = self.focused_index
+
+        if key == "tab":
             self.cycle_focus()
+        elif key == "shift tab":
+            self.cycle_focus(-1)
         else:
             return key
+
+    def mouse_event(self, size, event, button, col, row, focus):
+        logger.info("mouse_event")
+        if self.last_focused_index != self.focused_index and hasattr(self.focused_widget, "on_view_activate"):
+            self.focused_widget.on_view_activate()
+        self.last_focused_index = self.focused_index
+        return super().mouse_event(size, event, button, col, row, focus)
 
     def get_column(self, y):
         return self.columns.contents[y][0]
@@ -240,8 +282,6 @@ def run_gui(action, provider, **kwargs):
             state.listings_view.quit_app()
         elif key == "meta C":
             reload_config()
-        elif key == "meta .":
-            logger.info(state.main_view.get_focus_path())
         else:
             return False
 

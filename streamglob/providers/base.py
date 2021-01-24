@@ -89,7 +89,8 @@ class SimpleProviderView(BaseProviderView):
         # urwid.connect_signal(self.toolbar, "filter_change", self.filter_change)
         # urwid.connect_signal(self.body, "select", self.provider.on_select)
         urwid.connect_signal(self.body, "cycle_filter", self.cycle_filter)
-        urwid.connect_signal(self.body, "keypress", self.on_keypress)
+        if "keypress" in self.body.signals:
+            urwid.connect_signal(self.body, "keypress", self.on_keypress)
 
         self.pile  = urwid.Pile([
             ("pack", self.toolbar),
@@ -647,13 +648,13 @@ class SynchronizedPlayerMixin(object):
     signals = ["keypress"]
 
     KEYMAP = {
-        "p": "preview_all"
+        "meta p": "preview_all"
     }
 
     def __init__(self, *args, **kwargs):
 
         super().__init__(*args, **kwargs)
-        urwid.connect_signal(self, "requery", self.on_requery)
+        # urwid.connect_signal(self, "requery", self.on_requery)
         self.player = None
         self.player_task = None
         self.queued_task = None
@@ -710,15 +711,15 @@ class SynchronizedPlayerMixin(object):
     def new_media_source(self, **kwargs):
         return model.MediaSource.attr_class(**kwargs)
 
-    def play(self, listing, **kwargs):
-        raise Exception(listing)
-        sources, kwargs = self.extract_sources(listing, **kwargs)
-        task = self.create_task(listing, sources)
-        return state.task_manager.play(task, **kwargs)
+    # def play(self, listing, **kwargs):
+    #     raise Exception(listing)
+    #     sources, kwargs = self.extract_sources(listing, **kwargs)
+    #     task = self.create_task(listing, sources)
+    #     return state.task_manager.play(task, **kwargs)
 
 
-    def on_requery(self, source, count):
-        self.sync_player_playlist = True
+    # def on_requery(self, source, count):
+    #     self.sync_player_playlist = True
 
     def enable_focus_handler(self):
         if self.on_focus_handler:
@@ -733,27 +734,28 @@ class SynchronizedPlayerMixin(object):
 
     async def preview_listing(self, listing, playlist_position=0):
 
-        await state.task_manager.preview(listing, self, playlist_position=playlist_position)
+        await state.task_manager.preview(
+            listing, self, playlist_position=playlist_position
+        )
 
-    async def on_playlist_pos(self, name, value):
-
-        logger.info("on_playlist_pos: {value}")
-        try:
-            position = self.playlist_pos_to_row(value)
-        except IndexError:
-            return
-        # async def sync_mpv_playist_pos():
-        self.disable_focus_handler()
-        self.focus_position = position
-        try:
-            row = self[position]
-        except IndexError:
-            return
-        if row.details:
-            index = self.play_items[value].index
-            row.open_details()
-            row.details.contents.table.focus_position = index
-        self.enable_focus_handler()
+    # async def on_playlist_pos(self, name, value):
+    #     return
+    #     try:
+    #         position = self.playlist_pos_to_row(value)
+    #     except IndexError:
+    #         return
+    #     # async def sync_mpv_playist_pos():
+    #     self.disable_focus_handler()
+    #     self.focus_position = position
+    #     try:
+    #         row = self[position]
+    #     except IndexError:
+    #         return
+    #     if row.details:
+    #         index = self.play_items[value].index
+    #         row.open_details()
+    #         row.details.contents.table.focus_position = index
+    #     self.enable_focus_handler()
 
 
 
@@ -878,7 +880,6 @@ class SynchronizedPlayerMixin(object):
 
     def on_focus(self, source, position):
         self.sync_playlist_position()
-        logger.info("sync_playlist_position")
         if len(self):
             with db_session:
                 try:
@@ -910,6 +911,9 @@ class SynchronizedPlayerMixin(object):
         except BrokenPipeError:
             pass
 
+@model.attrclass()
+class ListingsPlayMediaTask(model.PlayMediaTask):
+    pass
 
 @keymapped()
 class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
@@ -924,6 +928,16 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
     def new_media_source(self, **kwargs):
         return self.provider.new_media_source(**kwargs)
 
+    def update_preview(self):
+
+        if not isinstance(state.task_manager.preview_task, ListingsPlayMediaTask.attr_class):
+            self.provider.reset()
+
+    def keypress(self, size, key):
+
+        self.update_preview()
+        return super().keypress(size, key)
+
     def create_task(self, listing, sources):
 
         media_types = set([s.media_type for s in sources if s.media_type])
@@ -933,7 +947,7 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
         else:
             downloader_spec = getattr(self.provider.config, "helpers", None) or sources[0].helper
 
-        return model.PlayMediaTask.attr_class(
+        return ListingsPlayMediaTask.attr_class(
             provider=self.provider.NAME,
             title=listing.title,
             sources = sources,
@@ -947,15 +961,21 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
         self.sync_player_playlist = False
         self.disable_focus_handler()
         super().reset(*args, **kwargs)
-        async def reset_async():
-            # await self.play_empty()
-            if len(self):
-                await self.preview_all()
-                self.on_focus(self, self.focus_position)
-            else:
-                 await self.play_empty()
-            self.enable_focus_handler()
-        state.event_loop.create_task(reset_async())
+        # async def reset_async():
+        #     if len(self):
+        #         await self.preview_all()
+        #         self.on_focus(self, self.focus_position)
+        #     else:
+        #          await self.play_empty()
+        #     self.enable_focus_handler()
+        # state.event_loop.create_task(reset_async())
+
+        if len(self):
+            state.event_loop.create_task(self.preview_all())
+            self.on_focus(self, self.focus_position)
+        else:
+            state.event_loop.create_task(self.play_empty())
+        self.enable_focus_handler()
 
 
 

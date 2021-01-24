@@ -8,12 +8,16 @@ from panwid.keymap import *
 from watchdog.observers.polling import PollingObserver
 from watchdog.events import FileSystemEventHandler
 
+from .. import model
 from ..utils import strip_emoji
 from .. import config
 from ..widgets import *
 # from ..widgets.browser import FileBrowser, DirectoryNode, FileNode
 from ..providers.base import SynchronizedPlayerMixin
 
+@model.attrclass()
+class FilesPlayMediaTask(model.PlayMediaTask):
+    pass
 
 class FilesViewEventHandler(FileSystemEventHandler):
 
@@ -52,6 +56,13 @@ class FilesView(SynchronizedPlayerMixin, StreamglobView):
         state.event_loop.create_task(self.check_updated())
         # self._emit("requery", self)
 
+    def keypress(self, size, key):
+
+        # if not isinstance(state.task_manager.preview_task, FilesPlayMediaTask.attr_class):
+        #     self.preview_all()
+
+        return super().keypress(size, key)
+
     async def check_updated(self):
         while True:
             if self.updated:
@@ -83,6 +94,13 @@ class FilesView(SynchronizedPlayerMixin, StreamglobView):
             FilesViewEventHandler(self), path, recursive=True
         )
         self.observer.start()
+
+    def create_task(self, listing, sources):
+        return FilesPlayMediaTask.attr_class(
+            title=listing.title,
+            sources=sources
+        )
+
 
     @property
     def play_items(self):

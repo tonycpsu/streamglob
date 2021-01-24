@@ -56,6 +56,10 @@ class StreamglobView(panwid.BaseView):
         "q": "quit_app"
     }
 
+    @property
+    def view_name(self):
+        return self.__class__.__name__.replace("View", "").lower()
+
     @keymap_command
     def quit_app(self):
 

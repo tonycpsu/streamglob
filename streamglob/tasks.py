@@ -71,14 +71,9 @@ class TaskManager(Observable):
                 # if not state.loop.process_input([key]):
                 # self._emit("keypress", key)
 
-            await self.preview_player.controller.register_unbound_key_callback(handle_mpv_key)
-
-            async def on_playlist_pos(name, value):
-                # if not (self.player and self.play_items and self.sync_player_playlist):
-                #     return
-                await caller.on_playlist_pos(name, value)
-
-            self.preview_player.controller.bind_property_observer("playlist-pos", on_playlist_pos)
+            await self.preview_player.controller.register_unbound_key_callback(
+                handle_mpv_key
+            )
 
             def on_player_done(f):
                 logger.info("player done")
