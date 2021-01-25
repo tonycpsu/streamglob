@@ -1,6 +1,7 @@
 import urwid
 from panwid.datatable import *
 
+from .. import model
 from ..widgets import *
 
 class TasksView(StreamglobView):
