@@ -317,7 +317,10 @@ class MediaSourceMixin(object):
         return f"{self.provider_id}_dl" # *shrug*
 
 
-    def download_filename(self, index=0, num=None, **kwargs):
+    def download_filename(self, listing=None, index=None, num=None, **kwargs):
+
+        if isinstance(index, int):
+            index += 1
 
         if "outfile" in kwargs:
             return kwargs.get("outfile")
@@ -339,7 +342,7 @@ class MediaSourceMixin(object):
         if template:
             template = self.TEMPLATE_RE.sub(r"{self.\1}", template)
             try:
-                outfile = template.format(self=self, listing=self.listing, index=index+1, num=num)
+                outfile = template.format(self=self, listing=listing, index=index, num=num)
             except Exception as e:
                 logger.exception(e)
                 raise SGInvalidFilenameTemplate

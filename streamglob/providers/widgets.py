@@ -5,7 +5,8 @@ import functools
 import re
 
 import urwid
-import panwid
+from panwid.datatable import *
+from panwid.keymap import *
 from pony.orm import *
 from googletransx import Translator
 
@@ -43,12 +44,17 @@ class FilterToolbar(urwid.WidgetWrap):
     def get_pref_col(self, size):
         return 0
 
-
+@keymapped()
 class ProviderDataTable(BaseDataTable):
 
     ui_sort = False
 
     signals = ["cycle_filter"]
+
+    KEYMAP = {
+        "p": "play_selection",
+        "l": "download_selection"
+    }
 
     def __init__(self, provider, view, *args, **kwargs):
 
@@ -62,7 +68,7 @@ class ProviderDataTable(BaseDataTable):
     @property
     def columns(self):
         return [
-            panwid.DataTableColumn(k, **v if v else {})
+            DataTableColumn(k, **v if v else {})
             for k, v in self.provider.ATTRIBUTES.items()
         ]
 
@@ -122,6 +128,16 @@ class ProviderDataTable(BaseDataTable):
             self.toggle_translation()
         else:
             return key
+
+    async def download_selection(self):
+
+        row_num = self.focus_position
+        listing = self[row_num].data_source
+        index = self.playlist_position
+
+        # FIXME inner_focus comes from MultiSourceListingMixin
+        async for task in self.provider.download(listing, index = self.inner_focus or 0):
+            pass
 
     def reset(self, *args, **kwargs):
         self.translate = False

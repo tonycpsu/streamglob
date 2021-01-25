@@ -928,6 +928,18 @@ class BAMMediaListingMixin(object):
         return f"{self.away_team.abbreviation}@{self.home_team.abbreviation}"
 
     @property
+    def start_date(self):
+        return self.start.strftime("%Y%m%d")
+
+    @property
+    def start_time(self):
+        return self.start.strftime("%H%M%S")
+
+    @property
+    def start_date_time(self):
+        return f"{self.start_date}_{self.start_time}"
+
+    @property
     def game_data(self):
         return self.provider.game_data(self.game_id)
 
@@ -2215,6 +2227,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
     def play_args(self, selection, **kwargs):
 
         source, kwargs = super().play_args(selection, **kwargs)
+
         # filter_args = self.filter_args()
         media_type = source.media_type
 

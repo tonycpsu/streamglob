@@ -14,6 +14,7 @@ import asyncio
 import functools
 import itertools
 import signal
+import inspect
 
 import urwid
 import urwid.raw_display
@@ -335,6 +336,19 @@ def run_gui(action, provider, **kwargs):
     state.loop.run()
 
 
+async def run_tasks(tasks):
+
+    async for task in tasks:
+        loop_result = await task.result
+        result = task.result.result()
+        if isinstance(result, Exception):
+            logger.exception("".join(traceback.format_exception(type(result), result, result.__traceback__)))
+        if task.proc.done():
+            proc = task.proc.result()
+        else:
+            proc = None
+
+
 def run_cli(action, provider, selection, **kwargs):
 
     try:
@@ -343,28 +357,25 @@ def run_cli(action, provider, selection, **kwargs):
         raise Exception(f"unknown action: {action}")
 
     try:
-        task = method(
-            selection,
-            progress=False,
-            stdout=sys.stdout, stderr=sys.stderr, **kwargs
-        )
-        loop_result = state.event_loop.run_until_complete(task.result)
-        result = task.result.result()
-        if isinstance(result, Exception):
-            logger.exception("".join(traceback.format_exception(type(result), result, result.__traceback__)))
-        if task.proc.done():
-            proc = task.proc.result()
+        if inspect.isasyncgenfunction(method):
+            tasks = method(
+                selection,
+                progress=False,
+                stdout=sys.stdout, stderr=sys.stderr, **kwargs
+            )
         else:
-            proc = None
+            tasks = [
+                method(
+                    selection,
+                    progress=False,
+                    stdout=sys.stdout, stderr=sys.stderr, **kwargs
+                )
+            ]
+
+        state.event_loop.run_until_complete(run_tasks(tasks))
+
     except KeyboardInterrupt:
         logger.info("Exiting on keyboard interrupt")
-        proc = None
-
-    if proc:
-        rc = proc.returncode
-    else:
-        rc = -1
-    return rc
 
 
 def main():
@@ -417,7 +428,7 @@ def main():
     log_file = os.path.join(config.settings.CONFIG_DIR, f"{PACKAGE_NAME}.log")
     fh = logging.FileHandler(log_file)
     add_log_handler(fh)
-    logging.getLogger("panwid.keymap").setLevel(logging.INFO)
+    # logging.getLogger("panwid.keymap").setLevel(logging.INFO)
     logging.getLogger("panwid.datatable").setLevel(logging.INFO)
     logging.getLogger("aio_mpv_jsonipc").setLevel(logging.INFO)
 

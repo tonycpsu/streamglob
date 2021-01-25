@@ -24,16 +24,14 @@ from .. import model
 from .. import config
 from  ..utils import *
 
-@keymapped()
+# @keymapped()
 class BaseProviderView(StreamglobView):
-
-    KEYMAP = {
-        "p": "play",
-        "l": "download"
-    }
 
     def update(self):
         pass
+
+    # def keypress(self, size, key):
+    #     return super().keypress(size, key)
 
     def refresh(self):
         pass
@@ -79,7 +77,9 @@ class SimpleProviderView(BaseProviderView):
         "=": ("cycle_filter", [2, 1]),
         "_": ("cycle_filter", [3, -1]),
         "+": ("cycle_filter", [3, 1]),
-        "ctrl d": "download"
+        "p": "play",
+        "l": "download"
+        # "ctrl d": "download"
     }
 
     def __init__(self, provider):
@@ -108,12 +108,11 @@ class SimpleProviderView(BaseProviderView):
 
     def reset(self):
         logger.info("reset")
-        import traceback; logger.info("".join(traceback.format_stack()))
+        # import traceback; logger.info("".join(traceback.format_stack()))
         self.body.reset()
 
     def on_keypress(self, source, key):
         self.keypress((100, 100), key)
-
 
     def keypress(self, size, key):
         logger.debug(key)
@@ -121,6 +120,7 @@ class SimpleProviderView(BaseProviderView):
 
     def __getattr__(self, attr):
         return getattr(self.body, attr)
+
 
 class InvalidConfigView(BaseProviderView):
 
@@ -504,11 +504,14 @@ class BaseProvider(abc.ABC):
 
         return sources, kwargs
 
-    def create_task(self, listing, *args, **kwargs):
+    def create_play_task(self, listing, **kwargs):
 
         sources, kwargs = self.extract_sources(listing, **kwargs)
+
         media_types = set([s.media_type for s in sources if s.media_type])
+
         player_spec = {"media_types": media_types}
+
         if media_types == {"image"}:
             downloader_spec = {None: None}
         else:
@@ -518,49 +521,57 @@ class BaseProvider(abc.ABC):
             provider=self.NAME,
             title=listing.title,
             sources = sources,
-            args = (player_spec, downloader_spec, *args),
+            args = (player_spec, downloader_spec),
             kwargs = kwargs
         )
 
-    def play(self, listing, **kwargs):
-        # sources, kwargs = self.extract_sources(listing, **kwargs)
-        task = self.create_task(listing, **kwargs)
-        return state.task_manager.play(task)
+    def create_download_tasks(self, listing, index=None, **kwargs):
 
-    def download(self, selection, index=None, no_task_manager=False, **kwargs):
-
-        listing = selection
         with db_session:
-            if not listing.is_inflated:
+            if isinstance(listing, model.InflatableMediaListing) and not listing.is_inflated:
                 listing = selection.attach()
                 listing.inflate()
                 listing = listing.detach()
 
-        sources, kwargs = self.play_args(listing, **kwargs)
+        sources, kwargs = self.extract_sources(listing, **kwargs)
+
         if not isinstance(sources, list):
             sources = [sources]
 
         if "num" not in kwargs:
             kwargs["num"] = len(sources)
+
         for i, source in enumerate(sources):
 
             if index is not None and index != i:
                 continue
             try:
-                filename = source.download_filename(index=index, **kwargs)
+                filename = source.download_filename(listing=listing, index=index, **kwargs)
             except SGInvalidFilenameTemplate as e:
                 logger.warning(f"filename template for provider {self.IDENTIFIER} is invalid: {e}")
                 raise
             downloader_spec = getattr(self.config, "helpers") or source.download_helper
             task = model.DownloadMediaTask.attr_class(
                 provider = self.NAME,
-                title = sanitize_filename(selection.title),
+                title = sanitize_filename(listing.title),
                 sources = [source],
-                listing = selection,
+                listing = listing,
                 dest = filename,
+                args = (downloader_spec,),
+                kwargs = dict(index=index, **kwargs),
                 postprocessors = (self.config.get("postprocessors", None) or []).copy()
             )
-            state.task_manager.download(task, downloader_spec, **kwargs)
+            yield task
+
+
+    async def play(self, listing, **kwargs):
+        # sources, kwargs = self.extract_sources(listing, **kwargs)
+        task = self.create_play_task(listing, **kwargs)
+        yield state.task_manager.play(task)
+
+    async def download(self, listing, index=None, no_task_manager=False, **kwargs):
+        for task in self.create_download_tasks(listing, index=index, **kwargs):
+            yield state.task_manager.download(task)
 
     def on_select(self, widget, selection):
         # self.play(selection)
@@ -694,46 +705,14 @@ class SynchronizedPlayerMixin(object):
     def extract_sources(self, listing, **kwargs):
         return (listing.sources if listing else [], kwargs)
 
-    def create_task(self, listing, *args, **kwargs):
+    def create_play_task(self, listing, *args, **kwargs):
         return model.PlayMediaTask.attr_class(
             title=listing.title,
-            sources=sources,
+            sources=listing.sources,
             args=args,
             kwargs=kwargs
         )
 
-    # def make_playlist(self, items):
-
-    #     ITEM_TEMPLATE=textwrap.dedent(
-    #     """\
-    #     #EXTINF:1,{title}
-    #     {url}
-    #     """)
-    #     with tempfile.NamedTemporaryFile(suffix=".m3u8", delete=False) as m3u:
-    #         m3u.write(f"#EXTM3U\n".encode("utf-8"))
-    #         for item in items:
-    #             m3u.write(ITEM_TEMPLATE.format(
-    #                 title = item.title.strip() or "(no title)",
-    #                 url=item.url
-    #             ).encode("utf-8"))
-    #         logger.info(m3u.name)
-
-    #         # listing = self.new_listing(
-    #         listing = AttrDict(
-    #             # title=f"{self.provider.NAME} playlist" + (
-    #             #     f" ({self.provider.feed.name}/"
-    #             #     if self.provider.feed
-    #             #     else " ("
-    #             # ) + f"{self.provider.status})",
-    #             title = self.playlist_title,
-    #             sources = [
-    #                 self.new_media_source(
-    #                     url = f"file://{m3u.name}",
-    #                     media_type = "video" # FIXME
-    #                 )
-    #             ],
-    #         )
-    #     return listing
 
     @property
     def play_items(self):
@@ -765,7 +744,7 @@ class SynchronizedPlayerMixin(object):
     async def preview_all(self, playlist_position=0):
         logger.info("preview_all")
         if len(self.play_items):
-            listing = self.make_playlist(self.play_items)
+            listing = state.task_manager.make_playlist(self.playlist_title, self.play_items)
         else:
             listing = None
 
@@ -774,29 +753,6 @@ class SynchronizedPlayerMixin(object):
     @property
     def playlist_title(self):
         return f"playlist"
-
-    @property
-    def empty_listing(self):
-        return self.make_playlist(
-            [
-                AttrDict(
-                    title=self.playlist_title,
-                    url=BLANK_IMAGE_URI,
-                    media_type="image"
-                )
-            ]
-        )
-
-        # return self.provider.new_listing(
-        #     title=f"{self.provider.NAME} empty",
-        #     sources = [
-        #         self.provider.new_media_source(
-        #             url=BLANK_IMAGE_URI,
-        #             media_type = "image"
-        #         )
-        #     ],
-        #     feed = self.provider.feed
-        # )
 
     def playlist_pos_to_row(self, pos):
         return self.play_items[pos].row_num
@@ -877,14 +833,14 @@ class SynchronizedPlayerMixin(object):
                         await self.preview_all(playlist_position=self.playlist_position)
                     state.event_loop.create_task(reload())
 
-    async def download(self):
+    # async def download(self):
 
-        row_num = self.focus_position
-        listing = self[row_num].data_source
-        index = self.playlist_position
+    #     row_num = self.focus_position
+    #     listing = self[row_num].data_source
+    #     index = self.playlist_position
 
-        # FIXME inner_focus comes from MultiSourceListingMixin
-        self.provider.download(listing, index = self.inner_focus or 0)
+    #     # FIXME inner_focus comes from MultiSourceListingMixin
+    #     self.provider.download(listing, index = self.inner_focus or 0)
 
     def quit_player(self):
         try:
@@ -930,10 +886,10 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
             ]
         ]
 
-    def create_task(self, listing, *args, **kwargs):
+    def create_play_task(self, listing, *args, **kwargs):
         if not listing:
             listing = self.empty_listing
-        return self.provider.create_task(listing, *args, **kwargs)
+        return self.provider.create_play_task(listing, *args, **kwargs)
 
 
     def extract_sources(self, listing, **kwargs):

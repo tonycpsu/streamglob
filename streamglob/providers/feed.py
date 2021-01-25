@@ -254,7 +254,6 @@ class CachedFeedProviderDetailDataTable(DetailDataTable):
     }
 
     def keypress(self, size, key):
-        logger.debug(key)
         return super().keypress(size, key)
 
     def row_attr_fn(self, position, data, row):

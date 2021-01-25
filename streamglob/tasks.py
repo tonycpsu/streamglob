@@ -106,14 +106,11 @@ class TaskManager(Observable):
 
     async def preview(self, listing, caller, **kwargs):
 
-        # if not listing:
-        #     listing = caller.empty_listing
-        #     sources = listing.sources
-        # else:
-        #     sources, kwargs = caller.extract_sources(listing, **kwargs)
-
+        logger.info(listing)
         if listing:
-            task = caller.create_task(listing, **kwargs)
+            logger.info(listing)
+            task = caller.create_play_task(listing, **kwargs)
+            logger.info(task)
         else:
             listing = self.empty_listing(caller.playlist_title)
             task = model.PlayMediaTask.attr_class(
@@ -161,9 +158,10 @@ class TaskManager(Observable):
         else:
             await start_player()
 
+
     def play(self, task, **kwargs):
 
-        self.current_task_id +=1
+        self.current_task_id += 1
         task.task_id = self.current_task_id
         # task.args = (player_spec, downloader_spec)
         # task.kwargs = kwargs
@@ -173,17 +171,17 @@ class TaskManager(Observable):
         self.to_play.append(task)
         return task
 
-    def download(self, task, downloader_spec, **kwargs):
+    def download(self, task, **kwargs):
 
         logger.info(f"download task: {task}")
         logger.info(f"download listing: {task.listing}")
-        self.current_task_id +=1
+        self.current_task_id += 1
         task.task_id = self.current_task_id
-        task.args = (downloader_spec,)
-        task.kwargs = kwargs
-        task.program = state.event_loop.create_future()
-        task.proc = state.event_loop.create_future()
-        task.result = state.event_loop.create_future()
+        # task.args = (downloader_spec, *task.args)
+        # task.kwargs = kwargs
+        # task.program = state.event_loop.create_future()
+        # task.proc = state.event_loop.create_future()
+        # task.result = state.event_loop.create_future()
         self.to_download.append(task)
         return task
 
