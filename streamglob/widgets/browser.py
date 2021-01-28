@@ -314,9 +314,9 @@ class FileBrowser(urwid.WidgetWrap):
                  ignore_directories=False,
                  expand_empty=False):
         self.root = root or os.getcwd()
-        if not isinstance(dir_sort, tuple):
+        if not isinstance(dir_sort, (tuple, list)):
             dir_sort = (dir_sort, False)
-        if not isinstance(file_sort, tuple):
+        if not isinstance(file_sort, (tuple, list)):
             file_sort = (file_sort, False)
 
         self.dir_sort = dir_sort

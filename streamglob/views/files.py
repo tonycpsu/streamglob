@@ -44,7 +44,8 @@ class FilesView(SynchronizedPlayerMixin, StreamglobView):
 
         self.browser = FileBrowser(
             self.root,
-            dir_sort=("mtime", True), file_sort=("alpha", True),
+            dir_sort = config.settings.profile.get_path("files.dir_sort"),
+            file_sort = config.settings.profile.get_path("files.file_sort"),
             ignore_files=False
         )
         self.pile  = urwid.Pile([
