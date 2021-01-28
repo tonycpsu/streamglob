@@ -59,10 +59,16 @@ class FilesView(SynchronizedPlayerMixin, StreamglobView):
 
     def keypress(self, size, key):
 
-        # if not isinstance(state.task_manager.preview_task, FilesPlayMediaTask.attr_class):
-        #     self.preview_all()
-
-        return super().keypress(size, key)
+        if key == "s":
+            self.browser.toggle_file_sort_order()
+        elif key == "S":
+            self.browser.toggle_file_sort_reverse()
+        elif key == "d":
+            self.browser.toggle_dir_sort_order()
+        elif key == "D":
+            self.browser.toggle_dir_sort_reverse()
+        else:
+            return super().keypress(size, key)
 
     async def check_updated(self):
         while True:

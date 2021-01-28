@@ -350,20 +350,60 @@ class FileBrowser(urwid.WidgetWrap):
         self.listbox.body._modified()
 
     @property
-    def dir_sort_key(self):
-        return self.SORT_KEY_MAP[self.dir_sort[0] or "alpha"]
+    def dir_sort_order(self):
+        return self.dir_sort[0]
 
-    @property
-    def file_sort_key(self):
-        return self.SORT_KEY_MAP[self.file_sort[0] or "alpha"]
+    @dir_sort_order.setter
+    def dir_sort_order(self, value):
+        self.dir_sort[0] = value
 
     @property
     def dir_sort_reverse(self):
         return self.dir_sort[1]
 
+    @dir_sort_reverse.setter
+    def dir_sort_reverse(self, value):
+        self.dir_sort[1] = value
+
+    @property
+    def dir_sort_key(self):
+        return self.SORT_KEY_MAP[self.dir_sort[0] or "alpha"]
+
+    @property
+    def file_sort_order(self):
+        return self.file_sort[0]
+
+    @file_sort_order.setter
+    def file_sort_order(self, value):
+        self.file_sort[0] = value
+
     @property
     def file_sort_reverse(self):
         return self.file_sort[1]
+
+    @file_sort_reverse.setter
+    def file_sort_reverse(self, value):
+        self.file_sort[1] = value
+
+    @property
+    def file_sort_key(self):
+        return self.SORT_KEY_MAP[self.file_sort[0] or "alpha"]
+
+    def toggle_dir_sort_order(self):
+        self.dir_sort_order = "mtime" if self.dir_sort_order == "alpha" else "alpha"
+        self.refresh()
+
+    def toggle_dir_sort_reverse(self):
+        self.dir_sort_reverse = True if self.dir_sort_reverse == False else False
+        self.refresh()
+
+    def toggle_file_sort_order(self):
+        self.file_sort_order = "mtime" if self.file_sort_order == "alpha" else "alpha"
+        self.refresh()
+
+    def toggle_file_sort_reverse(self):
+        self.file_sort_reverse = True if self.file_sort_reverse == False else False
+        self.refresh()
 
     def starts_expanded(self, node):
         return node.get_depth() < 1
