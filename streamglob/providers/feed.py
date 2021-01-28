@@ -774,12 +774,13 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
 
     def init_config(self):
         super().init_config()
-        with db_session(optimistic=False):
-            MediaFeed.purge_all(
-                min_items = config.settings.profile.cache.min_items,
-                max_items = config.settings.profile.cache.max_items,
-                max_age = config.settings.profile.cache.max_age
-            )
+        if config.settings.profile.cache.max_age > 0:
+            with db_session(optimistic=False):
+                MediaFeed.purge_all(
+                    min_items = config.settings.profile.cache.min_items,
+                    max_items = config.settings.profile.cache.max_items,
+                    max_age = config.settings.profile.cache.max_age
+                )
 
     def format_feed(feed):
         return feed.name if hasattr(feed, "name") else ""
