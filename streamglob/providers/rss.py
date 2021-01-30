@@ -85,7 +85,7 @@ class RSSSession(session.StreamSession):
 class RSSListing(model.TitledMediaListing):
     pass
 
-class RSSFeed(MediaFeed):
+class RSSFeed(FeedMediaChannel):
 
     LISTING_CLASS = RSSListing
 

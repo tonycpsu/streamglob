@@ -34,7 +34,7 @@ class PeriscopeListing(model.TitledMediaListing):
 
     is_live = Required(bool)
 
-class PeriscopeFeed(MediaFeed):
+class PeriscopeFeed(FeedMediaChannel):
 
     LISTING_CLASS = PeriscopeListing
 

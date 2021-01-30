@@ -650,10 +650,11 @@ class BackgroundTasksMixin(object):
             kwargs = {}
             interval = self.DEFAULT_INTERVAL
             if isinstance(task, tuple):
-                if len(task) == 4:
-                    (task, interval, args, kwargs) = task
-                elif len(task) == 3:
-                    (task, interval, args) = task
+                # if len(task) == 4:
+                #     (task, interval, args, kwargs) = task
+                if len(task) == 3:
+                    (task, interval, kwargs) = task
+                    # (task, interval, args) = task
                 elif len(task) == 2:
                     (task, interval) = task
             fn = getattr(self, task)
@@ -814,11 +815,11 @@ class SynchronizedPlayerMixin(object):
         if len(self):
             with db_session:
                 try:
-                    listing = self[position].data_source.attach()
+                    listing = self[position].data_source#.attach()
                 except (TypeError, IndexError): # FIXME
                     return
                 # listing.on_focus()
-                if listing.on_focus():
+                if hasattr(listing, "on_focus") and listing.on_focus():
                     async def reload():
                         self.invalidate_rows([listing.media_listing_id])
                         self.selection.close_details()
@@ -849,10 +850,6 @@ class ListingsPlayMediaTask(model.PlayMediaTask):
 @keymapped()
 class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
 
-    @property
-    def playlist_title(self):
-        return self.provider.playlist_title
-
     def new_listing(self, **kwargs):
         return self.provider.new_listing(**kwargs)
 
@@ -861,13 +858,26 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
 
     @property
     def play_items(self):
+        # logger.error(self.selection)
+        # logger.error(type(self.selection.data_source))
+        # logger.error(self.selection.data_source.locator)
+        # raise Exception(
+        #     [
+        #         row.data
+        #         for (row_num, row, index, source) in [
+        #                 (row_num, row, index, source) for row_num, row in enumerate(self)
+        #                 for index, source in enumerate(row.data.sources)
+        #                 if not source.is_bad
+        #         ]
+        #     ]
+        # )
         return [
             AttrDict(
                 media_listing_id = row.data.media_listing_id,
                 title = f"{self.playlist_title} {utils.sanitize_filename(row.data.title)}",
                 created = row.data.created,
-                feed = row.data.feed.name,
-                locator = row.data.feed.locator,
+                # feed = row.data.channel.name,
+                # locator = row.data.channel.locator,
                 index = index,
                 row_num = row_num,
                 count = len(row.data.sources),

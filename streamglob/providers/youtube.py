@@ -176,7 +176,7 @@ class YouTubeMediaListing(FeedMediaListing):
     pass
 
 
-class YouTubeFeed(MediaFeed):
+class YouTubeFeed(FeedMediaChannel):
 
     LISTING_CLASS = YouTubeMediaListing
 

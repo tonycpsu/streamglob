@@ -105,7 +105,7 @@ class InstagramMediaListingMixin(object):
         logger.debug("inflate")
         with db_session:
             # FIXME: for some reason I don't feel like digging into right now,
-            # self.feed is of type MediaFeed instead of InstagramMediaFeed, so
+            # self.feed is of type FeedMediaChannel instead of InstagramFeedMediaChannel, so
             # we force the issue here
             feed = self.provider.FEED_CLASS[self.feed.channel_id]
             with self.provider.session.limiter():
@@ -122,16 +122,18 @@ class InstagramMediaListingMixin(object):
         return self.media_type in ["carousel", "video"]
 
     def on_focus(self, source_count=None):
-        logger.info("on_focus")
-        if (
-                not self.provider.config.view.get("inflate_on_focus", False)
-                or not self.should_inflate_on_focus
-                or self.is_inflated
-        ):
-            return False
+        with db_session:
+            listing = self.attach() # FIXME
+            logger.info("on_focus")
+            if (
+                    not listing.provider.config.view.get("inflate_on_focus", False)
+                    or not listing.should_inflate_on_focus
+                    or listing.is_inflated
+            ):
+                return False
 
-        self.inflate()
-        return True
+            listing.inflate()
+            return True
 
 
 @model.attrclass(InstagramMediaListingMixin)
@@ -141,7 +143,7 @@ class InstagramMediaListing(InstagramMediaListingMixin, FeedMediaListing, model.
 
 
 
-class InstagramMediaFeedMixin(object):
+class InstagramFeedMediaChannelMixin(object):
 
     LISTING_CLASS = InstagramMediaListing
 
@@ -337,8 +339,8 @@ class InstagramMediaFeedMixin(object):
             commit()
 
 
-@model.attrclass(InstagramMediaFeedMixin)
-class InstagramMediaFeed(InstagramMediaFeedMixin, MediaFeed):
+@model.attrclass(InstagramFeedMediaChannelMixin)
+class InstagramFeedMediaChannel(InstagramFeedMediaChannelMixin, FeedMediaChannel):
     pass
 
 
@@ -370,7 +372,7 @@ class InstagramProviderView(CachedFeedProviderView):
 
 class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
 
-    FEED_CLASS = InstagramMediaFeed
+    FEED_CLASS = InstagramFeedMediaChannel
 
     SUBJECT_LABEL = "caption"
 

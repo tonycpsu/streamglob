@@ -25,7 +25,7 @@ from .filters import *
 
 
 @model.attrclass()
-class MediaFeed(model.MediaChannel):
+class FeedMediaChannel(model.MediaChannel):
     """
     A subclass of MediaChannel for providers that can distinguish between
     individual broadcasts / episodes / events, perhaps with the abilit to watch
@@ -40,7 +40,9 @@ class MediaFeed(model.MediaChannel):
     DEFAULT_MAX_ITEMS=500
     DEFAULT_MAX_AGE=90
 
-    items = Set(lambda: FeedMediaListing, reverse="feed")
+    @property
+    def items(self):
+        return self.listings
 
     @abc.abstractmethod
     async def fetch(self):
@@ -124,6 +126,10 @@ class MediaFeed(model.MediaChannel):
 
 class FeedMediaListingMixin(object):
 
+    @property
+    def feed(self):
+        return self.channel
+
     @db_session
     def mark_read(self):
         now = datetime.now()
@@ -197,19 +203,20 @@ class FeedMediaListingMixin(object):
 
 
 @model.attrclass(FeedMediaListingMixin)
-class FeedMediaListing(FeedMediaListingMixin, model.TitledMediaListing):
+class FeedMediaListing(FeedMediaListingMixin, model.ChannelMediaListing, model.TitledMediaListing):
     """
     An individual media clip, broadcast, episode, etc. within a particular
-    MediaFeed.
+    FeedMediaChannel.
     """
-    # FIXME: move MediaFeed here?
-    feed = Required(lambda: MediaFeed)
+    # FIXME: move FeedMediaChannel here?
+    # feed = Required(lambda: FeedMediaChannel)
     guid = Required(str, index=True)
     created = Required(datetime, default=datetime.now)
     fetched = Required(datetime, default=datetime.now)
     read = Optional(datetime)
     watched = Optional(datetime)
     downloaded = Optional(datetime)
+
     # was_downloaded = Required(bool, default=False)
     #
 #     @property
@@ -781,7 +788,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         super().init_config()
         if config.settings.profile.cache.max_age > 0:
             with db_session(optimistic=False):
-                MediaFeed.purge_all(
+                FeedMediaChannel.purge_all(
                     min_items = config.settings.profile.cache.min_items,
                     max_items = config.settings.profile.cache.max_items,
                     max_age = config.settings.profile.cache.max_age

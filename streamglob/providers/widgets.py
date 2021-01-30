@@ -142,6 +142,11 @@ class ProviderDataTable(BaseDataTable):
         self.translate = False
         super().reset(*args, **kwargs)
 
+
+    @property
+    def playlist_title(self):
+        return self.provider.playlist_title
+
     def decorate(self, row, column, value):
 
         if column.name == "title":

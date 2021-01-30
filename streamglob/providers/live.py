@@ -6,9 +6,8 @@ from dataclasses import *
 import abc
 
 @model.attrclass()
-class LiveStreamMediaListing(model.TitledMediaListing):
-
-    channel: str = None
+class LiveStreamMediaListing(model.ChannelMediaListing, model.TitledMediaListing):
+    pass
 
 class ChannelsFilter(ConfigFilter):
 
@@ -16,7 +15,7 @@ class ChannelsFilter(ConfigFilter):
     with_all = True
 
 
-class LiveStreamProviderDataTable(ProviderDataTable):
+class LiveStreamProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataTable):
 
     def keypress(self, size, key):
 
@@ -42,7 +41,7 @@ class LiveStreamProvider(BackgroundTasksMixin, BaseProvider):
     UPDATE_INTERVAL = 300
 
     TASKS = [
-        ("update", UPDATE_INTERVAL)
+        ("update", UPDATE_INTERVAL, {"instant": True})
     ]
 
     def __init__(self, *args, **kwargs):
@@ -67,7 +66,8 @@ class LiveStreamProvider(BackgroundTasksMixin, BaseProvider):
     def CHANNEL_CLASS(cls):
         clsname = f"{cls.NAME}Channel"
         pkg = sys.modules.get(cls.__module__)
-        return getattr(pkg, clsname, model.MediaSource)
+        cls = getattr(pkg, clsname, model.MediaChannel)
+        return cls.attr_class
 
     # def parse_identifier(self, identifier):
     #     if identifier:
@@ -88,25 +88,27 @@ class LiveStreamProvider(BackgroundTasksMixin, BaseProvider):
     @db_session
     def create_channels(self):
         for locator, name in self.channels.items():
-            feed = self.CHANNEL_CLASS.get(locator=locator)
-            if not feed:
-                feed = self.CHANNEL_CLASS(
+            channel = self.CHANNEL_CLASS.orm_class.get(locator=locator)
+            if not channel:
+                channel = self.CHANNEL_CLASS.orm_class(
                     provider_id = self.IDENTIFIER,
                     name = name or locator,
-                    locator=locator
+                    locator = locator
                     # **self.feed_attrs(name)
                 )
                 commit()
 
     def listings(self, offset=None, limit=None, *args, **kwargs):
 
-        return self.live_channels
+        return iter(self.live_channels)
 
+    def on_activate(self):
+        super().on_activate()
+        self.create_channels()
 
     @db_session
     def update(self):
-        self.create_channels()
-        self.refresh()
+        self.reset()
 
     @db_session
     def refresh(self):
@@ -117,13 +119,15 @@ class LiveStreamProvider(BackgroundTasksMixin, BaseProvider):
 
         self.live_channels = list()
         for locator in channels:
-            channel = self.CHANNEL_CLASS.get(locator=locator)
+            channel = self.CHANNEL_CLASS.orm_class.get(locator=locator)
             if not channel:
-                raise Exception
+                raise Exception(locator)
 
             listing = self.check_channel(locator)
+            logger.info(f"listing: {listing}")
             channel.updated = datetime.now()
-            if listing and listing.channel not in [l.channel for l in self.live_channels]:
+            # if listing and listing.channel not in [l.channel for l in self.live_channels]:
+            if listing:
                 self.live_channels.append(listing)
 
         self.view.refresh()

@@ -134,7 +134,7 @@ class attrclass(object):
 
             ns["__annotations__"] = {}
 
-            ns["ormclass"] = cls
+            ns["orm_class"] = cls
             for attr in cls._attrs_:
                 attr_type, validator_fn, default = parse_attr(attr)
                 if not attr_type:
@@ -166,15 +166,15 @@ class attrclass(object):
 
                     keys = {
                         k.name: getattr(self, k.name, None)
-                        for k in (self.ormclass._pk_
+                        for k in (self.orm_class._pk_
                                   if isinstance(cls._pk_, tuple)
-                                  else (self.ormclass._pk_,))
+                                  else (self.orm_class._pk_,))
                     }
 
-                    attached = self.ormclass.get(**keys)
+                    attached = self.orm_class.get(**keys)
 
                     if not attached:
-                        attached = self.ormclass(
+                        attached = self.orm_class(
                         **self.dict(exclude_unset = True, exclude_none = True)
                     )
                     return attached
@@ -245,7 +245,7 @@ class MediaChannel(MediaChannelMixin, db.Entity):
     of the provider.
 
     If the provider is able to distinguish between specific broadcasts, episodes,
-    videos, etc. in the channel with a unique identifer, the MediaFeed entity
+    videos, etc. in the channel with a unique identifer, the FeedMediaChannel entity
     defined below should be used instead.
     """
 
@@ -258,6 +258,7 @@ class MediaChannel(MediaChannelMixin, db.Entity):
     updated = Required(datetime, default=datetime.now)
     last_seen = Optional(datetime)
     update_interval = Required(int, default=DEFAULT_UPDATE_INTERVAL)
+    listings = Set(lambda: ChannelMediaListing, reverse="channel")
     attrs = Required(Json, default={})
 
 
@@ -372,10 +373,6 @@ class MediaSource(MediaSourceMixin, db.Entity):
     task = Optional(lambda: MediaTask, reverse="sources")
 
 
-    @property
-    def locator(self):
-        return self.url
-
 class InflatableMediaSourceMixin(object):
 
     @property
@@ -411,6 +408,12 @@ class MediaListing(MediaListingMixin, db.Entity):
     provider_id = Required(str, index=True)
     attrs = Required(Json, default={})
     task = Optional(lambda: MediaTask, reverse="listing")
+
+
+@attrclass()
+class ChannelMediaListing(MediaListing):
+
+    channel = Required(lambda: MediaChannel)
 
 
 @attrclass()
