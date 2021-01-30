@@ -70,6 +70,13 @@ class FilesView(SynchronizedPlayerMixin, StreamglobView):
             self.browser.toggle_dir_sort_order()
         elif key == "D":
             self.browser.toggle_dir_sort_reverse()
+        elif key == ".":
+            filename = os.path.basename(self.browser.selection.full_path)
+            try:
+                uri = MEDIA_URI_RE.search(filename).groups()[0].replace("+", "/")
+                providers.parse_uri(uri)
+            except (AttributeError, IndexError):
+                pass
         else:
             return super().keypress(size, key)
 
@@ -92,12 +99,6 @@ class FilesView(SynchronizedPlayerMixin, StreamglobView):
         if isinstance(selection, DirectoryNode):
             self.monitor_path(selection.full_path)
         elif isinstance(selection, FileNode):
-            filename = os.path.basename(selection.full_path)
-            try:
-                uri = MEDIA_URI_RE.search(filename).groups()[0].replace("+", "/")
-                providers.parse_uri(uri)
-            except (AttributeError, IndexError):
-                pass
             state.event_loop.create_task(self.preview_all())
 
     def monitor_path(self, path):

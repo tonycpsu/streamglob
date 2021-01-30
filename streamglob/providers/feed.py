@@ -680,6 +680,11 @@ class FeedProvider(BaseProvider):
             (feed, guid) = FEED_URI_RE.search(identifier).groups()
         except (IndexError, TypeError):
             feed = identifier
+            guid = None
+
+        if guid:
+            self.filters["search"].value = f"guid:{guid}"
+
         return (
             None,
             (feed or self.provider_data.get("selected_feed", None),),
@@ -998,7 +1003,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
             )
 
         if self.search_string:
-            (field, query) = re.search("(?:(\w+):\s*)?(.*)", self.search_string).groups()
+            (field, query) = re.search("(?:(\w+):)?(.*)", self.search_string).groups()
             if field and field in [a.name for a in self.LISTING_CLASS._attrs_]:
                 self.items_query = self.items_query.filter(
                     lambda i: getattr(i, field) == query
