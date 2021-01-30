@@ -2227,10 +2227,18 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
     def play_args(self, selection, **kwargs):
 
         source, kwargs = super().play_args(selection, **kwargs)
-
         # filter_args = self.filter_args()
         media_type = source.media_type
 
+        kwargs["listing_id"] = selection.game_id
+        kwargs["source_id"] = source. media_id
+        feed_team = (
+            selection.away_team.abbreviation
+            if kwargs["feed_type"] == "away"
+            else selection.home_team.abbreviation
+        ).lower()
+        start_date = selection.start.strftime("%Y-%m-%d")
+        kwargs["uri"] = f"{self.IDENTIFIER}/{start_date}.{feed_team}?media_id={source.media_id}&media_type={media_type}"
         if media_type == "video":
             if not "resolution" in kwargs and selection.media_params.resolution:
                 kwargs["resolution"] = selection.media_params.resolution

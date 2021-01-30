@@ -226,6 +226,11 @@ class FeedMediaSourceMixin(object):
         with db_session:
             self.seen = None
 
+    @property
+    def uri(self):
+        return f"{self.provider}/{self.listing.feed.name}.{self.listing.guid}"
+
+
 @model.attrclass(FeedMediaSourceMixin)
 class FeedMediaSource(FeedMediaSourceMixin, model.MediaSource):
 
@@ -543,22 +548,8 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerPro
                 self.selection.data_source.attach().read = datetime.now()
             self.selection.close_details()
             self.selection.clear_attr("unread")
-            # self.refresh()
-            # self.invalidate_selection()
-
-        # else:
-        #     self.selection.close_details()
-        #     self.focus_position += 1
-        #     return
-        #     logger.info(rc)
-        # if rc:
-        #     logger.info("mark was partial")
-        #     return
 
         while True:
-            if count == last_count:
-                return
-            count += len(self)
             try:
                 idx = next(
                     r.data.media_listing_id
@@ -569,10 +560,13 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerPro
             except (StopIteration, AttributeError):
                 if len(self) >= self.query_result_count():
                     return
+                if count == last_count:
+                    return
+                last_count = count
+                count += len(self)
                 self.focus_position = len(self)-1
                 self.load_more(self.focus_position)
                 self.focus_position += 1
-                last_count = count
         if idx:
             pos = self.index_to_position(idx)
             logger.info(pos)
@@ -651,7 +645,6 @@ class ItemStatusFilter(ListingFilter):
 class SearchFilter(TextFilter):
     pass
 
-
 FEED_URI_RE = re.compile("([^/]+)\.(.*)")
 class FeedProvider(BaseProvider):
     """
@@ -679,20 +672,15 @@ class FeedProvider(BaseProvider):
         return self.filters.feed.value
 
     def parse_identifier(self, identifier):
+        try:
+            (feed, guid) = FEED_URI_RE.search(identifier).groups()
+        except (IndexError, TypeError):
+            feed = identifier
         return (
             None,
-            (identifier or self.provider_data.get("selected_feed", None),),
+            (feed or self.provider_data.get("selected_feed", None),),
             {}
         )
-
-    #     super().parse_identifier(identifier)
-
-    #     if identifier:
-    #         logger.info(f"identifier: {identifier}")
-    #         try:
-    #             self.filters.feed.selected_label = identifier
-    #         except StopIteration:
-    #             self.filters.feed.value = identifier
 
         raise SGIncompleteIdentifier
 
@@ -875,7 +863,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         return None
 
     def on_feed_change(self, feed):
-        if feed:
+        if feed and hasattr(feed, "locator"):
             self.provider_data["selected_feed"] = feed.locator
         else:
             self.provider_data["selected_feed"] = None
@@ -1041,4 +1029,4 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
     @property
     def playlist_title(self):
         # return f"[{self.provider}]"
-        return f"[{self.IDENTIFIER}/{self.feed.locator}]"
+        return f"[{self.IDENTIFIER}/{self.feed.locator if self.feed else 'all'}]"

@@ -263,7 +263,7 @@ class MediaChannel(MediaChannelMixin, db.Entity):
 
 class MediaSourceMixin(object):
 
-    TEMPLATE_RE=re.compile("\{((?!(index|num|listing|feed))[^}]+)\}")
+    TEMPLATE_RE=re.compile("\{((?!(index|num|listing|feed|uri))[^}]+)\}")
 
     @property
     def provider(self):
@@ -342,7 +342,11 @@ class MediaSourceMixin(object):
         if template:
             template = self.TEMPLATE_RE.sub(r"{self.\1}", template)
             try:
-                outfile = template.format(self=self, listing=listing, index=index, num=num)
+                outfile = template.format(
+                    self=self, listing=listing,
+                    uri="uri=" + self.uri.replace("/", "+") +"=",
+                    index=index, num=num
+                )
             except Exception as e:
                 logger.exception(e)
                 raise SGInvalidFilenameTemplate

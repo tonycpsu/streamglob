@@ -1,6 +1,7 @@
 import logging
 logger = logging.getLogger(__name__)
 import asyncio
+import re
 
 import urwid
 from panwid.keymap import *
@@ -12,6 +13,7 @@ from .. import model
 from ..utils import strip_emoji
 from .. import config
 from ..widgets import *
+from .. import providers
 # from ..widgets.browser import FileBrowser, DirectoryNode, FileNode
 from ..providers.base import SynchronizedPlayerMixin
 
@@ -29,6 +31,7 @@ class FilesViewEventHandler(FileSystemEventHandler):
     def on_any_event(self, event):
         self.view.updated = True
 
+MEDIA_URI_RE=re.compile("uri=(.*)=\.")
 
 @keymapped()
 class FilesView(SynchronizedPlayerMixin, StreamglobView):
@@ -89,6 +92,12 @@ class FilesView(SynchronizedPlayerMixin, StreamglobView):
         if isinstance(selection, DirectoryNode):
             self.monitor_path(selection.full_path)
         elif isinstance(selection, FileNode):
+            filename = os.path.basename(selection.full_path)
+            try:
+                uri = MEDIA_URI_RE.search(filename).groups()[0].replace("+", "/")
+                providers.parse_uri(uri)
+            except (AttributeError, IndexError):
+                pass
             state.event_loop.create_task(self.preview_all())
 
     def monitor_path(self, path):

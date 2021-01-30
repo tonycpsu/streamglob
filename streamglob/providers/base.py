@@ -336,7 +336,6 @@ class BaseProvider(abc.ABC):
         self.apply_options(options)
         return (selection, options)
 
-
     def parse_identifier(self, identifier):
         return (None, identifier, {})
 
@@ -346,7 +345,7 @@ class BaseProvider(abc.ABC):
             selected_filters = zip(self.filters.keys(), filters)
 
             for f, value in selected_filters:
-                if value is None:
+                if value is None or value in [self.filters[f].selected_label, self.filters[f].value]:
                     continue
                 try:
                     self.filters[f].selected_label = value
@@ -373,7 +372,8 @@ class BaseProvider(abc.ABC):
             if k in self.filters:
                 logger.debug(f"option: {k}={v}")
                 try:
-                    self.filters[k].value = v
+                    if self.filters[k].value != v:
+                        self.filters[k].value = v
                 except StopIteration:
                     raise SGException("invalid value for %s: %s" %(k, v))
 
@@ -742,7 +742,6 @@ class SynchronizedPlayerMixin(object):
 
     @keymap_command()
     async def preview_all(self, playlist_position=0):
-        logger.info("preview_all")
         if len(self.play_items):
             listing = state.task_manager.make_playlist(self.playlist_title, self.play_items)
         else:

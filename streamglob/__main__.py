@@ -203,9 +203,12 @@ class TiledView(urwid.WidgetWrap):
     def keypress(self, size, key):
 
         key = super().keypress(size, key)
-        if self.last_focused_index != self.focused_index and hasattr(self.focused_widget, "on_view_activate"):
-            self.focused_widget.on_view_activate()
-        self.last_focused_index = self.focused_index
+        try:
+            if self.last_focused_index != self.focused_index and hasattr(self.focused_widget, "on_view_activate"):
+                self.focused_widget.on_view_activate()
+            self.last_focused_index = self.focused_index
+        except IndexError:
+            pass
 
         if key == "tab":
             self.cycle_focus()
@@ -216,9 +219,13 @@ class TiledView(urwid.WidgetWrap):
 
     def mouse_event(self, size, event, button, col, row, focus):
         logger.info("mouse_event")
-        if self.last_focused_index != self.focused_index and hasattr(self.focused_widget, "on_view_activate"):
-            self.focused_widget.on_view_activate()
-        self.last_focused_index = self.focused_index
+        try:
+            if self.last_focused_index != self.focused_index and hasattr(self.focused_widget, "on_view_activate"):
+                self.focused_widget.on_view_activate()
+            self.last_focused_index = self.focused_index
+        except IndexError:
+            pass
+
         return super().mouse_event(size, event, button, col, row, focus)
 
     def get_column(self, y):
@@ -428,7 +435,7 @@ def main():
     log_file = os.path.join(config.settings.CONFIG_DIR, f"{PACKAGE_NAME}.log")
     fh = logging.FileHandler(log_file)
     add_log_handler(fh)
-    # logging.getLogger("panwid.keymap").setLevel(logging.INFO)
+    logging.getLogger("panwid.keymap").setLevel(logging.INFO)
     logging.getLogger("panwid.datatable").setLevel(logging.INFO)
     logging.getLogger("aio_mpv_jsonipc").setLevel(logging.INFO)
 
