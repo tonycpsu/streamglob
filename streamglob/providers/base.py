@@ -115,7 +115,6 @@ class SimpleProviderView(BaseProviderView):
         self.keypress((100, 100), key)
 
     def keypress(self, size, key):
-        logger.debug(key)
         return super().keypress(size, key)
 
     def __getattr__(self, attr):
@@ -964,11 +963,10 @@ class DetailDataTable(BaseDataTable):
               for i, source in enumerate(self.listing.sources)
         ]
 
-    def row_attr_fn(self, row):
-        # raise Exception(row)
-        if not getattr(row.listing, "read", False):
+    def row_attr_fn(self, position, data, row):
+        if not getattr(data.listing, "read", False):
             try:
-                if not row.listing.attrs["parts_read"][str(self.focus_position)]:
+                if not data.listing.attrs["parts_read"][str(self.focus_position)]:
                     return "unread"
             except (IndexError, KeyError):
                 pass

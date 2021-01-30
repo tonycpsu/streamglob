@@ -342,7 +342,8 @@ class InstagramMediaFeed(InstagramMediaFeedMixin, MediaFeed):
     pass
 
 
-class InstagramDataTable(CachedFeedProviderDataTable):
+@keymapped()
+class InstagramDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -350,6 +351,9 @@ class InstagramDataTable(CachedFeedProviderDataTable):
         #     self, "end",
         #     self.on_end
         # )
+
+    def keypress(self, size, key):
+        return super().keypress(size, key)
 
 
     # @db_session
@@ -360,8 +364,7 @@ class InstagramDataTable(CachedFeedProviderDataTable):
 
 
 class InstagramProviderView(CachedFeedProviderView):
-    pass
-    # PROVIDER_BODY_CLASS = InstagramDataTable
+    PROVIDER_BODY_CLASS = InstagramDataTable
 
 
 @with_view(InstagramProviderView)

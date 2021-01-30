@@ -11,6 +11,7 @@ from panwid.dialog import *
 from panwid.keymap import *
 from limiter import get_limiter, limit
 from pony.orm import *
+from pydantic import BaseModel
 
 from .. import model
 from .. import utils
@@ -254,7 +255,7 @@ class CachedFeedProviderDetailDataTable(DetailDataTable):
     signals = ["next_unseen"]
 
     KEYMAP = {
-        "N": "toggle_selection_seen",
+        "m": "toggle_selection_seen",
         "n": "next_unseen"
     }
 
@@ -315,7 +316,7 @@ class CachedFeedProviderDetailDataTable(DetailDataTable):
 
 
 @keymapped()
-class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerProviderMixin, ProviderDataTable):
+class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataTable):
 
     signals = ["focus", "keypress"]
 
@@ -401,10 +402,12 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerPro
             with db_session:
                 listing = box.listing
                 sources = sorted(listing.sources, key=lambda s: s.rank)
-                source = sources[box.table.focus_position].attach()
+                source = sources[box.table.focus_position]
+                if isinstance(source, BaseModel):
+                    source = source.attach()
             return "unread" if not source.seen else None
         else:
-            return "unread" if not data.attach().read else None
+            return "unread" if not data.read else None
 
     @keymap_command()
     def inflate_selection(self):
