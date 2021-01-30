@@ -971,6 +971,10 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         if self.view.player:
             self.view.quit_player()
 
+    @property
+    def total_item_count(self):
+        return self.all_items_query.count()
+
     @db_session
     def  update_query(self):
 
@@ -986,12 +990,14 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         else:
             sort_fn = lambda i: getattr(i, sort_field)
 
-        self.items_query = (
+        self.all_items_query = (
             self.LISTING_CLASS.select()
             .order_by(sort_fn)
             .filter(status_filters[self.filters.status.value])
                 # [offset:offset+limit]
         )
+
+        self.items_query = self.all_items_query
 
         if self.feed_filters:
             for f in self.feed_filters:
