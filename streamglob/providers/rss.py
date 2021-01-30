@@ -18,29 +18,69 @@ class SGFeedUpdateFailedException(Exception):
     pass
 
 
+@model.attrclass()
 class RSSMediaSource(model.MediaSource):
+    pass
+    # @property
+    # def helper(self):
+    #     return True
 
-    @property
-    def helper(self):
-        return True
-
+@model.attrclass()
 class RSSMediaListing(FeedMediaListing):
     pass
 
 class RSSSession(session.StreamSession):
 
+    def get_rss_link(item):
+
+        try:
+            return next( (e.url for e in item.enclosures) )
+        except StopIteration:
+            return item.link
+
+    def get_atom_link(item):
+
+        try:
+            return next( (l.href for l in item.links) )
+        except StopIteration:
+            return item.id_
+
+    PARSE_FUNCS = [
+        (atoma.parse_rss_bytes, "items", "guid", "pub_date",
+         lambda i: i.title,
+         get_rss_link
+         ),
+        (atoma.parse_atom_bytes, "entries", "id_", "published",
+         lambda i: i.title.value,
+         get_atom_link
+         )
+    ]
+
     def parse(self, url):
         try:
-            content = self.session.get(url).content
+            res = self.session.get(url)
+            content = res.content
         except requests.exceptions.ConnectionError as e:
             logger.exception(e)
             raise SGFeedUpdateFailedException
-        # print(content)
-        try:
-            return atoma.parse_rss_bytes(content)
-        except atoma.exceptions.FeedXMLError as e:
-            logger.error(f"{e}: {content}")
-            raise SGFeedUpdateFailedException
+
+        for parse_func, collection, guid_attr, pub_attr, title_func, link_func in self.PARSE_FUNCS:
+            try:
+                parsed_feed = parse_func(content)
+                for item in getattr(parsed_feed, collection):
+                    guid = getattr(item, guid_attr)
+                    yield AttrDict(
+                        guid=guid,
+                        link=link_func(item),
+                        title=title_func(item),
+                        pub_date=getattr(item, pub_attr)
+                    )
+            except atoma.exceptions.FeedParseError:
+                # try next parse function
+                continue
+            except atoma.exceptions.FeedXMLError as e:
+                logger.error(f"{e}: {content}")
+                raise SGFeedUpdateFailedException
 
 class RSSListing(model.TitledMediaListing):
     pass
@@ -50,22 +90,22 @@ class RSSFeed(MediaFeed):
     LISTING_CLASS = RSSListing
 
     # @db_session
-    def fetch(self, limit = None):
+    async def fetch(self, limit = None, **kwargs):
 
         if not limit:
             limit = self.DEFAULT_FETCH_LIMIT
 
         try:
-            for item in self.session.parse(self.locator).items:
+            for item in self.session.parse(self.locator):
                 with db_session:
                     guid = getattr(item, "guid", item.link) or item.link
                     i = self.items.select(lambda i: i.guid == guid).first()
                     if not i:
-                        source = self.provider.new_media_source(
+                        source = AttrDict(
                             url=item.link,
                             media_type="video" # FIXME: could be something else
                         )
-                        i = self.LISTING_CLASS(
+                        i = AttrDict(
                             feed = self,
                             guid = guid,
                             title = item.title,
@@ -73,10 +113,7 @@ class RSSFeed(MediaFeed):
                             # created = datetime.fromtimestamp(
                             #     mktime(item.published_parsed)
                             # ),
-                            content = RSSMediaSource.schema().dumps(
-                                [source],
-                                many=True
-                            )
+                            sources = [source]
                         )
                         yield i
         except SGFeedUpdateFailedException:
