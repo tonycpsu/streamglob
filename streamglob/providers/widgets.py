@@ -56,10 +56,9 @@ class ProviderDataTable(BaseDataTable):
         "l": "download_selection"
     }
 
-    def __init__(self, provider, view, *args, **kwargs):
+    def __init__(self, provider, *args, **kwargs):
 
         self.provider = provider
-        self.view = view
         self.translate = False
         self.translate_src = None
         self._translator = None

@@ -364,10 +364,11 @@ class InstagramDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
 
 
 class InstagramProviderView(CachedFeedProviderView):
+
     PROVIDER_BODY_CLASS = InstagramDataTable
 
 
-@with_view(InstagramProviderView)
+# @with_view(InstagramProviderView)
 class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
 
     FEED_CLASS = InstagramMediaFeed
@@ -380,13 +381,17 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
 
     HELPER = "youtube-dl"
 
-    # VIEW_CLASS = InstagramProviderView
-
     POST_TYPE_MAP = {
         "image": "img",
         "video": "vid",
         "carousel": "car"
     }
+
+    @property
+    def VIEW(self):
+        return SimpleProviderView(self, CachedFeedProviderView2(self, InstagramDataTable(self)))
+
+        # return CachedFeedProviderView2(self, InstagramDataTable(self))
 
     @property
     def session_params(self):

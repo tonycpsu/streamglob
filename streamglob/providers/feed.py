@@ -12,7 +12,6 @@ from panwid.dialog import *
 from panwid.keymap import *
 from limiter import get_limiter, limit
 from pony.orm import *
-from pydantic import BaseModel
 
 from .. import model
 from .. import utils
@@ -396,18 +395,8 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
     #         k for k, v in row.attrs.get("parts_read", {}).items() if v
     #     )
 
+
     def row_attr_fn(self, position, data, row):
-        # logger.info(self.inner_table)
-        if len(data.sources) > 1:
-            box = row.details.contents
-            with db_session:
-                listing = box.listing
-                sources = sorted(listing.sources, key=lambda s: s.rank)
-                source = sources[box.table.focus_position]
-                if isinstance(source, BaseModel):
-                    source = source.attach()
-            return "unread" if not source.seen else None
-        else:
             return "unread" if not data.read else None
 
     @keymap_command()
@@ -710,8 +699,10 @@ class CachedFeedProviderView2(urwid.WidgetWrap):
 
     signals = ["select", "cycle_filter", "keypress"]
 
-    def __init__(self, provider, view):
-        self.table = CachedFeedProviderDataTable(provider, self)
+    def __init__(self, provider, body):
+        self.provider = provider
+        self.body = body#(self.provider, self)
+        # self.body = CachedFeedProviderDataTable(provider, self)
         self.footer_text = urwid.Text("", align="center")
         self.footer = urwid.Filler(
             urwid.AttrMap(
@@ -722,17 +713,17 @@ class CachedFeedProviderView2(urwid.WidgetWrap):
             )
         )
         self.pile = urwid.Pile([
-            ("weight", 1, self.table),
+            ("weight", 1, self.body),
             (1, self.footer),
         ])
 
 
         super().__init__(self.pile)
         self.pile.focus_position = 0
-        # urwid.connect_signal(self.table, "select", lambda *args: self._emit(*args))
-        # urwid.connect_signal(self.table, "cycle_filter", lambda *args: self._emit(*args))
-        urwid.connect_signal(self.table, "requery", self.update_count)
-        urwid.connect_signal(self.table, "keypress", lambda *args: self._emit(*args))
+        # urwid.connect_signal(self.body, "select", lambda *args: self._emit(*args))
+        # urwid.connect_signal(self.body, "cycle_filter", lambda *args: self._emit(*args))
+        urwid.connect_signal(self.body, "requery", self.update_count)
+        urwid.connect_signal(self.body, "keypress", lambda *args: self._emit(*args))
         # self.provider.filters["feed"].connect("changed", self.update_count)
 
     # def keypress(self, size, key):
@@ -741,16 +732,16 @@ class CachedFeedProviderView2(urwid.WidgetWrap):
 
 
     def update_count(self, source, count):
-        self.footer_text.set_text(f"{len(self)}/{self.table.query_result_count()} items")
+        self.footer_text.set_text(f"{len(self)}/{self.body.query_result_count()} items")
 
     def __iter__(self):
-        return iter(self.table)
+        return iter(self.body)
 
     def __len__(self):
-        return len(self.table)
+        return len(self.body)
 
     def __getattr__(self, attr):
-        return getattr(self.table, attr)
+        return getattr(self.body, attr)
 
 
 class CachedFeedProviderView(SimpleProviderView):
@@ -760,13 +751,14 @@ class CachedFeedProviderView(SimpleProviderView):
     # def keypress(self, size, key):
     #     raise Exception
 
-@with_view(CachedFeedProviderView)
+# @with_view(CachedFeedProviderView)
 class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvider):
 
     UPDATE_INTERVAL = (60 * 60 * 4)
 
     RATE_LIMIT = 5
     BURST_LIMIT = 5
+
 
     TASKS = [
         # ("update", UPDATE_INTERVAL, [], {"force": True})
@@ -781,6 +773,10 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         self.filters["search"].connect("changed", self.on_search_change)
         self.game_map = AttrDict()
         self.limiter = get_limiter(rate=self.RATE_LIMIT, capacity=self.BURST_LIMIT)
+
+    @property
+    def VIEW(self):
+        return SimpleProviderView(self, CachedFeedProviderView2(self, CachedFeedProviderDataTable))
 
     def init_config(self):
         super().init_config()
@@ -984,20 +980,22 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
             "not_downloaded": lambda i: i.downloaded is None
         }
 
-        (sort_field, sort_desc) = self.view.sort_by
-        if sort_desc:
-            sort_fn = lambda i: desc(getattr(i, sort_field))
-        else:
-            sort_fn = lambda i: getattr(i, sort_field)
-
         self.all_items_query = (
             self.LISTING_CLASS.select()
-            .order_by(sort_fn)
-            .filter(status_filters[self.filters.status.value])
-                # [offset:offset+limit]
         )
 
         self.items_query = self.all_items_query
+
+        (sort_field, sort_desc) = self.view.sort_by
+
+        if sort_field:
+            if sort_desc:
+                sort_fn = lambda i: desc(getattr(i, sort_field))
+            else:
+                sort_fn = lambda i: getattr(i, sort_field)
+            self.items_query = self.items_query.order_by(sort_fn)
+
+        self.items_query = self.items_query.filter(status_filters[self.filters.status.value])
 
         if self.feed_filters:
             for f in self.feed_filters:

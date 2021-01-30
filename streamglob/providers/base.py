@@ -14,6 +14,7 @@ from orderedattrdict import AttrDict, defaultdict
 from pony.orm import *
 from panwid.dialog import BaseView
 from panwid.keymap import *
+from pydantic import BaseModel
 
 from .widgets import *
 from .filters import *
@@ -82,10 +83,11 @@ class SimpleProviderView(BaseProviderView):
         # "ctrl d": "download"
     }
 
-    def __init__(self, provider):
+    def __init__(self, provider, body):
         self.provider = provider
+        self.body = body#(self.provider, self)
         self.toolbar = FilterToolbar(self.provider.filters)
-        self.body = self.PROVIDER_BODY_CLASS(self.provider, self)
+        # self.body = self.PROVIDER_BODY_CLASS(self.provider, self)
         # urwid.connect_signal(self.toolbar, "filter_change", self.filter_change)
         # urwid.connect_signal(self.body, "select", self.provider.on_select)
         urwid.connect_signal(self.body, "cycle_filter", self.cycle_filter)
@@ -146,7 +148,7 @@ def with_view(view):
 
 MEDIA_SPEC_RE=re.compile(r"(?:/([^:]+))?(?::(.*))?")
 
-@with_view(SimpleProviderView)
+# @with_view(SimpleProviderView)
 class BaseProvider(abc.ABC):
     """
     Abstract base class from which providers should inherit from
@@ -292,9 +294,15 @@ class BaseProvider(abc.ABC):
     def on_deactivate(self):
         pass
 
-    @abc.abstractmethod
+    @property
+    def VIEW(self):
+        return SimpleProviderView(self, ProviderDataTable)
+
+    # @abc.abstractmethod
     def make_view(self):
-        pass
+        if not self.config_is_valid:
+            return InvalidConfigView(self.NAME, self.REQUIRED_CONFIG)
+        return self.VIEW
 
     @classproperty
     def IDENTIFIER(cls):
@@ -998,7 +1006,6 @@ class MultiSourceListingMixin(object):
         return super().decorate(row, column, value)
 
     def detail_fn(self, data):
-
         if len(data.sources) <= 1:
             return
         # urwid.connect_signal(box.table, "focus", lambda s, i: self.on_focus(s, self.focus_position))
@@ -1032,3 +1039,17 @@ class MultiSourceListingMixin(object):
         if self.inner_table:
             return self.inner_table.focus_position
         return 0
+
+    def row_attr_fn(self, position, data, row):
+        # logger.info(self.inner_table)
+        if len(data.sources) > 1:
+            box = row.details.contents
+            with db_session:
+                listing = box.listing
+                sources = sorted(listing.sources, key=lambda s: s.rank)
+                source = sources[box.table.focus_position]
+                if isinstance(source, BaseModel):
+                    source = source.attach()
+            return "unread" if not source.seen else None
+        else:
+            return "unread" if not data.read else None
