@@ -148,7 +148,7 @@ class TextFilterWidget(Observable, urwid.WidgetWrap):
         self.padding = urwid.Padding(self.edit, left=padding, right=padding)
         self.attr = urwid.AttrMap(self.padding, "dropdown_text", "dropdown_focused")
         super().__init__(self.attr)
-        # urwid.connect_signal(self.edit, "select", lambda s, w: self.selected)
+        urwid.connect_signal(self.edit, "postchange", lambda s, w: self.changed())
         self.value = value
 
     def keypress(self, size, key):

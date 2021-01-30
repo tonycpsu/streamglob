@@ -772,7 +772,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         self.items_query = None
         self.filters["feed"].connect("changed", self.on_feed_change)
         self.filters["status"].connect("changed", self.on_status_change)
-        # self.filters["search"].connect("changed", self.on_search_change)
+        self.filters["search"].connect("changed", self.on_search_change)
         self.game_map = AttrDict()
         self.limiter = get_limiter(rate=self.RATE_LIMIT, capacity=self.BURST_LIMIT)
 
@@ -827,6 +827,10 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                 locator = self.selected_feed.locator
             )
         return feed
+
+    @property
+    def search_string(self):
+        return self.filters["search"].value
 
     @property
     def feeds(self):
@@ -886,7 +890,12 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         self.reset()
 
     def on_search_change(self, value, *args):
-        raise Exception(value)
+        if getattr(self, "search_task", False):
+            self.search_task.cancel()
+        self.search_task = state.event_loop.call_later(
+            1,
+            self.reset
+        )
 
 
     def open_popup(self, text):
@@ -986,6 +995,12 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
             self.items_query = self.items_query.filter(
                 lambda i: i.feed == self.feed
             )
+
+        if self.search_string:
+            self.items_query = self.items_query.filter(
+                lambda i: self.search_string.lower() in i.title.lower()
+            )
+
         self.view.update_count = True
 
 

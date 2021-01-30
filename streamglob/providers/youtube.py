@@ -215,9 +215,13 @@ class TemplateIngoreMissingDict(dict):
 class YouTubeProvider(PaginatedProviderMixin,
                       CachedFeedProvider):
 
-    FILTERS = AttrDict([
+    # FILTERS = AttrDict([
+    #     ("feed", YouTubeChannelsFilter),
+    #     ("status", ItemStatusFilter),
+    # ])
+
+    FILTERS_BROWSE = AttrDict([
         ("feed", YouTubeChannelsFilter),
-        ("status", ItemStatusFilter),
     ])
 
     FEED_CLASS = YouTubeFeed
