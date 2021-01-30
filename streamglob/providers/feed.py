@@ -1,6 +1,7 @@
 import logging
 logger = logging.getLogger(__name__)
 
+import re
 from datetime import datetime
 from dataclasses import *
 import functools
@@ -997,9 +998,15 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
             )
 
         if self.search_string:
-            self.items_query = self.items_query.filter(
-                lambda i: self.search_string.lower() in i.title.lower()
-            )
+            (field, query) = re.search("(?:(\w+):\s*)?(.*)", self.search_string).groups()
+            if field and field in [a.name for a in self.LISTING_CLASS._attrs_]:
+                self.items_query = self.items_query.filter(
+                    lambda i: getattr(i, field) == query
+                )
+            else:
+                self.items_query = self.items_query.filter(
+                    lambda i: query.lower() in i.title.lower()
+                )
 
         self.view.update_count = True
 
