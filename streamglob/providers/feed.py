@@ -5,6 +5,7 @@ import re
 from datetime import datetime
 from dataclasses import *
 import functools
+import textwrap
 
 from orderedattrdict import AttrDict
 from panwid.datatable import *
@@ -730,7 +731,15 @@ class CachedFeedProviderView(urwid.WidgetWrap):
 
 
     def update_count(self, source, count):
-        self.footer_text.set_text(f"{len(self)}/{self.body.query_result_count()} items")
+        self.footer_text.set_text(
+            textwrap.dedent(
+                f"""\
+                items: {len(self)} shown,
+                {self.body.query_result_count()} filtered,
+                {self.provider.feed_item_count} in feed,
+                {self.provider.total_item_count} total"""
+            ).replace("\n", " ")
+        )
 
     def __iter__(self):
         return iter(self.body)
@@ -959,7 +968,13 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
 
     @property
     def total_item_count(self):
-        return self.all_items_query.count()
+        with db_session:
+            return self.all_items_query.count()
+
+    @property
+    def feed_item_count(self):
+        with db_session:
+            return self.feed_items_query.count()
 
     @db_session
     def  update_query(self):
@@ -974,7 +989,14 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
             self.LISTING_CLASS.select()
         )
 
-        self.items_query = self.all_items_query
+        if self.feed:
+            self.feed_items_query = self.all_items_query.filter(
+                lambda i: i.feed == self.feed
+            )
+        else:
+            self.feed_items_query = self.all_items_query
+
+        self.items_query = self.feed_items_query
 
         (sort_field, sort_desc) = self.view.sort_by
 
@@ -991,10 +1013,6 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
             for f in self.feed_filters:
                 self.items_query = self.items_query.filter(f)
 
-        if self.feed:
-            self.items_query = self.items_query.filter(
-                lambda i: i.feed == self.feed
-            )
 
         if self.search_string:
             (field, query) = re.search("(?:(\w+):)?(.*)", self.search_string).groups()
