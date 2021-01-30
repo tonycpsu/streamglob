@@ -1744,11 +1744,6 @@ class BAMProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataTable):
 
 
 
-class BAMProviderView(SimpleProviderView):
-
-    PROVIDER_BODY_CLASS = BAMProviderDataTable
-
-@with_view(BAMProviderView)
 class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
     """
     Mixin class for use by BAMTech Media stream providers, which currently
@@ -1800,6 +1795,11 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         self.filters["date"].connect("changed", self.on_date_change)
         self.filters["hide_spoilers"].connect("changed", self.on_hide_spoilers_change)
         self.game_map = AttrDict()
+
+
+    @property
+    def VIEW(self):
+        return SimpleProviderView(self, BAMProviderDataTable(self))
 
     def init_config(self):
         super().init_config()

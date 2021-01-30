@@ -135,20 +135,8 @@ class InvalidConfigView(BaseProviderView):
             ]), valign="top")
         )
 
-
-def with_view(view):
-    def inner(cls):
-        def make_view(self):
-            if not self.config_is_valid:
-                return InvalidConfigView(self.NAME, self.REQUIRED_CONFIG)
-            return view(self)
-        return type(cls.__name__, (cls,), {'make_view': make_view})
-    return inner
-
-
 MEDIA_SPEC_RE=re.compile(r"(?:/([^:]+))?(?::(.*))?")
 
-# @with_view(SimpleProviderView)
 class BaseProvider(abc.ABC):
     """
     Abstract base class from which providers should inherit from

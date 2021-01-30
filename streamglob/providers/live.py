@@ -33,7 +33,6 @@ class LiveStreamProviderView(SimpleProviderView):
     PROVIDER_BODY_CLASS = LiveStreamProviderDataTable
 
 
-@with_view(LiveStreamProviderView)
 class LiveStreamProvider(BackgroundTasksMixin, BaseProvider):
 
     FILTERS = AttrDict([
@@ -50,10 +49,11 @@ class LiveStreamProvider(BackgroundTasksMixin, BaseProvider):
         super().__init__(*args, **kwargs)
         self.filters["channel"].connect("changed", self.on_channel_change)
         self.live_channels = list()
-        # self._update_alarm = None
 
-    def on_channel_change(self, *args):
-        self.refresh()
+
+    @property
+    def VIEW(self):
+        return SimpleProviderView(self, LiveStreamProviderDataTable(self))
 
     @property
     def ATTRIBUTES(self):

@@ -313,8 +313,6 @@ class CachedFeedProviderDetailDataTable(DetailDataTable):
                 await self.parent_table.next_unread()
 
 
-
-
 @keymapped()
 class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataTable):
 
@@ -638,7 +636,7 @@ class ItemStatusFilter(ListingFilter):
 class SearchFilter(TextFilter):
     pass
 
-FEED_URI_RE = re.compile("([^/]+)\.(.*)")
+FEED_URI_RE = re.compile("([^/]+)(?:\.(.*))?")
 class FeedProvider(BaseProvider):
     """
     A provider that offers multiple feeds to select from
@@ -695,7 +693,7 @@ class FeedProvider(BaseProvider):
         #     pass
 
 
-class CachedFeedProviderView2(urwid.WidgetWrap):
+class CachedFeedProviderView(urwid.WidgetWrap):
 
     signals = ["select", "cycle_filter", "keypress"]
 
@@ -744,14 +742,6 @@ class CachedFeedProviderView2(urwid.WidgetWrap):
         return getattr(self.body, attr)
 
 
-class CachedFeedProviderView(SimpleProviderView):
-
-    PROVIDER_BODY_CLASS = CachedFeedProviderView2
-
-    # def keypress(self, size, key):
-    #     raise Exception
-
-# @with_view(CachedFeedProviderView)
 class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvider):
 
     UPDATE_INTERVAL = (60 * 60 * 4)
@@ -776,7 +766,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
 
     @property
     def VIEW(self):
-        return SimpleProviderView(self, CachedFeedProviderView2(self, CachedFeedProviderDataTable))
+        return SimpleProviderView(self, CachedFeedProviderView(self, CachedFeedProviderDataTable(self)))
 
     def init_config(self):
         super().init_config()

@@ -368,7 +368,6 @@ class InstagramProviderView(CachedFeedProviderView):
     PROVIDER_BODY_CLASS = InstagramDataTable
 
 
-# @with_view(InstagramProviderView)
 class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
 
     FEED_CLASS = InstagramMediaFeed
@@ -389,9 +388,8 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
 
     @property
     def VIEW(self):
-        return SimpleProviderView(self, CachedFeedProviderView2(self, InstagramDataTable(self)))
+        return SimpleProviderView(self, CachedFeedProviderView(self, InstagramDataTable(self)))
 
-        # return CachedFeedProviderView2(self, InstagramDataTable(self))
 
     @property
     def session_params(self):
@@ -399,30 +397,13 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
             self.config.get("credentials", {}),
             **self.config.get("rate_limit", {})
         )
-    
-    # @property
-    # def ATTRIBUTES(self):
-    #     raise Exception(super().ATTRIBUTES)
-    #     attrs = list(super().ATTRIBUTES.items())
-    #     idx = next(i for i, a in enumerate(attrs) if a[0] == "title")
-    #     return AttrDict(
-    #         attrs[:idx]
-    #         + [
-    #             ("media_type", {
-    #                 "label": "type",
-    #                 "width": 4,
-    #                 "format_fn": lambda t: self.POST_TYPE_MAP.get(t, t),
-    #                 "align": "right",
-    #                 "sort_icon": False,
-    #             })
-    #         ]
-    #         + attrs[idx:]
-    #     )
+
 
     def init_config(self):
         super().init_config()
         attrs = list(self.ATTRIBUTES.items())
-        idx = next(i for i, a in enumerate(attrs) if a[0] == "title")
+        idx, attr = next(  (i, a ) for i, a in enumerate(attrs) if a[0] == "title")
+        attr[1]["label"] = "caption"
         self.ATTRIBUTES = AttrDict(
             attrs[:idx]
             + [

@@ -97,6 +97,7 @@ class BaseDataTable(panwid.DataTable):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+
     # def keypress(self, size, key):
     #     key = super().keypress(size, key)
 
