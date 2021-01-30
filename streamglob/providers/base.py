@@ -877,7 +877,7 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
                 index = index,
                 row_num = row_num,
                 count = len(row.data.sources),
-                url = source.locator or source.preview_locator
+                url = source.locator or getattr(source, "preview_locator", None) # FIXME
             )
             for (row_num, row, index, source) in [
                     (row_num, row, index, source) for row_num, row in enumerate(self)

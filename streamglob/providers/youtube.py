@@ -120,6 +120,10 @@ class YouTubeChannelsDropdown(Observable, urwid.WidgetWrap):
     def channel(self):
         return self.dropdown.selected_value
 
+    @channel.setter
+    def channel(self, value):
+        self.dropdown.selected_value = value
+
     @property
     def value(self):
         return self.channel
@@ -127,6 +131,10 @@ class YouTubeChannelsDropdown(Observable, urwid.WidgetWrap):
         #     return ("search", self.search)
         # else:
         #     return self.channel
+
+    @value.setter
+    def value(self, value):
+        self.channel = value
 
 
 class YouTubeChannelsFilter(FeedsFilter):
@@ -146,6 +154,10 @@ class YouTubeChannelsFilter(FeedsFilter):
     def value(self):
         return self.widget.value
 
+    @value.setter
+    def value(self, value):
+        self.widget.value = value
+
     @property
     def search(self):
         return self.widget.search
@@ -159,34 +171,40 @@ class YouTubeChannelsFilter(FeedsFilter):
         return lambda w: ("given", 30)
 
 
-
-class YouTubeListing(model.TitledMediaListing):
+@model.attrclass()
+class YouTubeMediaListing(FeedMediaListing):
     pass
 
 
 class YouTubeFeed(MediaFeed):
 
-    LISTING_CLASS = YouTubeListing
+    LISTING_CLASS = YouTubeMediaListing
 
-    def fetch(self, limit = None):
+    async def fetch(self, limit = None, *args, **kwargs):
 
         if not limit:
             limit = self.DEFAULT_FETCH_LIMIT
 
-        for item in self.session.youtube_dl_query(self.locator, limit=limit):
+        url = self.locator
+
+        if not url.endswith("/videos"):
+            url += "/videos"
+
+        for item in self.session.youtube_dl_query(url, limit=limit):
             with db_session:
+                logger.info(item["guid"])
                 i = self.items.select(lambda i: i.guid == item["guid"]).first()
 
                 url = item.pop("url")
                 if not i:
-                    i = self.LISTING_CLASS(
-                        feed=self,
-                        content = YouTubeMediaSource.schema().dumps(
-                            [self.provider.new_media_source(url, media_type="video")],
-                            many=True
-                        ),
+                    i = AttrDict(
+                        feed = self,
+                        sources = [
+                            AttrDict(url=url, media_type="video")
+                        ],
                         **item
                     )
+                    logger.info(i)
                     yield i
 
 class TemplateIngoreMissingDict(dict):
@@ -227,7 +245,7 @@ class YouTubeProvider(PaginatedProviderMixin,
                     AttrDict(
                         title = r.title,
                         guid = r.guid,
-                        content=self.new_media_source(r.url, media_type="video")
+                        sources = [ AttrDict(locator=r.url, media_type="video") ]
                     )
                     for r in self.session.youtube_dl_query(query, offset, limit)
                 ]

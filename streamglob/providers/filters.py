@@ -378,9 +378,9 @@ class FeedConfig:
 
     def __eq__(self, other):
         return self.locator == (
-            other
-            if isinstance(other, str)
-            else other.locator
+            other.locator
+            if hasattr(other, "locator")
+            else other
         )
 
     @property

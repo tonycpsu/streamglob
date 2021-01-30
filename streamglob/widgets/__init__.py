@@ -142,7 +142,7 @@ class TextFilterWidget(Observable, urwid.WidgetWrap):
     EDIT_WIDGET = urwid.Edit
     VALUE_TYPE = str
 
-    def __init__(self, value, align="left", padding=1):
+    def __init__(self, value="", align="left", padding=1):
         self.edit = self.EDIT_WIDGET(align=align, wrap="clip")
         # FIXME: use different attributes
         self.padding = urwid.Padding(self.edit, left=padding, right=padding)

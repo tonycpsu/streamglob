@@ -526,6 +526,9 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerPro
 
     @keymap_command
     async def next_unread(self):
+        return await self.next_matching(lambda r: not r.data_source.attach().read)
+
+    async def next_matching(self, predicate):
 
         idx = None
         count = 0
@@ -560,7 +563,7 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerPro
                 idx = next(
                     r.data.media_listing_id
                     for r in self[self.focus_position+1:]
-                    if not r.data_source.attach().read
+                    if predicate(r)
                 )
                 break
             except (StopIteration, AttributeError):
@@ -596,6 +599,8 @@ class CachedFeedProviderDataTable(MultiSourceListingMixin, SynchronizedPlayerPro
         self.mark_read_on_focus = True
         self._modified()
 
+    def select_guid(self, guid):
+        pass
 
     @db_session
     def item_at_position(self, position):
@@ -642,6 +647,12 @@ class ItemStatusFilter(ListingFilter):
         for s in ["All", "Unread", "Not Downloaded"]
     ])
 
+
+class SearchFilter(TextFilter):
+    pass
+
+
+FEED_URI_RE = re.compile("([^/]+)\.(.*)")
 class FeedProvider(BaseProvider):
     """
     A provider that offers multiple feeds to select from
@@ -652,7 +663,8 @@ class FeedProvider(BaseProvider):
     ])
 
     FILTERS_OPTIONS = AttrDict([
-        ("status", ItemStatusFilter)
+        ("status", ItemStatusFilter),
+        ("search", SearchFilter)
     ])
 
 
@@ -769,6 +781,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         self.items_query = None
         self.filters["feed"].connect("changed", self.on_feed_change)
         self.filters["status"].connect("changed", self.on_status_change)
+        # self.filters["search"].connect("changed", self.on_search_change)
         self.game_map = AttrDict()
         self.limiter = get_limiter(rate=self.RATE_LIMIT, capacity=self.BURST_LIMIT)
 
@@ -880,6 +893,10 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         if not self.is_active:
             return
         self.reset()
+
+    def on_search_change(self, value, *args):
+        raise Exception(value)
+
 
     def open_popup(self, text):
         class UpdateMessage(BasePopUp):
