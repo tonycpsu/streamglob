@@ -641,7 +641,7 @@ class ItemStatusFilter(ListingFilter):
 class SearchFilter(TextFilter):
     pass
 
-FEED_URI_RE = re.compile("([^/]+)(?:\.(.*))?")
+FEED_URI_RE = re.compile("([^/.]+)(?:\.(.*))?")
 class FeedProvider(BaseProvider):
     """
     A provider that offers multiple feeds to select from
@@ -670,7 +670,7 @@ class FeedProvider(BaseProvider):
     def parse_identifier(self, identifier):
         try:
             (feed, guid) = FEED_URI_RE.search(identifier).groups()
-        except (IndexError, TypeError):
+        except (IndexError, TypeError) as e:
             feed = identifier
             guid = None
 
