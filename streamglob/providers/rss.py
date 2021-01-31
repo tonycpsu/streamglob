@@ -25,9 +25,18 @@ class RSSMediaSource(model.MediaSource):
     # def helper(self):
     #     return True
 
-@model.attrclass()
-class RSSMediaListing(FeedMediaListing):
-    pass
+
+class RssMediaListingMixin(object):
+
+    @property
+    def body(self):
+        return self.description or self.title
+
+@model.attrclass(RssMediaListingMixin)
+class RSSMediaListing(RssMediaListingMixin, FeedMediaListing):
+
+    description = Optional(str, index=True)
+
 
 class RSSSession(session.StreamSession):
 
@@ -46,11 +55,11 @@ class RSSSession(session.StreamSession):
             return item.id_
 
     PARSE_FUNCS = [
-        (atoma.parse_rss_bytes, "items", "guid", "pub_date",
+        (atoma.parse_rss_bytes, "items", "guid", "pub_date", "description",
          lambda i: i.title,
          get_rss_link
          ),
-        (atoma.parse_atom_bytes, "entries", "id_", "published",
+        (atoma.parse_atom_bytes, "entries", "id_", "published", "content",
          lambda i: i.title.value,
          get_atom_link
          )
@@ -64,7 +73,8 @@ class RSSSession(session.StreamSession):
             logger.exception(e)
             raise SGFeedUpdateFailedException
 
-        for parse_func, collection, guid_attr, pub_attr, title_func, link_func in self.PARSE_FUNCS:
+        for (parse_func, collection, guid_attr, pub_attr, desc_attr,
+             title_func, link_func) in self.PARSE_FUNCS:
             try:
                 parsed_feed = parse_func(content)
                 for item in getattr(parsed_feed, collection):
@@ -73,6 +83,7 @@ class RSSSession(session.StreamSession):
                         guid=guid,
                         link=link_func(item),
                         title=title_func(item),
+                        description=getattr(item, desc_attr),
                         pub_date=getattr(item, pub_attr)
                     )
             except atoma.exceptions.FeedParseError:
@@ -82,12 +93,10 @@ class RSSSession(session.StreamSession):
                 logger.error(f"{e}: {content}")
                 raise SGFeedUpdateFailedException
 
-class RSSListing(model.TitledMediaListing):
-    pass
+# class RSSListing(model.TitledMediaListing):
+#     pass
 
 class RSSFeed(FeedMediaChannel):
-
-    LISTING_CLASS = RSSListing
 
     # @db_session
     async def fetch(self, limit = None, **kwargs):
@@ -106,9 +115,10 @@ class RSSFeed(FeedMediaChannel):
                             media_type="video" # FIXME: could be something else
                         )
                         i = AttrDict(
-                            feed = self,
+                            channel = self,
                             guid = guid,
                             title = item.title,
+                            description = item.description,
                             created = item.pub_date.replace(tzinfo=None),
                             # created = datetime.fromtimestamp(
                             #     mktime(item.published_parsed)
@@ -129,3 +139,7 @@ class RSSProvider(PaginatedProviderMixin,
     FEED_CLASS = RSSFeed
 
     SESSION_CLASS = RSSSession
+
+    @property
+    def auto_preview(self):
+        return True

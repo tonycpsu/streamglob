@@ -913,7 +913,7 @@ class DetailBox(urwid.WidgetWrap):
 
     def detail_table(self):
         columns = self.parent_table.columns.copy()
-        next(c for c in columns if c.name=="title").truncate = True
+        # next(c for c in columns if c.name=="title").truncate = True
         return DetailDataTable(
             self.listing,
             self.parent_table, columns=columns
@@ -1002,6 +1002,7 @@ class MultiSourceListingMixin(object):
         box = self.DETAIL_BOX_CLASS(data, self)
         urwid.connect_signal(box.table, "focus", lambda s, i: self.on_focus(s, self.focus_position))
         return box
+
         # return self.detail_box
 
     def sync_playlist_position(self):

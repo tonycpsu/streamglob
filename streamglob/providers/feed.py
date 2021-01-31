@@ -200,6 +200,10 @@ class FeedMediaListingMixin(object):
     def on_focus(self):
         pass
 
+    @property
+    def body(self):
+        return self.title
+
 
 
 @model.attrclass(FeedMediaListingMixin)
@@ -253,7 +257,6 @@ class CachedFeedProviderDetailBox(DetailBox):
             c for c in  self.parent_table._columns.copy()
             if not isinstance(c, DataTableDivider)
         ]
-        # next(c for c in columns if c.name=="title").truncate = True
         return CachedFeedProviderDetailDataTable(self.listing, self.parent_table, columns=columns)
 
 
@@ -697,6 +700,27 @@ class FeedProvider(BaseProvider):
         # except (StopIteration, SGException):
         #     pass
 
+# class FeedDetail(urwid.WidgetWrap):
+
+#     def __init__(self, post_date, poster, title, content=None):
+
+#         self.header = urwid.Columns([
+#             ("weight", 1, urwid.Text(post_date)),
+#             ("weight", 1, urwid.Text(poster)),
+#         ])
+#         self.body = urwid.Pile([
+#             (2, urwid.Filler(urwid.Text(title), valign="top")),
+#         ])
+#         if content:
+#             self.body.contents.append(
+#                 urwid.Text(title),
+#                 self.body.options("weight", 1)
+#             )
+#         self.pile = urwid.Pile([
+#             (1, urwid.Filler(urwid.AttrMap(self.header, {None: "table_row_header"}))),
+#             ("weight", 1, self.body)
+#         ])
+#         super().__init__(self.pile)
 
 class CachedFeedProviderView(urwid.WidgetWrap):
 
@@ -704,7 +728,8 @@ class CachedFeedProviderView(urwid.WidgetWrap):
 
     def __init__(self, provider, body):
         self.provider = provider
-        self.body = body#(self.provider, self)
+        self.body = body
+        self.detail = urwid.WidgetPlaceholder(urwid.Filler(urwid.Text("")))
         # self.body = CachedFeedProviderDataTable(provider, self)
         self.footer_text = urwid.Text("", align="center")
         self.footer = urwid.Filler(
@@ -716,7 +741,9 @@ class CachedFeedProviderView(urwid.WidgetWrap):
             )
         )
         self.pile = urwid.Pile([
-            ("weight", 1, self.body),
+            ("weight", 4, self.body),
+            (1, urwid.SolidFill(u"\N{BOX DRAWINGS LIGHT HORIZONTAL}")),
+            ("weight", 1, self.detail),
             (1, self.footer),
         ])
 
@@ -727,12 +754,37 @@ class CachedFeedProviderView(urwid.WidgetWrap):
         # urwid.connect_signal(self.body, "cycle_filter", lambda *args: self._emit(*args))
         urwid.connect_signal(self.body, "requery", self.update_count)
         urwid.connect_signal(self.body, "keypress", lambda *args: self._emit(*args))
+        urwid.connect_signal(self.body, "focus", self.update_detail)
         # self.provider.filters["feed"].connect("changed", self.update_count)
 
     # def keypress(self, size, key):
     #     # raise Exception(super().keypress)
     #     return super().keypress(size, key)
 
+
+    def update_detail(self, source, index):
+        # FIXME: this is so hacktacular :/
+
+        if not source.selection:
+            self.detail.original_widget = urwid.Filler(urwid.Text(""))
+            return
+        listing = source.selection.data_source
+        index = getattr(listing, source.df.index_name)
+        row = self.body.render_item(index)
+        body = listing.body
+        detail = urwid.Pile([
+            (1, urwid.Filler(
+                urwid.AttrMap(row, {"table_row_body": "table_row_header"}),
+                valign="top"
+            )),
+            ("weight", 1, urwid.Filler(urwid.Text(listing.body), valign="top"))
+        ])
+        # col_index = next(
+        #     i for i, c in enumerate(source.visible_columns)
+        #     if c.name == "title"
+        # )
+        # row.cells[col_index].inner_contents.set_text("")
+        self.detail.original_widget = detail
 
     def update_count(self, source, count):
         self.footer_text.set_text(
