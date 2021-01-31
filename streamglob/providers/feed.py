@@ -306,7 +306,6 @@ class CachedFeedProviderDetailDataTable(DetailDataTable):
     @keymap_command
     async def next_unseen(self):
         # await self.parent_table.next_unseen()
-
         if self.selection:
             await self.mark_selection_seen()
 
@@ -335,8 +334,6 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
     detail_auto_open = True
     detail_replace = True
     detail_selectable = True
-
-    DETAIL_BOX_CLASS = CachedFeedProviderDetailBox
 
     KEYMAP = {
         "home": "first_item",
@@ -1053,8 +1050,8 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                     for source in listing.sources.select().order_by(lambda s: s.rank)
                 ]
                 listing = listing.detach()
-                listing.feed = listing.feed.detach()
-                listing.feed.items = None
+                listing.channel = listing.channel.detach()
+                listing.feed.listings = None
                 listing.sources = sources
                 yield listing
 

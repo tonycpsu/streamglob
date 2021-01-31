@@ -317,7 +317,7 @@ class InstagramFeedMediaChannelMixin(object):
                 content = self.extract_content(post)
 
                 i = dict(
-                    feed = self,
+                    channel = self,
                     guid = post.shortcode,
                     title = (caption or "(no caption)").replace("\n", " "),
                     created = created,
@@ -346,6 +346,8 @@ class InstagramFeedMediaChannel(InstagramFeedMediaChannelMixin, FeedMediaChannel
 
 @keymapped()
 class InstagramDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
+
+    DETAIL_BOX_CLASS = CachedFeedProviderDetailBox
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
