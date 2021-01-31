@@ -145,7 +145,7 @@ EMOJI_RE = re.compile(
         u"\U0001F0A0-\U0001F0FF"
         u"\U0001F100-\U0001F64F"
         u"\U0001F680-\U0001F6FF"
-        u"\U0001F910-\U0001FA9f"
+        u"\U0001F900-\U0001FA9f"
 "]+", flags=re.UNICODE)
 #NON_BMP_RE = re.compile(u"[^\U00000000-\U0000d7ff\U0000e000-\U0000ffff]", flags=re.UNICODE)
 
