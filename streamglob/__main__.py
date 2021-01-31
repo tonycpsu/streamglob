@@ -207,7 +207,7 @@ class TiledView(urwid.WidgetWrap):
             if self.last_focused_index != self.focused_index and hasattr(self.focused_widget, "on_view_activate"):
                 self.focused_widget.on_view_activate()
             self.last_focused_index = self.focused_index
-        except IndexError:
+        except StopIteration:
             pass
 
         if key == "tab":
@@ -223,7 +223,7 @@ class TiledView(urwid.WidgetWrap):
             if self.last_focused_index != self.focused_index and hasattr(self.focused_widget, "on_view_activate"):
                 self.focused_widget.on_view_activate()
             self.last_focused_index = self.focused_index
-        except IndexError:
+        except StopIteration:
             pass
 
         return super().mouse_event(size, event, button, col, row, focus)
