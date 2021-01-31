@@ -132,13 +132,11 @@ class ListingsView(StreamglobView):
         self.set_provider(self.provider.IDENTIFIER)
 
     def on_view_activate(self):
+
         async def activate_async():
             if self.provider.auto_preview:
-                await self.provider.view.preview_all()
+                await self.provider.view.preview_selection()
         state.event_loop.create_task(activate_async())
-        # pos = self.provider.view.focus_position
-        # self.provider.reset()
-        # self.provider.view.focus_position = pos
 
     def keypress(self, size, key):
 

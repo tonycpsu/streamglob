@@ -432,6 +432,6 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
         # kwargs["media_type"] = selection.media_type
         return (source, kwargs)
 
-    @property
-    def auto_preview(self):
-        return True
+    # @property
+    # def auto_preview(self):
+    #     return True

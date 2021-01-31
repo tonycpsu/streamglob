@@ -369,7 +369,7 @@ class Program(object):
     def process_kwargs(self, kwargs):
         logger.info(kwargs)
         program_args = {
-            self.ARG_MAP.get(k): v
+            f"--{self.ARG_MAP.get(k)}": v
             for k, v in kwargs.items()
             if k in self.ARG_MAP
         }
@@ -592,7 +592,7 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
     }
 
     ARG_MAP = {
-        "playlist_position": "--playlist-start"
+        "playlist_position": "playlist-start"
     }
 
     def __init__(self, *args, **kwargs):
@@ -653,10 +653,9 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
         self.source = sources
         for i, s in enumerate(self.source_args):
             loadfile_options = ",".join([
-                f"{k.replace('_', '-')}={v}"
+                f"{self.ARG_MAP.get(k, k).replace('_', '-')}={v}"
                 for k,v in options.items()
             ])
-            # logger.info(loadfile_options)
             cmd = [
                 "loadfile",
                 s,

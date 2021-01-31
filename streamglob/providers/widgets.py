@@ -52,6 +52,7 @@ class ProviderDataTable(BaseDataTable):
     signals = ["cycle_filter"]
 
     KEYMAP = {
+        " ": "preview_selection",
         "p": "play_selection",
         "l": "download_selection"
     }
@@ -128,6 +129,9 @@ class ProviderDataTable(BaseDataTable):
         else:
             return key
 
+    async def play_selection(self):
+        raise NotImplementedError
+
     async def download_selection(self):
 
         row_num = self.focus_position
@@ -141,7 +145,6 @@ class ProviderDataTable(BaseDataTable):
     def reset(self, *args, **kwargs):
         self.translate = False
         super().reset(*args, **kwargs)
-
 
     @property
     def playlist_title(self):
@@ -165,3 +168,6 @@ class ProviderDataTable(BaseDataTable):
                     value = urwid.Text(markup)
 
         return super().decorate(row, column, value)
+
+    def on_deactivate(self):
+        state.event_loop.create_task(state.task_manager.preview(None, self))

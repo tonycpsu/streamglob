@@ -258,6 +258,7 @@ def run_gui(action, provider, **kwargs):
     set_stdout_level(logging.CRITICAL)
 
     state.log_buffer = LogBuffer()
+
     log_console = LogViewer(state.event_loop, state.log_buffer)
 
     add_log_handler(state.log_buffer)

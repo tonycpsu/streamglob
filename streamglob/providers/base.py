@@ -78,8 +78,6 @@ class SimpleProviderView(BaseProviderView):
         "=": ("cycle_filter", [2, 1]),
         "_": ("cycle_filter", [3, -1]),
         "+": ("cycle_filter", [3, 1]),
-        "p": "play",
-        "l": "download"
         # "ctrl d": "download"
     }
 
@@ -115,6 +113,9 @@ class SimpleProviderView(BaseProviderView):
 
     def on_keypress(self, source, key):
         self.keypress((100, 100), key)
+
+    def on_deactivate(self):
+        self.body.on_deactivate()
 
     def keypress(self, size, key):
         return super().keypress(size, key)
@@ -280,7 +281,7 @@ class BaseProvider(abc.ABC):
         pass
 
     def on_deactivate(self):
-        pass
+        self.view.on_deactivate()
 
     @property
     def VIEW(self):
@@ -457,9 +458,7 @@ class BaseProvider(abc.ABC):
         if not isinstance(sources, list):
             sources = [sources]
 
-        logger.error(sources)
         return sources
-        # return [ source for source in sources ]
 
     def play_args(self, selection, **kwargs):
         source = self.get_source(selection, **kwargs)
@@ -565,6 +564,7 @@ class BaseProvider(abc.ABC):
         yield state.task_manager.play(task)
 
     async def download(self, listing, index=None, no_task_manager=False, **kwargs):
+        raise Exception
         for task in self.create_download_tasks(listing, index=index, **kwargs):
             yield state.task_manager.download(task)
 
@@ -590,7 +590,11 @@ class BaseProvider(abc.ABC):
 
     @property
     def auto_preview(self):
-        return False
+        return self.config.auto_preview
+
+    @property
+    def auto_preview_delay(self):
+        return self.config.auto_preview_delay
 
 class PaginatedProviderMixin(object):
 
@@ -669,6 +673,7 @@ class BackgroundTasksMixin(object):
                 logger.info("deactivate cancel task")
                 task.cancel()
                 self._tasks[name] = None
+        super().on_deactivate()
         # if self._refresh_alarm:
         #     state.loop.remove_alarm(self._tasks[fn.__name__])
         # self._tasks[fn.__name__] = None
@@ -686,6 +691,7 @@ class SynchronizedPlayerMixin(object):
     signals = ["keypress"]
 
     KEYMAP = {
+        " ": "preview_selection",
         "meta p": "preview_all"
     }
 
@@ -711,6 +717,10 @@ class SynchronizedPlayerMixin(object):
             kwargs=kwargs
         )
 
+    async def preview_selection(self):
+        if len(self.body):
+            await self.preview_all(playlist_position=self.playlist_position)
+        # await self.set_playlist_pos(self.playlist_position)
 
     @property
     def play_items(self):
@@ -740,6 +750,7 @@ class SynchronizedPlayerMixin(object):
 
     @keymap_command()
     async def preview_all(self, playlist_position=0):
+
         if len(self.play_items):
             listing = state.task_manager.make_playlist(self.playlist_title, self.play_items)
         else:
@@ -770,17 +781,14 @@ class SynchronizedPlayerMixin(object):
     async def set_playlist_pos(self, pos):
         if not state.task_manager.preview_player:
             return
+
+        # if await state.task_manager.preview_player.command(
+        #     "get_property", "playlist-pos"
+        # ) == pos:
+        #     return
+
         await state.task_manager.preview_player.command(
             "set_property", "playlist-pos", pos
-        )
-        # HACK to work around https://github.com/mpv-player/mpv/issues/7247
-        #
-        # await asyncio.sleep(0.5)
-        geom = await state.task_manager.preview_player.command(
-            "get_property", "geometry"
-        )
-        await state.task_manager.preview_player.command(
-            "set_property", "geometry", geom
         )
 
     def run_queued_task(self):
@@ -805,15 +813,21 @@ class SynchronizedPlayerMixin(object):
             if index is None:
                 return
 
+            async def sync_playlist_async(index): # O_o
+                if  self.provider.auto_preview_delay:
+                    await asyncio.sleep(self.provider.auto_preview_delay)
+                await self.set_playlist_pos(index)
+
             if self.pending_event_task:
                 self.pending_event_task.cancel()
 
             self.pending_event_task = state.event_loop.create_task(
-                self.set_playlist_pos(index)
+                sync_playlist_async(index)
             )
 
     def on_focus(self, source, position):
-        self.sync_playlist_position()
+        if self.provider.auto_preview:
+            self.sync_playlist_position()
         if len(self):
             with db_session:
                 try:
@@ -828,6 +842,7 @@ class SynchronizedPlayerMixin(object):
                         self.selection.open_details()
                         self.refresh()
                         await self.preview_all(playlist_position=self.playlist_position)
+                    raise Exception
                     state.event_loop.create_task(reload())
 
     # async def download(self):
@@ -896,6 +911,10 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
         super().reset(*args, **kwargs)
 
         if self.provider.auto_preview:
+            # async def preview():
+            #     if delay:
+            #         await asyncio.sleep(delay)
+            #         await self.preview_all()
             state.event_loop.create_task(self.preview_all())
 
         self.enable_focus_handler()

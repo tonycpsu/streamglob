@@ -107,6 +107,7 @@ class TaskManager(Observable):
     async def preview(self, listing, caller, **kwargs):
 
         logger.info(listing)
+        # logger.error(kwargs)
         if listing:
             logger.info(listing)
             task = caller.create_play_task(listing, **kwargs)
@@ -148,9 +149,6 @@ class TaskManager(Observable):
             self.preview_task.result.add_done_callback(on_player_done)
 
         async def load_sources():
-            # self.preview_player = await self.preview_task.program
-            # sources, kwargs = self.provider.play_args(listing)
-            # sources, kwargs = caller.extract_sources(listing)
             await self.preview_task.load_sources(task.sources, **kwargs)
 
         if self.preview_player:

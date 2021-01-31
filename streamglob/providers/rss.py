@@ -139,7 +139,3 @@ class RSSProvider(PaginatedProviderMixin,
     FEED_CLASS = RSSFeed
 
     SESSION_CLASS = RSSSession
-
-    @property
-    def auto_preview(self):
-        return True
