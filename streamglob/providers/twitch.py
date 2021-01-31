@@ -20,8 +20,8 @@ class TwitchMediaSourceMixin(object):
     @property
     def helper(self):
         return AttrDict([
-            (None, "streamlink"),
-            # ("mpv", None),
+            # (None, "streamlink"),
+            ("mpv", None),
 
         ])
 
@@ -136,6 +136,6 @@ class TwitchProvider(LiveStreamProvider):
     def on_channel_change(self, *args):
         self.refresh()
 
-    @property
-    def auto_preview(self):
-        return True
+    # @property
+    # def auto_preview(self):
+    #     return True

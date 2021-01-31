@@ -107,8 +107,8 @@ class LiveStreamProvider(BackgroundTasksMixin, BaseProvider):
         self.create_channels()
 
     @db_session
-    def update(self):
-        self.reset()
+    async def update(self):
+        self.refresh()
 
     @db_session
     def refresh(self):

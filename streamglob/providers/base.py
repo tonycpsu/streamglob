@@ -634,7 +634,9 @@ class BackgroundTasksMixin(object):
                 # logger.info(fn)
                 # await fn(*args, **kwargs)
                 if instant:
+                    logger.info("foo")
                     state.event_loop.create_task(fn(*args, **kwargs))
+                    logger.info("bar")
                 logger.debug(f"sleeping for {interval}")
                 await asyncio.sleep(interval)
                 # state.event_loop.run_in_executor(None, lambda: fn(*args, **kwargs))
@@ -653,11 +655,11 @@ class BackgroundTasksMixin(object):
                 # if len(task) == 4:
                 #     (task, interval, args, kwargs) = task
                 if len(task) == 3:
-                    (task, interval, kwargs) = task
+                    (func, interval, kwargs) = task
                     # (task, interval, args) = task
                 elif len(task) == 2:
-                    (task, interval) = task
-            fn = getattr(self, task)
+                    (func, interval) = task
+            fn = getattr(self, func)
             self.run_in_background(fn, interval, *args, **kwargs)
 
 
@@ -858,19 +860,6 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
 
     @property
     def play_items(self):
-        # logger.error(self.selection)
-        # logger.error(type(self.selection.data_source))
-        # logger.error(self.selection.data_source.locator)
-        # raise Exception(
-        #     [
-        #         row.data
-        #         for (row_num, row, index, source) in [
-        #                 (row_num, row, index, source) for row_num, row in enumerate(self)
-        #                 for index, source in enumerate(row.data.sources)
-        #                 if not source.is_bad
-        #         ]
-        #     ]
-        # )
         return [
             AttrDict(
                 media_listing_id = row.data.media_listing_id,
