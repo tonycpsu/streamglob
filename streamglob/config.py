@@ -8,6 +8,7 @@ try:
 except ImportError:
     from collections import Mapping, MutableMapping
 import yaml
+from yamlinclude import YamlIncludeConstructor
 import functools
 from orderedattrdict import Tree
 import orderedattrdict.yamlutils
@@ -16,6 +17,7 @@ import distutils.spawn
 import tzlocal
 
 import getpass
+import xdg
 
 PACKAGE_NAME="streamglob"
 
@@ -40,7 +42,7 @@ def from_yaml_for_type(dict_type, loader, node):
                 'found unacceptable key (%s)' % exc, key_node.start_mark)
         d[key] = loader.construct_object(value_node, deep=False)
 
-def yaml_loader(node_type):
+def yaml_loader(node_type, base_dir=None):
 
     from_yaml = functools.partial(from_yaml_for_type, node_type)
 
@@ -56,15 +58,16 @@ def yaml_loader(node_type):
             orig, remove = node.value
             args = loader.construct_scalar(orig)
             return " ".join(a for a in args.split() if a != remove.value)
-
         self.add_constructor(u'tag:yaml.org,2002:map', from_yaml)
         self.add_constructor(u'tag:yaml.org,2002:omap', from_yaml)
         self.add_constructor('!join', yaml_join)
         self.add_constructor('!remove_arg', yaml_remove_arg)
+        self.add_constructor('!include', YamlIncludeConstructor(base_dir=base_dir))
+
 
     d = {"__init__": __init__}
 
-    cls = type(cls_name, (yaml.Loader,), d)
+    cls = type(cls_name, (yaml.FullLoader,), d)
     return cls
 
 class ConfigTree(Tree):
@@ -161,15 +164,25 @@ class Config(ConfigTree):
 
     DEFAULT_PROFILE = "default"
 
-    DEFAULT_CONFIG_DIR = os.path.expanduser(f"~/.config/{PACKAGE_NAME}")
-    CONFIG_FILE_NAME = "config.yaml"
+    DEFAULT_CONFIG_FILE = "config.yaml"
 
-    def __init__(self, config_dir=None,
+    PACKAGE_HOME = os.path.join(xdg.xdg_config_home(), PACKAGE_NAME)
+
+    DEFAULT_CONFIG_PATH = os.path.expanduser(
+        os.path.join(
+            PACKAGE_HOME,
+            DEFAULT_CONFIG_FILE
+        )
+    )
+
+    def __init__(self, config_file=None,
                  merge_default = False, *args, **kwargs):
         super(Config, self).__init__(*args, **kwargs)
-        self.__exclude_keys__ |= {"_config_dir", "include_profile", "_profile_tree"}
-        # self._config_file = config_file
-        self._config_dir = config_dir or self.DEFAULT_CONFIG_DIR
+        self.__exclude_keys__ |= {
+            "_config_file", "_config_dir", "include_profile", "_profile_tree"
+        }
+        self._config_file = config_file or self.DEFAULT_CONFIG_PATH
+        self._config_dir = os.path.dirname(self._config_file) or "."
         self.load()
         self._profile_tree = ProfileTree(
             **self.profiles,
@@ -178,7 +191,7 @@ class Config(ConfigTree):
 
     @property
     def config_file(self):
-        return os.path.join(self.CONFIG_DIR, self.CONFIG_FILE_NAME)
+        return self._config_file
 
     @property
     def CONFIG_DIR(self):
@@ -212,7 +225,8 @@ class Config(ConfigTree):
     def load(self):
         if not os.path.exists(self.config_file):
             raise Exception(f"config file {self.config_file} not found")
-        config = yaml.load(open(self.config_file), Loader=yaml_loader(ConfigTree))
+        loader = yaml_loader(ConfigTree, self._config_dir)
+        config = yaml.load(open(self.config_file), Loader=loader)
         self.update(config.items())
 
     def save(self):
@@ -223,15 +237,16 @@ class Config(ConfigTree):
             yaml.dump(d, outfile, default_flow_style=False, indent=4)
 
 
-def load(config_dir=None, merge_default=False):
+def load(config_file=None, merge_default=False):
     global settings
     settings = Config(
-        os.path.expanduser(config_dir)
-        if config_dir
-        else Config.DEFAULT_CONFIG_DIR, merge_default=merge_default
+        config_file = (
+            os.path.expanduser(config_file)
+            if config_file
+            else Config.DEFAULT_CONFIG_PATH
+        ),
+        merge_default=merge_default
     )
-
-# settings = Config(CONFIG_FILE, merge_default=True)
 
 __all__ = [
     "CONFIG_DIR",

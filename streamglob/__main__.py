@@ -393,11 +393,22 @@ def main():
     today = datetime.now(pytz.timezone('US/Eastern')).date()
 
     init_parser = argparse.ArgumentParser()
-    init_parser.add_argument("-c", "--config-dir", help="use alternate config directory")
+    init_parser.add_argument("-c", "--config-file", help="use alternate config file")
     init_parser.add_argument("-p", "--profile", help="use alternate config profile")
     options, args = init_parser.parse_known_args()
 
-    config.load(options.config_dir, merge_default=True)
+    # -c used to refer to a config dir
+    config_file = None
+    if options.config_file:
+        config_file = os.path.expanduser(options.config_file)
+        if os.path.isdir(config_file):
+            config_file = os.path.join(config_file, config.Config.DEFAULT_CONFIG_FILE)
+            logger.warning(
+                "`-c` should refer to a file, not a directory.  "
+                f"using `{config_file}`"
+            )
+
+    config.load(config_file, merge_default=True)
     if options.profile:
         for p in options.profile.split(","):
             config.settings.include_profile(p)
