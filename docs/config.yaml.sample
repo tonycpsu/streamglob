@@ -167,14 +167,6 @@ profiles:
                         baseball: medium
                 output:
                     template: "{feed_name}.{title}.{timestamp}.{ext}"
-            periscope:
-                # feeds in name:url format                
-                feeds:
-                    mlb:
-                    nhl:
-                helpers:
-                    null: youtube-dl
-                    mpv: null
             twitch:
                 # list of usernames
                 channels:
