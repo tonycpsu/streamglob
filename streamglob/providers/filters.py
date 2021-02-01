@@ -226,6 +226,7 @@ class DateFilterWidget(Observable, urwid.WidgetWrap):
         self.value = self.initial_date
 
     def cycle_day(self, n=1):
+        import traceback; logger.error("".join(traceback.format_stack()))
         d = self.value + timedelta(days=n)
         self.value = d
         # self.date_picker.date = d
@@ -264,7 +265,7 @@ class DateFilterWidget(Observable, urwid.WidgetWrap):
         if key in ["-", "="]:
             self.cycle_day(-1 if key == "-" else 1)
             self.date_changed()
-        if key in ["_", "+"]:
+        elif key in ["_", "+"]:
             self.cycle_month(-1 if key == "_" else 1)
             self.date_changed()
         elif key in ["ctrl left", "ctrl right"]:

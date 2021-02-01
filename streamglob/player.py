@@ -329,7 +329,6 @@ class Program(object):
                 self.pipe_from_source()
                 self.source.pipe_to_dst()
         elif source and not isinstance(source, list):
-            logger.error(source)
             self._source = [source]
         else:
             self._source = source

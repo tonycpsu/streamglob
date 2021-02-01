@@ -5,6 +5,7 @@ import abc
 
 import urwid
 from panwid import *
+from panwid.dialog import PopUpMixin
 from orderedattrdict import AttrDict
 from datetime import datetime, timedelta
 import dateutil.parser
@@ -477,7 +478,7 @@ class BAMDetailBox(Observable, urwid.WidgetWrap):
 
                 def open_body_popup(b):
 
-                    self.view.open_popup(
+                    self.open_popup(
                         BAMArticleBody(body_markup),
                         width=("relative", 80),
                         height=("relative", 80),
@@ -1153,7 +1154,7 @@ class BAMMediaListingMixin(object):
             # ("live_stream", live_stream)
         ])
 
-    def select_media(self, media_type=None, feed_type=None):
+    def select_media(self, media_id=None, media_type=None, feed_type=None):
 
         if not media_type:
             media_type = "video"
@@ -1178,6 +1179,8 @@ class BAMMediaListingMixin(object):
             return next(
                 m for m in preferred_media
                 if (
+                        media_id and m.media_id == media_id
+                        or
                         (self.away_team.abbreviation.lower() in faves
                          and getattr(m, "feed_type").lower() == "away")
                         or
@@ -1522,7 +1525,8 @@ class WatchDialog(BasePopUp):
                     selection,
                     media_id = media.media_id,
                     offset=offset,
-                    resolution=self.resolution_dropdown.selected_label
+                    resolution=self.resolution_dropdown.selected_label,
+                    feed_type = feed_type
                 )
             )
             # self.provider.preview_listing
@@ -1738,7 +1742,7 @@ class BAMProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataTable):
                 default_resolution = self.provider.filters.resolution.value,
                 watch_live = self.provider.filters.live_stream.value == "live"
             )
-            self.view.open_popup(dialog, width=80, height=15)
+            state.listings_view.open_popup(dialog, width=80, height=15)
         except SGStreamNotFound:
             logger.warn(f"no stream found for game {selection['game_id']}")
 
@@ -2215,16 +2219,16 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
 
     def get_source(
             self, selection,
-            # media_id=None,
+            media_id=None,
             media_type=None,
             feed_type=None,
             **kwargs
     ):
         media = selection.select_media(
+            media_id = media_id,
             media_type = media_type,
             feed_type = feed_type
         )
-        # raise Exception(media)
         return media
 
     def play_args(self, selection, **kwargs):
@@ -2234,7 +2238,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         media_type = source.media_type
 
         kwargs["listing_id"] = selection.game_id
-        kwargs["source_id"] = source. media_id
+        kwargs["source_id"] = source.media_id
         feed_team = (
             selection.away_team.abbreviation
             if kwargs["feed_type"] == "away"
@@ -2288,6 +2292,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         if source.requires_auth:
             kwargs["headers"] = self.session.headers
             kwargs["cookies"] = self.session.cookies
+
         return (source, kwargs)
 
     def team_color_attr(self, team, cfg, style=None):

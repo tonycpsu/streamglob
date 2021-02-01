@@ -366,7 +366,7 @@ class BaseProvider(abc.ABC):
             selected_filters = zip(self.filters.keys(), filters)
 
             for f, value in selected_filters:
-                if value is None or value in [self.filters[f].selected_label, self.filters[f].value]:
+                if value is None or value in [getattr(self.filters[f], "selected_label", None), self.filters[f].value]:
                     continue
                 try:
                     self.filters[f].selected_label = value
@@ -589,7 +589,6 @@ class BaseProvider(abc.ABC):
         yield state.task_manager.play(task)
 
     async def download(self, listing, index=None, no_task_manager=False, **kwargs):
-        raise Exception
         for task in self.create_download_tasks(listing, index=index, **kwargs):
             yield state.task_manager.download(task)
 
@@ -699,16 +698,7 @@ class BackgroundTasksMixin(object):
                 task.cancel()
                 self._tasks[name] = None
         super().on_deactivate()
-        # if self._refresh_alarm:
-        #     state.loop.remove_alarm(self._tasks[fn.__name__])
-        # self._tasks[fn.__name__] = None
 
-
-# BLANK_IMAGE_URI = """\
-# data://image/png;base64,\
-# iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAA\
-# AAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=\
-# """
 
 @keymapped()
 class SynchronizedPlayerMixin(object):
