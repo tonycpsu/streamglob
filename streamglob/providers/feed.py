@@ -640,10 +640,6 @@ class ItemStatusFilter(ListingFilter):
         for s in ["All", "Unread", "Not Downloaded"]
     ])
 
-
-class SearchFilter(TextFilter):
-    pass
-
 FEED_URI_RE = re.compile("([^/.]+)(?:\.(.*))?")
 class FeedProvider(BaseProvider):
     """
@@ -654,13 +650,14 @@ class FeedProvider(BaseProvider):
         ("feed", FeedsFilter),
     ])
 
-    FILTERS_OPTIONS = AttrDict([
-        ("status", ItemStatusFilter),
-        ("search", SearchFilter)
-    ])
-
-
     REQUIRED_CONFIG = ["feeds"]
+
+    @property
+    def FILTERS_OPTIONS(self):
+        return AttrDict([
+            ("status", ItemStatusFilter),
+            ("search", TextFilter)
+        ],**super().FILTERS_OPTIONS)
 
     @property
     def selected_feed_label(self):
@@ -779,6 +776,7 @@ class CachedFeedProviderView(urwid.WidgetWrap):
             )),
             ("weight", 1, urwid.Filler(urwid.Text(listing.body), valign="top"))
         ])
+        detail.selectable = lambda: False
         # col_index = next(
         #     i for i, c in enumerate(source.visible_columns)
         #     if c.name == "title"
@@ -825,7 +823,6 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         self.items_query = None
         self.filters["feed"].connect("changed", self.on_feed_change)
         self.filters["status"].connect("changed", self.on_status_change)
-        self.filters["search"].connect("changed", self.on_search_change)
         self.game_map = AttrDict()
         self.limiter = get_limiter(rate=self.RATE_LIMIT, capacity=self.BURST_LIMIT)
 
@@ -885,9 +882,9 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
             )
         return feed
 
-    @property
-    def search_string(self):
-        return self.filters["search"].value
+    # @property
+    # def search_string(self):
+    #     return self.filters["search"].value
 
     @property
     def feeds(self):
@@ -946,15 +943,6 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
             return
         self.reset()
 
-    def on_search_change(self, value, *args):
-        if getattr(self, "search_task", False):
-            self.search_task.cancel()
-        self.search_task = state.event_loop.call_later(
-            1,
-            self.reset
-        )
-
-
     def open_popup(self, text):
         class UpdateMessage(BasePopUp):
             def __init__(self):
@@ -1003,7 +991,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
 
     def refresh(self):
         logger.info("+feed provider refresh")
-        self.update_query()
+        # self.update_query()
         self.view.refresh()
         # state.loop.draw_screen()
         logger.info("-feed provider refresh")
@@ -1034,8 +1022,9 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
             return self.feed_items_query.count()
 
     @db_session
-    def  update_query(self):
+    def update_query(self, search_filter=None):
 
+        logger.error(search_filter)
         status_filters =  {
             "all": lambda: True,
             "unread": lambda i: i.read is None,
@@ -1071,8 +1060,8 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                 self.items_query = self.items_query.filter(f)
 
 
-        if self.search_string:
-            (field, query) = re.search("(?:(\w+):)?(.*)", self.search_string).groups()
+        if search_filter:
+            (field, query) = re.search("(?:(\w+):)?(.*)", search_filter).groups()
             if field and field in [a.name for a in self.LISTING_CLASS._attrs_]:
                 self.items_query = self.items_query.filter(
                     lambda i: getattr(i, field) == query
@@ -1083,6 +1072,12 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                 )
 
         self.view.update_count = True
+
+    def apply_search_query(self, query):
+        self.update_query(query)
+        self.refresh()
+
+    # def clear_search_query(self):
 
 
     def listings(self, offset=None, limit=None, *args, **kwargs):

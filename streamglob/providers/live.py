@@ -34,7 +34,7 @@ class LiveStreamProviderView(SimpleProviderView):
 
 class LiveStreamProvider(BackgroundTasksMixin, BaseProvider):
 
-    FILTERS = AttrDict([
+    FILTERS_BROWSE = AttrDict([
         ("channel", ChannelsFilter)
     ])
 

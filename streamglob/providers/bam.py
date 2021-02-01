@@ -1753,18 +1753,11 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
     UPDATE_INTERVAL = 60
 
     TASKS = [
-        ("update", UPDATE_INTERVAL, [], {})
+        ("update", UPDATE_INTERVAL)
     ]
 
     FILTERS_BROWSE = AttrDict([
         ("date", BAMDateFilter)
-    ])
-
-    FILTERS_OPTIONS = AttrDict([
-        ("media_type",MediaTypeFilter),
-        ("resolution", ResolutionFilter),
-        ("live_stream", LiveStreamFilter),
-        ("hide_spoilers", BooleanFilter),
     ])
 
     ATTRIBUTES = AttrDict(
@@ -1795,6 +1788,16 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         self.filters["date"].connect("changed", self.on_date_change)
         self.filters["hide_spoilers"].connect("changed", self.on_hide_spoilers_change)
         self.game_map = AttrDict()
+
+
+    @property
+    def FILTERS_OPTIONS(self):
+        return AttrDict([
+            ("media_type",MediaTypeFilter),
+            ("resolution", ResolutionFilter),
+            ("live_stream", LiveStreamFilter),
+            ("hide_spoilers", BooleanFilter),
+        ], **super().FILTERS_OPTIONS)
 
 
     @property

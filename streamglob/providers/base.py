@@ -123,6 +123,14 @@ class SimpleProviderView(BaseProviderView):
     def __getattr__(self, attr):
         return getattr(self.body, attr)
 
+    def apply_search_query(self, query):
+        # FIXME: assumes body is a data table
+        self.body.apply_filters([
+            lambda listing: query.lower() in listing["title"].lower()
+        ])
+        self.body.refresh()
+
+
 
 class InvalidConfigView(BaseProviderView):
 
@@ -146,7 +154,7 @@ class BaseProvider(abc.ABC):
     SESSION_CLASS = StreamSession
     LISTING_CLASS = model.TitledMediaListing
     # VIEW_CLASS = SimpleProviderView
-    FILTERS = AttrDict()
+    # FILTERS = AttrDict()
     ATTRIBUTES = AttrDict(title={"width": ("weight", 1)})
     MEDIA_TYPES = None
     RPC_METHODS = []
@@ -185,6 +193,8 @@ class BaseProvider(abc.ABC):
             + "|".join([k.pattern for k in self.highlight_map.keys()])
             + ")", re.IGNORECASE
         )
+        print(self.filters)
+        self.filters["search"].connect("changed", self.on_search_change)
 
     def init_config(self):
         with db_session:
@@ -310,13 +320,28 @@ class BaseProvider(abc.ABC):
 
     @property
     def FILTERS_OPTIONS(self):
-        return AttrDict()
+        return AttrDict([
+            ("search", TextFilter)
+        ])
 
     @property
     def FILTERS(self):
         d = getattr(self, "FILTERS_BROWSE", AttrDict())
         d.update(getattr(self, "FILTERS_OPTIONS", {}))
         return d
+
+    def on_search_change(self, value, *args):
+
+        if getattr(self, "search_task", False):
+            self.search_task.cancel()
+        self.search_task = state.event_loop.call_later(
+            1,
+            self.apply_search_query,
+            value
+        )
+
+    def apply_search_query(self, query):
+        self.view.apply_search_query(query)
 
     def parse_spec(self, spec):
 

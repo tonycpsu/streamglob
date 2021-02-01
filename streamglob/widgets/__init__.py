@@ -160,6 +160,9 @@ class TextFilterWidget(Observable, urwid.WidgetWrap):
         else:
             return super().keypress(size, key)
 
+    def selectable(self):
+        return True
+
     @property
     def value(self):
         try:

@@ -87,9 +87,17 @@ class PeriscopeProvider(PaginatedProviderMixin, CachedFeedProvider):
     #     CachedFeedProvider.FILTERS,
     # )
 
-    FILTERS_OPTIONS= AttrDict(
-        live = PeriscopeLiveStreamFilter
-    )
+    # FILTERS_OPTIONS = AttrDict(
+    #     live = PeriscopeLiveStreamFilter
+    # )
+
+
+    # @property
+    # def FILTERS_OPTIONS(self):
+    #     return AttrDict(super().FILTERS_OPTIONS,
+    #                     **AttrDict([
+    #         ("live", PeriscopeLiveStreamFilter)
+    #     ]))
 
     MEDIA_TYPES = {"video"}
 

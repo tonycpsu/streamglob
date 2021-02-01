@@ -171,3 +171,9 @@ class ProviderDataTable(BaseDataTable):
 
     def on_deactivate(self):
         state.event_loop.create_task(state.task_manager.preview(None, self))
+
+    def apply_search_query(self, query):
+        self.apply_filters([lambda row: query in row["title"]])
+
+    def clear_search_query(self):
+        self.reset_filters()
