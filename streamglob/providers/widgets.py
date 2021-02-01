@@ -8,7 +8,7 @@ import urwid
 from panwid.datatable import *
 from panwid.keymap import *
 from pony.orm import *
-from googletransx import Translator
+from pygoogletranslation import Translator
 
 from . import config
 from .. import utils
