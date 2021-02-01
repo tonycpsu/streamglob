@@ -796,6 +796,9 @@ class CachedFeedProviderView(urwid.WidgetWrap):
             ).replace("\n", " ")
         )
 
+    def show_footer_message(self, text):
+        self.footer_text.set_text(text)
+
     def __iter__(self):
         return iter(self.body)
 
@@ -962,11 +965,13 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
 
     async def update(self, force=False, resume=False, replace=False):
         logger.info(f"update: force={force} resume={resume}")
-        self.open_popup("Updating feeds...")
+        self.view.show_footer_message("Updating...")
+        state.loop.draw_screen()
+        # self.open_popup("Updating feeds...")
         # asyncio.create_task(
         await self.update_feeds(force=force, resume=resume, replace=replace)
         # )
-        self.close_popup()
+        # self.close_popup()
         self.reset()
         # update_task = state.event_loop.run_in_executor(None, update_feeds)
 
