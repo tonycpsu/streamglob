@@ -549,7 +549,7 @@ class BaseProvider(abc.ABC):
         with db_session:
             if isinstance(listing, model.InflatableMediaListing) and not listing.is_inflated:
                 listing = selection.attach()
-                listing.inflate()
+                state.asyncio.create_task(listing.inflate())
                 listing = listing.detach()
 
         sources, kwargs = self.extract_sources(listing, **kwargs)
@@ -857,7 +857,6 @@ class SynchronizedPlayerMixin(object):
                         self.selection.open_details()
                         self.refresh()
                         await self.preview_all(playlist_position=self.playlist_position)
-                    raise Exception
                     state.event_loop.create_task(reload())
 
     # async def download(self):

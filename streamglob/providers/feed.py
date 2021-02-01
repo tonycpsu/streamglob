@@ -66,7 +66,7 @@ class FeedMediaChannel(model.MediaChannel):
                 commit()
                 if self.provider.config.get("inflate_on_fetch") and not listing.is_inflated:
                     logger.info("inflating on fetch")
-                    listing.inflate()
+                    await listing.inflate()
             with db_session:
                 try:
                     listing = self.provider.LISTING_CLASS[listing.media_listing_id]
@@ -608,7 +608,8 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
     @keymap_command
     async def update(self, force=False, resume=False, replace=False):
         await self.provider.update(force=force, resume=resume, replace=replace)
-
+        logger.info("reset after update")
+        self.reset()
 
     # # FIXME: move to base view
     # @keymap_command
@@ -962,9 +963,9 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
     async def update(self, force=False, resume=False, replace=False):
         logger.info(f"update: force={force} resume={resume}")
         self.open_popup("Updating feeds...")
-        asyncio.create_task(
-            self.update_feeds(force=force, resume=resume, replace=replace)
-        )
+        # asyncio.create_task(
+        await self.update_feeds(force=force, resume=resume, replace=replace)
+        # )
         self.close_popup()
         self.reset()
         # update_task = state.event_loop.run_in_executor(None, update_feeds)

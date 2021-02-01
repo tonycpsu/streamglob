@@ -18,39 +18,27 @@ from .. import session
 from orderedattrdict import AttrDict, DefaultAttrDict
 from instalooter.looters import ProfileLooter
 from pony.orm import *
-import limiter
+from aiolimiter import AsyncLimiter
 import json
 
 
 class InstagramSession(session.StreamSession):
 
-    DEFAULT_CACPACITY = 100
-    DEFAULT_CONSUME = 50
-    DEFAULT_RATE = 10
+    DEFAULT_REQUESTS_PER_MINUTE = 20
 
     def __init__(
             self,
             provider_id,
-            capacity = DEFAULT_CACPACITY,
-            consume = DEFAULT_CONSUME,
-            rate = DEFAULT_RATE,
+            requests_per_minute = DEFAULT_REQUESTS_PER_MINUTE,
             *args, **kwargs
     ):
         super().__init__(provider_id, *args, **kwargs)
-        self.capacity = capacity
-        self.consume = consume
-        self.rate = rate
-        self._limiter = limiter.get_limiter(
-            rate = self.rate, capacity=self.capacity
-        )
+        self.requests_per_minute = requests_per_minute
+        self._limiter = AsyncLimiter(requests_per_minute, 60)
 
-    @contextmanager
+    @property
     def limiter(self):
-        try:
-            with limiter.limit(self._limiter, consume = self.consume):
-                yield
-        finally:
-            pass
+        return self._limiter
 
 
 class InstagramMediaSourceMixin(object):
@@ -99,7 +87,7 @@ class InstagramMediaListingMixin(object):
     def shortcode(self):
         return self.guid
 
-    def inflate(self):
+    async def inflate(self):
         if self.is_inflated:
             return False
         logger.debug("inflate")
@@ -108,13 +96,16 @@ class InstagramMediaListingMixin(object):
             # self.feed is of type FeedMediaChannel instead of InstagramFeedMediaChannel, so
             # we force the issue here
             feed = self.provider.FEED_CLASS[self.feed.channel_id]
-            with self.provider.session.limiter():
+            # with self.provider.session.limiter():
+            async with self.provider.session.limiter:
                 post_info = feed.get_post_info(self.shortcode)
                 post = AttrDict(post_info)
             delete(s for s in self.sources)
+            listing = self.provider.LISTING_CLASS[self.media_listing_id]
             for i, source in enumerate(feed.extract_content(post)):
-                self.sources.add(self.provider.new_media_source(rank=i, **source).attach())
-            self.is_inflated = True
+                listing.sources.add(listing.provider.new_media_source(rank=i, **source).attach())
+            listing.is_inflated = True
+            commit()
         return True
 
     @property
@@ -132,7 +123,7 @@ class InstagramMediaListingMixin(object):
             ):
                 return False
 
-            listing.inflate()
+            state.event_loop.create_task(listing.inflate())
             return True
 
 
@@ -258,19 +249,21 @@ class InstagramFeedMediaChannelMixin(object):
             self.pages = self.looter.pages(cursor = end_cursor)
 
         def get_posts(pages):
+            posts = list()
             for page in pages:
                 cursor = page["edge_owner_to_timeline_media"]["page_info"]["end_cursor"]
                 for media in self.looter._medias(iter([page])):
-                    yield (cursor, AttrDict(media))
-                    # code = media["shortcode"]
-                    # with self.session.limiter():
-                    #     post = self.get_post_info(code)
-                    #     yield (cursor, AttrDict(post))
+                    posts.append( (cursor, AttrDict(media)) )
+            return posts
 
         count = 0
         new_count = 0
 
-        for end_cursor, post in get_posts(self.pages):
+        posts = state.event_loop.run_in_executor(
+            None, get_posts, self.pages
+        )
+
+        for end_cursor, post in await posts:
 
             # raise Exception(post)
             count += 1
