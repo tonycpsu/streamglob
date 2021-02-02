@@ -333,7 +333,7 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
     with_scrollbar=True
     sort_by = ("created", True)
     index = "media_listing_id"
-    # no_load_on_init = True
+    no_load_on_init = True
     detail_auto_open = True
     detail_replace = True
     detail_selectable = True
