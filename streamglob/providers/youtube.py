@@ -198,7 +198,7 @@ class YouTubeFeed(FeedMediaChannel):
                 url = item.pop("url")
                 if not i:
                     i = AttrDict(
-                        feed = self,
+                        channel = self,
                         sources = [
                             AttrDict(url=url, media_type="video")
                         ],
@@ -265,7 +265,3 @@ class YouTubeProvider(PaginatedProviderMixin,
         if fmt:
             kwargs["format"] = fmt
         return (source, kwargs)
-
-    @property
-    def auto_preview(self):
-        return True
