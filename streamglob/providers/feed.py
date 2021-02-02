@@ -176,10 +176,6 @@ class FeedMediaListingMixin(object):
         return datetime.now() - self.fetched
 
     @property
-    def locator(self):
-        return self.content
-
-    @property
     def feed_name(self):
         return self.feed.name
 

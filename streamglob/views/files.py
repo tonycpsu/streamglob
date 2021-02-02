@@ -127,7 +127,7 @@ class FilesView(SynchronizedPlayerMixin, StreamglobView):
         return [
             AttrDict(
                 title = "foo",
-                url = self.browser.selection.full_path
+                locator = self.browser.selection.full_path
             )
         ]
 

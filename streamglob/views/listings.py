@@ -155,6 +155,10 @@ class ListingsView(StreamglobView):
     def activate(self):
         self.set_provider(self.provider.IDENTIFIER)
 
+    @property
+    def preview_mode(self):
+        return self.toolbar.preview_dropdown.value
+
     # def on_view_activate(self):
 
     #     async def activate_async():

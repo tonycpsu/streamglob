@@ -739,6 +739,10 @@ class SynchronizedPlayerMixin(object):
     async def preview_selection(self):
         if len(self.body):
             await self.preview_all(playlist_position=self.playlist_position)
+        if state.listings_view.preview_mode == "thumbnail":
+            listing = self.selection.data_source
+            source = listing.sources[0]
+            await self.playlist_replace(source.locator)
         # await self.set_playlist_pos(self.playlist_position)
 
     @property
@@ -835,7 +839,7 @@ class SynchronizedPlayerMixin(object):
             async def sync_playlist_async(index): # O_o
                 delay = (
                     self.provider.auto_preview_thumbnail_delay
-                    if state.listings_view.toolbar.preview_dropdown.value == "thumbnail"
+                    if state.listings_view.preview_mode == "thumbnail"
                     else auto_preview_content_delay
                 )
                 if delay:
@@ -867,6 +871,35 @@ class SynchronizedPlayerMixin(object):
                         self.refresh()
                         await self.preview_all(playlist_position=self.playlist_position)
                     state.event_loop.create_task(reload())
+
+    async def playlist_replace(self, url, pos=None):
+
+        await state.task_manager.preview_player.command(
+            "loadfile", url, "append"
+        )
+
+        count = await state.task_manager.preview_player.command(
+            "get_property", "playlist-count"
+        )
+
+        if pos is None:
+            pos = await state.task_manager.preview_player.command(
+                "get_property", "playlist-pos"
+            )
+
+        await state.task_manager.preview_player.command(
+            "playlist-remove", str(pos)
+        )
+
+        await state.task_manager.preview_player.command(
+            "playlist-move", str(count-2), pos
+        )
+
+        await state.task_manager.preview_player.command(
+            "playlist-play-index", pos
+        )
+
+
 
     # async def download(self):
 
@@ -910,7 +943,7 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
                 count = len(row.data.sources),
                 locator = (
                     (getattr(source, "preview_locator", None) or source.locator)
-                    if state.listings_view.toolbar.preview_dropdown.value == "thumbnail"
+                    if state.listings_view.preview_mode == "thumbnail"
                     else (source.locator or getattr(source, "preview_locator", None))
                 )
             )

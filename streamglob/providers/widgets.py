@@ -52,7 +52,6 @@ class ProviderDataTable(BaseDataTable):
     signals = ["cycle_filter"]
 
     KEYMAP = {
-        " ": "preview_selection",
         "p": "play_selection",
         "l": "download_selection"
     }
