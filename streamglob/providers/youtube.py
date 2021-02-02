@@ -15,9 +15,20 @@ from .filters import *
 
 import youtube_dl
 
-
 @model.attrclass()
-class YouTubeMediaSource(model.MediaSource):
+class YouTubeMediaListing(FeedMediaListing):
+    pass
+
+
+class YouTubeMediaSourceMixin(object):
+
+    @property
+    def locator(self):
+        return f"https://youtu.be/{self.listing.guid}"
+
+    @property
+    def preview_locator(self):
+        return f"http://img.youtube.com/vi/{self.listing.guid}/0.jpg"
 
     @property
     def helper(self):
@@ -25,6 +36,10 @@ class YouTubeMediaSource(model.MediaSource):
             (None, "youtube-dl"),
             ("mpv", None),
         ])
+
+@model.attrclass(YouTubeMediaSourceMixin)
+class YouTubeMediaSource(YouTubeMediaSourceMixin, model.InflatableMediaSource):
+    pass
 
 class SearchResult(AttrDict):
 
@@ -59,7 +74,8 @@ class YouTubeSession(session.StreamSession):
                 yield SearchResult(
                     guid = item["id"],
                     title = item["title"],
-                    url = f"https://youtu.be/{item['url']}"
+                    # url = f"https://youtu.be/{item['url']}",
+                    # preview_url = f"http://img.youtube.com/vi/{item['url']}/0.jpg"
                 )
 
 class YouTubeChannelsDropdown(Observable, urwid.WidgetWrap):
@@ -170,12 +186,6 @@ class YouTubeChannelsFilter(FeedsFilter):
     def widget_sizing(self):
         return lambda w: ("given", 30)
 
-
-@model.attrclass()
-class YouTubeMediaListing(FeedMediaListing):
-    pass
-
-
 class YouTubeFeed(FeedMediaChannel):
 
     LISTING_CLASS = YouTubeMediaListing
@@ -195,12 +205,11 @@ class YouTubeFeed(FeedMediaChannel):
                 logger.info(item["guid"])
                 i = self.items.select(lambda i: i.guid == item["guid"]).first()
 
-                url = item.pop("url")
                 if not i:
                     i = AttrDict(
                         channel = self,
                         sources = [
-                            AttrDict(url=url, media_type="video")
+                            AttrDict(media_type="video")
                         ],
                         **item
                     )

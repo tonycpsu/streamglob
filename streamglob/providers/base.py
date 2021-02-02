@@ -613,12 +613,16 @@ class BaseProvider(abc.ABC):
         return f"<{type(self)}: {self.NAME}>"
 
     @property
-    def auto_preview(self):
-        return self.config.auto_preview
+    def auto_preview_enabled(self):
+        return self.config.auto_preview.enabled
 
     @property
-    def auto_preview_delay(self):
-        return self.config.auto_preview_delay
+    def auto_preview_content_delay(self):
+        return self.config.auto_preview.content_delay
+
+    @property
+    def auto_preview_thumbnail_delay(self):
+        return self.config.auto_preview.thumbnail_delay
 
 class PaginatedProviderMixin(object):
 
@@ -829,8 +833,13 @@ class SynchronizedPlayerMixin(object):
                 return
 
             async def sync_playlist_async(index): # O_o
-                if  self.provider.auto_preview_delay:
-                    await asyncio.sleep(self.provider.auto_preview_delay)
+                delay = (
+                    self.provider.auto_preview_thumbnail_delay
+                    if state.listings_view.toolbar.preview_dropdown.value == "thumbnail"
+                    else auto_preview_content_delay
+                )
+                if delay:
+                    await asyncio.sleep(delay)
                 await self.set_playlist_pos(index)
 
             if self.pending_event_task:
@@ -841,7 +850,7 @@ class SynchronizedPlayerMixin(object):
             )
 
     def on_focus(self, source, position):
-        if self.provider.auto_preview:
+        if self.provider.auto_preview_enabled:
             self.sync_playlist_position()
         if len(self):
             with db_session:
@@ -899,7 +908,11 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
                 index = index,
                 row_num = row_num,
                 count = len(row.data.sources),
-                url = source.locator or getattr(source, "preview_locator", None) # FIXME
+                locator = (
+                    (getattr(source, "preview_locator", None) or source.locator)
+                    if state.listings_view.toolbar.preview_dropdown.value == "thumbnail"
+                    else (source.locator or getattr(source, "preview_locator", None))
+                )
             )
             for (row_num, row, index, source) in [
                     (row_num, row, index, source) for row_num, row in enumerate(self)
@@ -924,7 +937,7 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
         self.disable_focus_handler()
         super().reset(*args, **kwargs)
 
-        if self.provider.auto_preview:
+        if self.provider.auto_preview_enabled:
             # async def preview():
             #     if delay:
             #         await asyncio.sleep(delay)

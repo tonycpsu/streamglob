@@ -62,14 +62,14 @@ class TaskManager(Observable):
         ITEM_TEMPLATE=textwrap.dedent(
         """\
         #EXTINF:1,{title}
-        {url}
+        {locator}
         """)
         with tempfile.NamedTemporaryFile(suffix=".m3u8", delete=False) as m3u:
             m3u.write(f"#EXTM3U\n".encode("utf-8"))
             for item in items:
                 m3u.write(ITEM_TEMPLATE.format(
                     title = item.title.strip() or "(no title)",
-                    url=item.url
+                    locator=item.locator
                 ).encode("utf-8"))
             logger.info(m3u.name)
 
@@ -97,7 +97,7 @@ class TaskManager(Observable):
             [
                 AttrDict(
                     title=title,
-                    url=BLANK_IMAGE_URI,
+                    locator=BLANK_IMAGE_URI,
                     media_type="image"
                 )
             ]

@@ -8,7 +8,7 @@ from ..providers.base import SynchronizedPlayerMixin
 
 class ProviderToolbar(urwid.WidgetWrap):
 
-    signals = ["provider_change", "profile_change"]
+    signals = ["provider_change", "profile_change", "preview_change"]
     def __init__(self, default_provider):
 
         def format_provider(n, p):
@@ -50,6 +50,23 @@ class ProviderToolbar(urwid.WidgetWrap):
             lambda w, b, v: self._emit("profile_change", v)
         )
 
+
+        self.preview_dropdown = BaseDropdown(
+            AttrDict([
+                ("Full", "full"),
+                ("Thumbnail", "thumbnail"),
+            ]),
+            label="Preview",
+            default=config.settings.preview_content or "full",
+            margin=1
+        )
+
+        urwid.connect_signal(
+            self.preview_dropdown, "change",
+            lambda w, b, v: self._emit("preview_change", v)
+        )
+
+
         self.max_concurrent_tasks_widget = providers.filters.IntegerTextFilterWidget(
             default=config.settings.tasks.max,
                 minimum=1
@@ -68,10 +85,12 @@ class ProviderToolbar(urwid.WidgetWrap):
         self.columns = urwid.Columns([
             # ('weight', 1, urwid.Padding(urwid.Edit("foo"))),
             (self.provider_dropdown.width, self.provider_dropdown),
+            ("weight", 1, urwid.Padding(urwid.Text(""))),
+            (self.preview_dropdown.width, self.preview_dropdown),
+            # (1, urwid.Divider(u"\N{BOX DRAWINGS LIGHT VERTICAL}")),
             ("pack", urwid.Text(("Downloads"))),
             (5, self.max_concurrent_tasks_widget),
             ("weight", 1, urwid.Padding(urwid.Text(""))),
-            # (1, urwid.Divider(u"\N{BOX DRAWINGS LIGHT VERTICAL}")),
             (self.profile_dropdown.width, self.profile_dropdown),
         ], dividechars=3)
         # self.filler = urwid.Filler(self.columns)
@@ -106,6 +125,11 @@ class ListingsView(StreamglobView):
             lambda w, p: profile_change(p)
         )
 
+        urwid.connect_signal(
+            self.toolbar, "preview_change",
+            lambda w, p: self.provider.reset()
+        )
+
         self.listings_view_placeholder = urwid.WidgetPlaceholder(
             urwid.Filler(urwid.Text(""))
         )
@@ -131,12 +155,12 @@ class ListingsView(StreamglobView):
     def activate(self):
         self.set_provider(self.provider.IDENTIFIER)
 
-    def on_view_activate(self):
+    # def on_view_activate(self):
 
-        async def activate_async():
-            if self.provider.auto_preview:
-                await self.provider.view.preview_selection()
-        state.event_loop.create_task(activate_async())
+    #     async def activate_async():
+    #         if self.provider.auto_preview_enabled:
+    #             await self.provider.view.preview_all()
+    #     state.event_loop.create_task(activate_async())
 
     def keypress(self, size, key):
 
