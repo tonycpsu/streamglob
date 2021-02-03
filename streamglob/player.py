@@ -590,6 +590,14 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
         "RIGHT": "cursor right"
     }
 
+    LOG_LEVEL_MAP = {
+        "fatal": "critical",
+        "warn": "warning",
+        "status": "info",
+        "v": "debug",
+        "trace": "debug"
+    }
+
     ARG_MAP = {
         "playlist_position": "playlist-start"
     }
@@ -618,12 +626,22 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
         rc = await super().run(*args, **kwargs)
         await self.wait_for_socket()
         # self.controller = MPV(start_mpv=False, ipc_socket=self.ipc_socket_name)
-        controller = MPV(socket=self.ipc_socket_name)
+        controller = MPV(
+            socket=self.ipc_socket_name,
+            log_callback=self.log,
+            log_level="error"
+        )
         await controller.start()
         self.ready.set_result(controller)
         # self._initialized = True
         return rc
         # state.event_loop.call_later(5, self.test)
+
+    async def log(self, level, prefix, text):
+        if not len(text):
+            return
+        log_method = getattr(logger, self.LOG_LEVEL_MAP.get(level, level))
+        log_method(f"{prefix}: {text}")
 
     async def command(self, *args, **kwargs):
         try:
