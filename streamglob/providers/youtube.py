@@ -2,6 +2,11 @@ import logging
 logger = logging.getLogger(__name__)
 import os
 
+import dateparser
+from datetime import timedelta
+import xml.etree.ElementTree as ET
+import isodate
+
 from .feed import *
 
 from ..exceptions import *
@@ -15,9 +20,44 @@ from .filters import *
 
 import youtube_dl
 
-@model.attrclass()
-class YouTubeMediaListing(FeedMediaListing):
-    pass
+class YouTubeMediaListingMixin(object):
+
+
+    @property
+    def duration(self):
+        return (
+            str(timedelta(seconds=self.duration_seconds))
+            if self.duration_seconds is not None
+            else None
+        )
+
+    # FIXME: do these in bulk to minimize API calls
+    @property
+    def google_data(self):
+        if not getattr(self, "_google_data", False):
+            url = (
+                f"https://www.googleapis.com/youtube/v3/videos?id={self.guid}"
+                f"&part=snippet,contentDetails"
+                f"&key={self.provider.config.credentials.api_key}"
+            )
+            self._google_data = self.provider.session.get(url).json()
+
+        return self._google_data
+
+    async def inflate(self):
+            listing = self.attach()
+            listing.duration_seconds = int(
+                isodate.parse_duration(
+                    listing.google_data["items"][0]["contentDetails"]["duration"]
+                ).total_seconds()
+            )
+
+
+@model.attrclass(YouTubeMediaListingMixin)
+class YouTubeMediaListing(YouTubeMediaListingMixin, model.InflatableMediaListing, FeedMediaListing):
+
+    duration_seconds = Optional(int)
+
 
 
 class YouTubeMediaSourceMixin(object):
@@ -36,6 +76,7 @@ class YouTubeMediaSourceMixin(object):
             (None, "youtube-dl"),
             ("mpv", None),
         ])
+
 
 @model.attrclass(YouTubeMediaSourceMixin)
 class YouTubeMediaSource(YouTubeMediaSourceMixin, model.InflatableMediaSource):
@@ -74,9 +115,20 @@ class YouTubeSession(session.StreamSession):
                 yield SearchResult(
                     guid = item["id"],
                     title = item["title"],
+                    duration_seconds = self.parse_duration(item["duration"]),
                     # url = f"https://youtu.be/{item['url']}",
                     # preview_url = f"http://img.youtube.com/vi/{item['url']}/0.jpg"
                 )
+
+    @classmethod
+    def parse_duration(cls, s):
+        if not s:
+            return None
+        return (dateparser.parse(s) - datetime.now().replace(
+                hour=0,minute=0,second=0)
+             ).seconds
+
+
 
 class YouTubeChannelsDropdown(Observable, urwid.WidgetWrap):
 
@@ -186,20 +238,53 @@ class YouTubeChannelsFilter(FeedsFilter):
     def widget_sizing(self):
         return lambda w: ("given", 30)
 
+
+
 class YouTubeFeed(FeedMediaChannel):
 
     LISTING_CLASS = YouTubeMediaListing
 
-    async def fetch(self, limit = None, *args, **kwargs):
+    CHANNEL_URL_TEMPLATE = "https://youtube.com/channel/{locator}/videos"
 
-        if not limit:
-            limit = self.DEFAULT_FETCH_LIMIT
+    @property
+    @memo(region="long")
+    def rss_data(self):
+        url = f"https://www.youtube.com/feeds/videos.xml?channel_id={self.locator}"
+        res = self.session.get(url)
+        content = res.content
+        tree = ET.fromstring(content)
+        entries = tree.findall(
+            ".//{http://www.w3.org/2005/Atom}entry"
+        )
+        # raise Exception(entries[0].find("./{http://www.w3.org/2005/Atom}title"))
 
-        url = self.locator
+        res = {
+            tag: entry.find(ns+tag).text
+            for entry in entries
+            for ns, tag in [
+                    ("{http://www.w3.org/2005/Atom}", "title"),
+                    ("{http://www.w3.org/2005/Atom}", "published"),
+                    (".//{http://search.yahoo.com/mrss/}", "description")
 
-        if not url.endswith("/videos"):
-            url += "/videos"
+            ]
+        }
+        return res
 
+    @property
+    def is_channel(self):
+        return len(self.locator) == 24 and self.locator.startswith("UC")
+
+    async def fetch(self, *args, **kwargs):
+
+        limit = self.provider.config.get("fetch_limit", self.DEFAULT_FETCH_LIMIT)
+
+        url = (
+            self.CHANNEL_URL_TEMPLATE.format(locator=self.locator)
+            if self.is_channel
+            else self.locator
+        )
+
+        # raise Exception(self.rss_data)
         for item in self.session.youtube_dl_query(url, limit=limit):
             with db_session:
                 logger.info(item["guid"])
@@ -209,7 +294,7 @@ class YouTubeFeed(FeedMediaChannel):
                     i = AttrDict(
                         channel = self,
                         sources = [
-                            AttrDict(media_type="video")
+                            AttrDict(media_type="video", duration_seconds=item["duration_seconds"])
                         ],
                         **item
                     )
@@ -235,6 +320,22 @@ class YouTubeProvider(PaginatedProviderMixin,
     SESSION_CLASS = YouTubeSession
 
     DOWNLOADER = "youtube-dl"
+
+    def init_config(self):
+        super().init_config()
+        attrs = list(self.ATTRIBUTES.items())
+        idx, attr = next(  (i, a ) for i, a in enumerate(attrs) if a[0] == "title")
+        self.ATTRIBUTES = AttrDict(
+            attrs[:idx]
+            + [
+                ("duration", {
+                    "width": 8,
+                    "align": "right",
+                })
+            ]
+            + attrs[idx:]
+        )
+
 
     @property
     def selected_feed(self):
