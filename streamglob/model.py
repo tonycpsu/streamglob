@@ -19,6 +19,7 @@ from pony.orm import *
 
 from orderedattrdict import AttrDict
 from pony.orm.core import EntityMeta
+import pydantic
 from pydantic import BaseModel, Field, validator
 
 
@@ -185,21 +186,30 @@ class attrclass(object):
             return ns
 
 
+        bases = []
         # if there's an entity class in this entity class's hierarchy that has
         # an attr class, make our attr class a subclass of it
-        bases = []
-
         for c in cls.mro():
             if hasattr(c, "attr_class"):
                 bases.append(c.attr_class)
                 break
+
+        for c in cls.mro():
+            if (c not in bases
+                and c.__base__ == object
+                and c not in [
+                    pony.orm.core.Entity,
+                    pydantic.utils.Representation
+                ]):
+                print(bases, c)
+                bases.append(c)
         else:
             bases.append(BaseModel)
 
         # if there's a base class we want to wedge into the class hierarchy of
         # both the entity class and the attr class (e.g. mixins with methods or
         # properties common to both) we do that here
-        if self.common_base:
+        if self.common_base and self.common_base not in bases:
             bases.insert(0, self.common_base)
             # bases.append(self.common_base)
 
@@ -222,6 +232,7 @@ class attrclass(object):
             # return detached
         cls.detach = detach
         cls.attach = lambda self: self
+        cls.orm_class = cls
         return cls
 
 
