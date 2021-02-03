@@ -1041,7 +1041,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
 
         if self.feed:
             self.feed_items_query = self.all_items_query.filter(
-                lambda i: i.feed == self.feed
+                lambda i: i.channel == self.feed
             )
         else:
             self.feed_items_query = self.all_items_query
@@ -1103,7 +1103,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                 ]
                 listing = listing.detach()
                 listing.channel = listing.channel.detach()
-                listing.feed.listings = None
+                listing.channel.listings = None
                 listing.sources = sources
                 yield listing
 
