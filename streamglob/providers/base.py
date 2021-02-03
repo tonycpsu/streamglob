@@ -711,7 +711,10 @@ class SynchronizedPlayerMixin(object):
 
     KEYMAP = {
         " ": "preview_selection",
-        "meta p": "preview_all"
+        "meta p": "preview_all",
+        "<": ("player_command", ["playlist_prev"]),
+        ">": ("player_command", ["playlist_next"]),
+        "?": ("player_command", ["script-message", "osc-playlist"]),
     }
 
     def __init__(self, *args, **kwargs):
@@ -725,6 +728,10 @@ class SynchronizedPlayerMixin(object):
         self.on_focus_handler = None
         self.sync_player_playlist = False
 
+    async def player_command(self, *args):
+        await state.task_manager.preview_player.command(*args)
+
+
     def extract_sources(self, listing, **kwargs):
         return (listing.sources if listing else [], kwargs)
 
@@ -737,8 +744,8 @@ class SynchronizedPlayerMixin(object):
         )
 
     async def preview_selection(self):
-        if len(self.body):
-            await self.preview_all(playlist_position=self.playlist_position)
+        # if len(self.body):
+        #     await self.preview_all(playlist_position=self.playlist_position)
         if state.listings_view.preview_mode == "thumbnail":
             listing = self.selection.data_source
             source = listing.sources[0]
@@ -882,23 +889,29 @@ class SynchronizedPlayerMixin(object):
             "get_property", "playlist-count"
         )
 
+        logger.info(f"count: {count}")
+
         if pos is None:
             pos = await state.task_manager.preview_player.command(
                 "get_property", "playlist-pos"
             )
 
+        logger.info(f"pos: {pos}")
+
         await state.task_manager.preview_player.command(
             "playlist-remove", str(pos)
         )
 
-        await state.task_manager.preview_player.command(
-            "playlist-move", str(count-2), pos
-        )
+        if count-2 != pos:
+            await state.task_manager.preview_player.command(
+                "playlist-move", str(count-2), pos
+            )
+
+            logger.info(f"move: {count-2} -> {pos}")
 
         await state.task_manager.preview_player.command(
             "playlist-play-index", pos
         )
-
 
 
     # async def download(self):

@@ -201,7 +201,6 @@ class attrclass(object):
                     pony.orm.core.Entity,
                     pydantic.utils.Representation
                 ]):
-                print(bases, c)
                 bases.append(c)
         else:
             bases.append(BaseModel)
