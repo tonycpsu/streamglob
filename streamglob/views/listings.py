@@ -105,7 +105,13 @@ class ProviderToolbar(urwid.WidgetWrap):
         return (self.provider_dropdown.selected_label)
 
 
+@keymapped()
 class ListingsView(StreamglobView):
+
+    KEYMAP = {
+        "meta [": ("cycle_provider", [-1]),
+        "meta ]": ("cycle_provider", [1]),
+    }
 
     def __init__(self, provider):
 
@@ -152,6 +158,9 @@ class ListingsView(StreamglobView):
             self.pile.focus_position = 0
         self.provider.activate()
 
+    def cycle_provider(self, step=1):
+        self.toolbar.cycle_provider(step)
+
     def activate(self):
         self.set_provider(self.provider.IDENTIFIER)
 
@@ -167,9 +176,4 @@ class ListingsView(StreamglobView):
         state.event_loop.create_task(activate_async())
 
     def keypress(self, size, key):
-
-        if key in ["meta up", "meta down"]:
-            self.toolbar.cycle_provider(-1 if key == "meta up" else 1)
-
-        else:
-            return super().keypress(size, key)
+        return super().keypress(size, key)

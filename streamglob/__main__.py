@@ -110,7 +110,15 @@ def reload_config():
 
 intersperse = lambda e,l: sum([[x, e] for x in l],[])[:-1]
 
-class TiledView(urwid.WidgetWrap):
+@keymapped()
+class MainView(urwid.WidgetWrap):
+
+    KEYMAP = {
+        ",": ("player_command", ["seek", "-10"]),
+        ".": ("player_command", ["seek", "+10"]),
+        "meta ,": ("player_command", ["seek", "-10"]),
+        "meta .": ("player_command", ["seek", "+10"]),
+    }
 
     def __init__(self, widgets, weight=1, dividers=False):
 
@@ -234,6 +242,9 @@ class TiledView(urwid.WidgetWrap):
     def get_widget(self, x, y):
         return self.columns.contents[y][0].contents[x][0]
 
+    async def player_command(self, *args):
+        await state.task_manager.preview_player.command(*args)
+
 
 
 def run_gui(action, provider, **kwargs):
@@ -271,7 +282,7 @@ def run_gui(action, provider, **kwargs):
         def selectable(self):
             return False
 
-    state.main_view = TiledView([
+    state.main_view = MainView([
         [ state.tasks_view, state.listings_view ],
         [ state.files_view, VideoPlaceholder() ]
     ], weight=[

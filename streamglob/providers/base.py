@@ -711,9 +711,7 @@ class SynchronizedPlayerMixin(object):
 
     KEYMAP = {
         " ": "preview_selection",
-        "meta p": "preview_all",
-        "<": ("player_command", ["playlist_prev"]),
-        ">": ("player_command", ["playlist_next"]),
+        "meta p": "preview_all"
     }
 
     def __init__(self, *args, **kwargs):
@@ -726,10 +724,6 @@ class SynchronizedPlayerMixin(object):
         self.pending_event_task = None
         self.on_focus_handler = None
         self.sync_player_playlist = False
-
-    async def player_command(self, *args):
-        await state.task_manager.preview_player.command(*args)
-
 
     def extract_sources(self, listing, **kwargs):
         return (listing.sources if listing else [], kwargs)
