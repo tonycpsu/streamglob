@@ -587,7 +587,8 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
         "UP": "cursor up",
         "DOWN": "cursor down",
         "LEFT": "cursor left",
-        "RIGHT": "cursor right"
+        "RIGHT": "cursor right",
+        "SPACE": " "
     }
 
     LOG_LEVEL_MAP = {
