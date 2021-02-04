@@ -714,7 +714,6 @@ class SynchronizedPlayerMixin(object):
         "meta p": "preview_all",
         "<": ("player_command", ["playlist_prev"]),
         ">": ("player_command", ["playlist_next"]),
-        "?": ("player_command", ["script-message", "osc-playlist"]),
     }
 
     def __init__(self, *args, **kwargs):
@@ -744,12 +743,16 @@ class SynchronizedPlayerMixin(object):
         )
 
     async def preview_selection(self):
-        # if len(self.body):
-        #     await self.preview_all(playlist_position=self.playlist_position)
+        if not len(self.body):
+            return
+
         if state.listings_view.preview_mode == "thumbnail":
             listing = self.selection.data_source
             source = listing.sources[0]
             await self.playlist_replace(source.locator)
+        else:
+            await self.preview_all(playlist_position=self.playlist_position)
+
         # await self.set_playlist_pos(self.playlist_position)
 
     @property
@@ -881,20 +884,16 @@ class SynchronizedPlayerMixin(object):
 
     async def playlist_replace(self, url, pos=None):
 
+        count = len(self)
+
         await state.task_manager.preview_player.command(
             "loadfile", url, "append"
-        )
-
-        count = await state.task_manager.preview_player.command(
-            "get_property", "playlist-count"
         )
 
         logger.info(f"count: {count}")
 
         if pos is None:
-            pos = await state.task_manager.preview_player.command(
-                "get_property", "playlist-pos"
-            )
+            pos = self.focus_position
 
         logger.info(f"pos: {pos}")
 
@@ -902,12 +901,9 @@ class SynchronizedPlayerMixin(object):
             "playlist-remove", str(pos)
         )
 
-        if count-2 != pos:
-            await state.task_manager.preview_player.command(
-                "playlist-move", str(count-2), pos
-            )
-
-            logger.info(f"move: {count-2} -> {pos}")
+        await state.task_manager.preview_player.command(
+            "playlist-move", str(count-1), str(pos)
+        )
 
         await state.task_manager.preview_player.command(
             "playlist-play-index", pos
