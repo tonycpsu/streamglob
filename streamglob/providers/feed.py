@@ -202,7 +202,7 @@ class FeedMediaListingMixin(object):
 
 
 
-@model.attrclass(FeedMediaListingMixin)
+@model.attrclass()
 class FeedMediaListing(FeedMediaListingMixin, model.ChannelMediaListing, model.TitledMediaListing):
     """
     An individual media clip, broadcast, episode, etc. within a particular
@@ -224,6 +224,18 @@ class FeedMediaListing(FeedMediaListingMixin, model.ChannelMediaListing, model.T
 #         seen = self.sources.seen.select()
 #         return all(seen)
 # #
+
+class ContentFeedMediaListingMixin(object):
+
+    @property
+    def body(self):
+        return self.content or ""
+
+
+@model.attrclass()
+class ContentFeedMediaListing(ContentFeedMediaListingMixin, FeedMediaListing):
+
+    content = Optional(str)
 
 class FeedMediaSourceMixin(object):
 

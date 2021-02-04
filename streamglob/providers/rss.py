@@ -26,17 +26,9 @@ class RSSMediaSource(model.MediaSource):
     #     return True
 
 
-class RssMediaListingMixin(object):
-
-    @property
-    def body(self):
-        return self.description or self.title
-
-@model.attrclass(RssMediaListingMixin)
-class RSSMediaListing(RssMediaListingMixin, FeedMediaListing):
-
-    description = Optional(str, index=True)
-
+@model.attrclass()
+class RSSMediaListing(ContentFeedMediaListing):
+    pass
 
 class RSSSession(session.StreamSession):
 
@@ -83,7 +75,7 @@ class RSSSession(session.StreamSession):
                         guid=guid,
                         link=link_func(item),
                         title=title_func(item),
-                        description=getattr(item, desc_attr),
+                        content=getattr(item, desc_attr),
                         pub_date=getattr(item, pub_attr)
                     )
             except atoma.exceptions.FeedParseError:
@@ -118,7 +110,7 @@ class RSSFeed(FeedMediaChannel):
                             channel = self,
                             guid = guid,
                             title = item.title,
-                            description = item.description,
+                            content = item.content,
                             created = item.pub_date.replace(tzinfo=None),
                             # created = datetime.fromtimestamp(
                             #     mktime(item.published_parsed)

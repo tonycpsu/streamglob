@@ -46,18 +46,22 @@ class YouTubeMediaListingMixin(object):
 
     async def inflate(self):
             listing = self.attach()
+            data = self.google_data
+            listing.created = data["items"][0]["snippet"]["publishedAt"][:-1]
+            listing.content = data["items"][0]["snippet"]["description"]
             listing.duration_seconds = int(
                 isodate.parse_duration(
-                    listing.google_data["items"][0]["contentDetails"]["duration"]
+                    data["items"][0]["contentDetails"]["duration"]
                 ).total_seconds()
             )
+            listing.definition = data["items"][0]["contentDetails"]["definition"]
 
 
 @model.attrclass(YouTubeMediaListingMixin)
-class YouTubeMediaListing(YouTubeMediaListingMixin, model.InflatableMediaListing, FeedMediaListing):
+class YouTubeMediaListing(YouTubeMediaListingMixin, model.InflatableMediaListing, ContentFeedMediaListing):
 
     duration_seconds = Optional(int)
-
+    definition = Optional(str)
 
 
 class YouTubeMediaSourceMixin(object):
