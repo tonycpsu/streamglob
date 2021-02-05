@@ -2,6 +2,7 @@ import logging
 logger = logging.getLogger(__name__)
 import os
 
+from pony.orm import *
 import dateparser
 from datetime import timedelta
 import xml.etree.ElementTree as ET
@@ -31,34 +32,9 @@ class YouTubeMediaListingMixin(object):
             else None
         )
 
-    # FIXME: do these in bulk to minimize API calls
-    @property
-    def google_data(self):
-        if not getattr(self, "_google_data", False):
-            url = (
-                f"https://www.googleapis.com/youtube/v3/videos?id={self.guid}"
-                f"&part=snippet,contentDetails"
-                f"&key={self.provider.config.credentials.api_key}"
-            )
-            self._google_data = self.provider.session.get(url).json()
-
-        return self._google_data
-
-    async def inflate(self):
-            listing = self.attach()
-            data = self.google_data
-            listing.created = data["items"][0]["snippet"]["publishedAt"][:-1]
-            listing.content = data["items"][0]["snippet"]["description"]
-            listing.duration_seconds = int(
-                isodate.parse_duration(
-                    data["items"][0]["contentDetails"]["duration"]
-                ).total_seconds()
-            )
-            listing.definition = data["items"][0]["contentDetails"]["definition"]
-
 
 @model.attrclass(YouTubeMediaListingMixin)
-class YouTubeMediaListing(YouTubeMediaListingMixin, model.InflatableMediaListing, ContentFeedMediaListing):
+class YouTubeMediaListing(YouTubeMediaListingMixin, ContentFeedMediaListing):
 
     duration_seconds = Optional(int)
     definition = Optional(str)
@@ -83,19 +59,14 @@ class YouTubeMediaSourceMixin(object):
 
 
 @model.attrclass(YouTubeMediaSourceMixin)
-class YouTubeMediaSource(YouTubeMediaSourceMixin, model.InflatableMediaSource):
+class YouTubeMediaSource(YouTubeMediaSourceMixin, FeedMediaSource):
     pass
-
-class SearchResult(AttrDict):
-
-    @property
-    def content(self):
-        return AttrDict(url=self.url, media_type="video")
 
 class YouTubeSession(session.StreamSession):
 
-    def youtube_dl_query(self, query, offset=None, limit=None):
+    async def youtube_dl_query(self, query, offset=None, limit=None):
 
+        logger.debug(f"youtube_dl_query: {query} {offset}, {limit}")
         ytdl_opts = {
             "ignoreerrors": True,
             'quiet': True,
@@ -110,19 +81,58 @@ class YouTubeSession(session.StreamSession):
             ytdl_opts["playliststart"] = offset+1
             ytdl_opts["playlistend"] = offset + limit
 
+        #     ytdl_opts["daterange"] = youtube_dl.DateRange(end=)
+
         with youtube_dl.YoutubeDL(ytdl_opts) as ydl:
             playlist_dict = ydl.extract_info(query, download=False)
+
             if not playlist_dict:
                 logger.warn("youtube_dl returned no data")
                 return
             for item in playlist_dict['entries']:
-                yield SearchResult(
+                yield AttrDict(
                     guid = item["id"],
                     title = item["title"],
                     duration_seconds = self.parse_duration(item["duration"]),
                     # url = f"https://youtu.be/{item['url']}",
                     # preview_url = f"http://img.youtube.com/vi/{item['url']}/0.jpg"
                 )
+
+
+    async def fetch_google_data(self, video_ids):
+        url = (
+            f"https://www.googleapis.com/youtube/v3/videos?"
+            f"id={','.join(video_ids)}"
+            f"&part=snippet,contentDetails"
+            f"&key={self.provider.config.credentials.api_key}"
+        )
+        return self.provider.session.get(url).json()
+
+    async def bulk_update(self, entries):
+
+        vids = [entry.guid for entry in entries]
+        data = await self.fetch_google_data(vids)
+        logger.debug(f"bulk_update: {vids}")
+
+        for entry in entries:
+            item = next(
+                item for item in data["items"]
+                if item["id"] == entry.guid
+            )
+            entry.created = dateparser.parse(item["snippet"]["publishedAt"][:-1]) # FIXME: Time zone convert from UTC
+            entry.content = item["snippet"]["description"]
+            entry.duration_seconds = int(
+                isodate.parse_duration(
+                    item["contentDetails"]["duration"]
+                ).total_seconds()
+            )
+            entry.definition = item["contentDetails"]["definition"]
+            yield entry
+
+    async def fetch(self, query, offset=None, limit=None):
+
+        async for entry in self.youtube_dl_query(query, offset=offset, limit=limit):
+            yield entry
 
     @classmethod
     def parse_duration(cls, s):
@@ -215,12 +225,7 @@ class YouTubeChannelsFilter(FeedsFilter):
 
     @property
     def items(self):
-        # channels = [("Search", "search")]
-        # channels += list(state.provider_config.feeds.items())
-        # return channels
-        # raise Exception(list(super().items.items()))
         return AttrDict(super().items, **{"Search": "search"})
-        # return list(super().items)
 
     @property
     def value(self):
@@ -275,10 +280,28 @@ class YouTubeFeed(FeedMediaChannel):
         return res
 
     @property
+    @db_session
+    def end_cursor(self):
+        num_listings = self.provider.LISTING_CLASS.select(
+            lambda l: l.channel == self
+        ).count()
+        try:
+            oldest, guid = select(
+                (l.created, l.guid)
+                for l in  self.provider.LISTING_CLASS
+                if l.channel == self
+            ).order_by(lambda c, g: c).first()
+        except TypeError:
+            oldest, guid = (None, None)
+
+        return (oldest, num_listings, guid)
+
+
+    @property
     def is_channel(self):
         return len(self.locator) == 24 and self.locator.startswith("UC")
 
-    async def fetch(self, *args, **kwargs):
+    async def fetch(self, resume=False, *args, **kwargs):
 
         limit = self.provider.config.get("fetch_limit", self.DEFAULT_FETCH_LIMIT)
 
@@ -288,27 +311,98 @@ class YouTubeFeed(FeedMediaChannel):
             else self.locator
         )
 
-        # raise Exception(self.rss_data)
-        for item in self.session.youtube_dl_query(url, limit=limit):
+        listings = []
+
+        (oldest, num_listings, oldest_guid) = self.end_cursor
+        offset = num_listings if resume else 0
+        new = 0
+
+        while offset >= 0:
+
             with db_session:
+
+                logger.info(f"fetch: offset={offset}, limit={limit}")
+                batch = [
+                    item async for item in self.session.fetch(
+                        url, offset=offset, limit=limit
+                    )
+                ]
+
+                if not len(batch):
+                    break
+
+                # if we're not resuming and we already have the first item,
+                # assume there's nothing new and return early
+                if (
+                        not resume
+                        and self.items.select(
+                            lambda i: i.guid == batch[0]["guid"]
+                    ).first()
+                ):
+                    break
+
+                # add in data from Google API
+                batch = [ l async for l in self.session.bulk_update(batch) ]
+
+            try:
+                start = next(
+                    i for i, item in enumerate(batch)
+                    if (
+                        (oldest is None or item.created <= oldest)
+                        and item.guid != oldest_guid
+                    )
+                )
+
+                if start and len(listings):
+                    listings[:0] += batch[start:]
+                else:
+                    listings += [l for l in batch[start:]
+                                 if (oldest is None
+                                     or l.created <= oldest)
+                                 and l.guid != oldest_guid]
+
+            except StopIteration:
+                start = None
+                # these are all newer, so advance and continue
+                offset += limit
+                if resume:
+                    continue
+
+            if len(listings) >= limit:
+                # there's an item in this batch that's newer, so we don't need
+                # to go back any further
+                break
+            elif not resume:
+                break
+            else:
+                # advance forward to get one more page
+                offset += limit
+                continue
+
+            # go back a page
+            offset -= min(offset, limit)
+
+        with db_session:
+
+            for item in listings:
+
                 logger.info(item["guid"])
+
                 i = self.items.select(lambda i: i.guid == item["guid"]).first()
 
-                if not i:
-                    i = AttrDict(
-                        channel = self,
-                        sources = [
-                            AttrDict(media_type="video", duration_seconds=item["duration_seconds"])
-                        ],
-                        **item
-                    )
-                    logger.info(i)
-                    yield i
+                if i:
+                    raise RuntimeError(f"old listing retrieved: {i}")
 
-class TemplateIngoreMissingDict(dict):
+                listing = AttrDict(
+                    channel = self,
+                    sources = [
+                        AttrDict(media_type="video")
+                    ],
+                    **item
+                )
+                yield listing
 
-     def __missing__(self, key):
-         return '{' + key + '}'
+
 
 class YouTubeProvider(PaginatedProviderMixin,
                       CachedFeedProvider):
@@ -358,7 +452,11 @@ class YouTubeProvider(PaginatedProviderMixin,
                     AttrDict(
                         title = r.title,
                         guid = r.guid,
-                        sources = [ AttrDict(locator=r.url, media_type="video") ]
+                        sources = [
+                            AttrDict(
+                                locator=r.url, media_type="video"
+                            )
+                        ]
                     )
                     for r in self.session.youtube_dl_query(query, offset, limit)
                 ]
