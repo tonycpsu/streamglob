@@ -2,11 +2,21 @@ import logging
 logger = logging.getLogger(__name__)
 import os
 
-from pony.orm import *
-import dateparser
 from datetime import timedelta
 import xml.etree.ElementTree as ET
+from urllib.parse import parse_qs
+import json
+import math
+import shutil
+import tempfile
+
+from pony.orm import *
+import dateparser
 import isodate
+import wand.image
+import wand.drawing
+import ffmpeg
+
 
 from .feed import *
 
@@ -31,6 +41,50 @@ class YouTubeMediaListingMixin(object):
             if self.duration_seconds is not None
             else None
         )
+
+    @property
+    def video_info(self):
+        return parse_qs(
+            self.provider.session.get(
+                "https://www.youtube.com/get_video_info"
+                f"?video_id={self.guid}&asv=3&el=detailpage&hl=en_US"
+            ).text
+        )
+
+    @property
+    def storyboards(self):
+
+        pr = json.loads(self.video_info["player_response"][0])
+        spec = pr["storyboards"]["playerStoryboardSpecRenderer"]["spec"]
+        duration = int(pr["videoDetails"]["lengthSeconds"])
+
+        spec_parts = spec.split('|')
+        base_url = spec_parts[0].split('$')[0] + "2/"
+
+        sgp_part = spec_parts[0].split('$N')[1]
+
+        if(len(spec_parts) == 3):
+            sigh = spec_parts[2].split('M#')[1]
+        elif (len(spec_parts) == 2):
+            sigh = spec_parts[1].split('t#')[1]
+        else:
+            sigh = spec_parts[3].split('M#')[1]
+
+        num_boards = 0
+        num_tiles = 25
+
+        if duration < 250:
+            num_boards = math.ceil((duration / 2) / num_tiles)
+        elif duration > 250 and duration < 1000:
+            num_boards = math.ceil((duration / 4) / num_tiles)
+        elif duration > 1000:
+            num_boards = math.ceil((duration / 10) / num_tiles)
+
+        return [
+            f"{base_url}M{i}{sgp_part}&sigh={sigh}"
+            for i in range(num_boards)
+        ]
+
 
 
 @model.attrclass(YouTubeMediaListingMixin)
@@ -404,6 +458,106 @@ class YouTubeFeed(FeedMediaChannel):
                 yield listing
 
 
+@keymapped()
+class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
+
+    def keypress(self, size, key):
+        return super().keypress(size, key)
+
+
+    def on_focus(self, source, position):
+        super().on_focus(source, position)
+        async def preview():
+            state.loop.draw_screen()
+            row = self[position]
+            listing = row.data_source
+            # FIXME: stashing in row object is kinda gross
+            if not getattr(row, "_preview", False):
+                row._preview = self.make_storyboard_preview(listing)
+            await self.playlist_replace(row._preview)
+
+        state.event_loop.create_task(preview())
+
+
+    # FIXME: share temp dir with player and other modules
+    @property
+    def tmp_dir(self):
+        if not getattr(self, "_tmp_dir", False):
+            self._tmp_dir = tempfile.mkdtemp()
+        return self._tmp_dir
+
+    # FIXME: shared utility module if reused?
+    def download_file(self, url, path):
+        if os.path.isdir(path):
+            dest = os.path.join(path, url.split('/')[-1])
+        else:
+            dest = path
+
+        with requests.get(url, stream=True) as r:
+            with open(dest, 'wb') as f:
+                shutil.copyfileobj(r.raw, f)
+
+    def make_storyboard_preview(self, listing):
+
+        TILE_WIDTH=160
+        TILE_HEIGHT=90
+        INSET_SCALE=3
+        FRAME_RATE=2
+        INSET_OFFSET=5
+        INSET_STROKE=3
+        TILE_SKIP=5
+
+        thumbnail = os.path.join(self.tmp_dir, "thumbnail.jpg")
+        self.download_file(listing.sources[0].preview_locator, thumbnail)
+
+        board_files = []
+        for i, board in enumerate(listing.storyboards):
+            board_file = os.path.join(self.tmp_dir, f"board_{i:02d}")
+            board_files.append(board_file)
+            self.download_file(board, board_file)
+
+        thumbnail = wand.image.Image(filename=thumbnail)
+        i = 0
+        for board_file in board_files:
+            with wand.image.Image(filename=board_file) as img:
+                for h in range(0, img.height, TILE_HEIGHT):
+                    for w in range(0, img.width, TILE_WIDTH):
+                        i += 1
+                        if i % TILE_SKIP:
+                            continue
+                        w_end = w + TILE_WIDTH
+                        h_end = h + TILE_HEIGHT
+                        with img[w:w_end, h:h_end] as chunk:
+                            clone = thumbnail.clone()
+                            chunk.resize(TILE_WIDTH * INSET_SCALE,
+                                         TILE_HEIGHT * INSET_SCALE)
+                            thumbnail.composite(
+                                chunk,
+                                left=thumbnail.width-chunk.width-INSET_OFFSET,
+                                top=thumbnail.height-chunk.height-INSET_OFFSET
+                            )
+                            with wand.drawing.Drawing() as draw:
+                                draw.fill_color="transparent"
+                                draw.stroke_color="yellow"
+                                draw.stroke_width=INSET_STROKE
+                                draw.rectangle(
+                                    left=thumbnail.width-chunk.width-INSET_OFFSET,
+                                    top=thumbnail.height-chunk.height-INSET_OFFSET,
+                                    width=TILE_WIDTH * INSET_SCALE
+                                    , height=TILE_HEIGHT * INSET_SCALE,
+                                )
+                                draw(thumbnail)
+                            tile_file=os.path.join(self.tmp_dir, f"tile{i:04d}.jpg")
+                            thumbnail.save(filename=tile_file)
+
+        inputs = ffmpeg.concat(
+            ffmpeg.input(os.path.join(self.tmp_dir, "tile*.jpg"),
+                                      pattern_type='glob',framerate=FRAME_RATE)
+        )
+        preview_file=os.path.join(self.tmp_dir, f"preview.{listing.guid}.mp4")
+        logger.info(preview_file)
+        inputs.output(preview_file).run(overwrite_output=True, quiet=True)
+        return preview_file
 
 class YouTubeProvider(PaginatedProviderMixin,
                       CachedFeedProvider):
@@ -419,6 +573,11 @@ class YouTubeProvider(PaginatedProviderMixin,
     SESSION_CLASS = YouTubeSession
 
     DOWNLOADER = "youtube-dl"
+
+    @property
+    def VIEW(self):
+        return SimpleProviderView(self, CachedFeedProviderView(self, YouTubeDataTable(self)))
+
 
     def init_config(self):
         super().init_config()

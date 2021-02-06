@@ -168,12 +168,12 @@ class ListingsView(StreamglobView):
     def preview_mode(self):
         return self.toolbar.preview_dropdown.value
 
-    def on_view_activate(self):
+    # def on_view_activate(self):
 
-        async def activate_async():
-            if self.provider.auto_preview_enabled:
-                await self.provider.view.preview_all()
-        state.event_loop.create_task(activate_async())
+    #     async def activate_async():
+    #         if self.provider.auto_preview_enabled:
+    #             await self.provider.view.preview_all()
+    #     state.event_loop.create_task(activate_async())
 
     def keypress(self, size, key):
         return super().keypress(size, key)
