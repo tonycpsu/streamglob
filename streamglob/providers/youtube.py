@@ -55,7 +55,10 @@ class YouTubeMediaListingMixin(object):
     def storyboards(self):
 
         pr = json.loads(self.video_info["player_response"][0])
-        spec = pr["storyboards"]["playerStoryboardSpecRenderer"]["spec"]
+        try:
+            spec = pr["storyboards"]["playerStoryboardSpecRenderer"]["spec"]
+        except KeyError:
+            return None
         duration = int(pr["videoDetails"]["lengthSeconds"])
 
         spec_parts = spec.split('|')
@@ -467,16 +470,20 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
 
     def on_focus(self, source, position):
         super().on_focus(source, position)
-        async def preview():
-            state.loop.draw_screen()
-            row = self[position]
-            listing = row.data_source
-            # FIXME: stashing in row object is kinda gross
-            if not getattr(row, "_preview", False):
-                row._preview = self.make_storyboard_preview(listing)
-            await self.playlist_replace(row._preview)
+        state.loop.draw_screen()
+        if state.listings_view.preview_mode == "storyboard":
+            async def preview():
+                for pos in range(position, min(len(self)-1, position+3)):
+                    row = self[pos]
+                    listing = row.data_source
+                    if not listing.storyboards:
+                        continue
+                    # FIXME: stashing in row object is kinda gross
+                    if not getattr(row, "_preview", False):
+                        row._preview = self.make_storyboard_preview(listing)
+                    await self.playlist_replace(row._preview, pos=pos)
 
-        state.event_loop.create_task(preview())
+            state.event_loop.create_task(preview())
 
 
     # FIXME: share temp dir with player and other modules

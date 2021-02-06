@@ -53,8 +53,9 @@ class ProviderToolbar(urwid.WidgetWrap):
 
         self.preview_dropdown = BaseDropdown(
             AttrDict([
-                ("Full", "full"),
                 ("Thumbnail", "thumbnail"),
+                ("Storyboard", "storyboard"),
+                ("Full", "full"),
             ]),
             label="Preview",
             default=config.settings.preview_content or "full",

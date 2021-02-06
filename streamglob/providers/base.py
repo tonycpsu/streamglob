@@ -740,7 +740,7 @@ class SynchronizedPlayerMixin(object):
         if not len(self.body):
             return
 
-        if state.listings_view.preview_mode == "thumbnail":
+        if state.listings_view.preview_mode != "full":
             listing = self.selection.data_source
             source = listing.sources[0]
             await self.playlist_replace(source.locator)
@@ -842,9 +842,9 @@ class SynchronizedPlayerMixin(object):
 
             async def sync_playlist_async(index): # O_o
                 delay = (
-                    self.provider.auto_preview_thumbnail_delay
-                    if state.listings_view.preview_mode == "thumbnail"
-                    else auto_preview_content_delay
+                    self.provider.auto_preview_content_delay
+                    if state.listings_view.preview_mode == "full"
+                    else self.provider.auto_preview_thumbnail_delay
                 )
                 if delay:
                     await asyncio.sleep(delay)
@@ -899,9 +899,10 @@ class SynchronizedPlayerMixin(object):
             "playlist-move", str(count-1), str(pos)
         )
 
-        await state.task_manager.preview_player.command(
-            "playlist-play-index", pos
-        )
+        if pos == self.focus_position:
+            await state.task_manager.preview_player.command(
+                "playlist-play-index", pos
+            )
 
 
     # async def download(self):
@@ -945,9 +946,9 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
                 row_num = row_num,
                 count = len(row.data.sources),
                 locator = (
-                    (getattr(source, "preview_locator", None) or source.locator)
-                    if state.listings_view.preview_mode == "thumbnail"
-                    else (source.locator or getattr(source, "preview_locator", None))
+                    (source.locator or getattr(source, "preview_locator", None))
+                    if state.listings_view.preview_mode == "full"
+                    else (getattr(source, "preview_locator", None) or source.locator)
                 )
             )
             for (row_num, row, index, source) in [
