@@ -724,6 +724,7 @@ class SynchronizedPlayerMixin(object):
         self.pending_event_task = None
         self.on_focus_handler = None
         self.sync_player_playlist = False
+        self.playlist_lock = asyncio.Lock()
 
     def extract_sources(self, listing, **kwargs):
         return (listing.sources if listing else [], kwargs)
@@ -878,40 +879,45 @@ class SynchronizedPlayerMixin(object):
 
     async def playlist_replace(self, url, pos=None):
 
-        if pos is None:
-            pos = self.focus_position
+        async with self.playlist_lock:
+            if pos is None:
+                pos = self.focus_position
 
-        count = len(self)
+            count = len(self)
 
-        await state.task_manager.preview_player.command(
-            "loadfile", url, "append"
-        )
+            await state.task_manager.preview_player.command(
+                "loadfile", url, "append"
+            )
 
-        logger.info(f"count: {count}")
+            logger.info(f"count: {count}")
 
-        # if pos == self.focus_position:
-        #     logger.info("idle")
-        #     await state.task_manager.preview_player.command(
-        #         "playlist-play-index", "none"
-        #     )
-
-
-        logger.info(f"move: {count-1} -> {pos}")
-        await state.task_manager.preview_player.command(
-            "playlist-move", str(count), str(pos)
-        )
-
-        logger.info(f"remove: {pos+1}")
-        await state.task_manager.preview_player.command(
-            "playlist-remove", str(pos+1)
-        )
+            # if pos == self.focus_position:
+            #     logger.info("idle")
+            #     await state.task_manager.preview_player.command(
+            #         "playlist-play-index", "none"
+            #     )
 
 
-        if pos == self.focus_position:
-            logger.info(f"play: {pos}")
+            logger.info(f"move: {count} -> {pos}")
+            await state.task_manager.preview_player.command(
+                "playlist-move", str(count), str(pos)
+            )
+
+            logger.info(f"remove: {pos+1}")
+            await state.task_manager.preview_player.command(
+                "playlist-remove", str(pos+1)
+            )
+
             await state.task_manager.preview_player.command(
                 "playlist-play-index", pos
             )
+
+
+            # if pos == self.focus_position:
+            #     logger.info(f"play: {pos}")
+            #     await state.task_manager.preview_player.command(
+            #         "playlist-play-index", pos
+            #     )
 
 
     # async def download(self):

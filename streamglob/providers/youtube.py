@@ -509,7 +509,8 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         state.loop.draw_screen()
         if state.listings_view.preview_mode == "storyboard":
             async def preview():
-                for pos in range(position, min(len(self)-1, position+2)):
+                # for pos in range(position, min(len(self)-1, position+2)):
+                for pos in [position]:
                     row = self[pos]
                     listing = row.data_source
                     if not listing.storyboards or listing.guid in self.storyboards:
@@ -603,7 +604,8 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         )
         storyboard_file=os.path.join(self.tmp_dir, f"storyboard.{listing.guid}.mp4")
         logger.info(storyboard_file)
-        inputs.output(storyboard_file).run(overwrite_output=True, quiet=True)
+        proc = await inputs.output(storyboard_file).run_asyncio(overwrite_output=True, quiet=True)
+        await proc.wait()
         for p in itertools.chain(
             pathlib.Path(self.tmp_dir).glob(f"board.{listing.guid}.*"),
             pathlib.Path(self.tmp_dir).glob(f"tile.{listing.guid}.*")
