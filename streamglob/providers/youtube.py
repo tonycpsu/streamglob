@@ -504,21 +504,35 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
     def keypress(self, size, key):
         return super().keypress(size, key)
 
+    def reset(self, *args, **kwargs):
+        super().reset(*args, **kwargs)
+        for pos, row in enumerate(self):
+            listing = row.data_source
+            if listing.guid in self.storyboards:
+                storyboard = self.storyboards[listing.guid]
+                state.event_loop.create_task(self.playlist_replace(storyboard, pos=pos))
+
+
     def on_focus(self, source, position):
+
+        async def preview(listing):
+            logger.info(f"preview {pos}")
+            storyboard = await self.storyboard_for(listing)
+            await self.playlist_replace(storyboard, pos=pos)
+
         super().on_focus(source, position)
         state.loop.draw_screen()
         if state.listings_view.preview_mode == "storyboard":
-            async def preview():
-                # for pos in range(position, min(len(self)-1, position+2)):
-                for pos in [position]:
-                    row = self[pos]
-                    listing = row.data_source
-                    if not listing.storyboards or listing.guid in self.storyboards:
-                        continue
-                    logger.info(f"preview {pos}")
-                    await self.playlist_replace(await self.storyboard_for(listing), pos=pos)
-
-            state.event_loop.create_task(preview())
+            # for pos in range(position, min(len(self)-1, position+2)):
+            for pos in [position]:
+                row = self[pos]
+                listing = row.data_source
+                if not listing.storyboards or listing.guid in self.storyboards:
+                    continue
+                if getattr(self, "preview_task", False):
+                    logger.info("cancelling")
+                    self.preview_task.cancel()
+                self.preview_task = state.event_loop.create_task(preview(listing))
 
 
     # FIXME: share temp dir with player and other modules
