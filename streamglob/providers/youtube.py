@@ -515,25 +515,30 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
 
     def on_focus(self, source, position):
 
-        async def preview(listing):
-            logger.info(f"preview {pos}")
-            storyboard = await self.storyboard_for(listing)
-            await self.playlist_replace(storyboard, pos=pos)
 
         super().on_focus(source, position)
-        state.loop.draw_screen()
+
         if state.listings_view.preview_mode == "storyboard":
             # for pos in range(position, min(len(self)-1, position+2)):
-            for pos in [position]:
-                row = self[pos]
-                listing = row.data_source
-                if not listing.storyboards or listing.guid in self.storyboards:
-                    continue
-                if getattr(self, "preview_task", False):
-                    logger.info("cancelling")
-                    self.preview_task.cancel()
-                self.preview_task = state.event_loop.create_task(preview(listing))
+            state.event_loop.create_task(self.storyboard_preview(position))
 
+
+    async def storyboard_preview(self, position):
+
+        async def preview(listing):
+            # logger.info(f"preview {position}")
+            storyboard = await self.storyboard_for(listing)
+            await self.playlist_replace(storyboard, pos=position)
+
+        row = self[position]
+        listing = row.data_source
+        if not listing.storyboards or listing.guid in self.storyboards:
+            return
+        if getattr(self, "preview_task", False):
+            # logger.info("canceling")
+            self.preview_task.cancel()
+        self.preview_task = state.event_loop.create_task(preview(listing))
+        # await self.preview_task
 
     # FIXME: share temp dir with player and other modules
     @property
@@ -561,9 +566,9 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         PREVIEW_HEIGHT=720
         TILE_WIDTH=160
         TILE_HEIGHT=90
-        INSET_SCALE=3
+        INSET_SCALE=1/2
         FRAME_RATE=2
-        INSET_OFFSET=5
+        INSET_OFFSET=10
         INSET_STROKE=3
         TILE_SKIP=5
 
@@ -591,24 +596,14 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
                         h_end = h + TILE_HEIGHT
                         with img[w:w_end, h:h_end] as tile:
                             clone = thumbnail.clone()
-                            tile.resize(thumbnail.width//4,
-                                         thumbnail.height//4)
+                            tile.resize(int(thumbnail.width * INSET_SCALE),
+                                         int(thumbnail.height * INSET_SCALE))
+                            tile.border("yellow", INSET_STROKE, INSET_STROKE)
                             thumbnail.composite(
                                 tile,
                                 left=thumbnail.width-tile.width-INSET_OFFSET,
                                 top=thumbnail.height-tile.height-INSET_OFFSET
                             )
-                            with wand.drawing.Drawing() as draw:
-                                draw.fill_color="transparent"
-                                draw.stroke_color="yellow"
-                                draw.stroke_width=INSET_STROKE
-                                draw.rectangle(
-                                    left=thumbnail.width-tile.width-INSET_OFFSET,
-                                    top=thumbnail.height-tile.height-INSET_OFFSET,
-                                    width=tile.width,
-                                    height=tile.height,
-                                )
-                                draw(thumbnail)
                             tile_file=os.path.join(self.tmp_dir, f"tile.{listing.guid}.{i:04d}.jpg")
                             thumbnail.save(filename=tile_file)
 
