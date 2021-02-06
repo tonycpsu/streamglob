@@ -1,3 +1,4 @@
+import os
 import logging
 logger = logging.getLogger(__name__)
 import asyncio
@@ -96,9 +97,7 @@ class FilesView(SynchronizedPlayerMixin, StreamglobView):
 
     def on_focus(self, source, selection):
 
-        if isinstance(selection, DirectoryNode):
-            self.monitor_path(selection.full_path)
-        elif isinstance(selection, FileNode):
+        if isinstance(selection, FileNode):
             state.event_loop.create_task(self.preview_all())
 
     def monitor_path(self, path):
@@ -126,8 +125,8 @@ class FilesView(SynchronizedPlayerMixin, StreamglobView):
     def play_items(self):
         return [
             AttrDict(
-                title = "foo",
-                locator = self.browser.selection.full_path
+                title="foo",
+                locator=self.browser.selection.full_path
             )
         ]
 
