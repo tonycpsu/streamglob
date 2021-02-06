@@ -562,15 +562,20 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
 
     async def make_storyboard_preview(self, listing):
 
-        PREVIEW_WIDTH=1280
-        PREVIEW_HEIGHT=720
-        TILE_WIDTH=160
-        TILE_HEIGHT=90
-        INSET_SCALE=1/2
-        FRAME_RATE=2
-        INSET_OFFSET=10
-        INSET_STROKE=3
-        TILE_SKIP=5
+        TILE_WIDTH = 160
+        TILE_HEIGHT = 90
+
+        PREVIEW_WIDTH = 1280
+        PREVIEW_HEIGHT = 720
+
+        inset_scale = self.provider.config.get_path("auto_preview.storyboard.scale") or 0.25
+        inset_offset = self.provider.config.get_path("auto_preview.storyboard.offset") or 0
+        frame_rate = self.provider.config.get_path("auto_preview.storyboard.frame_rate") or 1
+        border_color = self.provider.config.get_path(
+            "auto_preview.storyboard.border.color"
+        ) or "black"
+        border_width = self.provider.config.get_path("auto_preview.storyboard.border.width") or 1
+        tile_skip = self.provider.config.get_path("auto_preview.storyboard.skip") or None
 
         thumbnail = await self.thumbnail_for(listing)
 
@@ -590,26 +595,26 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
                 for h in range(0, img.height, TILE_HEIGHT):
                     for w in range(0, img.width, TILE_WIDTH):
                         i += 1
-                        if i % TILE_SKIP:
+                        if tile_skip and i % tile_skip:
                             continue
                         w_end = w + TILE_WIDTH
                         h_end = h + TILE_HEIGHT
                         with img[w:w_end, h:h_end] as tile:
                             clone = thumbnail.clone()
-                            tile.resize(int(thumbnail.width * INSET_SCALE),
-                                         int(thumbnail.height * INSET_SCALE))
-                            tile.border("yellow", INSET_STROKE, INSET_STROKE)
+                            tile.resize(int(thumbnail.width * inset_scale),
+                                         int(thumbnail.height * inset_scale))
+                            tile.border(border_color, border_width, border_width)
                             thumbnail.composite(
                                 tile,
-                                left=thumbnail.width-tile.width-INSET_OFFSET,
-                                top=thumbnail.height-tile.height-INSET_OFFSET
+                                left=thumbnail.width-tile.width-inset_offset,
+                                top=thumbnail.height-tile.height-inset_offset
                             )
                             tile_file=os.path.join(self.tmp_dir, f"tile.{listing.guid}.{i:04d}.jpg")
                             thumbnail.save(filename=tile_file)
 
         inputs = ffmpeg.concat(
             ffmpeg.input(os.path.join(self.tmp_dir, f"tile.{listing.guid}.*.jpg"),
-                                      pattern_type="glob",framerate=FRAME_RATE)
+                                      pattern_type="glob",framerate=frame_rate)
         )
         storyboard_file=os.path.join(self.tmp_dir, f"storyboard.{listing.guid}.mp4")
         logger.info(storyboard_file)
@@ -621,6 +626,7 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         ):
             p.unlink()
         return storyboard_file
+
 
 class YouTubeProvider(PaginatedProviderMixin,
                       CachedFeedProvider):

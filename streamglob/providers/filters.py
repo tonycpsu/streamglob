@@ -122,7 +122,7 @@ class WidgetFilter(Filter):
         return lambda w: ("weight", 1)
 
     def cycle(self, step=1):
-        raise Exception
+        pass
 
 
 class BooleanFilterWidget(urwid.CheckBox):
