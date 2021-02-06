@@ -830,7 +830,7 @@ class SynchronizedPlayerMixin(object):
         return self.row_to_playlist_pos(self.focus_position)
 
     # FIXME: inner_focus comes from MultiSourceListingMixin
-    def sync_playlist_position(self):
+    async def sync_playlist_position(self):
 
         if state.task_manager.preview_player and len(self):
 
@@ -841,26 +841,30 @@ class SynchronizedPlayerMixin(object):
             if index is None:
                 return
 
-            async def sync_playlist_async(index): # O_o
-                delay = (
-                    self.provider.auto_preview_content_delay
-                    if state.listings_view.preview_mode == "full"
-                    else self.provider.auto_preview_thumbnail_delay
-                )
-                if delay:
-                    await asyncio.sleep(delay)
-                await self.set_playlist_pos(index)
-
-            if self.pending_event_task:
-                self.pending_event_task.cancel()
-
-            self.pending_event_task = state.event_loop.create_task(
-                sync_playlist_async(index)
+            delay = (
+                self.provider.auto_preview_content_delay
+                if state.listings_view.preview_mode == "full"
+                else self.provider.auto_preview_thumbnail_delay
             )
+            if delay:
+                await asyncio.sleep(delay)
+            logger.info("calling set_playlist_pos")
+            await self.set_playlist_pos(index)
+
+            # async def sync_playlist_async(index): # O_o
+
+            # if self.pending_event_task:
+            #     self.pending_event_task.cancel()
+
+            # self.pending_event_task = state.event_loop.create_task(
+            #     sync_playlist_async(index)
+            # )
+            # await sync_playlist_async(index)
+            # await self.pending_event_task = sync
 
     def on_focus(self, source, position):
         if self.provider.auto_preview_enabled:
-            self.sync_playlist_position()
+            state.event_loop.create_task(self.sync_playlist_position())
         if len(self):
             with db_session:
                 try:
@@ -908,9 +912,10 @@ class SynchronizedPlayerMixin(object):
                 "playlist-remove", str(pos+1)
             )
 
-            await state.task_manager.preview_player.command(
-                "playlist-play-index", pos
-            )
+            if pos == self.focus_position:
+                await state.task_manager.preview_player.command(
+                    "playlist-play-index", pos
+                )
 
 
             # if pos == self.focus_position:
@@ -1103,12 +1108,12 @@ class MultiSourceListingMixin(object):
 
         # return self.detail_box
 
-    def sync_playlist_position(self):
-        super().sync_playlist_position()
+    async def sync_playlist_position(self):
+        return await super().sync_playlist_position()
 
 
     def on_inner_focus(self, position):
-        self.sync_playlist_position()
+        state.event_loop.create_task(self.sync_playlist_position())
 
     @property
     def playlist_position(self):
