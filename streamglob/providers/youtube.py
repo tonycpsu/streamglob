@@ -8,7 +8,9 @@ from urllib.parse import parse_qs
 import json
 import math
 import shutil
+import pathlib
 import tempfile
+import itertools
 
 from pony.orm import *
 import dateparser
@@ -90,7 +92,7 @@ class YouTubeMediaListingMixin(object):
 
 
 
-@model.attrclass(YouTubeMediaListingMixin)
+@model.attrclass()
 class YouTubeMediaListing(YouTubeMediaListingMixin, ContentFeedMediaListing):
 
     duration_seconds = Optional(int)
@@ -103,9 +105,9 @@ class YouTubeMediaSourceMixin(object):
     def locator(self):
         return f"https://youtu.be/{self.listing.guid}"
 
-    @property
-    def preview_locator(self):
-        return f"https://i.ytimg.com/vi/{self.listing.guid}/maxresdefault.jpg"
+    # @property
+    # def preview_locator(self):
+    #     return f"https://i.ytimg.com/vi/{self.listing.guid}/maxresdefault.jpg"
 
     @property
     def helper(self):
@@ -114,12 +116,13 @@ class YouTubeMediaSourceMixin(object):
             ("mpv", None),
         ])
 
-
-@model.attrclass(YouTubeMediaSourceMixin)
-class YouTubeMediaSource(YouTubeMediaSourceMixin, FeedMediaSource):
+@model.attrclass()
+class YouTubeMediaSource(YouTubeMediaSourceMixin, FeedMediaSource, model.InflatableMediaSource):
     pass
 
 class YouTubeSession(session.StreamSession):
+
+    THUMBNAIL_RESOLUTIONS = ["maxres", "standard", "high", "medium", "default"]
 
     async def youtube_dl_query(self, query, offset=None, limit=None):
 
@@ -167,6 +170,8 @@ class YouTubeSession(session.StreamSession):
 
     async def bulk_update(self, entries):
 
+
+
         vids = [entry.guid for entry in entries]
         data = await self.fetch_google_data(vids)
         logger.debug(f"bulk_update: {vids}")
@@ -185,6 +190,11 @@ class YouTubeSession(session.StreamSession):
                 ).total_seconds()
             )
             entry.definition = item["contentDetails"]["definition"]
+            entry.thumbnail = next(
+                item["snippet"]["thumbnails"][res]["url"]
+                for res in self.THUMBNAIL_RESOLUTIONS
+                if res in item["snippet"]["thumbnails"]
+            )
             yield entry
 
     async def fetch(self, query, offset=None, limit=None):
@@ -454,7 +464,7 @@ class YouTubeFeed(FeedMediaChannel):
                 listing = AttrDict(
                     channel = self,
                     sources = [
-                        AttrDict(media_type="video")
+                        AttrDict(media_type="video", preview_url=item.thumbnail)
                     ],
                     **item
                 )
@@ -464,24 +474,48 @@ class YouTubeFeed(FeedMediaChannel):
 @keymapped()
 class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
 
+    @property
+    def thumbnails(self):
+        if not hasattr(self, "_thumbnails"):
+            self._thumbnails = AttrDict()
+        return self._thumbnails
+
+    async def thumbnail_for(self, listing):
+        if listing.guid not in self.thumbnails:
+            thumbnail = os.path.join(self.tmp_dir, f"thumbnail.{listing.guid}.jpg")
+            await self.download_file(listing.sources[0].preview_locator, thumbnail)
+            self.thumbnails[listing.guid] = thumbnail
+        return self.thumbnails[listing.guid]
+
+    @property
+    def storyboards(self):
+        if not hasattr(self, "_storyboards"):
+            self._storyboards = AttrDict()
+        return self._storyboards
+
+    async def storyboard_for(self, listing):
+        if not listing.storyboards:
+            return await self.thumbnail_for(listing)
+
+        if listing.guid not in self.storyboards:
+            self.storyboards[listing.guid] = await self.make_storyboard_preview(listing)
+        return self.storyboards[listing.guid]
+
     def keypress(self, size, key):
         return super().keypress(size, key)
-
 
     def on_focus(self, source, position):
         super().on_focus(source, position)
         state.loop.draw_screen()
         if state.listings_view.preview_mode == "storyboard":
             async def preview():
-                for pos in range(position, min(len(self)-1, position+3)):
+                for pos in range(position, min(len(self)-1, position+2)):
                     row = self[pos]
                     listing = row.data_source
-                    if not listing.storyboards:
+                    if not listing.storyboards or listing.guid in self.storyboards:
                         continue
-                    # FIXME: stashing in row object is kinda gross
-                    if not getattr(row, "_preview", False):
-                        row._preview = self.make_storyboard_preview(listing)
-                    await self.playlist_replace(row._preview, pos=pos)
+                    logger.info(f"preview {pos}")
+                    await self.playlist_replace(await self.storyboard_for(listing), pos=pos)
 
             state.event_loop.create_task(preview())
 
@@ -494,18 +528,22 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         return self._tmp_dir
 
     # FIXME: shared utility module if reused?
-    def download_file(self, url, path):
+    async def download_file(self, url, path):
         if os.path.isdir(path):
             dest = os.path.join(path, url.split('/')[-1])
         else:
             dest = path
 
-        with requests.get(url, stream=True) as r:
+        with requests.get(url, stream=True) as res:
+            if res.status_code != 200:
+                return None
             with open(dest, 'wb') as f:
-                shutil.copyfileobj(r.raw, f)
+                shutil.copyfileobj(res.raw, f)
 
-    def make_storyboard_preview(self, listing):
+    async def make_storyboard_preview(self, listing):
 
+        PREVIEW_WIDTH=1280
+        PREVIEW_HEIGHT=720
         TILE_WIDTH=160
         TILE_HEIGHT=90
         INSET_SCALE=3
@@ -514,16 +552,18 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         INSET_STROKE=3
         TILE_SKIP=5
 
-        thumbnail = os.path.join(self.tmp_dir, "thumbnail.jpg")
-        self.download_file(listing.sources[0].preview_locator, thumbnail)
+        thumbnail = await self.thumbnail_for(listing)
 
         board_files = []
         for i, board in enumerate(listing.storyboards):
-            board_file = os.path.join(self.tmp_dir, f"board_{i:02d}")
+            board_file = os.path.join(self.tmp_dir, f"board.{listing.guid}.{i:02d}.jpg")
             board_files.append(board_file)
-            self.download_file(board, board_file)
+            await self.download_file(board, board_file)
 
         thumbnail = wand.image.Image(filename=thumbnail)
+        thumbnail.trim(fuzz=5)
+        if thumbnail.width != PREVIEW_WIDTH:
+            thumbnail.transform(resize=f"{PREVIEW_WIDTH}x{PREVIEW_HEIGHT}")
         i = 0
         for board_file in board_files:
             with wand.image.Image(filename=board_file) as img:
@@ -534,37 +574,42 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
                             continue
                         w_end = w + TILE_WIDTH
                         h_end = h + TILE_HEIGHT
-                        with img[w:w_end, h:h_end] as chunk:
+                        with img[w:w_end, h:h_end] as tile:
                             clone = thumbnail.clone()
-                            chunk.resize(TILE_WIDTH * INSET_SCALE,
-                                         TILE_HEIGHT * INSET_SCALE)
+                            tile.resize(thumbnail.width//4,
+                                         thumbnail.height//4)
                             thumbnail.composite(
-                                chunk,
-                                left=thumbnail.width-chunk.width-INSET_OFFSET,
-                                top=thumbnail.height-chunk.height-INSET_OFFSET
+                                tile,
+                                left=thumbnail.width-tile.width-INSET_OFFSET,
+                                top=thumbnail.height-tile.height-INSET_OFFSET
                             )
                             with wand.drawing.Drawing() as draw:
                                 draw.fill_color="transparent"
                                 draw.stroke_color="yellow"
                                 draw.stroke_width=INSET_STROKE
                                 draw.rectangle(
-                                    left=thumbnail.width-chunk.width-INSET_OFFSET,
-                                    top=thumbnail.height-chunk.height-INSET_OFFSET,
-                                    width=TILE_WIDTH * INSET_SCALE
-                                    , height=TILE_HEIGHT * INSET_SCALE,
+                                    left=thumbnail.width-tile.width-INSET_OFFSET,
+                                    top=thumbnail.height-tile.height-INSET_OFFSET,
+                                    width=tile.width,
+                                    height=tile.height,
                                 )
                                 draw(thumbnail)
-                            tile_file=os.path.join(self.tmp_dir, f"tile{i:04d}.jpg")
+                            tile_file=os.path.join(self.tmp_dir, f"tile.{listing.guid}.{i:04d}.jpg")
                             thumbnail.save(filename=tile_file)
 
         inputs = ffmpeg.concat(
-            ffmpeg.input(os.path.join(self.tmp_dir, "tile*.jpg"),
-                                      pattern_type='glob',framerate=FRAME_RATE)
+            ffmpeg.input(os.path.join(self.tmp_dir, f"tile.{listing.guid}.*.jpg"),
+                                      pattern_type="glob",framerate=FRAME_RATE)
         )
-        preview_file=os.path.join(self.tmp_dir, f"preview.{listing.guid}.mp4")
-        logger.info(preview_file)
-        inputs.output(preview_file).run(overwrite_output=True, quiet=True)
-        return preview_file
+        storyboard_file=os.path.join(self.tmp_dir, f"storyboard.{listing.guid}.mp4")
+        logger.info(storyboard_file)
+        inputs.output(storyboard_file).run(overwrite_output=True, quiet=True)
+        for p in itertools.chain(
+            pathlib.Path(self.tmp_dir).glob(f"board.{listing.guid}.*"),
+            pathlib.Path(self.tmp_dir).glob(f"tile.{listing.guid}.*")
+        ):
+            p.unlink()
+        return storyboard_file
 
 class YouTubeProvider(PaginatedProviderMixin,
                       CachedFeedProvider):

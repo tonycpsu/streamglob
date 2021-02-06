@@ -226,7 +226,6 @@ class MainView(urwid.WidgetWrap):
             return key
 
     def mouse_event(self, size, event, button, col, row, focus):
-        logger.info("mouse_event")
         try:
             if self.last_focused_index != self.focused_index and hasattr(self.focused_widget, "on_view_activate"):
                 self.focused_widget.on_view_activate()
@@ -458,6 +457,7 @@ def main():
     log_file = os.path.join(config.settings.CONFIG_DIR, f"{PACKAGE_NAME}.log")
     fh = logging.FileHandler(log_file)
     add_log_handler(fh)
+    logging.getLogger("panwid.dropdown").setLevel(logging.INFO)
     logging.getLogger("panwid.keymap").setLevel(logging.INFO)
     logging.getLogger("panwid.datatable").setLevel(logging.INFO)
     logging.getLogger("aio_mpv_jsonipc").setLevel(logging.INFO)

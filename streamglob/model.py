@@ -397,7 +397,6 @@ class InflatableMediaSourceMixin(object):
         raise Exception("must override inflate method")
 
 
-@attrclass(InflatableMediaSourceMixin)
 class InflatableMediaSource(InflatableMediaSourceMixin, MediaSource):
 
     preview_url = Optional(str)

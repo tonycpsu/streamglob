@@ -1040,7 +1040,6 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
     @db_session
     def update_query(self, search_filter=None):
 
-        logger.error(search_filter)
         status_filters =  {
             "all": lambda: True,
             "unread": lambda i: i.read is None,

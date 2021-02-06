@@ -878,6 +878,9 @@ class SynchronizedPlayerMixin(object):
 
     async def playlist_replace(self, url, pos=None):
 
+        if pos is None:
+            pos = self.focus_position
+
         count = len(self)
 
         await state.task_manager.preview_player.command(
@@ -886,20 +889,26 @@ class SynchronizedPlayerMixin(object):
 
         logger.info(f"count: {count}")
 
-        if pos is None:
-            pos = self.focus_position
+        # if pos == self.focus_position:
+        #     logger.info("idle")
+        #     await state.task_manager.preview_player.command(
+        #         "playlist-play-index", "none"
+        #     )
 
-        logger.info(f"pos: {pos}")
 
+        logger.info(f"move: {count-1} -> {pos}")
         await state.task_manager.preview_player.command(
-            "playlist-remove", str(pos)
+            "playlist-move", str(count), str(pos)
         )
 
+        logger.info(f"remove: {pos+1}")
         await state.task_manager.preview_player.command(
-            "playlist-move", str(count-1), str(pos)
+            "playlist-remove", str(pos+1)
         )
+
 
         if pos == self.focus_position:
+            logger.info(f"play: {pos}")
             await state.task_manager.preview_player.command(
                 "playlist-play-index", pos
             )
