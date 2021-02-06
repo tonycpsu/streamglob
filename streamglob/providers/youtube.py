@@ -48,7 +48,7 @@ class YouTubeMediaSourceMixin(object):
 
     @property
     def preview_locator(self):
-        return f"http://img.youtube.com/vi/{self.listing.guid}/0.jpg"
+        return f"https://i.ytimg.com/vi/{self.listing.guid}/maxresdefault.jpg"
 
     @property
     def helper(self):
@@ -119,6 +119,7 @@ class YouTubeSession(session.StreamSession):
                 item for item in data["items"]
                 if item["id"] == entry.guid
             )
+
             entry.created = dateparser.parse(item["snippet"]["publishedAt"][:-1]) # FIXME: Time zone convert from UTC
             entry.content = item["snippet"]["description"]
             entry.duration_seconds = int(
