@@ -306,6 +306,16 @@ def run_gui(action, provider, **kwargs):
 
     state.screen.set_terminal_properties(get_colors())
 
+    old_signal_keys = state.screen.tty_signal_keys()
+    l = list(old_signal_keys)
+    l[0] = 'undefined'
+    l[1] = 'undefined'
+    l[2] = 'undefined'
+    l[3] = 'undefined'
+    l[4] = 'undefined'
+    state.screen.tty_signal_keys(*l)
+
+
     state.listings_view = ListingsView(provider)
     state.files_view = FilesView()
     state.tasks_view = TasksView()
@@ -346,6 +356,10 @@ def run_gui(action, provider, **kwargs):
     def global_input(key):
         if key in ('q', 'Q'):
             state.listings_view.quit_app()
+        elif key == "ctrl d":
+            state.main_view.set_focus(0, 1) # browser
+        elif key == "ctrl o":
+            state.main_view.set_focus(1, 0) # listings
         elif key == "meta C":
             reload_config()
         elif isinstance(key, str) and key.startswith("meta"):

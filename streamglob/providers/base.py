@@ -81,7 +81,10 @@ class SimpleProviderView(BaseProviderView):
         "=": ("cycle_filter", [2, 1]),
         "_": ("cycle_filter", [3, -1]),
         "+": ("cycle_filter", [3, 1]),
+        "ctrl p": ("cycle_filter", [0, -1]),
+        "ctrl n": ("cycle_filter", [0, 1]),
         "ctrl f": ("focus_filter", ["search"])
+
         # "ctrl d": "download"
     }
 
