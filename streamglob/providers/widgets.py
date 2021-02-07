@@ -38,6 +38,18 @@ class FilterToolbar(urwid.WidgetWrap):
             return
         list(self.filters.values())[index].cycle(step)
 
+    def focus_filter(self, name):
+        try:
+            target = next(
+                i for i, f in enumerate(self.filters)
+                if f == name
+            )
+        except StopIteration:
+            raise RuntimeError(f"filter {name} not found")
+
+        self.columns.focus_position = target
+
+
     def keypress(self, size, key):
         return super(FilterToolbar, self).keypress(size, key)
 

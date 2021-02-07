@@ -81,6 +81,7 @@ class SimpleProviderView(BaseProviderView):
         "=": ("cycle_filter", [2, 1]),
         "_": ("cycle_filter", [3, -1]),
         "+": ("cycle_filter", [3, 1]),
+        "ctrl f": ("focus_filter", ["search"])
         # "ctrl d": "download"
     }
 
@@ -91,9 +92,14 @@ class SimpleProviderView(BaseProviderView):
         # self.body = self.PROVIDER_BODY_CLASS(self.provider, self)
         # urwid.connect_signal(self.toolbar, "filter_change", self.filter_change)
         # urwid.connect_signal(self.body, "select", self.provider.on_select)
-        urwid.connect_signal(self.body, "cycle_filter", self.cycle_filter)
-        if "keypress" in self.body.signals:
+        try:
+            urwid.connect_signal(self.body, "cycle_filter", self.cycle_filter)
+        except NameError:
+            pass
+        try:
             urwid.connect_signal(self.body, "keypress", self.on_keypress)
+        except NameError:
+            pass
 
         self.pile  = urwid.Pile([
             ("pack", self.toolbar),
@@ -133,7 +139,9 @@ class SimpleProviderView(BaseProviderView):
         ])
         self.body.refresh()
 
-
+    def focus_filter(self, name):
+        self.toolbar.focus_filter(name)
+        self.pile.focus_position = 0
 
 class InvalidConfigView(BaseProviderView):
 
@@ -211,6 +219,14 @@ class BaseProvider(abc.ABC):
         #     raise
         #     logger.warn(f"couldn't initialize configuration for {self.IDENTIFIER}")
 
+        for name, f in self.filters.items():
+            value = self.default_filter_values.get(name, None)
+            if value:
+                f.value = value
+
+    @property
+    def default_filter_values(self):
+        return AttrDict()
 
     @db_session
     def save_provider_data(self):
@@ -1022,7 +1038,7 @@ class DetailBox(urwid.WidgetWrap):
 
     def detail_table(self):
         columns = self.parent_table.columns.copy()
-        # next(c for c in columns if c.name=="title").truncate = True
+        next(c for c in columns if c.name=="title").truncate = True
         return DetailDataTable(
             self.listing,
             self.parent_table, columns=columns

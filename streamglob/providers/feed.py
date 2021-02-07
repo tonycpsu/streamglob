@@ -673,6 +673,15 @@ class FeedProvider(BaseProvider):
         return self.filters.feed.selected_label
 
     @property
+    def default_filter_values(self):
+
+        return AttrDict(
+            feed=self.provider_data.get("selected_feed", None),
+            status=self.provider_data.get("selected_status", None)
+        )
+
+
+    @property
     def selected_feed(self):
         return self.filters.feed.value
 
@@ -688,7 +697,8 @@ class FeedProvider(BaseProvider):
 
         return (
             None,
-            (feed or self.provider_data.get("selected_feed", None),),
+            (feed,),
+            # (feed or self.provider_data.get("selected_feed", None),),
             {}
         )
 
@@ -728,7 +738,7 @@ class FeedProvider(BaseProvider):
 #         ])
 #         super().__init__(self.pile)
 
-class CachedFeedProviderView(urwid.WidgetWrap):
+class CachedFeedProviderBodyView(urwid.WidgetWrap):
 
     signals = ["select", "cycle_filter", "keypress"]
 
@@ -762,11 +772,6 @@ class CachedFeedProviderView(urwid.WidgetWrap):
         urwid.connect_signal(self.body, "keypress", lambda *args: self._emit(*args))
         urwid.connect_signal(self.body, "focus", self.update_detail)
         # self.provider.filters["feed"].connect("changed", self.update_count)
-
-    # def keypress(self, size, key):
-    #     # raise Exception(super().keypress)
-    #     return super().keypress(size, key)
-
 
     def update_detail(self, source, index):
         # FIXME: this is so hacktacular :/
@@ -817,6 +822,25 @@ class CachedFeedProviderView(urwid.WidgetWrap):
         return getattr(self.body, attr)
 
 
+@keymapped()
+class CachedFeedProviderView(urwid.WidgetWrap):
+
+    KEYMAP = {
+        "ctrl j": ("focus_filter", ["feed"]),
+        "ctrl v": ("focus_filter", ["status"]),
+    }
+
+    def __init__(self, provider, body):
+        self.provider = provider
+        self.body = body
+        super().__init__(self.body)
+
+    def keypress(self, size, key):
+        return super().keypress(size, key)
+
+    def __getattr__(self, attr):
+        return getattr(self.body, attr)
+
 class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvider):
 
     UPDATE_INTERVAL = (60 * 60 * 4)
@@ -840,7 +864,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
 
     @property
     def VIEW(self):
-        return SimpleProviderView(self, CachedFeedProviderView(self, CachedFeedProviderDataTable(self)))
+        return CachedFeedProviderView(self, CachedFeedProviderBodyView(self, CachedFeedProviderDataTable(self)))
 
     def init_config(self):
         super().init_config()
