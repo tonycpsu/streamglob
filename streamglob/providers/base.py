@@ -836,16 +836,20 @@ class SynchronizedPlayerMixin(object):
     def playlist_position(self):
         return self.row_to_playlist_pos(self.focus_position)
 
+    async def playist_position_changed(self, pos):
+        pass
+
     # FIXME: inner_focus comes from MultiSourceListingMixin
     async def sync_playlist_position(self):
 
-        if state.task_manager.preview_player and len(self):
+        await state.task_manager._preview_player
+        if len(self):
 
             try:
-                index = self.playlist_position
+                pos = self.playlist_position
             except AttributeError:
                 return
-            if index is None:
+            if pos is None:
                 return
 
             delay = (
@@ -856,7 +860,8 @@ class SynchronizedPlayerMixin(object):
             if delay:
                 await asyncio.sleep(delay)
             logger.info("calling set_playlist_pos")
-            await self.set_playlist_pos(index)
+            await self.set_playlist_pos(pos)
+            await self.playist_position_changed(pos)
 
             # async def sync_playlist_async(index): # O_o
 
@@ -998,7 +1003,7 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
         return self.provider.extract_sources(listing, **kwargs)
 
     def reset(self, *args, **kwargs):
-        self.sync_player_playlist = False
+        # self.sync_player_playlist = False
         # self.disable_focus_handler()
         super().reset(*args, **kwargs)
 

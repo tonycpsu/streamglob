@@ -42,7 +42,8 @@ class TaskManager(Observable):
 
         super().__init__()
         self.preview_task = None
-        self.preview_player = None
+        self._preview_player = state.event_loop.create_future()
+        self._preview_player_lock = asyncio.Lock()
         self.to_play = TaskList()
         self.to_download = TaskList()
         self.playing = TaskList()
@@ -56,6 +57,9 @@ class TaskManager(Observable):
     def max_concurrent_tasks(self):
         return config.settings.tasks.max or self.DEFAULT_MAX_CONCURRENT_TASKS
 
+    @property
+    def preview_player(self):
+        return self._preview_player.result()
 
     def make_playlist(self, title, items):
 
@@ -123,8 +127,7 @@ class TaskManager(Observable):
             self.preview_task = task
             await self.start_task(self.preview_task)
             logger.info(self.preview_task)
-            self.preview_player = await self.preview_task.program
-            logger.info(self.preview_player)
+            self._preview_player.set_result(await self.preview_task.program)
             await self.preview_task.proc
 
             async def handle_mpv_key(key_state, key_name, key_string):
@@ -144,17 +147,18 @@ class TaskManager(Observable):
             def on_player_done(f):
                 logger.info("player done")
                 self.preview_task = None
-                self.preview_player = None
+                self._preview_player = asyncio.Future()
 
             self.preview_task.result.add_done_callback(on_player_done)
 
         async def load_sources():
             await self.preview_task.load_sources(task.sources, **kwargs)
 
-        if self.preview_player:
-            await load_sources()
-        else:
-            await start_player()
+        async with self._preview_player_lock:
+            if self._preview_player.done():
+                await load_sources()
+            else:
+                await start_player()
 
 
     def play(self, task, **kwargs):
@@ -238,7 +242,7 @@ class TaskManager(Observable):
             logger.error(e)
             return
         task.proc.set_result(proc)
-        logger.debug(f"proc: {task.proc}")
+        # logger.debug(f"proc: {task.proc}")
         task.pid = proc.pid
         logger.debug(f"pid: {task.pid}")
 
