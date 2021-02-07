@@ -823,17 +823,17 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
 
 
 @keymapped()
-class CachedFeedProviderView(urwid.WidgetWrap):
+class CachedFeedProviderView(SimpleProviderView):
 
     KEYMAP = {
-        "ctrl j": ("focus_filter", ["feed"]),
-        "ctrl v": ("focus_filter", ["status"]),
+        "ctrl e": ("focus_filter", ["feed"]),
+        "ctrl r": ("focus_filter", ["status"]),
     }
 
     def __init__(self, provider, body):
         self.provider = provider
         self.body = body
-        super().__init__(self.body)
+        super().__init__(self.provider, self.body)
 
     def keypress(self, size, key):
         return super().keypress(size, key)

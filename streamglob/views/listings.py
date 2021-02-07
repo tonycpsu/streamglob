@@ -182,8 +182,6 @@ class ListingsView(StreamglobView):
                 await self.provider.view.preview_all()
                 # if hasattr(state, "loop"):
                     # state.loop.draw_screen()
-            else:
-                raise Exception
 
         state.event_loop.create_task(activate_async())
 

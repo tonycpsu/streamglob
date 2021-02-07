@@ -48,7 +48,7 @@ class FilterToolbar(urwid.WidgetWrap):
             raise RuntimeError(f"filter {name} not found")
 
         self.columns.focus_position = target
-
+        state.loop.draw_screen()
 
     def keypress(self, size, key):
         return super(FilterToolbar, self).keypress(size, key)

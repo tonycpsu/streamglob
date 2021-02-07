@@ -644,7 +644,7 @@ class YouTubeProvider(PaginatedProviderMixin,
 
     @property
     def VIEW(self):
-        return SimpleProviderView(self, CachedFeedProviderView(self, YouTubeDataTable(self)))
+        return CachedFeedProviderView(self, CachedFeedProviderBodyView(self, YouTubeDataTable(self)))
 
 
     def init_config(self):

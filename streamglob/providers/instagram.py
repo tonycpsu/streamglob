@@ -385,7 +385,7 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
 
     @property
     def VIEW(self):
-        return SimpleProviderView(self, CachedFeedProviderView(self, InstagramDataTable(self)))
+        return CachedFeedProviderView(self, CachedFeedProviderBodyView(self, InstagramDataTable(self)))
 
 
     @property
