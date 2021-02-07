@@ -515,7 +515,6 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
 
     def on_focus(self, source, position):
 
-
         super().on_focus(source, position)
 
         if state.listings_view.preview_mode == "storyboard":

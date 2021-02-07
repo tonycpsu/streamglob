@@ -120,7 +120,7 @@ class ListingsView(StreamglobView):
         self.toolbar = ProviderToolbar(self.provider.IDENTIFIER)
         urwid.connect_signal(
             self.toolbar, "provider_change",
-            lambda w, p: self.set_provider(p)
+            lambda w, p: self.on_set_provider(p)
         )
 
         def profile_change(p):
@@ -148,7 +148,11 @@ class ListingsView(StreamglobView):
         ])
         super().__init__(self.pile)
 
+
     def set_provider(self, provider):
+        self.toolbar.provider_dropdown.value = provider
+
+    def on_set_provider(self, provider):
 
         self.provider.deactivate()
         self.provider = providers.get(provider)

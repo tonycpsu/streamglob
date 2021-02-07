@@ -360,12 +360,12 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
         "n": "next_unread",
         "N": "prev_unread",
         "m": "toggle_selection_read",
-        "meta i": "inflate_selection",
+        "i": "inflate_selection",
         "meta ctrl k": "kill_all",
-        "meta r": ("update", [], {"force": True}),
-        "meta R": ("update", [], {"force": True, "replace": True}),
-        "meta f": ("update", [], {"force": True, "resume": True}),
-        "meta F": ("update", [], {"force": True, "resume": True, "replace": True}),
+        "r": ("update", [], {"force": True}),
+        "R": ("update", [], {"force": True, "replace": True}),
+        "f": ("update", [], {"force": True, "resume": True}),
+        "F": ("update", [], {"force": True, "resume": True, "replace": True}),
         "f": ["cycle", "fullscreen"],
         # "q": "quit_app"
     }

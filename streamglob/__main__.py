@@ -343,12 +343,20 @@ def run_gui(action, provider, **kwargs):
             # (log_console, pile.options("given", 20))
         )
 
-
     def global_input(key):
         if key in ('q', 'Q'):
             state.listings_view.quit_app()
         elif key == "meta C":
             reload_config()
+        elif isinstance(key, str) and key.startswith("meta"):
+            try:
+                p = next(
+                    p for p in providers.PROVIDERS.keys()
+                    if p.lower().startswith(key[-1].lower())
+                )
+            except StopIteration:
+                return False
+            state.listings_view.set_provider(p)
         else:
             return False
 
