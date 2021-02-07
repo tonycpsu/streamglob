@@ -93,7 +93,7 @@ class YouTubeMediaListingMixin(object):
 
 
 @model.attrclass()
-class YouTubeMediaListing(YouTubeMediaListingMixin, ContentFeedMediaListing):
+class YouTubeMediaListing(YouTubeMediaListingMixin, model.ContentMediaListing, FeedMediaListing):
 
     duration_seconds = Optional(int)
     definition = Optional(str)
