@@ -88,6 +88,11 @@ class ProviderDataTable(BaseDataTable):
             logger.exception(e)
             return []
 
+    @property
+    def config(self):
+        return self.provider.config
+
+
     def listings(self, *args, **kwargs):
         yield from self.provider.listings(*args, **kwargs)
 

@@ -522,7 +522,10 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
 
     async def storyboard_preview(self, position):
 
+
         async def preview(listing):
+            if self.config.auto_preview.storyboard_delay:
+                await asyncio.sleep(self.config.auto_preview.storyboard_delay)
             # logger.info(f"preview {position}")
             storyboard = await self.storyboard_for(listing)
             await self.playlist_replace(storyboard, pos=position)
@@ -532,7 +535,6 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         if not listing.storyboards or listing.guid in self.storyboards:
             return
         if getattr(self, "preview_task", False):
-            # logger.info("canceling")
             self.preview_task.cancel()
         self.preview_task = state.event_loop.create_task(preview(listing))
         # await self.preview_task

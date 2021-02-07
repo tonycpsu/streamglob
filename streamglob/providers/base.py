@@ -43,6 +43,9 @@ class BaseProviderView(StreamglobView):
     def selectable(self):
         return True
 
+    @property
+    def config(self):
+        return self.provider.config
 
 class TabularProviderMixin(object):
 
@@ -616,14 +619,6 @@ class BaseProvider(abc.ABC):
     def auto_preview_enabled(self):
         return self.config.auto_preview.enabled
 
-    @property
-    def auto_preview_content_delay(self):
-        return self.config.auto_preview.content_delay
-
-    @property
-    def auto_preview_thumbnail_delay(self):
-        return self.config.auto_preview.thumbnail_delay
-
 class PaginatedProviderMixin(object):
 
     DEFAULT_PAGE_SIZE = 50
@@ -853,9 +848,9 @@ class SynchronizedPlayerMixin(object):
                 return
 
             delay = (
-                self.provider.auto_preview_content_delay
+                self.config.auto_preview.content_delay
                 if state.listings_view.preview_mode == "full"
-                else self.provider.auto_preview_thumbnail_delay
+                else self.config.auto_preview.thumbnail_delay
             )
             if delay:
                 await asyncio.sleep(delay)
