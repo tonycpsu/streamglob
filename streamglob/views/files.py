@@ -89,6 +89,10 @@ class FilesView(SynchronizedPlayerMixin, StreamglobView):
             await asyncio.sleep(1)
 
     @property
+    def playlist_position(self):
+        return 0
+
+    @property
     def root(self):
         return os.path.expanduser(
             config.settings.profile.get_path("output.path")

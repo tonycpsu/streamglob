@@ -717,6 +717,8 @@ class SynchronizedPlayerMixin(object):
     def __init__(self, *args, **kwargs):
 
         super().__init__(*args, **kwargs)
+        if "focus" in self.signals:
+            self.on_focus_handler = urwid.connect_signal(self, "focus", self.on_focus)
         # urwid.connect_signal(self, "requery", self.on_requery)
         self.player = None
         self.player_task = None
@@ -760,16 +762,16 @@ class SynchronizedPlayerMixin(object):
     def new_media_source(self, **kwargs):
         return model.MediaSource.attr_class(**kwargs)
 
-    def enable_focus_handler(self):
-        if self.on_focus_handler:
-            return
-            # urwid.disconnect_by_key(self, "focus", self.on_focus_handler)
-        self.on_focus_handler = urwid.connect_signal(self, "focus", self.on_focus)
+    # def enable_focus_handler(self):
+    #     if self.on_focus_handler:
+    #         return
+    #         # urwid.disconnect_by_key(self, "focus", self.on_focus_handler)
+    #     self.on_focus_handler = urwid.connect_signal(self, "focus", self.on_focus)
 
-    def disable_focus_handler(self):
-        if not self.on_focus_handler:
-            return
-        self.on_focus_handler = urwid.signals.disconnect_signal_by_key(self, "focus", self.on_focus_handler)
+    # def disable_focus_handler(self):
+    #     if not self.on_focus_handler:
+    #         return
+    #     self.on_focus_handler = urwid.signals.disconnect_signal_by_key(self, "focus", self.on_focus_handler)
 
     async def preview_listing(self, listing, **kwargs):
         await state.task_manager.preview(
@@ -777,7 +779,12 @@ class SynchronizedPlayerMixin(object):
         )
 
     @keymap_command()
-    async def preview_all(self, playlist_position=0):
+    async def preview_all(self, playlist_position=None):
+        if not playlist_position:
+            try:
+                playlist_position = self.playlist_position
+            except AttributeError:
+                playlist_position = 0
 
         if len(self.play_items):
             listing = state.task_manager.make_playlist(self.playlist_title, self.play_items)
@@ -992,7 +999,7 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
 
     def reset(self, *args, **kwargs):
         self.sync_player_playlist = False
-        self.disable_focus_handler()
+        # self.disable_focus_handler()
         super().reset(*args, **kwargs)
 
         if self.provider.auto_preview_enabled:
@@ -1001,8 +1008,6 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
             #         await asyncio.sleep(delay)
             #         await self.preview_all()
             state.event_loop.create_task(self.preview_all())
-
-        self.enable_focus_handler()
 
 
 

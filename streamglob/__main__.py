@@ -110,6 +110,30 @@ def reload_config():
 
 intersperse = lambda e,l: sum([[x, e] for x in l],[])[:-1]
 
+class MainViewPile(urwid.Pile):
+
+    signals = ["focus_changed"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._contents.set_focus_changed_callback(
+            lambda pos: self._emit("focus_changed", pos)
+        )
+
+class MainViewColumns(urwid.Columns):
+
+    signals = ["focus_changed"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._contents.set_focus_changed_callback(
+            lambda pos: self._emit("focus_changed", pos)
+        )
+
+    # def keypress(self, size, key):
+    #     super().keypress(size, key)
+
+
 @keymapped()
 class MainView(urwid.WidgetWrap):
 
@@ -127,8 +151,8 @@ class MainView(urwid.WidgetWrap):
         self.dividers = dividers
         self.last_focused_index = None
 
-        self.columns = urwid.Columns([
-            ("weight", self.weight[i][0], urwid.Pile([
+        self.columns = MainViewColumns([
+            ("weight", self.weight[i][0], MainViewPile([
                 ("weight", self.weight[i][1][j]
                  if isinstance(self.weight, list)
                  else self.weight, w)
@@ -136,6 +160,18 @@ class MainView(urwid.WidgetWrap):
             ]))
             for i, col in enumerate(zip(*self.widgets))
         ])
+
+        urwid.connect_signal(
+            self.columns, "focus_changed",
+            lambda s, p: self.focus_changed("columns", p, self.columns[p].focus_position)
+        )
+
+        for pile, options in self.columns.contents:
+            urwid.connect_signal(
+                pile, "focus_changed",
+                lambda s, p: self.focus_changed("rows", self.columns.focus_position, p)
+            )
+
         for i in range(len(self.columns.contents)):
             pile = self.columns.contents[i][0]
             pile.contents = intersperse(
@@ -162,6 +198,15 @@ class MainView(urwid.WidgetWrap):
 
         self.set_focus(1, 0)
 
+
+    def focus_changed(self, foo, x, y):
+        logger.info(f"focus_changed: {foo}, {x}, {y}")
+        self.get_widget(x, y).on_view_activate()
+        if hasattr(state, "loop"):
+            state.loop.draw_screen()
+        # self.get_widget(x, y).activate
+        # logger.info(self.get_widget(x, y))
+
     def __getitem__(self, index):
         return self.widgets[index//len(self.widgets)][index%len(self.widgets)]
 
@@ -178,14 +223,14 @@ class MainView(urwid.WidgetWrap):
         while next(c) != self.focused_index:
             pass
 
-        indexes = [ next(c) for i in range(len(self)) ]
+        indexes = [next(c) for i in range(len(self))]
 
         for i in indexes:
             if not self[i].selectable():
                 continue
             break
         self._w.set_focus_path(self.focus_paths[i])
-        self.focused_widget.on_view_activate()
+        # self.focused_widget.on_view_activate()
         self.last_focused_index = self.focused_index
 
     @property
@@ -211,12 +256,12 @@ class MainView(urwid.WidgetWrap):
     def keypress(self, size, key):
 
         key = super().keypress(size, key)
-        try:
-            if self.last_focused_index != self.focused_index and hasattr(self.focused_widget, "on_view_activate"):
-                self.focused_widget.on_view_activate()
-            self.last_focused_index = self.focused_index
-        except StopIteration:
-            pass
+        # try:
+        #     if self.last_focused_index != self.focused_index and hasattr(self.focused_widget, "on_view_activate"):
+        #         self.focused_widget.on_view_activate()
+        #     self.last_focused_index = self.focused_index
+        # except StopIteration:
+        #     pass
 
         if key == "tab":
             self.cycle_focus()
@@ -225,21 +270,21 @@ class MainView(urwid.WidgetWrap):
         else:
             return key
 
-    def mouse_event(self, size, event, button, col, row, focus):
-        try:
-            if self.last_focused_index != self.focused_index and hasattr(self.focused_widget, "on_view_activate"):
-                self.focused_widget.on_view_activate()
-            self.last_focused_index = self.focused_index
-        except StopIteration:
-            pass
+    # def mouse_event(self, size, event, button, col, row, focus):
+    #     try:
+    #         if self.last_focused_index != self.focused_index and hasattr(self.focused_widget, "on_view_activate"):
+    #             self.focused_widget.on_view_activate()
+    #         self.last_focused_index = self.focused_index
+    #     except StopIteration:
+    #         pass
 
-        return super().mouse_event(size, event, button, col, row, focus)
+        # return super().mouse_event(size, event, button, col, row, focus)
 
     def get_column(self, y):
         return self.columns.contents[y][0]
 
     def get_widget(self, x, y):
-        return self.columns.contents[y][0].contents[x][0]
+        return self.columns.contents[x][0].contents[y][0]
 
     async def player_command(self, *args):
         await state.task_manager.preview_player.command(*args)
