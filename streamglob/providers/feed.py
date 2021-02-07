@@ -883,7 +883,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         media_listing_id = {"hide": True},
         feed = {"width": 30, "format_fn": format_feed },
         created = {"width": 19},
-        title = {"width": ("weight", 1), "truncate": False},
+        title = {"width": ("weight", 1), "truncate": True},
     )
     # @property
     # def ATTRIBUTES(self):

@@ -239,22 +239,28 @@ class InstagramFeedMediaChannelMixin(object):
 
         logger.info(f"cursor: {end_cursor}")
         try:
-            self.pages = self.looter.pages(cursor = end_cursor)
+            self.pages = self.looter.pages(cursor=end_cursor)
         except ValueError:
             self.looter_.logout()
             self.looter_.login(
-                username = self.provider.session_params["username"],
-                password = self.provider.session_params["password"],
+                username=self.provider.session_params["username"],
+                password=self.provider.session_params["password"],
             )
-            self.pages = self.looter.pages(cursor = end_cursor)
+            self.pages = self.looter.pages(cursor=end_cursor)
 
+        # def get_posts(pages):
+        #     posts = list()
+        #     for page in pages:
+        #         cursor = page["edge_owner_to_timeline_media"]["page_info"]["end_cursor"]
+        #         for media in self.looter._medias(iter([page])):
+        #             posts.append((cursor, AttrDict(media)))
+        #     return posts
+        #
         def get_posts(pages):
-            posts = list()
             for page in pages:
                 cursor = page["edge_owner_to_timeline_media"]["page_info"]["end_cursor"]
                 for media in self.looter._medias(iter([page])):
-                    posts.append( (cursor, AttrDict(media)) )
-            return posts
+                    yield (cursor, AttrDict(media))#
 
         count = 0
         new_count = 0
@@ -265,7 +271,6 @@ class InstagramFeedMediaChannelMixin(object):
 
         for end_cursor, post in await posts:
 
-            # raise Exception(post)
             count += 1
 
             logger.info(f"cursor: {end_cursor}")
@@ -401,6 +406,7 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
         attrs = list(self.ATTRIBUTES.items())
         idx, attr = next(  (i, a ) for i, a in enumerate(attrs) if a[0] == "title")
         attr[1]["label"] = "caption"
+        # attr[1]["truncate"] = True
         self.ATTRIBUTES = AttrDict(
             attrs[:idx]
             + [
