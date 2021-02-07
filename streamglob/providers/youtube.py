@@ -529,6 +529,7 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
             # logger.info(f"preview {position}")
             storyboard = await self.storyboard_for(listing)
             await self.playlist_replace(storyboard, pos=position)
+            state.loop.draw_screen()
 
         row = self[position]
         listing = row.data_source

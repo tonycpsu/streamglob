@@ -910,7 +910,7 @@ class SynchronizedPlayerMixin(object):
                         self.refresh()
                         await self.preview_all(playlist_position=self.playlist_position)
                     state.event_loop.create_task(reload())
-        state.loop.draw_screen()
+        # state.loop.draw_screen()
 
     async def playlist_replace(self, url, pos=None):
 
