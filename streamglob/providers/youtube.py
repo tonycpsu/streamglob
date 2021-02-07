@@ -646,6 +646,9 @@ class YouTubeProvider(PaginatedProviderMixin,
     def VIEW(self):
         return CachedFeedProviderView(self, CachedFeedProviderBodyView(self, YouTubeDataTable(self)))
 
+    @property
+    def PREVIEW_TYPES(self):
+        return ["full", "storyboard", "thumbnail"]
 
     def init_config(self):
         super().init_config()
@@ -662,6 +665,14 @@ class YouTubeProvider(PaginatedProviderMixin,
             + attrs[idx:]
         )
 
+    @property
+    def default_filter_values(self):
+
+        return AttrDict(
+            super().default_filter_values, **AttrDict(
+                preview=self.config.get_path("auto_preview.content", None)
+            )
+        )
 
     @property
     def selected_feed(self):

@@ -53,9 +53,9 @@ class ProviderToolbar(urwid.WidgetWrap):
 
         self.preview_dropdown = BaseDropdown(
             AttrDict([
-                ("Thumbnail", "thumbnail"),
-                ("Storyboard", "storyboard"),
                 ("Full", "full"),
+                ("Storyboard", "storyboard"),
+                ("Thumbnail", "thumbnail"),
             ]),
             label="Preview",
             default=config.settings.preview_content or "full",
@@ -114,6 +114,8 @@ class ListingsView(StreamglobView):
         "meta ]": ("cycle_provider", [1]),
     }
 
+    SETTINGS = ["provider", "profile", "preview"]
+
     def __init__(self, provider):
 
         self.provider = provider
@@ -148,9 +150,24 @@ class ListingsView(StreamglobView):
         ])
         super().__init__(self.pile)
 
-
     def set_provider(self, provider):
         self.toolbar.provider_dropdown.value = provider
+
+    @property
+    def profile(self):
+        return self.toolbar.profile_dropdown.value
+
+    @profile.setter
+    def profile(self, value):
+        self.toolbar.profile_dropdown.value = value
+
+    @property
+    def preview(self):
+        return self.toolbar.preview_dropdown.value
+
+    @preview.setter
+    def preview(self, value):
+        self.toolbar.preview_dropdown.value = value
 
     def on_set_provider(self, provider):
 
@@ -162,6 +179,14 @@ class ListingsView(StreamglobView):
         else:
             self.pile.focus_position = 0
         self.provider.activate()
+        logger.error(self.provider.default_filter_values)
+        for name, value in self.provider.default_filter_values.items():
+            if name not in self.SETTINGS:
+                continue
+            setattr(self, name, value)
+            # value = self.provider.default_filter_values.get(name, None)
+            # if value:
+            #     setattr(self, name, value)
 
     def cycle_provider(self, step=1):
         self.toolbar.cycle_provider(step)

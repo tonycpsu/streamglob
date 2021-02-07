@@ -269,6 +269,10 @@ class BaseProvider(abc.ABC):
         return {"proxies": config.settings.profile.get("proxies")}
 
     @property
+    def PREVIEW_TYPES(self):
+        return ["full"]
+
+    @property
     def session(self):
         if self._session is None:
             session_params = self.session_params
