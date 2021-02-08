@@ -90,6 +90,7 @@ class FeedMediaChannel(model.MediaChannel):
     @db_session
     def reset(self):
         delete(i for i in self.items)
+        self.attrs["end_cursor"] = None
         commit()
 
     @classmethod
@@ -363,10 +364,9 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
         "i": "inflate_selection",
         "meta ctrl k": "kill_all",
         "r": ("update", [], {"force": True}),
-        "R": ("update", [], {"force": True, "replace": True}),
-        "f": ("update", [], {"force": True, "resume": True}),
-        "F": ("update", [], {"force": True, "resume": True, "replace": True}),
-        "f": ["cycle", "fullscreen"],
+        "R": ("update", [], {"force": True, "resume": True}),
+        # "f": ("update", [], {"force": True, "resume": True}),
+        # "F": ("update", [], {"force": True, "resume": True, "replace": True}),
         # "q": "quit_app"
     }
 

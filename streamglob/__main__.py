@@ -142,6 +142,7 @@ class MainView(urwid.WidgetWrap):
         ".": ("player_command", ["seek", "+10"]),
         "meta ,": ("player_command", ["seek", "-10"]),
         "meta .": ("player_command", ["seek", "+10"]),
+        "f": ["cycle", "fullscreen"]
     }
 
     def __init__(self, widgets, weight=1, dividers=False):
