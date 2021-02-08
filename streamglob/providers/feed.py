@@ -13,6 +13,7 @@ from panwid.dialog import *
 from panwid.keymap import *
 from limiter import get_limiter, limit
 from pony.orm import *
+import timeago
 
 from .. import model
 from .. import utils
@@ -74,6 +75,8 @@ class FeedMediaChannel(model.MediaChannel):
                     continue
                 self.provider.on_new_listing(listing)
                 self.updated = datetime.now()
+
+        self.fetched = datetime.now()
 
     @db_session
     def mark_all_items_read(self):
@@ -776,6 +779,8 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
     @property
     def footer_attrs(self):
         return AttrDict([
+            ("last fetched", lambda: timeago.format(self.provider.feed.fetched, datetime.now())),
+            ("last updated", lambda: timeago.format(self.provider.feed.updated, datetime.now())),
             ("shown", lambda: len(self)),
             ("filtered", lambda: self.body.query_result_count()),
             ("fetched in feed", lambda: self.provider.feed_item_count),
