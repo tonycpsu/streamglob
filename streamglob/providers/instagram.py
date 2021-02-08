@@ -169,6 +169,12 @@ class InstagramFeedMediaChannelMixin(object):
 
         return self.looter.get_post_info(shortcode)
 
+    @property
+    def posts(self):
+
+        url = f"https://www.instagram.com/{self.locator[1:]}/?__a=1"
+        data = self.looter.session.get(url).json()
+        return data["graphql"]["user"]["edge_owner_to_timeline_media"]["count"]
 
     def extract_content(self, post):
 
@@ -229,6 +235,10 @@ class InstagramFeedMediaChannelMixin(object):
     async def fetch(self, resume=False, replace=False):
 
         logger.info(f"fetching {self.locator}")
+
+        # update cached post count
+        with db_session:
+            self.attrs["posts"] = self.posts
 
         limit = self.provider.config.get("fetch_limit", self.DEFAULT_FETCH_LIMIT)
 
@@ -365,10 +375,19 @@ class InstagramDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
     #     state.event_loop.create_task(self.fetch_more())
 
 
+
+
+class InstagramProviderBodyView(CachedFeedProviderBodyView):
+
+    @property
+    def footer_attrs(self):
+        return AttrDict(super().footer_attrs, **AttrDict([
+            ("total in feed", lambda: self.provider.feed.attrs.get("posts", 0))
+        ]))
+
 class InstagramProviderView(CachedFeedProviderView):
 
     PROVIDER_BODY_CLASS = InstagramDataTable
-
 
 class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
 
@@ -390,7 +409,7 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
 
     @property
     def VIEW(self):
-        return CachedFeedProviderView(self, CachedFeedProviderBodyView(self, InstagramDataTable(self)))
+        return CachedFeedProviderView(self, InstagramProviderBodyView(self, InstagramDataTable(self)))
 
 
     @property

@@ -773,6 +773,15 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
         urwid.connect_signal(self.body, "focus", self.update_detail)
         # self.provider.filters["feed"].connect("changed", self.update_count)
 
+    @property
+    def footer_attrs(self):
+        return AttrDict([
+            ("shown", lambda: len(self)),
+            ("filtered", lambda: self.body.query_result_count()),
+            ("fetched in feed", lambda: self.provider.feed_item_count),
+            # ("fetched total", lambda: self.provider.total_item_count)
+        ])
+
     def update_detail(self, source, index):
         # FIXME: this is so hacktacular :/
 
@@ -799,14 +808,10 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
         self.detail.original_widget = detail
 
     def update_count(self, source, count):
-        self.footer_text.set_text(
-            textwrap.dedent(
-                f"""\
-                items: {len(self)} shown,
-                {self.body.query_result_count()} filtered,
-                {self.provider.feed_item_count} in feed,
-                {self.provider.total_item_count} total"""
-            ).replace("\n", " ")
+        self.footer_text.set_text(", ".join((
+                f"{label}: {func()}"
+                for label, func in self.footer_attrs.items()
+            ))
         )
 
     def show_footer_message(self, text):
