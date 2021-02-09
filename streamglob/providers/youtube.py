@@ -369,9 +369,7 @@ class YouTubeFeed(FeedMediaChannel):
     def is_channel(self):
         return len(self.locator) == 24 and self.locator.startswith("UC")
 
-    async def fetch(self, resume=False, *args, **kwargs):
-
-        limit = self.provider.config.get("fetch_limit", self.DEFAULT_FETCH_LIMIT)
+    async def fetch(self, limit=None, resume=False, *args, **kwargs):
 
         url = (
             self.CHANNEL_URL_TEMPLATE.format(locator=self.locator)
@@ -474,6 +472,10 @@ class YouTubeFeed(FeedMediaChannel):
 @keymapped()
 class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.storyboard_tasks = []
+
     @property
     def thumbnails(self):
         if not hasattr(self, "_thumbnails"):
@@ -505,6 +507,12 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         return super().keypress(size, key)
 
     def reset(self, *args, **kwargs):
+
+        while len(self.storyboard_tasks):
+            task = self.storyboard_tasks.pop()
+            if not task.cancelled:
+                task.cancel()
+
         super().reset(*args, **kwargs)
         for pos, row in enumerate(self):
             listing = row.data_source
@@ -518,10 +526,11 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
 
         if state.listings_view.preview_mode == "storyboard":
             # for pos in range(position, min(len(self)-1, position+2)):
-            state.event_loop.create_task(self.storyboard_preview(pos))
+            self.storyboard_tasks.append(
+                state.event_loop.create_task(self.storyboard_preview(pos))
+            )
 
     async def storyboard_preview(self, position):
-
 
         async def preview(listing):
             if self.config.auto_preview.storyboard_delay:

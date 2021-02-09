@@ -91,11 +91,7 @@ class RSSSession(session.StreamSession):
 class RSSFeed(FeedMediaChannel):
 
     # @db_session
-    async def fetch(self, limit = None, **kwargs):
-
-        if not limit:
-            limit = self.DEFAULT_FETCH_LIMIT
-
+    async def fetch(self, limit=None, **kwargs):
         try:
             for item in self.session.parse(self.locator):
                 with db_session:

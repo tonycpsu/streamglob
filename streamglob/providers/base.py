@@ -738,7 +738,7 @@ class SynchronizedPlayerMixin(object):
         super().__init__(*args, **kwargs)
         if "focus" in self.signals:
             self.on_focus_handler = urwid.connect_signal(self, "focus", self.on_focus)
-        # urwid.connect_signal(self, "requery", self.on_requery)
+        urwid.connect_signal(self, "requery", self.on_requery)
         self.player = None
         self.player_task = None
         self.queued_task = None
@@ -746,6 +746,9 @@ class SynchronizedPlayerMixin(object):
         self.on_focus_handler = None
         self.sync_player_playlist = False
         self.playlist_lock = asyncio.Lock()
+
+    def on_requery(self, source, count):
+        state.event_loop.create_task(self.preview_all())
 
     def extract_sources(self, listing, **kwargs):
         return (listing.sources if listing else [], kwargs)
@@ -1021,7 +1024,7 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
             return ([], kwargs)
         return self.provider.extract_sources(listing, **kwargs)
 
-    def reset(self, *args, **kwargs):
+    def reset2(self, *args, **kwargs):
         # self.sync_player_playlist = False
         # self.disable_focus_handler()
         super().reset(*args, **kwargs)

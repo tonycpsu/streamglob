@@ -266,6 +266,7 @@ class MediaChannel(MediaChannelMixin, db.Entity):
     provider_id = Required(str, index=True)
     locator = Required(str)
     updated = Required(datetime, default=datetime.now)
+    fetched = Required(datetime, default=datetime.now)
     last_seen = Optional(datetime)
     update_interval = Required(int, default=DEFAULT_UPDATE_INTERVAL)
     listings = Set(lambda: ChannelMediaListing, reverse="channel")

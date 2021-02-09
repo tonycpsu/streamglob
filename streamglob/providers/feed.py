@@ -11,6 +11,7 @@ from orderedattrdict import AttrDict
 from panwid.datatable import *
 from panwid.dialog import *
 from panwid.keymap import *
+from panwid.sparkwidgets import SparkBarWidget
 from limiter import get_limiter, limit
 from pony.orm import *
 import timeago
@@ -33,9 +34,7 @@ class FeedMediaChannel(model.MediaChannel):
     on demand.
     """
 
-    # FIXME: move to feed.py?
-
-    DEFAULT_FETCH_LIMIT = 100
+    DEFAULT_FETCH_LIMIT = 50
 
     DEFAULT_MIN_ITEMS=10
     DEFAULT_MAX_ITEMS=500
@@ -49,9 +48,14 @@ class FeedMediaChannel(model.MediaChannel):
     async def fetch(self):
         pass
 
+    @property
+    def fetch_limit(self):
+        return self.provider.config.fetch_limit or DEFAULT_FETCH_LIMIT
 
     async def update(self, *args, **kwargs):
-        async for item in self.fetch(*args, **kwargs):
+
+        fetched = 0
+        async for item in self.fetch(limit=self.fetch_limit, *args, **kwargs):
             with db_session:
                 old = self.provider.LISTING_CLASS.get(guid=item["guid"])
                 if old:
@@ -75,6 +79,19 @@ class FeedMediaChannel(model.MediaChannel):
                     continue
                 self.provider.on_new_listing(listing)
                 self.updated = datetime.now()
+                fetched+=1
+                # self.provider.view.show_footer_message(f"Updating... {fetched}") # FIXME
+                spark_vals = [
+                    ("light green", fetched, ("{value}", "black")),
+                    ("dark green", self.fetch_limit-fetched, (self.fetch_limit, "black", ">"))
+                ]
+                footer_message = urwid.Columns([
+                    ("pack", urwid.Text("Updating...")),
+                    ('pack', SparkBarWidget(spark_vals, 20, align="center")),
+                ],dividechars=1)
+                self.provider.view.set_footer_widget(
+                    footer_message
+                )
 
         self.fetched = datetime.now()
 
@@ -381,6 +398,7 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
         urwid.connect_signal(self, "requery", self.on_requery)
 
     def on_requery(self, source, count):
+        super().on_requery(source, count)
         self.update_count = True
 
     # def detail_box(self):
@@ -576,7 +594,7 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
                 count += len(self)
                 self.focus_position = len(self)-1
                 self.load_more(self.focus_position)
-                self.focus_position += 1
+                # self.focus_position += 1
         if idx:
             pos = self.index_to_position(idx)
             logger.info(pos)
@@ -741,6 +759,72 @@ class FeedProvider(BaseProvider):
 #         ])
 #         super().__init__(self.pile)
 
+class CachedFeedProviderFooter(urwid.WidgetWrap):
+
+    def __init__(self, attrs):
+        self.attrs = attrs
+        self.indicator_placeholder = urwid.WidgetPlaceholder(urwid.Text(""))
+        self.footer_placeholder = urwid.WidgetPlaceholder(urwid.Text(""))
+        self._width = None
+        self.filler = urwid.Filler(
+            urwid.AttrMap(
+                urwid.Columns([
+                    ("weight", 1, self.indicator_placeholder),
+                    ("weight", 1, self.footer_placeholder),
+                ], dividechars=1),
+                "footer"
+            )
+        )
+        super().__init__(self.filler)
+
+    def render(self, size, focus=False):
+
+        update = self._width is None
+        self._width=size[0]
+        if update:
+            self.update_indicator()
+        return super().render(size, focus=focus)
+
+
+    def update(self, source, count):
+        self.update_indicator()
+        self.update_count()
+
+    def update_indicator(self):
+
+        if not self._width:
+            return
+        shown = self.attrs["shown"]()
+        filtered = self.attrs["filtered"]()
+        fetched = self.attrs["fetched in feed"]()
+
+        spark_vals = [
+            ("dark blue", shown, (shown, "black", ">")),
+            ("light blue", filtered-shown, (filtered, "black", ">")),
+            ("dark red", fetched-filtered, (fetched, "black", ">"))
+        ]
+        self.set_indicator_widget(SparkBarWidget(spark_vals, self._width//2))
+
+    def update_count(self):
+        self.show_footer_message(", ".join((
+                f"{label}: {func()}"
+                for label, func in self.attrs.items()
+            ))
+        )
+
+    def show_footer_message(self, message):
+        text = urwid.Text(message, align="center")
+        self.set_footer_widget(text)
+
+    def set_footer_widget(self, widget):
+        self.footer_placeholder.original_widget = widget
+        state.loop.draw_screen()
+
+    def set_indicator_widget(self, widget):
+        self.indicator_placeholder.original_widget = widget
+        state.loop.draw_screen()
+
+
 class CachedFeedProviderBodyView(urwid.WidgetWrap):
 
     signals = ["select", "cycle_filter", "keypress"]
@@ -750,15 +834,18 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
         self.body = body
         self.detail = urwid.WidgetPlaceholder(urwid.Filler(urwid.Text("")))
         # self.body = CachedFeedProviderDataTable(provider, self)
-        self.footer_text = urwid.Text("", align="center")
-        self.footer = urwid.Filler(
-            urwid.AttrMap(
-                urwid.Padding(
-                    self.footer_text
-                ),
-                "footer"
-            )
-        )
+        # self.footer_text = urwid.Text("", align="center")
+        self.footer = CachedFeedProviderFooter(self.footer_attrs)
+        # self.footer = urwid.Filler(
+        #     urwid.AttrMap(
+        #         urwid.Columns([
+        #             ("weight", 1, self.indicator_placeholder),
+        #             ("weight", 3, self.footer_placeholder),
+        #             ("weight", 1, urwid.Text("")),
+        #         ], dividechars=1),
+        #         "footer"
+        #     )
+        # )
         self.pile = urwid.Pile([
             ("weight", 4, self.body),
             (1, urwid.SolidFill(u"\N{BOX DRAWINGS LIGHT HORIZONTAL}")),
@@ -766,12 +853,11 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
             (1, self.footer),
         ])
 
-
         super().__init__(self.pile)
         self.pile.focus_position = 0
         # urwid.connect_signal(self.body, "select", lambda *args: self._emit(*args))
         # urwid.connect_signal(self.body, "cycle_filter", lambda *args: self._emit(*args))
-        urwid.connect_signal(self.body, "requery", self.update_count)
+        urwid.connect_signal(self.body, "requery", self.footer.update)
         urwid.connect_signal(self.body, "keypress", lambda *args: self._emit(*args))
         urwid.connect_signal(self.body, "focus", self.update_detail)
         # self.provider.filters["feed"].connect("changed", self.update_count)
@@ -812,15 +898,6 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
         # row.cells[col_index].inner_contents.set_text("")
         self.detail.original_widget = detail
 
-    def update_count(self, source, count):
-        self.footer_text.set_text(", ".join((
-                f"{label}: {func()}"
-                for label, func in self.footer_attrs.items()
-            ))
-        )
-
-    def show_footer_message(self, text):
-        self.footer_text.set_text(text)
 
     def __iter__(self):
         return iter(self.body)

@@ -23,6 +23,8 @@ from panwid.datatable import *
 from panwid.listbox import ScrollingListBox
 from panwid.dropdown import *
 from panwid.dialog import *
+from panwid import sparkwidgets
+
 from pony.orm import db_session
 from tonyc_utils.logging import *
 
@@ -88,6 +90,9 @@ def load_palette():
         ScrollingListBox.get_palette_entries()
     )
     state.palette_entries.update(TabView.get_palette_entries())
+
+    state.palette_entries.update(sparkwidgets.get_palette_entries())
+
 
     # raise Exception(state.palette_entries)
     return Palette("default", **state.palette_entries)
@@ -310,7 +315,6 @@ def run_gui(action, provider, **kwargs):
     old_signal_keys = state.screen.tty_signal_keys()
     l = list(old_signal_keys)
     l[0] = 'undefined'
-    l[1] = 'undefined'
     l[2] = 'undefined'
     l[3] = 'undefined'
     l[4] = 'undefined'
