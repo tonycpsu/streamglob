@@ -240,8 +240,6 @@ class InstagramFeedMediaChannelMixin(object):
         with db_session:
             self.attrs["posts"] = self.posts
 
-        limit = self.provider.config.get("fetch_limit", self.DEFAULT_FETCH_LIMIT)
-
         try:
             (_, end_cursor) = self.end_cursor if resume else None
         except TypeError:
@@ -382,8 +380,20 @@ class InstagramProviderBodyView(CachedFeedProviderBodyView):
     @property
     def footer_attrs(self):
         return AttrDict(super().footer_attrs, **AttrDict([
-            ("total in feed", lambda: self.provider.feed.attrs.get("posts", 0))
+            ("total", lambda: self.provider.feed.attrs.get("posts", 0))
         ]))
+
+    @property
+    def indicator_bars(self):
+        return super().indicator_bars + [
+            ("total", "dark gray",
+             lambda: (
+                 self.footer_attrs["total"]()
+                 - self.footer_attrs["fetched"]()
+                 - self.footer_attrs["matching"]())
+             )
+        ]
+
 
 class InstagramProviderView(CachedFeedProviderView):
 
