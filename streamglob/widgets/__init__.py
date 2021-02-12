@@ -92,10 +92,18 @@ class BaseDataTable(panwid.DataTable):
     KEYMAP = {
         "j": "keypress down",
         "k": "keypress up",
+        "home": "key_home",
+        "end": "key_end"
     }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+    def key_home(self):
+        self.focus_position = 0
+
+    def key_end(self):
+        self.focus_position = len(self)-1
 
 
     # def keypress(self, size, key):
