@@ -1066,11 +1066,6 @@ class DetailBox(urwid.WidgetWrap):
 @keymapped()
 class DetailDataTable(BaseDataTable):
 
-    KEYMAP = {
-        "j": "keypress down",
-        "k": "keypress up",
-    }
-
     with_header = False
 
     def __init__(self, listing, parent_table, columns=None):
