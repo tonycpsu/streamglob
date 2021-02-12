@@ -560,36 +560,24 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
             self.selection.close_details()
             self.selection.clear_attr("unread")
 
-        while True:
-            try:
-                idx = next(
-                    r.data.media_listing_id
-                    for r in self[self.focus_position+1:]
-                    if predicate(r)
-                )
-                break
-            except (StopIteration, AttributeError):
-                # if len(self) >= self.query_result_count():
-                #     logger.info(f"len(self) {len(self)} == self.query_result_count() {self.query_result_count()}")
-                #     return
+        try:
+            idx = next(
+                r.data.media_listing_id
+                for r in self[self.focus_position+1:]
+                if predicate(r)
+            )
+        except (StopIteration, AttributeError):
+            if self.focus_position == len(self)-1:
+                self.load_more(self.focus_position)
+            else:
                 self.focus_position = len(self)-1
-                updated = self.load_more(self.focus_position)
-                if not updated:
-                    logger.info("load_more no updated")
-                    return
-                # count += updated
-                # logger.info(f"count: {count}, last_count: {last_count}")
-                # if count == last_count:
-                #     return
-                # last_count = count
-                # self.focus_position += 1
-        if idx:
-            pos = self.index_to_position(idx)
-            logger.info(pos)
-            focus_position_orig = self.focus_position
-            self.focus_position = pos
-            self.mark_read_on_focus = True
-            self._modified()
+        # if idx:
+        #     pos = self.index_to_position(idx)
+        #     logger.info(pos)
+        #     focus_position_orig = self.focus_position
+        #     self.focus_position = pos
+        #     self.mark_read_on_focus = True
+        #     self._modified()
 
 
     @keymap_command
@@ -1228,9 +1216,11 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         (sort_field, sort_desc) = self.view.sort_by
 
         if self.pagination_cursor:
+            # raise Exception(self.pagination_cursor)
+
             op = "<" if sort_desc else ">"
             self.items_query = self.items_query.filter(
-                raw_sql(f"{sort_field} {op} {self.pagination_cursor}")
+                raw_sql(f"{sort_field} {op} '{self.pagination_cursor}'")
             )
 
         if sort_field:
@@ -1244,7 +1234,6 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                 pk_sort_attr = desc(pk_sort_attr)
             self.items_query = self.items_query.order_by(pk_sort_attr)
             self.items_query = self.items_query.order_by(sort_fn)
-
 
         self.view.update_count = True
 
@@ -1277,6 +1266,9 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                 listing.channel.listings = None
                 listing.sources = sources
                 yield listing
+
+        self.pagination_cursor = getattr(listing, self.view.sort_by[0])
+        self.update_query()
 
                 # yield (listing, dict(source_count=len(listing.sources)))
 
