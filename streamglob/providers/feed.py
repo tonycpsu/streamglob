@@ -569,15 +569,17 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
         except (StopIteration, AttributeError):
             if self.focus_position == len(self)-1:
                 self.load_more(self.focus_position)
+                if self.focus_position < len(self) - 1:
+                    self.focus_position += 1
             else:
                 self.focus_position = len(self)-1
-        # if idx:
-        #     pos = self.index_to_position(idx)
-        #     logger.info(pos)
-        #     focus_position_orig = self.focus_position
-        #     self.focus_position = pos
-        #     self.mark_read_on_focus = True
-        #     self._modified()
+        if idx:
+            pos = self.index_to_position(idx)
+            logger.info(pos)
+            focus_position_orig = self.focus_position
+            self.focus_position = pos
+            self.mark_read_on_focus = True
+            self._modified()
 
 
     @keymap_command
