@@ -978,6 +978,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         self.items_query = None
         self.filters["feed"].connect("changed", self.on_feed_change)
         self.filters["status"].connect("changed", self.on_status_change)
+        self.pagination_cursor = None
         self.game_map = AttrDict()
         self.limiter = get_limiter(rate=self.RATE_LIMIT, capacity=self.BURST_LIMIT)
 
@@ -1207,21 +1208,11 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
 
         self.items_query = self.feed_items_query
 
-        (sort_field, sort_desc) = self.view.sort_by
-
-        if sort_field:
-            if sort_desc:
-                sort_fn = lambda i: desc(getattr(i, sort_field))
-            else:
-                sort_fn = lambda i: getattr(i, sort_field)
-            self.items_query = self.items_query.order_by(sort_fn)
-
-        self.items_query = self.items_query.filter(status_filters[self.filters.status.value])
-
         if self.feed_filters:
             for f in self.feed_filters:
                 self.items_query = self.items_query.filter(f)
 
+        self.items_query = self.items_query.filter(status_filters[self.filters.status.value])
 
         if search_filter:
             (field, query) = re.search("(?:(\w+):)?(.*)", search_filter).groups()
@@ -1233,6 +1224,27 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                 self.items_query = self.items_query.filter(
                     lambda i: query.lower() in i.title.lower()
                 )
+
+        (sort_field, sort_desc) = self.view.sort_by
+
+        if self.pagination_cursor:
+            op = "<" if sort_desc else ">"
+            self.items_query = self.items_query.filter(
+                raw_sql(f"{sort_field} {op} {self.pagination_cursor}")
+            )
+
+        if sort_field:
+            sort_fn = lambda i: desc(getattr(i, sort_field))
+            if sort_desc:
+                sort_fn = desc(sort_fn)
+
+            # break ties with primary key to ensure pagination cursor is correct
+            pk_sort_attr = self.LISTING_CLASS._pk_
+            if sort_desc:
+                pk_sort_attr = desc(pk_sort_attr)
+            self.items_query = self.items_query.order_by(pk_sort_attr)
+            self.items_query = self.items_query.order_by(sort_fn)
+
 
         self.view.update_count = True
 
@@ -1255,8 +1267,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
 
         with db_session:
 
-            logger.info(f"offset: {offset}, limit: {limit}, {self.items_query.get_sql()}")
-            for listing in self.items_query[offset:offset+limit]:
+            for listing in self.items_query[:limit]:
                 sources = [
                     source.detach()
                     for source in listing.sources.select().order_by(lambda s: s.rank)
