@@ -1266,7 +1266,10 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                 listing.channel.listings = None
                 listing.sources = sources
                 yield listing
+            else:
+                return
 
+        # get last item's sort key and store it as our pagination cursor
         self.pagination_cursor = getattr(listing, self.view.sort_by[0])
         self.update_query()
 
