@@ -49,6 +49,7 @@ class FeedMediaChannel(model.MediaChannel):
     async def update(self, *args, **kwargs):
 
         fetched = 0
+        self.provider.update_fetch_indicator(0)
         async for item in self.fetch(limit=self.provider.fetch_limit, *args, **kwargs):
             with db_session:
                 old = self.provider.LISTING_CLASS.get(guid=item["guid"])
@@ -540,9 +541,13 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
     async def last_item(self):
         self.focus_position = len(self)-1
 
+    @staticmethod
+    def is_unread(listing):
+        return not listing.data_source.attach().read
+
     @keymap_command
     async def next_unread(self):
-        return await self.next_matching(lambda r: not r.data_source.attach().read)
+        return await self.next_matching(self.is_unread)
 
     async def next_matching(self, predicate):
 
@@ -568,9 +573,13 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
             )
         except (StopIteration, AttributeError):
             if self.focus_position == len(self)-1:
-                self.load_more(self.focus_position)
-                if self.focus_position < len(self) - 1:
-                    self.focus_position += 1
+                updated = self.load_more(self.focus_position)
+                if updated:
+                    if self.focus_position < len(self) - 1:
+                        self.focus_position += 1
+                else:
+                    await self.update(force=True, resume=True)
+
             else:
                 self.focus_position = len(self)-1
         if idx:
@@ -760,28 +769,31 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
         update = self._width is None
         self._width = size[0]
         if update:
-            self.update_indicator()
+            self.update_status_indicator()
         return super().render(size, focus=focus)
 
 
     def update(self, source, count):
-        self.update_indicator()
+        self.update_status_indicator()
         self.update_count()
 
+    def update_fetch_indicator(self, num, count):
 
-    def update_indicator(self):
+        spark_vals = [
+            (num, "light green", ("{value}", "black")),
+            (count-num, "dark green", (count, "black", ">"))
+        ]
+        indicator_widget = SparkBarWidget(
+            spark_vals,
+            int(self._width *(2/3)),
+        )
+        self.set_indicator_widget(indicator_widget)
+
+    def update_status_indicator(self):
 
         if not self._width:
             return
-        # shown = self.attrs["shown"]()
-        # matching = self.attrs["matching"]()
-        # fetched = self.attrs["fetched in feed"]()
 
-        # spark_vals = [
-        #     (shown, "light blue", (shown, "black", ">")),
-        #     (matching-shown, "dark blue", (matching, "black", ">")),
-        #     (fetched-matching, "dark red", (fetched, "black", ">"))
-        # ]
         spark_vals = [
             (func(), attr, (f"{self.attrs[label]()} {label}", "black", ">"))
             for label, attr, func in self.bars
@@ -790,7 +802,7 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
         self.set_indicator_widget(
             SparkBarWidget(
                 spark_vals,
-                self._width *(2/3),
+                int(self._width *(2/3)),
                 min_width=5
             )
         )
@@ -813,26 +825,6 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
     def set_indicator_widget(self, widget):
         self.indicator_placeholder.original_widget = widget
         state.loop.draw_screen()
-
-    def update_fetch_indicator(self, num, count):
-        update_text = "Updating..."
-        spark_vals = [
-            (num, "light green", ("{value}", "black")),
-            (count-num, "dark green", (count, "black", ">"))
-        ]
-        spark_bar = SparkBarWidget(
-            spark_vals,
-            int(self._width*(1/3)-len(update_text)-1),
-        )
-
-        footer_message = urwid.Columns([
-            ("pack", urwid.Text(update_text)),
-            ('pack', spark_bar),
-        ], dividechars=1)
-
-        self.set_message_widget(
-            footer_message
-        )
 
 
 
@@ -916,18 +908,19 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
 
     def update_fetch_indicator(self, num, count):
         self.footer.update_fetch_indicator(num, count)
-        spark_vals = [
-            (num, "light green", ("{value}", "black")),
-            (count-num, "dark green", (count, "black", ">"))
-        ]
-        footer_message = urwid.Columns([
-            ("pack", urwid.Text("Updating...")),
-            ('pack', SparkBarWidget(spark_vals, 20, align="center")),
-        ],dividechars=1)
+    #     self.footer.update_fetch_indicator(num, count)
+    #     spark_vals = [
+    #         (num, "light green", ("{value}", "black")),
+    #         (count-num, "dark green", (count, "black", ">"))
+    #     ]
+    #     footer_message = urwid.Columns([
+    #         ("pack", urwid.Text("Updating...")),
+    #         ('pack', SparkBarWidget(spark_vals, 20, align="center")),
+    #     ],dividechars=1)
 
-        self.footer.set_message_widget(
-            footer_message
-        )
+    #     self.footer.set_message_widget(
+    #         footer_message
+    #     )
 
 
 @keymapped()
@@ -1245,6 +1238,9 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
 
     def update_fetch_indicator(self, num):
         self.view.update_fetch_indicator(num, self.fetch_limit)
+
+    def show_message(self, message):
+        self.view.show_message(message)
 
     def listings(self, offset=None, limit=None, *args, **kwargs):
 
