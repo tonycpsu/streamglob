@@ -302,9 +302,8 @@ class InstagramFeedMediaChannelMixin(object):
 
             if i and not replace:
                 logger.debug(f"old: {created}")
-                continue
+                return
             else:
-                new_seen = True
                 logger.debug(f"new: {created}")
                 caption = (
                     post["edge_media_to_caption"]["edges"][0]["node"]["text"]

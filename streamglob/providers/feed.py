@@ -806,6 +806,7 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
         indicator_widget = SparkBarWidget(
             spark_vals,
             int(self._width *(2/3)),
+            min_width=2
         )
         self.set_indicator_widget(indicator_widget)
         state.loop.draw_screen()
@@ -824,7 +825,7 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
             SparkBarWidget(
                 spark_vals,
                 int(self._width *(2/3)),
-                min_width=5
+                min_width=3
             )
         )
 
