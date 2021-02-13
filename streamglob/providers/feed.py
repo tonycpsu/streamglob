@@ -280,7 +280,8 @@ class CachedFeedProviderDetailDataTable(DetailDataTable):
 
     KEYMAP = {
         "m": "toggle_selection_seen",
-        "n": "next_unseen"
+        "n": "next_unseen",
+        "N": "next_unread",
     }
 
     def keypress(self, size, key):
@@ -333,7 +334,11 @@ class CachedFeedProviderDetailDataTable(DetailDataTable):
             if next_unseen:
                 self.focus_position = next_unseen.rank
             else:
-                await self.parent_table.next_unread()
+                await self.next_unread()
+
+    @keymap_command
+    async def next_unread(self):
+        await self.parent_table.next_unread(no_sources=True)
 
 
 @keymapped()
@@ -363,7 +368,8 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
         "meta a": ("mark_visible_read", [-1]),
         "meta A": ("mark_visible_read", [1]),
         "n": "next_unread",
-        "N": "prev_unread",
+        "N": ("next_unread", [True]),
+        "b": "prev_unread",
         "m": "toggle_selection_read",
         "i": "inflate_selection",
         "meta ctrl k": "kill_all",
@@ -546,10 +552,13 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
         return not listing.data_source.attach().read
 
     @keymap_command
-    async def next_unread(self):
-        return await self.next_matching(self.is_unread)
+    async def next_unread(self, no_sources=False):
+        return await self.next_matching(self.is_unread, no_sources=no_sources)
 
-    async def next_matching(self, predicate):
+    async def next_matching(self, predicate, no_sources=False):
+        # FIXME: this is sort of a mish-mash between a general purpose
+        # function and one particular to marking read and moving to the next
+        # unread.  Will require some cleanup if it's used for other purposes.
 
         idx = None
         count = 0
@@ -557,13 +566,24 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
 
         if not self.selection:
             return
-        if len(self.selection.data.sources) == 1:
-            rc = self.mark_item_read(self.focus_position)
-        else:
-            with db_session:
-                self.selection.data_source.attach().read = datetime.now()
+
+        with db_session:
+            for i, s in enumerate(self.selection.data.sources):
+            # # now = datetime.now()
+                source = FeedMediaSource[s.media_source_id]
+                # logger.info(f"{i}, {source}")
+                # source.attach().read = now
+                source.mark_seen()
+                # commit()
+                if len(self.selection.data.sources) > 1:
+                    logger.info(f"{len(self.selection.data.sources)}, {len(self.selection.details.contents.table)}")
+                    self.selection.details.contents.table[i].clear_attr("unread")
+                # else:
+                #     self.selection.data_source.attach().read = now
             self.selection.close_details()
             self.selection.clear_attr("unread")
+
+        rc = self.mark_item_read(self.focus_position)
 
         try:
             idx = next(
@@ -788,6 +808,7 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
             int(self._width *(2/3)),
         )
         self.set_indicator_widget(indicator_widget)
+        state.loop.draw_screen()
 
     def update_status_indicator(self):
 
@@ -908,19 +929,6 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
 
     def update_fetch_indicator(self, num, count):
         self.footer.update_fetch_indicator(num, count)
-    #     self.footer.update_fetch_indicator(num, count)
-    #     spark_vals = [
-    #         (num, "light green", ("{value}", "black")),
-    #         (count-num, "dark green", (count, "black", ">"))
-    #     ]
-    #     footer_message = urwid.Columns([
-    #         ("pack", urwid.Text("Updating...")),
-    #         ('pack', SparkBarWidget(spark_vals, 20, align="center")),
-    #     ],dividechars=1)
-
-    #     self.footer.set_message_widget(
-    #         footer_message
-    #     )
 
 
 @keymapped()
