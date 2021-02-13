@@ -41,7 +41,8 @@ class FilesView(SynchronizedPlayerMixin, StreamglobView):
 
     KEYMAP = {
         "meta p": "preview_all",
-        "ctrl r": "refresh"
+        "ctrl r": "refresh",
+        "delete": "delete_selection"
     }
 
     def __init__(self):
@@ -136,6 +137,18 @@ class FilesView(SynchronizedPlayerMixin, StreamglobView):
 
     def refresh(self):
         self.browser.refresh()
+
+    def delete_selection(self):
+
+        focus = self.browser.body.get_focus()[1]
+        selection = self.browser.selection
+        if isinstance(selection, DirectoryNode):
+            # TODO: recursive delete with confirmation?
+            return
+        os.remove(selection.full_path)
+        next_focused =  selection.prev_sibling() or selection.next_sibling() or selection.get_parent()
+        self.browser.body.set_focus(next_focused)
+        selection.get_parent().get_child_keys(reload=True)
 
     # def on_view_activate(self):
     #     state.event_loop.create_task(self.play_empty())
