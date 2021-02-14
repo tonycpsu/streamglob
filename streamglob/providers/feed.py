@@ -806,7 +806,7 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
         indicator_widget = SparkBarWidget(
             spark_vals,
             int(self._width *(2/3)),
-            min_width=2
+            min_width=1
         )
         self.set_indicator_widget(indicator_widget)
         state.loop.draw_screen()
@@ -817,15 +817,15 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
             return
 
         spark_vals = [
-            (func(), attr, (f"{self.attrs[label]()} {label}", "black", ">"))
-            for label, attr, func in self.bars
+            (func(), attr, (f"{label}{self.attrs[name]()}", "black", ">" if i else "<"))
+            for i, (name, label, attr, func) in enumerate(self.bars)
         ]
         logger.error(spark_vals)
         self.set_indicator_widget(
             SparkBarWidget(
                 spark_vals,
-                int(self._width *(2/3)),
-                min_width=3
+                int(self._width *(2/3))-1, # FIXME: urwid/urwid#225 strikes again
+                fit_label=True
             )
         )
 
@@ -868,12 +868,9 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
 
         super().__init__(self.pile)
         self.pile.focus_position = 0
-        # urwid.connect_signal(self.body, "select", lambda *args: self._emit(*args))
-        # urwid.connect_signal(self.body, "cycle_filter", lambda *args: self._emit(*args))
         urwid.connect_signal(self.body, "requery", self.footer.update)
         urwid.connect_signal(self.body, "keypress", lambda *args: self._emit(*args))
         urwid.connect_signal(self.body, "focus", self.update_detail)
-        # self.provider.filters["feed"].connect("changed", self.update_count)
 
     @property
     def footer_attrs(self):
@@ -889,11 +886,11 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
     @property
     def indicator_bars(self):
         return [
-            ("shown", "dark blue",
+            ("shown", "👓", "dark blue",
              lambda: self.footer_attrs["shown"]()),
-            ("matching", "light blue",
+            ("matching", "✓", "light blue",
              lambda: self.footer_attrs["matching"]() - self.footer_attrs["shown"]()),
-            ("fetched", "dark red",
+            ("fetched", "↓", "dark red",
              lambda: self.footer_attrs["fetched"]() - self.footer_attrs["matching"]()),
         ]
 
@@ -926,7 +923,6 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
 
     def __getattr__(self, attr):
         return getattr(self.body, attr)
-
 
     def update_fetch_indicator(self, num, count):
         self.footer.update_fetch_indicator(num, count)

@@ -385,7 +385,7 @@ class InstagramProviderBodyView(CachedFeedProviderBodyView):
     @property
     def indicator_bars(self):
         return super().indicator_bars + [
-            ("total", "dark gray",
+            ("total", "🌐", "dark gray",
              lambda: (
                  self.footer_attrs["total"]()
                  - self.footer_attrs["fetched"]()
