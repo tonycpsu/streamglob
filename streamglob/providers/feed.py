@@ -1154,6 +1154,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
 
     def reset(self):
         logger.info("provider reset")
+        self.pagination_cursor = None
         self.update_query()
         self.view.reset()
 
@@ -1254,6 +1255,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
     def listings(self, offset=None, limit=None, *args, **kwargs):
 
         count = 0
+        cursor = None
 
         if not offset:
             offset = 0
@@ -1272,14 +1274,12 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                 listing.channel = listing.channel.detach()
                 listing.channel.listings = None
                 listing.sources = sources
+                # get last item's sort key and store it as our pagination cursor
+                cursor = getattr(listing, self.view.sort_by[0])
                 yield listing
-            else:
-                return
 
-        # get last item's sort key and store it as our pagination cursor
-        self.pagination_cursor = getattr(listing, self.view.sort_by[0])
         self.update_query()
-
+        self.pagination_curosr = cursor
                 # yield (listing, dict(source_count=len(listing.sources)))
 
     @db_session
