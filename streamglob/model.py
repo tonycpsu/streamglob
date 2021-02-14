@@ -428,7 +428,14 @@ class ContentMediaListingMixin(object):
 
     @property
     def body_urls(self):
-        extracted_urls = urlscan.extracthtmlurls(self.content) or urlscan.extracturls(self.content)
+
+        if not self.content:
+            return []
+
+        extracted_urls = (
+            urlscan.extracthtmlurls(self.content)
+            or urlscan.extracturls(self.content)
+        )
 
         urls = []
         dedupe = True

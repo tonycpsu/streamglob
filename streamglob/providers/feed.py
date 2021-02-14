@@ -803,7 +803,6 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
 
         if not self._width:
             return
-
         spark_vals = [
             (func(), attr, (f"{label}{self.attrs[name]()}", "black", ">" if i else "<"))
             for i, (name, label, attr, func) in enumerate(self.bars)
@@ -862,14 +861,25 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
 
     @property
     def footer_attrs(self):
-        return AttrDict([
-            ("refreshed", lambda: timeago.format(self.provider.feed.fetched, datetime.now())),
-            ("updated", lambda: timeago.format(self.provider.feed.updated, datetime.now())),
-            ("shown", lambda: len(self)),
-            ("matching", lambda: self.body.query_result_count()),
-            ("fetched", lambda: self.provider.feed_item_count),
-            # ("fetched total", lambda: self.provider.total_item_count)
-        ])
+        if self.provider.feed:
+            return AttrDict([
+                ("refreshed", lambda: timeago.format(self.provider.feed.fetched, datetime.now())),
+                ("updated", lambda: timeago.format(self.provider.feed.updated, datetime.now())),
+                ("shown", lambda: len(self)),
+                ("matching", lambda: self.body.query_result_count()),
+                ("fetched", lambda: self.provider.feed_item_count),
+                # ("fetched total", lambda: self.provider.total_item_count)
+            ])
+        else:
+            # FIXME: aggregate stats
+            return AttrDict([
+                ("refreshed", lambda: "?"),
+                ("updated", lambda: "?"),
+                ("shown", lambda: 0),
+                ("matching", lambda: 0),
+                ("fetched", lambda: 0),
+                # ("fetched total", lambda: self.provider.total_item_count)
+            ])
 
     @property
     def indicator_bars(self):
@@ -913,6 +923,8 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
         return getattr(self.body, attr)
 
     def update_fetch_indicator(self, num, count):
+        if not self.provider.feed:
+            return
         self.footer.update_fetch_indicator(num, count)
 
 
@@ -1038,7 +1050,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
 
     @property
     def fetch_limit(self):
-        return self.config.fetch_limit or DEFAULT_FETCH_LIMIT
+        return self.config.fetch_limit or self.DEFAULT_FETCH_LIMIT
 
     def create_feeds(self):
         with db_session:
