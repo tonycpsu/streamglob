@@ -16,6 +16,7 @@ import tempfile
 import pony.options
 pony.options.CUT_TRACEBACK = False
 from pony.orm import *
+from urlscan import urlscan, urlchoose
 
 from orderedattrdict import AttrDict
 from pony.orm.core import EntityMeta
@@ -424,6 +425,32 @@ class ContentMediaListingMixin(object):
     @property
     def body(self):
         return self.content or ""
+
+    @property
+    def body_urls(self):
+        extracted_urls = urlscan.extracthtmlurls(self.content) or urlscan.extracturls(self.content)
+
+        urls = []
+        dedupe = True
+        for group, usedfirst, usedlast in extracted_urls:
+            if dedupe is True:
+                # If no unique URLs exist, then skip the group completely
+                if not [chunk for chunks in group for chunk in chunks
+                        if chunk.url is not None and chunk.url not in urls]:
+                    continue
+            groupurls = []
+            markup = []
+            for chunks in group:
+                i = 0
+                while i < len(chunks):
+                    chunk = chunks[i]
+                    i += 1
+                    if chunk.url is not None:
+                        if (dedupe is True and chunk.url not in urls) \
+                                or dedupe is False:
+                            urls.append(chunk.url)
+                            groupurls.append(chunk.url)
+        return urls
 
 @attrclass()
 class ContentMediaListing(ContentMediaListingMixin, MediaListing):
