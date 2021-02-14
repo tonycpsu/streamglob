@@ -230,18 +230,6 @@ class FeedMediaListing(FeedMediaListingMixin, model.ChannelMediaListing, model.T
 #         return all(seen)
 # #
 
-class ContentFeedMediaListingMixin(object):
-
-    @property
-    def body(self):
-        return self.content or ""
-
-
-@model.attrclass()
-class ContentFeedMediaListing(ContentFeedMediaListingMixin, FeedMediaListing):
-
-    content = Optional(str)
-
 class FeedMediaSourceMixin(object):
 
     def mark_seen(self):

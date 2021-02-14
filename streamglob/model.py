@@ -411,13 +411,24 @@ class MediaListingMixin(object):
         # return self.provider.NAME.lower()
 
 
-@attrclass(MediaListingMixin)
+@attrclass()
 class MediaListing(MediaListingMixin, db.Entity):
 
     media_listing_id = PrimaryKey(int, auto=True)
     provider_id = Required(str, index=True)
     attrs = Required(Json, default={})
     task = Optional(lambda: MediaTask, reverse="listing")
+
+class ContentMediaListingMixin(object):
+
+    @property
+    def body(self):
+        return self.content or ""
+
+@attrclass()
+class ContentMediaListing(ContentMediaListingMixin, MediaListing):
+
+    content = Optional(str)
 
 
 @attrclass()

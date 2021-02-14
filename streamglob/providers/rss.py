@@ -27,7 +27,7 @@ class RSSMediaSource(model.MediaSource):
 
 
 @model.attrclass()
-class RSSMediaListing(ContentFeedMediaListing):
+class RSSMediaListing(model.ContentMediaListing, FeedMediaListing):
     pass
 
 class RSSSession(session.StreamSession):
