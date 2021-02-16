@@ -1275,8 +1275,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                 yield listing
 
         self.update_query()
-        self.pagination_curosr = cursor
-                # yield (listing, dict(source_count=len(listing.sources)))
+        self.pagination_cursor = cursor
 
     @db_session
     def mark_items_read(self, request):
