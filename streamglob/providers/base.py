@@ -1066,6 +1066,11 @@ class DetailBox(urwid.WidgetWrap):
 @keymapped()
 class DetailDataTable(BaseDataTable):
 
+    # KEYMAP = {
+    #     "home": "key_home",
+    #     "end": "key_end"
+    # }
+
     with_header = False
 
     def __init__(self, listing, parent_table, columns=None):
@@ -1073,8 +1078,36 @@ class DetailDataTable(BaseDataTable):
         self.parent_table = parent_table
         super().__init__(columns=columns)
 
+    # def key_home(self):
+    #     # raise Exception
+    #     if self.focus_position == 0:
+    #         super().key_home()
+    #         # self.parent_table.focus_position = 0
+    #     else:
+    #         self.focus_position = 0
+
+    # def key_end(self):
+    #     if self.focus_position == len(self)-1:
+    #         super().key_end()
+    #         # self.parent_table.focus_position = len(self.parent_table)-1
+    #     else:
+    #         self.focus_position = len(self)-1
+
+
     def keypress(self, size, key):
-        return super().keypress(size, key)
+        if key == "home":
+            if self.focus_position != 0:
+                self.focus_position = 0
+            else:
+                self.parent_table.focus_position = 0
+        elif key == "end":
+            if self.focus_position != len(self)-1:
+                self.focus_position = len(self)-1
+            else:
+                self.parent_table.focus_position = len(self.parent_table)-1
+        else:
+            return key
+
 
     def query(self, *args, **kwargs):
         return [

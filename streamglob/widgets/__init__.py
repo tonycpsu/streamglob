@@ -106,15 +106,6 @@ class BaseDataTable(panwid.DataTable):
         self.focus_position = len(self)-1
 
 
-    # def keypress(self, size, key):
-    #     key = super().keypress(size, key)
-
-    #     if key == "ctrl d":
-    #         logger.info(self.focus_position)
-    #         self.log_dump(20)
-    #     else:
-    #         return key
-
 class Observable(object):
 
     def __init__(self, *args, **kwargs):

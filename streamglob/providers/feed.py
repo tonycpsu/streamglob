@@ -345,8 +345,6 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
     detail_selectable = True
 
     KEYMAP = {
-        "home": "first_item",
-        "end": "last_item",
         "cursor up": "prev_item",
         "cursor down": "next_item",
         "ctrl r": "reset",
@@ -526,14 +524,6 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
     async def next_item(self):
         if self.focus_position < len(self)-1:
             self.focus_position += 1
-
-    @keymap_command
-    async def first_item(self):
-        self.focus_position = 0
-
-    @keymap_command
-    async def last_item(self):
-        self.focus_position = len(self)-1
 
     @staticmethod
     def is_unread(listing):
