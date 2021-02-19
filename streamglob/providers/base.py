@@ -815,10 +815,6 @@ class SynchronizedPlayerMixin(object):
 
         await self.preview_listing(listing, playlist_position=playlist_position)
 
-    @property
-    def playlist_title(self):
-        return f"playlist"
-
     def playlist_pos_to_row(self, pos):
         return self.play_items[pos].row_num
 

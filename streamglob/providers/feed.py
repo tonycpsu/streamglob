@@ -713,39 +713,12 @@ class FeedProvider(BaseProvider):
         if "status" not in options:
             options.status = self.provider_data.get("selected_status", None)
         super().apply_options(options)
-        # try:
-        #     self.filters.status.value = options.get(
-        #         "status",
-        #         self.provider_data.get("selected_status", None)
-        #     )
-        # except (StopIteration, SGException):
-        #     pass
 
-# class FeedDetail(urwid.WidgetWrap):
-
-#     def __init__(self, post_date, poster, title, content=None):
-
-#         self.header = urwid.Columns([
-#             ("weight", 1, urwid.Text(post_date)),
-#             ("weight", 1, urwid.Text(poster)),
-#         ])
-#         self.body = urwid.Pile([
-#             (2, urwid.Filler(urwid.Text(title), valign="top")),
-#         ])
-#         if content:
-#             self.body.contents.append(
-#                 urwid.Text(title),
-#                 self.body.options("weight", 1)
-#             )
-#         self.pile = urwid.Pile([
-#             (1, urwid.Filler(urwid.AttrMap(self.header, {None: "table_row_header"}))),
-#             ("weight", 1, self.body)
-#         ])
-#         super().__init__(self.pile)
 
 class CachedFeedProviderFooter(urwid.WidgetWrap):
 
     def __init__(self, attrs, bars):
+
         self.attrs = attrs
         self.bars = bars
         self.indicator_placeholder = urwid.WidgetPlaceholder(urwid.Text(""))
@@ -754,8 +727,8 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
         self.filler = urwid.Filler(
             urwid.AttrMap(
                 urwid.Columns([
-                    ("weight", 1, urwid.Padding(self.message_placeholder)),
                     ("weight", 2, urwid.Padding(self.indicator_placeholder)),
+                    ("weight", 1, urwid.Padding(self.message_placeholder)),
                 ], dividechars=1),
                 "footer"
             )
@@ -770,9 +743,9 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
             self.update_status_indicator()
         return super().render(size, focus=focus)
 
+    def update(self, count=0):
 
-    def update(self, source, count):
-        self.update_status_indicator()
+        self.update_status_indicator(count)
         self.update_count()
 
     def update_fetch_indicator(self, num, count):
@@ -784,20 +757,26 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
         indicator_widget = SparkBarWidget(
             spark_vals,
             int(self._width *(2/3)),
-            min_width=1
+            fit_label=True
+            # min_width=3
         )
         self.set_indicator_widget(indicator_widget)
         state.loop.draw_screen()
 
-    def update_status_indicator(self):
+    def update_status_indicator(self, count=0):
 
-        if not self._width:
+        if not (count and self._width):
+            self.set_indicator_widget(urwid.Text(""))
             return
+
         spark_vals = [
-            (func(), attr, (f"{label}{self.attrs[name]()}", "black", ">" if i else "<"))
+            (func(), attr, (f"{label}{self.attrs[name](): >3}", "black", ">" if i else "<"))
             for i, (name, label, attr, func) in enumerate(self.bars)
         ]
-        logger.error(spark_vals)
+        # logger.error(spark_vals)
+        # if not len(spark_vals):
+        #     self.set_indicator_widget(urwid.Text(""))
+        #     return
         self.set_indicator_widget(
             SparkBarWidget(
                 spark_vals,
@@ -814,7 +793,7 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
         )))
 
     def show_message(self, message):
-        text = urwid.Text(message)
+        text = urwid.Text(message, align="right")
         self.set_message_widget(text)
 
     def set_message_widget(self, widget):
@@ -845,9 +824,9 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
 
         super().__init__(self.pile)
         self.pile.focus_position = 0
-        urwid.connect_signal(self.body, "requery", self.footer.update)
+        urwid.connect_signal(self.body, "requery", self.on_requery)
         urwid.connect_signal(self.body, "keypress", lambda *args: self._emit(*args))
-        urwid.connect_signal(self.body, "focus", self.update_detail)
+        urwid.connect_signal(self.body, "focus", self.on_focus)
 
     @property
     def footer_attrs(self):
@@ -855,6 +834,7 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
             return AttrDict([
                 ("refreshed", lambda: timeago.format(self.provider.feed.fetched, datetime.now())),
                 ("updated", lambda: timeago.format(self.provider.feed.updated, datetime.now())),
+                ("selected", lambda: self.body.focus_position+1 if len(self) else 0),
                 ("shown", lambda: len(self)),
                 ("matching", lambda: self.body.query_result_count()),
                 ("fetched", lambda: self.provider.feed_item_count),
@@ -865,6 +845,7 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
             return AttrDict([
                 ("refreshed", lambda: "?"),
                 ("updated", lambda: "?"),
+                ("selected", lambda: self.body.focus_position+1),
                 ("shown", lambda: 0),
                 ("matching", lambda: 0),
                 ("fetched", lambda: 0),
@@ -874,22 +855,33 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
     @property
     def indicator_bars(self):
         return [
+            ("selected", "", "dark green",
+             lambda: self.footer_attrs["selected"]()),
             ("shown", "👓", "dark blue",
              lambda: self.footer_attrs["shown"]()),
             ("matching", "✓", "light blue",
-             lambda: self.footer_attrs["matching"]() - self.footer_attrs["shown"]()),
+             # lambda: self.footer_attrs["matching"]() - self.footer_attrs["shown"]()),
+             lambda: self.footer_attrs["matching"]()),
             ("fetched", "↓", "dark red",
-             lambda: self.footer_attrs["fetched"]() - self.footer_attrs["matching"]()),
+             # lambda: self.footer_attrs["fetched"]() - self.footer_attrs["matching"]()),
+             lambda: self.footer_attrs["fetched"]()),
         ]
 
-    def update_detail(self, source, index):
+    def on_requery(self, source, count):
+        self.footer.update(count)
+
+    def on_focus(self, source, index):
+        self.update_detail(source.selection)
+        self.footer.update(len(source))
+
+    def update_detail(self, selection):
         # FIXME: this is so hacktacular :/
 
-        if not source.selection:
+        if not selection:
             self.detail.original_widget = urwid.Filler(urwid.Text(""))
             return
-        listing = source.selection.data_source
-        index = getattr(listing, source.df.index_name)
+        listing = selection.data_source
+        index = getattr(listing, self.body.df.index_name)
         row = self.body.render_item(index)
         body = listing.body
         detail = urwid.Pile([
@@ -901,7 +893,6 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
         ])
         detail.selectable = lambda: False
         self.detail.original_widget = detail
-
 
     def __iter__(self):
         return iter(self.body)
