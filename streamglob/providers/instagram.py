@@ -5,6 +5,7 @@ import warnings
 from itertools import islice
 from datetime import datetime
 from contextlib import contextmanager
+import traceback
 
 from .feed import *
 from ..exceptions import *
@@ -265,10 +266,14 @@ class InstagramFeedMediaChannelMixin(object):
         #     return posts
         #
         def get_posts(pages):
-            for page in pages:
-                cursor = page["edge_owner_to_timeline_media"]["page_info"]["end_cursor"]
-                for media in self.looter._medias(iter([page])):
-                    yield (cursor, AttrDict(media))#
+            try:
+                for page in pages:
+                    cursor = page["edge_owner_to_timeline_media"]["page_info"]["end_cursor"]
+                    for media in self.looter._medias(iter([page])):
+                        yield (cursor, AttrDict(media))
+            except json.decoder.JSONDecodeError:
+                logger.error("".join(traceback.format_exc()))
+                raise StopIteration
 
         count = 0
         new_count = 0
