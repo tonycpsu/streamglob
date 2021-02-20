@@ -66,8 +66,10 @@ class ProviderDataTable(BaseDataTable):
     KEYMAP = {
         "p": "play_selection",
         "l": "download_selection",
-        "ctrl t": "toggle_translation",
-        "meta e": "toggle_strip_emoji",
+        "ctrl o": "strip_emoji_selection",
+        "ctrl t": "translate_selection",
+        "meta o": "toggle_strip_emoji_all",
+        "meta t": "toggle_translate_all",
     }
 
     def __init__(self, provider, *args, **kwargs):
@@ -114,10 +116,38 @@ class ProviderDataTable(BaseDataTable):
     @property
     def translator(self):
         if not self._translator:
-            self._translator = Translator()
+            self._translator = Translator(sleep=1)
         return self._translator
 
-    def toggle_translation(self):
+    def strip_emoji_selection(self):
+        strip_emoji = self.strip_emoji
+        index = getattr(self.selection.data_source, self.df.index_name)
+        try:
+            strip_emoji = not self.df.get(index, "_strip_emoji")
+        except ValueError:
+            strip_emoji = not strip_emoji
+        self.df.set(index, "_strip_emoji", strip_emoji)
+        self.invalidate_rows([index])
+
+    def translate_selection(self):
+        translate = self.translate
+        index = getattr(self.selection.data_source, self.df.index_name)
+        try:
+            translate = not self.df.get(index, "_translate")
+        except ValueError:
+            translate = not translate
+        self.df.set(index, "_translate", translate)
+        if translate:
+            if "_title_translated" not in self.df.columns or not self.df.get(index, "_title_translated"):
+                translated = self.translator.translate(
+                    self.selection.data_source.title,
+                    src=self.translate_src or "auto",
+                    dest=config.settings.profile.translate
+                ).text
+                self.df.set(index, "_title_translated", translated)
+        self.invalidate_rows([index])
+
+    def toggle_translate_all(self):
         self.translate = not self.translate
         if self.translate:
             texts = [
@@ -127,18 +157,19 @@ class ProviderDataTable(BaseDataTable):
                 and isinstance(row.get("title"), str)
                 and len(row.get("title"))
             ]
-            translations = self.translator.translate(
+            translates = self.translator.translate(
                 [ t[1] for t in texts ],
                 src=self.translate_src or "auto",
                 dest=config.settings.profile.translate
             )
-            for (i, _), t in zip(texts, translations):
+            for (i, _), t in zip(texts, translates):
+                self.df.set(i, "_translate", True)
                 self.df.set(i, "_title_translated", t.text)
         self.invalidate_rows(
             [ row.index for row in self if row.get("_title_translated") ]
         )
 
-    def toggle_strip_emoji(self):
+    def toggle_strip_emoji_all(self):
         self.strip_emoji = not self.strip_emoji
         self.invalidate_rows(
             [ row.index for row in self ]
@@ -173,10 +204,10 @@ class ProviderDataTable(BaseDataTable):
 
         if column.name == "title":
 
-            if self.translate and row.get("_title_translated"):
+            if row.get("_title_translated") and (self.translate or row.get("_translate")):
                 value = row.get("_title_translated")
 
-            if self.strip_emoji:
+            if self.strip_emoji or row.get("_strip_emoji"):
                 value = utils.strip_emoji(value)
 
             if self.provider.highlight_map:
