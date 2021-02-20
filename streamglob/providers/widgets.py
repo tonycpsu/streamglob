@@ -66,13 +66,15 @@ class ProviderDataTable(BaseDataTable):
     KEYMAP = {
         "p": "play_selection",
         "l": "download_selection",
-        # "ctrl r": "reset"
+        "ctrl t": "toggle_translation",
+        "meta e": "toggle_strip_emoji",
     }
 
     def __init__(self, provider, *args, **kwargs):
 
         self.provider = provider
         self.translate = False
+        self.strip_emoji = False
         self.translate_src = None
         self._translator = None
         super(ProviderDataTable,  self).__init__(*args, **kwargs)
@@ -131,20 +133,19 @@ class ProviderDataTable(BaseDataTable):
                 dest=config.settings.profile.translate
             )
             for (i, _), t in zip(texts, translations):
-                self.df.set(i, "_title_translated", utils.strip_emoji(t.text))
+                self.df.set(i, "_title_translated", t.text)
         self.invalidate_rows(
             [ row.index for row in self if row.get("_title_translated") ]
         )
 
-    def keypress(self, size, key):
+    def toggle_strip_emoji(self):
+        self.strip_emoji = not self.strip_emoji
+        self.invalidate_rows(
+            [ row.index for row in self ]
+        )
 
-        key = super().keypress(size, key)
-        # if key == "ctrl r":
-        #     self.provider.reset()
-        if key == "ctrl t":
-            self.toggle_translation()
-        else:
-            return key
+    def keypress(self, size, key):
+        return super().keypress(size, key)
 
     async def play_selection(self):
         raise NotImplementedError
@@ -174,6 +175,9 @@ class ProviderDataTable(BaseDataTable):
 
             if self.translate and row.get("_title_translated"):
                 value = row.get("_title_translated")
+
+            if self.strip_emoji:
+                value = utils.strip_emoji(value)
 
             if self.provider.highlight_map:
                 markup = [
