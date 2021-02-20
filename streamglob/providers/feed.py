@@ -932,6 +932,7 @@ class CachedFeedProviderView(SimpleProviderView):
     def __getattr__(self, attr):
         return getattr(self.body, attr)
 
+
 class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvider):
 
     UPDATE_INTERVAL = (60 * 60 * 4)
@@ -1037,6 +1038,18 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
     def fetch_limit(self):
         return self.config.fetch_limit or self.DEFAULT_FETCH_LIMIT
 
+    @property
+    def translate(self):
+        return (self.translate_src and super().translate)
+
+    @property
+    def translate_src(self):
+        logger.error("translate_src")
+        cfg = self.config.feeds[self.feed.locator]
+        if cfg and isinstance(cfg, AttrDict):
+            return getattr(cfg, "translate", "auto")
+        return None
+
     def create_feeds(self):
         with db_session:
             for n, f in self.feeds.items():
@@ -1063,7 +1076,6 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         else:
             self.provider_data["selected_feed"] = None
         self.save_provider_data()
-        self.view.translate_src = getattr(feed, "translate", None)
 
         if not self.is_active:
             return

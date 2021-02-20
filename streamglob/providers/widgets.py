@@ -75,9 +75,9 @@ class ProviderDataTable(BaseDataTable):
     def __init__(self, provider, *args, **kwargs):
 
         self.provider = provider
-        self.translate = False
-        self.strip_emoji = False
-        self.translate_src = None
+        self.translate = self.provider.translate
+        logger.error(f"translate_init: {self.translate} {self.provider.translate_src}")
+        self.strip_emoji = self.provider.strip_emoji
         self._translator = None
         super(ProviderDataTable,  self).__init__(*args, **kwargs)
 
@@ -141,14 +141,17 @@ class ProviderDataTable(BaseDataTable):
             if "_title_translated" not in self.df.columns or not self.df.get(index, "_title_translated"):
                 translated = self.translator.translate(
                     self.selection.data_source.title,
-                    src=self.translate_src or "auto",
-                    dest=config.settings.profile.translate
+                    src=self.provider.translate_src or "auto",
+                    dest=self.provider.translate_dest
                 ).text
                 self.df.set(index, "_title_translated", translated)
         self.invalidate_rows([index])
 
     def toggle_translate_all(self):
         self.translate = not self.translate
+        self.apply_translation()
+
+    def apply_translation(self):
         if self.translate:
             texts = [
                 (row.index, row.get("title"))
@@ -159,8 +162,8 @@ class ProviderDataTable(BaseDataTable):
             ]
             translates = self.translator.translate(
                 [ t[1] for t in texts ],
-                src=self.translate_src or "auto",
-                dest=config.settings.profile.translate
+                src=self.provider.translate_src or "auto",
+                dest=self.provider.translate_dest
             )
             for (i, _), t in zip(texts, translates):
                 self.df.set(i, "_translate", True)
@@ -192,9 +195,9 @@ class ProviderDataTable(BaseDataTable):
             pass
 
     def reset(self, *args, **kwargs):
-        self.translate = False
-        # self.provider.reset(*args, **kwargs)
         super().reset(*args, **kwargs)
+        self.translate = self.provider.translate
+        self.apply_translation()
 
     @property
     def playlist_title(self):

@@ -651,6 +651,28 @@ class BaseProvider(abc.ABC):
     def auto_preview_enabled(self):
         return self.config.auto_preview.enabled
 
+    @property
+    def strip_emoji(self):
+        return (self.config.get("strip_emoji") or
+                config.settings.profile.tables.get("strip_emoji")
+                or False)
+
+    @property
+    def translate(self):
+        return (self.config.get("translate") or
+                config.settings.profile.tables.get("translate")
+                or False)
+
+    @property
+    def translate_src(self):
+        return "auto"
+
+    @property
+    def translate_dest(self):
+        return (self.config.get("translate_dest") or
+                config.settings.profile.tables.get("translate_dest")
+                or "en")
+
 class PaginatedProviderMixin(object):
 
     DEFAULT_PAGE_SIZE = 50
