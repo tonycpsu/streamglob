@@ -242,8 +242,14 @@ class FeedMediaSourceMixin(object):
 
     @property
     def uri(self):
-        return f"{self.provider}/{self.listing.feed.name}.{self.listing.guid}"
+        return f"{self.provider.IDENTIFIER}/{self.listing.channel.locator}.{self.listing.guid}"
 
+    @property
+    def is_downloaded(self):
+        with db_session:
+            source = self.provider.MEDIA_SOURCE_CLASS[self.media_source_id]
+            # listing = self.provider.LISTING_CLASS.orm_class[self.listing.media_listing_id]
+            return os.path.exists(source.download_filename(listing=source.listing))
 
 @model.attrclass(FeedMediaSourceMixin)
 class FeedMediaSource(FeedMediaSourceMixin, model.MediaSource):
@@ -282,7 +288,7 @@ class CachedFeedProviderDetailDataTable(DetailDataTable):
         if not source.seen:
             # logger.info("detail unread")
             return "unread"
-        return None
+        return super().row_attr_fn(position, data, row)
 
     async def mark_selection_seen(self):
         with db_session:
@@ -408,7 +414,7 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
 
 
     def row_attr_fn(self, position, data, row):
-            return "unread" if not data.read else None
+        return "unread" if not data.read else super().row_attr_fn(position, data, row)
 
     @keymap_command()
     def inflate_selection(self):

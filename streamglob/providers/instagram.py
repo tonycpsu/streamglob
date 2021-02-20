@@ -70,11 +70,6 @@ class InstagramMediaSourceMixin(object):
     def download_helper(self):
         return lambda d: d.is_simple
 
-    @property
-    def uri(self):
-        return f"{self.provider.IDENTIFIER}/{self.listing.feed.locator}.{self.listing.guid}"
-
-
 
 @model.attrclass(InstagramMediaSourceMixin)
 class InstagramMediaSource(InstagramMediaSourceMixin, model.InflatableMediaSource, FeedMediaSource):

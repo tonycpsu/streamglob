@@ -12,6 +12,7 @@ import asyncio
 import shutil
 import unicodedata
 import tempfile
+import traceback
 
 import pony.options
 pony.options.CUT_TRACEBACK = False
@@ -331,7 +332,7 @@ class MediaSourceMixin(object):
         return f"{self.provider_id}_dl" # *shrug*
 
 
-    def download_filename(self, listing=None, index=None, num=None, **kwargs):
+    def download_filename(self, listing=None, index=0, num=0, **kwargs):
 
         if isinstance(index, int):
             index += 1
@@ -360,11 +361,12 @@ class MediaSourceMixin(object):
                 outfile = template.format(
                     self=self, listing=listing,
                     uri="uri=" + self.uri.replace("/", "+") +"=",
-                    index=index, num=num
+                    # index=index, num=num
+                    index=self.rank+1, num=len(listing.sources) if listing else 0
                 )
             except Exception as e:
-                logger.exception(e)
-                raise SGInvalidFilenameTemplate
+                logger.exception("".join(traceback.format_exc()))
+                raise SGInvalidFilenameTemplate(str(e))
         else:
             template = "{listing.provider}.{self.default_name}.{self.timestamp}.{self.ext}"
             outfile = template.format(self=self)

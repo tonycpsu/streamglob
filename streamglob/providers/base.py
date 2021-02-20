@@ -1189,7 +1189,6 @@ class MultiSourceListingMixin(object):
         return 0
 
     def row_attr_fn(self, position, data, row):
-        # logger.info(self.inner_table)
         if len(data.sources) > 1:
             box = row.details.contents
             with db_session:
@@ -1198,6 +1197,8 @@ class MultiSourceListingMixin(object):
                 source = sources[box.table.focus_position]
                 if isinstance(source, BaseModel):
                     source = source.attach()
-            return "unread" if not source.seen else None
+            if source.is_downloaded:
+                return "downloaded"
         else:
-            return "unread" if not data.read else None
+            if len(data.sources) and data.sources[0].is_downloaded:
+                return "downloaded"
