@@ -94,6 +94,12 @@ class FilesView(SynchronizedPlayerMixin, StreamglobView):
         return 0
 
     @property
+    def playlist_title(self):
+        return f"[{self.browser.root}/{self.browser.selection.full_path}]"
+
+        return
+
+    @property
     def root(self):
         return os.path.expanduser(
             config.settings.profile.get_path("output.path")
