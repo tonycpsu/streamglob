@@ -804,11 +804,9 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
 
     def set_message_widget(self, widget):
         self.message_placeholder.original_widget = widget
-        state.loop.draw_screen()
 
     def set_indicator_widget(self, widget):
         self.indicator_placeholder.original_widget = widget
-        state.loop.draw_screen()
 
 
 
