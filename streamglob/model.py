@@ -29,6 +29,7 @@ from marshmallow import fields as mm_fields
 
 from . import config
 from . import providers
+from . import utils
 from .state import *
 from .exceptions import *
 
@@ -354,6 +355,7 @@ class MediaSourceMixin(object):
 
         if template:
             template = self.TEMPLATE_RE.sub(r"{self.\1}", template)
+            template = template.replace("{listing.title", "{listing.safe_title")
             try:
                 outfile = template.format(
                     self=self, listing=listing,
@@ -476,9 +478,15 @@ class MultiSourceMediaListing(MediaListing):
 
     sources = Set(MediaSource)
 
+class TitledMediaListingMixin(object):
+
+    @property
+    def safe_title(self):
+        return utils.sanitize_filename(self.title)
+
 
 @attrclass()
-class TitledMediaListing(MultiSourceMediaListing):
+class TitledMediaListing(TitledMediaListingMixin, MultiSourceMediaListing):
 
     title = Required(str)
 
