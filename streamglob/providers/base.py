@@ -31,8 +31,8 @@ class BaseProviderView(StreamglobView):
     def update(self):
         pass
 
-    # def keypress(self, size, key):
-    #     return super().keypress(size, key)
+    def keypress(self, size, key):
+        return super().keypress(size, key)
 
     def refresh(self):
         pass
@@ -84,8 +84,8 @@ class SimpleProviderView(BaseProviderView):
         "ctrl p": ("cycle_filter", [0, -1]),
         "ctrl n": ("cycle_filter", [0, 1]),
         "ctrl f": ("focus_filter", ["search"]),
-        "/": ("focus_filter", ["search"])
-
+        "/": ("focus_filter", ["search"]),
+        "ctrl r": "reset"
         # "ctrl d": "download"
     }
 
@@ -116,22 +116,30 @@ class SimpleProviderView(BaseProviderView):
     def cycle_filter(self, n, step):
         self.toolbar.cycle_filter(n, step)
 
-    def refresh(self):
-        self.body.refresh()
+    # def refresh(self):
+    #     self.body.refresh()
 
-    def reset(self):
-        logger.info("reset")
-        # import traceback; logger.info("".join(traceback.format_stack()))
-        self.body.reset()
+    # def reset(self):
+    #     logger.info("reset")
+    #     # import traceback; logger.info("".join(traceback.format_stack()))
+    #     self.body.reset()
 
     def on_keypress(self, source, key):
         self.keypress((100, 100), key)
+
+    def on_activate(self):
+        self.reset()
+        self.body.on_activate()
 
     def on_deactivate(self):
         self.body.on_deactivate()
 
     def keypress(self, size, key):
         return super().keypress(size, key)
+
+    def reset(self):
+        self.provider.reset()
+        self.body.reset()
 
     def __getattr__(self, attr):
         return getattr(self.body, attr)
@@ -315,7 +323,7 @@ class BaseProvider(abc.ABC):
         self._active = False
 
     def on_activate(self):
-        pass
+        self.view.on_activate()
 
     def on_deactivate(self):
         self.view.on_deactivate()
@@ -697,7 +705,7 @@ class BackgroundTasksMixin(object):
         self._tasks[fn.__name__] = state.event_loop.create_task(run())
 
     def on_activate(self):
-        # self.update()
+        super().on_activate()
         for task in self.TASKS:
             args = []
             kwargs = {}

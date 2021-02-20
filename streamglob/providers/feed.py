@@ -353,7 +353,7 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
     KEYMAP = {
         "cursor up": "prev_item",
         "cursor down": "next_item",
-        "ctrl r": "reset",
+        # "ctrl r": "reset",
         # "ctrl d": "download",
         "A": "mark_all_read",
         "ctrl a": "mark_visible_read",
@@ -920,7 +920,7 @@ class CachedFeedProviderView(SimpleProviderView):
 
     KEYMAP = {
         "ctrl e": ("focus_filter", ["feed"]),
-        "ctrl r": ("focus_filter", ["status"]),
+        "ctrl s": ("focus_filter", ["status"]),
     }
 
     def __init__(self, provider, body):
@@ -1070,14 +1070,14 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         if not self.is_active:
             return
         self.update_count = True
-        self.reset()
+        self.view.reset()
 
     def on_status_change(self, status, *args):
         self.provider_data["selected_status"] = status
         self.save_provider_data()
         if not self.is_active:
             return
-        self.reset()
+        self.view.reset()
 
     def open_popup(self, text):
         class UpdateMessage(BasePopUp):
@@ -1139,7 +1139,6 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         logger.info("provider reset")
         self.pagination_cursor = None
         self.update_query()
-        self.view.reset()
 
     def on_activate(self):
         super().on_activate()

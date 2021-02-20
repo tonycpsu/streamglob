@@ -65,7 +65,8 @@ class ProviderDataTable(BaseDataTable):
 
     KEYMAP = {
         "p": "play_selection",
-        "l": "download_selection"
+        "l": "download_selection",
+        # "ctrl r": "reset"
     }
 
     def __init__(self, provider, *args, **kwargs):
@@ -160,6 +161,7 @@ class ProviderDataTable(BaseDataTable):
 
     def reset(self, *args, **kwargs):
         self.translate = False
+        # self.provider.reset(*args, **kwargs)
         super().reset(*args, **kwargs)
 
     @property
@@ -184,6 +186,9 @@ class ProviderDataTable(BaseDataTable):
                     value = urwid.Text(markup)
 
         return super().decorate(row, column, value)
+
+    def on_activate(self):
+        pass
 
     def on_deactivate(self):
         state.event_loop.create_task(state.task_manager.preview(None, self))
