@@ -8,6 +8,7 @@ from collections import namedtuple
 import argparse
 import subprocess
 import select
+import termios
 import time
 import re
 import asyncio
@@ -312,6 +313,7 @@ def run_gui(action, provider, **kwargs):
 
     state.screen.set_terminal_properties(get_colors())
 
+    # set some term attrs to undefined to enable some extra ctrl keys
     old_signal_keys = state.screen.tty_signal_keys()
     l = list(old_signal_keys)
     l[0] = 'undefined'
@@ -320,6 +322,11 @@ def run_gui(action, provider, **kwargs):
     l[4] = 'undefined'
     state.screen.tty_signal_keys(*l)
 
+    # additionally, set attribute termios.VDISCARD so that Ctrl-O works
+    fileno = sys.stdin.fileno()
+    tattr = termios.tcgetattr(fileno)
+    tattr[6][termios.VDISCARD] = 0
+    termios.tcsetattr(fileno, termios.TCSADRAIN, tattr)
 
     state.listings_view = ListingsView(provider)
     state.files_view = FilesView()
