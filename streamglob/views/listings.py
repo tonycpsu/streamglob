@@ -51,22 +51,7 @@ class ProviderToolbar(urwid.WidgetWrap):
         )
 
 
-        self.preview_dropdown = BaseDropdown(
-            AttrDict([
-                ("Full", "full"),
-                ("Storyboard", "storyboard"),
-                ("Thumbnail", "thumbnail"),
-            ]),
-            label="Preview",
-            default=config.settings.preview_content or "full",
-            margin=1
-        )
-
-        urwid.connect_signal(
-            self.preview_dropdown, "change",
-            lambda w, b, v: self._emit("preview_change", v)
-        )
-
+        self.preview_dropdown_placeholder = urwid.WidgetPlaceholder(urwid.Text(""))
 
         self.max_concurrent_tasks_widget = providers.filters.IntegerTextFilterWidget(
             default=config.settings.tasks.max,
@@ -87,7 +72,7 @@ class ProviderToolbar(urwid.WidgetWrap):
             # ('weight', 1, urwid.Padding(urwid.Edit("foo"))),
             (self.provider_dropdown.width, self.provider_dropdown),
             ("weight", 1, urwid.Padding(urwid.Text(""))),
-            (self.preview_dropdown.width, self.preview_dropdown),
+            (20, self.preview_dropdown_placeholder),
             # (1, urwid.Divider(u"\N{BOX DRAWINGS LIGHT VERTICAL}")),
             ("pack", urwid.Text(("Downloads"))),
             (5, self.max_concurrent_tasks_widget),
@@ -104,6 +89,27 @@ class ProviderToolbar(urwid.WidgetWrap):
     @property
     def provider(self):
         return (self.provider_dropdown.selected_label)
+
+    def set_preview_types(self, preview_types):
+        self.preview_dropdown = BaseDropdown(
+            AttrDict([
+                (pt.title(), pt)
+                for pt in preview_types
+                # ("Full", "full"),
+                # ("Storyboard", "storyboard"),
+                # ("Thumbnail", "thumbnail"),
+            ]),
+            label="Preview",
+            default=config.settings.preview_content or "full",
+            margin=1
+        )
+
+        urwid.connect_signal(
+            self.preview_dropdown, "change",
+            lambda w, b, v: self._emit("preview_change", v)
+        )
+
+        self.preview_dropdown_placeholder.original_widget = self.preview_dropdown
 
 
 @keymapped()
@@ -174,6 +180,7 @@ class ListingsView(StreamglobView):
         self.provider.deactivate()
         self.provider = providers.get(provider)
         self.listings_view_placeholder.original_widget = self.provider.view
+        self.toolbar.set_preview_types(self.provider.PREVIEW_TYPES)
         if self.provider.config_is_valid:
             self.pile.focus_position = 2
         else:
