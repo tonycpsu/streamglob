@@ -877,6 +877,30 @@ class SynchronizedPlayerMixin(object):
         await state.task_manager.preview_player.command(
             "set_property", "playlist-pos", pos
         )
+        cfg = config.settings.profile.display.title
+        x = cfg.x or 0
+        if isinstance(x, dict):
+            scroll_speed = x.scroll or 5
+            x=f"w-w/{scroll_speed}*mod(t,{scroll_speed}*(w+tw)/w)-w"
+        y = cfg.y or 0
+        color = cfg.color or "white"
+        shadow = cfg.shadow or "black"
+        title = self.play_items[pos].title
+        font = cfg.font or "sans"
+        size = cfg.size or 50
+        alpha = cfg.alpha or 1.0
+        shadow_x = cfg.shadow_x or 1
+        shadow_y = cfg.shadow_y or 1
+        vf_title=f"""@title:drawtext=text=\"{title}\":fontfile=\"{font}\":\
+x=\"{x}\":y={y}:fontsize=(h/{size}):fontcolor={color}@{alpha}:\
+shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
+        await state.task_manager.preview_player.command(
+            "vf", "clr", ""
+        )
+        vf=f"@framerate:framerate=fps=30,{vf_title}"
+        await state.task_manager.preview_player.command(
+            "vf", "add", vf
+        )
 
     def run_queued_task(self):
 
@@ -1030,6 +1054,7 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
                 index = index,
                 row_num = row_num,
                 count = len(row.data.sources),
+                media_type = source.media_type,
                 locator = (
                     (source.locator or getattr(source, "preview_locator", None))
                     if state.listings_view.preview_mode == "full"
