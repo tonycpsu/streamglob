@@ -152,7 +152,7 @@ class ProviderDataTable(BaseDataTable):
         self.apply_translation()
 
     def apply_translation(self):
-        if self.translate:
+        if len(self) and self.translate:
             texts = [
                 (row.index, row.get("title"))
                 for row in self
@@ -160,14 +160,24 @@ class ProviderDataTable(BaseDataTable):
                 and isinstance(row.get("title"), str)
                 and len(row.get("title"))
             ]
+            # FIXME: bulk translate not working, so we improvise...
+            # translates = self.translator.translate(
+            #     [ t[1] for t in texts ],
+            #     src=self.provider.translate_src or "auto",
+            #     dest=self.provider.translate_dest
+            # )
             translates = self.translator.translate(
-                [ t[1] for t in texts ],
+                "\N{VERTICAL LINE}".join(
+                    [ t[1].replace(
+                        "\N{VERTICAL LINE}", "|"
+                    ) for t in texts ]),
                 src=self.provider.translate_src or "auto",
                 dest=self.provider.translate_dest
-            )
+            ).text.split("\N{VERTICAL LINE}")
+            # raise Exception(translated)
             for (i, _), t in zip(texts, translates):
                 self.df.set(i, "_translate", True)
-                self.df.set(i, "_title_translated", t.text)
+                self.df.set(i, "_title_translated", t)
         self.invalidate_rows(
             [ row.index for row in self if row.get("_title_translated") ]
         )
