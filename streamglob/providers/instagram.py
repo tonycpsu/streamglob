@@ -83,8 +83,8 @@ class InstagramMediaListingMixin(object):
     def shortcode(self):
         return self.guid
 
-    async def inflate(self):
-        if self.is_inflated:
+    async def inflate(self, force=False):
+        if self.is_inflated and not force:
             return False
         logger.debug("inflate")
         with db_session:
@@ -98,8 +98,10 @@ class InstagramMediaListingMixin(object):
                 post = AttrDict(post_info)
             delete(s for s in self.sources)
             listing = self.provider.LISTING_CLASS[self.media_listing_id]
-            for i, source in enumerate(feed.extract_content(post)):
-                listing.sources.add(listing.provider.new_media_source(rank=i, **source).attach())
+            for i, src in enumerate(feed.extract_content(post)):
+                source = listing.provider.new_media_source(rank=i, **src).attach()
+                logger.error(f"{source.locator}, {source.preview_locator}")
+                listing.sources.add(source)
             listing.is_inflated = True
             commit()
         return True
@@ -189,6 +191,7 @@ class InstagramFeedMediaChannelMixin(object):
                 content = [
                     dict(
                         url = post.video_url,
+                        preview_url = post.display_url,
                         media_type = media_type,
                         shortcode = post.shortcode
                     )
@@ -208,6 +211,7 @@ class InstagramFeedMediaChannelMixin(object):
                 content = [
                     dict(
                         url = s.video_url if s.is_video else s.display_url,
+                        preview_url = s.display_url,
                         media_type = "video" if s.is_video else "image",
                         shortcode = post.shortcode
                     )
