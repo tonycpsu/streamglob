@@ -592,7 +592,7 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
     }
 
     LOG_LEVEL_MAP = {
-        "fatal": "critical",
+        "fatal": "error", # critical goes to stdout
         "warn": "warning",
         "status": "info",
         "v": "debug",
