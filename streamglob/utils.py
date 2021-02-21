@@ -119,6 +119,8 @@ def format_str_truncated(length, s, end_char=ELLIPSIS, encoding=None):
     return s
 
 
+# FIXME: some of these ranges include things that aren't exactly "emoji", but
+# still confuse Urwid as shown in urwid/urwid#225
 EMOJI_RE = re.compile(
     "["
         u"\U00000080-\U000002AF"
@@ -144,7 +146,7 @@ EMOJI_RE = re.compile(
         u"\U0001F000-\U0001F02F"
         u"\U0001F0A0-\U0001F0FF"
         u"\U0001F100-\U0001F64F"
-        u"\U0001F680-\U0001F6FF"
+        u"\U0001F680-\U0001F7FF"
         u"\U0001F900-\U0001FA9f"
 "]+", flags=re.UNICODE)
 #NON_BMP_RE = re.compile(u"[^\U00000000-\U0000d7ff\U0000e000-\U0000ffff]", flags=re.UNICODE)
