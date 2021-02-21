@@ -521,6 +521,10 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
                 state.event_loop.create_task(self.playlist_replace(storyboard, pos=pos))
 
 
+    def on_activate(self):
+        self.reset()
+        super().on_activate()
+
     # def on_focus(self, source, position):
     async def playist_position_changed(self, pos):
 
