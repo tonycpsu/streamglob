@@ -85,7 +85,7 @@ class SimpleProviderView(BaseProviderView):
         "ctrl n": ("cycle_filter", [0, 1]),
         "ctrl f": ("focus_filter", ["search"]),
         "/": ("focus_filter", ["search"]),
-        "ctrl r": "reset"
+        "ctrl r": "reset_provider"
         # "ctrl d": "download"
     }
 
@@ -128,7 +128,7 @@ class SimpleProviderView(BaseProviderView):
         self.keypress((100, 100), key)
 
     def on_activate(self):
-        self.reset()
+        # self.reset()
         self.body.on_activate()
 
     def on_deactivate(self):
@@ -137,8 +137,10 @@ class SimpleProviderView(BaseProviderView):
     def keypress(self, size, key):
         return super().keypress(size, key)
 
-    def reset(self):
+    def reset_provider(self):
         self.provider.reset()
+
+    def reset(self):
         self.body.reset()
 
     def __getattr__(self, attr):
@@ -323,6 +325,8 @@ class BaseProvider(abc.ABC):
         self._active = False
 
     def on_activate(self):
+        return
+        self.reset()
         self.view.on_activate()
 
     def on_deactivate(self):
@@ -769,7 +773,7 @@ class SynchronizedPlayerMixin(object):
         if "focus" in self.signals:
             self.on_focus_handler = urwid.connect_signal(self, "focus", self.on_focus)
         urwid.connect_signal(self, "requery", self.on_requery)
-        self.player = None
+        # self.player = None
         self.player_task = None
         self.queued_task = None
         self.pending_event_task = None
@@ -1049,19 +1053,6 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
         if not listing:
             return ([], kwargs)
         return self.provider.extract_sources(listing, **kwargs)
-
-    def reset2(self, *args, **kwargs):
-        # self.sync_player_playlist = False
-        # self.disable_focus_handler()
-        super().reset(*args, **kwargs)
-
-        if self.provider.auto_preview_enabled:
-            # async def preview():
-            #     if delay:
-            #         await asyncio.sleep(delay)
-            #         await self.preview_all()
-            state.event_loop.create_task(self.preview_all())
-
 
 
 class DetailBox(urwid.WidgetWrap):

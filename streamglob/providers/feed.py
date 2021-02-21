@@ -249,7 +249,10 @@ class FeedMediaSourceMixin(object):
         with db_session:
             source = self.provider.MEDIA_SOURCE_CLASS[self.media_source_id]
             # listing = self.provider.LISTING_CLASS.orm_class[self.listing.media_listing_id]
-            return os.path.exists(source.download_filename(listing=source.listing))
+            try:
+                return os.path.exists(source.download_filename(listing=source.listing))
+            except SGInvalidFilenameTemplate as e:
+                logger.error(e)
 
 @model.attrclass(FeedMediaSourceMixin)
 class FeedMediaSource(FeedMediaSourceMixin, model.MediaSource):
@@ -377,7 +380,7 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
         # self.mark_read_on_focus = False
         # self.mark_read_task = None
         self.update_count = True
-        urwid.connect_signal(self, "requery", self.on_requery)
+        # urwid.connect_signal(self, "requery", self.on_requery)
 
     def on_requery(self, source, count):
         super().on_requery(source, count)
@@ -420,7 +423,7 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
     def inflate_selection(self):
         with db_session:
             listing = self.selection.data_source.attach()
-            if listing.inflate():
+            if listing.inflate(force=True):
                 # position = self.focus_position
                 self.invalidate_rows([listing.media_listing_id])
                 self.selection.close_details()
@@ -621,9 +624,9 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
             guid=self[position].data.get("guid")
         )
 
-    def refresh(self, *args, **kwargs):
-        logger.info("datatable refresh")
-        super().refresh(*args, **kwargs)
+    # def refresh(self, *args, **kwargs):
+    #     logger.info("datatable refresh")
+    #     super().refresh(*args, **kwargs)
 
     @keymap_command
     async def update(self, force=False, resume=False, replace=False):
@@ -828,7 +831,6 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
 
         super().__init__(self.pile)
         self.pile.focus_position = 0
-        urwid.connect_signal(self.body, "requery", self.on_requery)
         urwid.connect_signal(self.body, "keypress", lambda *args: self._emit(*args))
         urwid.connect_signal(self.body, "focus", self.on_focus)
 
@@ -872,6 +874,7 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
         ]
 
     def on_requery(self, source, count):
+        super().on_requery(source, count)
         self.footer.update(count)
 
     def on_focus(self, source, index):
@@ -1044,7 +1047,6 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
 
     @property
     def translate_src(self):
-        logger.error("translate_src")
         cfg = self.config.feeds[self.feed.locator]
         if cfg and isinstance(cfg, AttrDict):
             return getattr(cfg, "translate", "auto")
@@ -1080,14 +1082,14 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         if not self.is_active:
             return
         self.update_count = True
-        self.view.reset()
+        self.reset()
 
     def on_status_change(self, status, *args):
         self.provider_data["selected_status"] = status
         self.save_provider_data()
         if not self.is_active:
             return
-        self.view.reset()
+        self.reset()
 
     def open_popup(self, text):
         class UpdateMessage(BasePopUp):
@@ -1149,6 +1151,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         logger.info("provider reset")
         self.pagination_cursor = None
         self.update_query()
+        super().reset()
 
     def on_activate(self):
         super().on_activate()

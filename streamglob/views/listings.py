@@ -86,6 +86,10 @@ class ProviderToolbar(urwid.WidgetWrap):
 
         self.provider_dropdown.cycle(step)
 
+    def cycle_preview_type(self, step=1):
+
+        self.preview_dropdown.cycle(step)
+
     @property
     def provider(self):
         return (self.provider_dropdown.selected_label)
@@ -118,6 +122,8 @@ class ListingsView(StreamglobView):
     KEYMAP = {
         "meta [": ("cycle_provider", [-1]),
         "meta ]": ("cycle_provider", [1]),
+        "meta {": ("cycle_preview_type", [-1]),
+        "meta }": ("cycle_preview_type", [1]),
     }
 
     SETTINGS = ["provider", "profile", "preview"]
@@ -155,6 +161,7 @@ class ListingsView(StreamglobView):
             ('weight', 1, self.listings_view_placeholder),
         ])
         super().__init__(self.pile)
+        self.on_set_provider(self.provider.IDENTIFIER)
 
     def set_provider(self, provider):
         self.toolbar.provider_dropdown.value = provider
@@ -185,18 +192,21 @@ class ListingsView(StreamglobView):
             self.pile.focus_position = 2
         else:
             self.pile.focus_position = 0
-        self.provider.activate()
         logger.error(self.provider.default_filter_values)
         for name, value in self.provider.default_filter_values.items():
             if name not in self.SETTINGS:
                 continue
             setattr(self, name, value)
+        self.provider.activate()
             # value = self.provider.default_filter_values.get(name, None)
             # if value:
             #     setattr(self, name, value)
 
     def cycle_provider(self, step=1):
         self.toolbar.cycle_provider(step)
+
+    def cycle_preview_type(self, step=1):
+        self.toolbar.cycle_preview_type(step)
 
     def activate(self):
         self.set_provider(self.provider.IDENTIFIER)
