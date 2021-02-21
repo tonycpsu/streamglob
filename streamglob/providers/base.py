@@ -1139,14 +1139,6 @@ class DetailDataTable(BaseDataTable):
               for i, source in enumerate(self.listing.sources)
         ]
 
-    def row_attr_fn(self, position, data, row):
-        if not getattr(data.listing, "read", False):
-            try:
-                if not data.listing.attrs["parts_read"][str(self.focus_position)]:
-                    return "unread"
-            except (IndexError, KeyError):
-                pass
-        return None
 
 @keymapped()
 class MultiSourceListingMixin(object):
@@ -1221,5 +1213,4 @@ class MultiSourceListingMixin(object):
             if source.is_downloaded:
                 return "downloaded"
         else:
-            if len(data.sources) and data.sources[0].is_downloaded:
-                return "downloaded"
+            return "downloaded" if data.sources[0].is_downloaded else super().row_attr_fn(position, data, row)

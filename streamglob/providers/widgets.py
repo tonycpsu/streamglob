@@ -178,9 +178,9 @@ class ProviderDataTable(BaseDataTable):
             for (i, _), t in zip(texts, translates):
                 self.df.set(i, "_translate", True)
                 self.df.set(i, "_title_translated", t)
-        self.invalidate_rows(
-            [ row.index for row in self if row.get("_title_translated") ]
-        )
+            self.invalidate_rows(
+                [ row.index for row in self if row.get("_title_translated") ]
+            )
 
     def toggle_strip_emoji_all(self):
         self.strip_emoji = not self.strip_emoji

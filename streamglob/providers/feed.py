@@ -410,12 +410,6 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
             # logger.info(len([s for s in listing.sources if not s.seen]))
             return len([s for s in listing.sources if not s.seen])
 
-    # def check_parts(self, row):
-    #     return (
-    #         k for k, v in row.attrs.get("parts_read", {}).items() if v
-    #     )
-
-
     def row_attr_fn(self, position, data, row):
         return "unread" if not data.read else super().row_attr_fn(position, data, row)
 
