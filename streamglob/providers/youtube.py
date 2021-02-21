@@ -500,7 +500,7 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
             return await self.thumbnail_for(listing)
 
         if listing.guid not in self.storyboards:
-            self.storyboards[listing.guid] = await self.make_storyboard_preview(listing)
+            self.storyboards[listing.guid] = await self.make_preview_storyboard(listing)
         return self.storyboards[listing.guid]
 
     def keypress(self, size, key):
@@ -525,16 +525,16 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         self.reset()
         super().on_activate()
 
-    # def on_focus(self, source, position):
-    async def playist_position_changed(self, pos):
+    # # def on_focus(self, source, position):
+    # async def playlist_position_changed(self, pos):
 
-        if state.listings_view.preview_mode == "storyboard":
-            # for pos in range(position, min(len(self)-1, position+2)):
-            self.storyboard_tasks.append(
-                state.event_loop.create_task(self.storyboard_preview(pos))
-            )
+    #     if state.listings_view.preview_mode == "storyboard":
+    #         # for pos in range(position, min(len(self)-1, position+2)):
+    #         self.storyboard_tasks.append(
+    #             state.event_loop.create_task(self.preview_content_storyboard(pos))
+    #         )
 
-    async def storyboard_preview(self, position):
+    async def preview_content_storyboard(self, position, listing):
 
         async def preview(listing):
             if self.config.auto_preview.storyboard_delay:
@@ -544,8 +544,6 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
             await self.playlist_replace(storyboard, pos=position)
             state.loop.draw_screen()
 
-        row = self[position]
-        listing = row.data_source
         if not listing.storyboards or listing.guid in self.storyboards:
             return
         if getattr(self, "preview_task", False):
@@ -573,7 +571,7 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
             with open(dest, 'wb') as f:
                 shutil.copyfileobj(res.raw, f)
 
-    async def make_storyboard_preview(self, listing):
+    async def make_preview_storyboard(self, listing):
 
         TILE_WIDTH = 160
         TILE_HEIGHT = 90

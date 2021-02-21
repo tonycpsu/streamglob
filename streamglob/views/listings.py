@@ -94,7 +94,8 @@ class ProviderToolbar(urwid.WidgetWrap):
     def provider(self):
         return (self.provider_dropdown.selected_label)
 
-    def set_preview_types(self, preview_types):
+    def set_preview_types(self, preview_types, provider_config):
+
         self.preview_dropdown = BaseDropdown(
             AttrDict([
                 (pt.title(), pt)
@@ -104,7 +105,7 @@ class ProviderToolbar(urwid.WidgetWrap):
                 # ("Thumbnail", "thumbnail"),
             ]),
             label="Preview",
-            default=config.settings.preview_content or "full",
+            default=provider_config.default or "full",
             margin=1
         )
 
@@ -187,7 +188,7 @@ class ListingsView(StreamglobView):
         self.provider.deactivate()
         self.provider = providers.get(provider)
         self.listings_view_placeholder.original_widget = self.provider.view
-        self.toolbar.set_preview_types(self.provider.PREVIEW_TYPES)
+        self.toolbar.set_preview_types(self.provider.PREVIEW_TYPES, self.provider.config.auto_preview)
         if self.provider.config_is_valid:
             self.pile.focus_position = 2
         else:

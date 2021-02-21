@@ -656,6 +656,14 @@ class BaseProvider(abc.ABC):
         return self.config.auto_preview.enabled
 
     @property
+    def auto_preview_default(self):
+        return self.config.auto_preview.default
+
+    @property
+    def auto_preview_content(self):
+        return self.config.auto_preview.content
+
+    @property
     def strip_emoji(self):
         return (self.config.get("strip_emoji") or
                 config.settings.profile.tables.get("strip_emoji")
@@ -902,18 +910,47 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
             "vf", "add", vf
         )
 
-    def run_queued_task(self):
+    # def run_queued_task(self):
 
-        if self.pending_event_task:
-            state.event_loop.create_task(self.queued_task())
-            self.pending_event_task = None
+    #     if self.pending_event_task:
+    #         state.event_loop.create_task(self.queued_task())
+    #         self.pending_event_task = None
 
-    @property
+    # @property
     def playlist_position(self):
         return self.row_to_playlist_pos(self.focus_position)
 
-    async def playist_position_changed(self, pos):
+    async def playlist_position_changed(self, pos):
         pass
+
+    async def preview_content_full(self, position, listing, source=None):
+        await self.playlist_replace(listing.sources[0].locator, pos=position)
+
+    async def preview_content_thumbnail(self, position, listing):
+        logger.info("preview thumbnail")
+        await self.playlist_replace(listing.sources[0].preview_locator, pos=position)
+
+    async def preview_content(self):
+        try:
+            position = self.playlist_position
+        except AttributeError:
+            return
+        row_num = self.playlist_pos_to_row(position)
+        logger.info(f"row_num: {row_num}")
+        row = self[row_num]
+        listing = row.data_source
+        delay = (
+            self.config.auto_preview.content_delay
+            # if state.listings_view.preview_mode == "full"
+            # else self.config.auto_preview.thumbnail_delay
+        )
+        if delay:
+            await asyncio.sleep(delay)
+        logger.info("preview")
+        preview_fn = getattr(self, f"preview_content_{self.config.auto_preview.content}")
+        logger.info(preview_fn)
+        await preview_fn(position, listing)
+
 
     # FIXME: inner_focus comes from MultiSourceListingMixin
     async def sync_playlist_position(self):
@@ -928,27 +965,14 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
             if pos is None:
                 return
 
-            delay = (
-                self.config.auto_preview.content_delay
-                if state.listings_view.preview_mode == "full"
-                else self.config.auto_preview.thumbnail_delay
-            )
-            if delay:
-                await asyncio.sleep(delay)
-            logger.info("calling set_playlist_pos")
             await self.set_playlist_pos(pos)
-            await self.playist_position_changed(pos)
-
-            # async def sync_playlist_async(index): # O_o
-
-            # if self.pending_event_task:
-            #     self.pending_event_task.cancel()
-
-            # self.pending_event_task = state.event_loop.create_task(
-            #     sync_playlist_async(index)
-            # )
-            # await sync_playlist_async(index)
-            # await self.pending_event_task = sync
+            if self.pending_event_task:
+                self.pending_event_task.cancel()
+                self.pending_event_task = None
+            self.pending_event_task = asyncio.create_task(
+                self.preview_content()
+            )
+            await self.playlist_position_changed(pos)
 
     def on_focus(self, source, position):
         if self.provider.auto_preview_enabled:
@@ -970,13 +994,21 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
                     state.event_loop.create_task(reload())
         # state.loop.draw_screen()
 
+    def on_deactivate(self):
+        if self.pending_event_task:
+            self.pending_event_task.cancel()
+            self.pending_event_task = None
+        super().on_deactivate()
+
     async def playlist_replace(self, url, pos=None):
 
         async with self.playlist_lock:
             if pos is None:
                 pos = self.focus_position
 
-            count = len(self)
+            count = await state.task_manager.preview_player.command(
+                "get_property", "playlist-count"
+            )
 
             await state.task_manager.preview_player.command(
                 "loadfile", url, "append"
@@ -1057,7 +1089,7 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
                 media_type = source.media_type,
                 locator = (
                     (source.locator or getattr(source, "preview_locator", None))
-                    if state.listings_view.preview_mode == "full"
+                    if self.provider.auto_preview_default == "full"
                     else (getattr(source, "preview_locator", None) or source.locator)
                 )
             )

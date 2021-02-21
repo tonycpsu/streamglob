@@ -1152,10 +1152,10 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         self.create_feeds()
         self.reset()
 
-    def on_deactivate(self):
-        if self.view.player:
-            self.view.quit_player()
-        super().on_deactivate()
+    # def on_deactivate(self):
+    #     if self.view.player:
+    #         self.view.quit_player()
+    #     super().on_deactivate()
 
     @property
     def total_item_count(self):
