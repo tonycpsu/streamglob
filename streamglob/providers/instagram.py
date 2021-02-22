@@ -6,6 +6,7 @@ from itertools import islice
 from datetime import datetime
 from contextlib import contextmanager
 import traceback
+import asyncio
 
 from .feed import *
 from ..exceptions import *
@@ -66,6 +67,11 @@ class InstagramMediaSourceMixin(object):
     def is_bad(self):
         return any(s in (self.locator or self.preview_locator) for s in ["0_0_0", "null.jpg"])
 
+    def validate(self):
+        if self.media_type == "image":
+            return True
+        return self.provider.session.head(self.locator).status_code == 200
+
     @property
     def download_helper(self):
         return lambda d: d.is_simple
@@ -124,12 +130,25 @@ class InstagramMediaListingMixin(object):
             state.event_loop.create_task(listing.inflate())
             return True
 
+    def refresh(self):
+        async def foo():
+            async with self.provider.session.limiter:
+                await self.attach().inflate(force=True)
+
+        try:
+            loop = asyncio.new_event_loop()
+            return loop.run_until_complete(foo())
+        finally:
+            loop.close()
+
+
+
+
 
 @model.attrclass(InstagramMediaListingMixin)
 class InstagramMediaListing(InstagramMediaListingMixin, FeedMediaListing, model.InflatableMediaListing):
 
     media_type = Required(str)
-
 
 
 class InstagramFeedMediaChannelMixin(object):

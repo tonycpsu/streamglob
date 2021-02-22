@@ -152,25 +152,6 @@ class FeedMediaListingMixin(object):
             s.seen = None
         commit()
 
-    # @db_session
-    # def mark_part_read(self, index):
-    #     logger.info(f"mark_part_read {index}")
-    #     if not "parts_read" in self.attrs:
-    #         self.attrs["parts_read"] = dict()
-    #     self.attrs["parts_read"][str(index)] = True
-
-    # @db_session
-    # def mark_part_unread(self, index):
-    #     logger.info(f"mark_part_unread {index}")
-    #     self.attrs["parts_read"].pop(str(index), None)
-
-    # @db_session
-    # def part_is_read(self, index):
-    #     try:
-    #         return self.attrs.get("parts_read", {})[str(index)]
-    #     except:
-    #         return False
-
     @property
     def age(self):
         return datetime.now() - self.created
@@ -204,6 +185,12 @@ class FeedMediaListingMixin(object):
     @property
     def body(self):
         return self.title
+
+    def validate(self):
+        return all(s.validate() for s in self.sources)
+
+    def refresh(self):
+        pass
 
 
 
@@ -256,6 +243,14 @@ class FeedMediaSourceMixin(object):
                 return os.path.exists(source.download_filename(listing=source.listing))
             except SGInvalidFilenameTemplate as e:
                 logger.error(e)
+
+    def validate(self):
+        return True
+
+    def refresh(self):
+        for s in self.sources:
+            s.refresh()
+
 
 @model.attrclass(FeedMediaSourceMixin)
 class FeedMediaSource(FeedMediaSourceMixin, model.MediaSource):
@@ -1268,6 +1263,10 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                 listing.sources = sources
                 # get last item's sort key and store it as our pagination cursor
                 cursor = getattr(listing, self.view.sort_by[0])
+                if not listing.validate():
+                    logger.info("listing broken, fixing...")
+                    listing.refresh()
+                    logger.info("fixed")
                 yield listing
 
         self.pagination_cursor = cursor

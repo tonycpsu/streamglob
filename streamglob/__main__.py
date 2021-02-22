@@ -390,7 +390,7 @@ def run_gui(action, provider, **kwargs):
         state.main_view,
         state.palette,
         screen=state.screen,
-        event_loop = urwid.AsyncioEventLoop(loop=state.event_loop),
+        event_loop=urwid.AsyncioEventLoop(loop=state.event_loop),
         unhandled_input=global_input,
         pop_ups=True
     )

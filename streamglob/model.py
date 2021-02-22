@@ -306,6 +306,8 @@ class MediaSourceMixin(object):
         """
         Subclasses can override this to check the validity of a source's URL
         and return True if the source should be filtered or marked as such.
+
+        FIXME: this probably isn't necessary anymore
         """
         return False
 
