@@ -105,7 +105,7 @@ class ProviderToolbar(urwid.WidgetWrap):
                 # ("Thumbnail", "thumbnail"),
             ]),
             label="Preview",
-            default=provider_config.default or "full",
+            default=provider_config[0].mode or "full",
             margin=1
         )
 

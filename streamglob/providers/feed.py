@@ -247,7 +247,10 @@ class FeedMediaSourceMixin(object):
     @property
     def is_downloaded(self):
         with db_session:
-            source = self.provider.MEDIA_SOURCE_CLASS[self.media_source_id]
+            try:
+                source = self.provider.MEDIA_SOURCE_CLASS[self.media_source_id]
+            except:
+                return False
             # listing = self.provider.LISTING_CLASS.orm_class[self.listing.media_listing_id]
             try:
                 return os.path.exists(source.download_filename(listing=source.listing))
@@ -414,10 +417,10 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
         return "unread" if not data.read else super().row_attr_fn(position, data, row)
 
     @keymap_command()
-    def inflate_selection(self):
+    async def inflate_selection(self):
         with db_session:
             listing = self.selection.data_source.attach()
-            if listing.inflate(force=True):
+            if await listing.inflate(force=True):
                 # position = self.focus_position
                 self.invalidate_rows([listing.media_listing_id])
                 self.selection.close_details()

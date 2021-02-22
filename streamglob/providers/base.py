@@ -653,11 +653,11 @@ class BaseProvider(abc.ABC):
 
     @property
     def auto_preview_enabled(self):
-        return self.config.auto_preview.enabled
+        return len(self.config.auto_preview) > 0
 
     @property
     def auto_preview_default(self):
-        return self.config.auto_preview.default
+        return self.config.auto_preview[0].mode if self.auto_preview_enabled else None
 
     @property
     def auto_preview_content(self):
@@ -923,12 +923,25 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
     async def playlist_position_changed(self, pos):
         pass
 
-    async def preview_content_full(self, position, listing, source=None):
-        await self.playlist_replace(listing.sources[0].locator, pos=position)
 
-    async def preview_content_thumbnail(self, position, listing):
-        logger.info("preview thumbnail")
-        await self.playlist_replace(listing.sources[0].preview_locator, pos=position)
+    async def preview_content_thumbnail(self, cfg, position, listing, source_idx=0):
+        source = listing.sources[source_idx]
+        if source.preview_locator is None:
+            logger.info("no thumbnail")
+            return
+        logger.info(f"replacing with thumbnail: {source.preview_locator}")
+        await self.playlist_replace(source.preview_locator, pos=position)
+
+    async def preview_content_full(self, cfg, position, listing, source_idx=0):
+        source = listing.sources[source_idx]
+        if source.preview_locator is None:
+            logger.info("no thumbnail")
+            return
+        if source.locator is None:
+            logger.info("no full")
+            return
+        logger.info(f"replacing with full: {source.locator}")
+        await self.playlist_replace(source.locator, pos=position)
 
     async def preview_content(self):
         try:
@@ -936,20 +949,39 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
         except AttributeError:
             return
         row_num = self.playlist_pos_to_row(position)
-        logger.info(f"row_num: {row_num}")
         row = self[row_num]
         listing = row.data_source
-        delay = (
-            self.config.auto_preview.content_delay
-            # if state.listings_view.preview_mode == "full"
-            # else self.config.auto_preview.thumbnail_delay
-        )
-        if delay:
-            await asyncio.sleep(delay)
-        logger.info("preview")
-        preview_fn = getattr(self, f"preview_content_{self.config.auto_preview.content}")
-        logger.info(preview_fn)
-        await preview_fn(position, listing)
+        source_idx = self.play_items[position].index
+        for i, cfg in enumerate(self.config.auto_preview):
+            logger.info(f"stage: {cfg}")
+            if cfg.delay:
+                logger.info(f"sleeping: {cfg.delay}")
+                await asyncio.sleep(cfg.delay)
+            if i == 0:
+                await self.set_playlist_pos(position)
+            if self.play_items[position].preview_mode == cfg.mode:
+                continue
+            preview_fn = getattr(
+                self, f"preview_content_{cfg.mode}"
+            )
+            logger.info(preview_fn)
+            await preview_fn(cfg, position, listing, source_idx=source_idx)
+            self.play_items[position].preview_mode = cfg.mode
+
+        # logger.info(f"row_num: {row_num}")
+        # row = self[row_num]
+        # listing = row.data_source
+        # delay = (
+        #     self.config.auto_preview.content_delay
+        #     # if state.listings_view.preview_mode == "full"
+        #     # else self.config.auto_preview.thumbnail_delay
+        # )
+        # if delay:
+        #     await asyncio.sleep(delay)
+        # logger.info("preview")
+        # preview_fn = getattr(self, f"preview_content_{self.config.auto_preview.content}")
+        # logger.info(preview_fn)
+        # await preview_fn(position, listing)
 
 
     # FIXME: inner_focus comes from MultiSourceListingMixin
@@ -964,14 +996,13 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
                 return
             if pos is None:
                 return
-
-            await self.set_playlist_pos(pos)
-            if self.pending_event_task:
-                self.pending_event_task.cancel()
-                self.pending_event_task = None
-            self.pending_event_task = asyncio.create_task(
-                self.preview_content()
-            )
+            if state.listings_view.preview_mode != "full":
+                if self.pending_event_task:
+                    self.pending_event_task.cancel()
+                    self.pending_event_task = None
+                self.pending_event_task = asyncio.create_task(
+                    self.preview_content()
+                )
             await self.playlist_position_changed(pos)
 
     def on_focus(self, source, position):
@@ -1078,16 +1109,17 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
     def play_items(self):
         return [
             AttrDict(
-                media_listing_id = row.data.media_listing_id,
-                title = f"{self.playlist_title} {utils.sanitize_filename(row.data.title)}",
-                created = row.data.created,
-                # feed = row.data.channel.name,
-                # locator = row.data.channel.locator,
-                index = index,
-                row_num = row_num,
-                count = len(row.data.sources),
-                media_type = source.media_type,
-                locator = (
+                media_listing_id=row.data.media_listing_id,
+                title=f"{self.playlist_title} {utils.sanitize_filename(row.data.title)}",
+                created=row.data.created,
+                # feed=row.data.channel.name,
+                # locator=row.data.channel.locator,
+                index=index,
+                row_num=row_num,
+                count=len(row.data.sources),
+                media_type=source.media_type,
+                preview_mode="full" if self.provider.auto_preview_default == "full" else "thumbnail",
+                locator=(
                     (source.locator or getattr(source, "preview_locator", None))
                     if self.provider.auto_preview_default == "full"
                     else (getattr(source, "preview_locator", None) or source.locator)

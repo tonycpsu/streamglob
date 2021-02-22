@@ -495,12 +495,12 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
             self._storyboards = AttrDict()
         return self._storyboards
 
-    async def storyboard_for(self, listing):
+    async def storyboard_for(self, listing, cfg):
         if not listing.storyboards:
             return await self.thumbnail_for(listing)
 
         if listing.guid not in self.storyboards:
-            self.storyboards[listing.guid] = await self.make_preview_storyboard(listing)
+            self.storyboards[listing.guid] = await self.make_preview_storyboard(listing, cfg)
         return self.storyboards[listing.guid]
 
     def keypress(self, size, key):
@@ -525,22 +525,10 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         self.reset()
         super().on_activate()
 
-    # # def on_focus(self, source, position):
-    # async def playlist_position_changed(self, pos):
-
-    #     if state.listings_view.preview_mode == "storyboard":
-    #         # for pos in range(position, min(len(self)-1, position+2)):
-    #         self.storyboard_tasks.append(
-    #             state.event_loop.create_task(self.preview_content_storyboard(pos))
-    #         )
-
-    async def preview_content_storyboard(self, position, listing):
+    async def preview_content_thumbnail(self, cfg, position, listing, source_idx=0):
 
         async def preview(listing):
-            if self.config.auto_preview.storyboard_delay:
-                await asyncio.sleep(self.config.auto_preview.storyboard_delay)
-            # logger.info(f"preview {position}")
-            storyboard = await self.storyboard_for(listing)
+            storyboard = await self.storyboard_for(listing, cfg)
             await self.playlist_replace(storyboard, pos=position)
             state.loop.draw_screen()
 
@@ -571,7 +559,7 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
             with open(dest, 'wb') as f:
                 shutil.copyfileobj(res.raw, f)
 
-    async def make_preview_storyboard(self, listing):
+    async def make_preview_storyboard(self, listing, cfg):
 
         TILE_WIDTH = 160
         TILE_HEIGHT = 90
@@ -579,14 +567,12 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         PREVIEW_WIDTH = 1280
         PREVIEW_HEIGHT = 720
 
-        inset_scale = self.provider.config.get_path("auto_preview.storyboard.scale") or 0.25
-        inset_offset = self.provider.config.get_path("auto_preview.storyboard.offset") or 0
-        frame_rate = self.provider.config.get_path("auto_preview.storyboard.frame_rate") or 1
-        border_color = self.provider.config.get_path(
-            "auto_preview.storyboard.border.color"
-        ) or "black"
-        border_width = self.provider.config.get_path("auto_preview.storyboard.border.width") or 1
-        tile_skip = self.provider.config.get_path("auto_preview.storyboard.skip") or None
+        inset_scale = cfg.scale or 0.25
+        inset_offset = cfg.offset or 0
+        frame_rate = cfg.frame_rate or 1
+        border_color = cfg.border.color or "black"
+        border_width = cfg.border.width or 1
+        cfg.skip or None
 
         thumbnail = await self.thumbnail_for(listing)
 
