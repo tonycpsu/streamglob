@@ -792,6 +792,11 @@ class SynchronizedPlayerMixin(object):
     def on_requery(self, source, count):
         state.event_loop.create_task(self.preview_all())
 
+    def load_more(self, position):
+        if self.pending_event_task:
+            self.pending_event_task.cancel()
+        super().load_more(position)
+
     def extract_sources(self, listing, **kwargs):
         return (listing.sources if listing else [], kwargs)
 
