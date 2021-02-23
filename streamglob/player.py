@@ -657,6 +657,9 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
         except MPVError as e:
             logger.warn(f"MPV error: {e}")
 
+    async def wait_for_event(self, event, timeout=None):
+        return await self.controller.get_events(event=event, timeout=timeout).__anext__()
+
     async def quit(self):
         await self.command("quit")
 

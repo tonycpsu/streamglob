@@ -874,23 +874,33 @@ class SynchronizedPlayerMixin(object):
             return 0
 
     async def set_playlist_pos(self, pos):
+
         if not state.task_manager.preview_player:
             return
 
-        # if await state.task_manager.preview_player.command(
-        #     "get_property", "playlist-pos"
-        # ) == pos:
-        #     return
+        await state.task_manager.preview_player.command(
+            "vf", "del", "@title,@framerate,@playlist"
+        )
 
         await state.task_manager.preview_player.command(
             "set_property", "playlist-pos", pos
         )
+        # try to ensure video filters aren't lost by waiting for next track
+        try:
+            event = await state.task_manager.preview_player.wait_for_event(
+                "playback-restart", 0.5
+            )
+        except StopIteration:
+            logger.info("StopIteration")
+            pass
+
+        logger.info("foo")
         cfg = config.settings.profile.display.title
-        x = cfg.x or 0
+        x = cfg.x or "0"
         if isinstance(x, dict):
             scroll_speed = x.scroll or 5
             x=f"w-w/{scroll_speed}*mod(t,{scroll_speed}*(w+tw)/w)-w"
-        y = cfg.y or 0
+        y = cfg.y or "0"
         color = cfg.color or "white"
         shadow = cfg.shadow or "black"
         title = self.play_items[pos].title
@@ -899,16 +909,23 @@ class SynchronizedPlayerMixin(object):
         alpha = cfg.alpha or 1.0
         shadow_x = cfg.shadow_x or 1
         shadow_y = cfg.shadow_y or 1
+
         vf_title=f"""@title:drawtext=text=\"{title}\":fontfile=\"{font}\":\
 x=\"{x}\":y={y}:fontsize=(h/{size}):fontcolor={color}@{alpha}:\
 shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
-        await state.task_manager.preview_player.command(
-            "vf", "clr", ""
-        )
-        vf=f"@framerate:framerate=fps=30,{vf_title}"
+
+        x = "10"
+        y = f"{y}+max_glyph_h+10"
+        text = f"{self.playlist_position+1}/{len(self.play_items)}"
+        vf_playlist=f"""@playlist:drawtext=text=\"{text}\":fontfile=\"{font}\":\
+x=\"{x}\":y={y}:fontsize=(h/{size}):fontcolor={color}@{alpha}:\
+shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
+
+        vf=f"@framerate:framerate=fps=30,{vf_title},{vf_playlist}"
         await state.task_manager.preview_player.command(
             "vf", "add", vf
         )
+
 
     # def run_queued_task(self):
 
