@@ -1270,8 +1270,8 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                 cursor = getattr(listing, self.view.sort_by[0])
                 yield listing
 
-        self.update_query()
         self.pagination_cursor = cursor
+        self.update_query()
 
     @db_session
     def mark_items_read(self, request):
