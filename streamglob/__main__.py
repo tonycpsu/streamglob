@@ -363,7 +363,7 @@ def run_gui(action, provider, **kwargs):
     if options.verbose:
         left_column = state.main_view.get_column(0)
         left_column.contents.append(
-            (urwid.LineBox(log_console), left_column.options("weight", 1))
+            (urwid.LineBox(log_console), left_column.options("weight", 2))
             # (log_console, pile.options("given", 20))
         )
 

@@ -213,6 +213,10 @@ class ProviderDataTable(BaseDataTable):
     def playlist_title(self):
         return self.provider.playlist_title
 
+    @property
+    def playlist_position_text(self):
+        return f"[{self.focus_position+1}/{len(self)}]"
+
     def decorate(self, row, column, value):
 
         if column.name == "title":

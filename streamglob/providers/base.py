@@ -923,7 +923,7 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
 
         x = "10"
         y = f"{y}+max_glyph_h+10"
-        text = f"{self.playlist_position+1}/{len(self.play_items)}"
+        text = f"{self.playlist_position_text}"
         vf_playlist=f"""@playlist:drawtext=text=\"{text}\":fontfile=\"{font}\":\
 x=\"{x}\":y={y}:fontsize=(h/{size}):fontcolor={color}@{alpha}:\
 shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
@@ -1301,6 +1301,14 @@ class MultiSourceListingMixin(object):
     @property
     def playlist_position(self):
         return self.row_to_playlist_pos(self.focus_position) + self.inner_focus
+
+    @property
+    def playlist_position_text(self):
+        if self.inner_table:
+            inner_text = f"{self.inner_focus+1}/{len(self.inner_table)}"
+        else:
+            inner_text=""
+        return f"[{self.focus_position+1}/{len(self)}] {inner_text}"
 
     @property
     def inner_table(self):
