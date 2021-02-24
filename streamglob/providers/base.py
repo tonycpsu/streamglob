@@ -884,7 +884,7 @@ class SynchronizedPlayerMixin(object):
             return
 
         await state.task_manager.preview_player.command(
-            "vf", "del", "@title,@framerate,@playlist"
+            "vf", "del", "@title,@framerate,@upscale,@playlist"
         )
 
         await state.task_manager.preview_player.command(
@@ -916,6 +916,7 @@ class SynchronizedPlayerMixin(object):
         alpha = cfg.alpha or 1.0
         shadow_x = cfg.shadow_x or 1
         shadow_y = cfg.shadow_y or 1
+        upscale = cfg.upscale or 1280
 
         vf_title=f"""@title:drawtext=text=\"{title}\":fontfile=\"{font}\":\
 x=\"{x}\":y={y}:fontsize=(h/{size}):fontcolor={color}@{alpha}:\
@@ -928,7 +929,9 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
 x=\"{x}\":y={y}:fontsize=(h/{size}):fontcolor={color}@{alpha}:\
 shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
 
-        vf=f"@framerate:framerate=fps=30,{vf_title},{vf_playlist}"
+        vf_scale = f"@upscale:lavfi=[scale=w=max(iw\\,{upscale}):h=-2]"
+        vf=f"@framerate:framerate=fps=30,{vf_scale},{vf_title},{vf_playlist}"
+
         await state.task_manager.preview_player.command(
             "vf", "add", vf
         )
