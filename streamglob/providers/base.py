@@ -1315,15 +1315,4 @@ class MultiSourceListingMixin(object):
         return 0
 
     def row_attr_fn(self, position, data, row):
-        if len(data.sources) > 1:
-            box = row.details.contents
-            with db_session:
-                listing = box.listing
-                sources = sorted(listing.sources, key=lambda s: s.rank)
-                source = sources[box.table.focus_position]
-                if isinstance(source, BaseModel):
-                    source = source.attach()
-            if source.is_downloaded:
-                return "downloaded"
-        else:
-            return "downloaded" if data.sources[0].is_downloaded else super().row_attr_fn(position, data, row)
+        return "downloaded" if data.sources[0].is_downloaded else super().row_attr_fn(position, data, row)
