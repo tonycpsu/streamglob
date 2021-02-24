@@ -12,6 +12,8 @@ import termios
 import time
 import re
 import asyncio
+import nest_asyncio
+nest_asyncio.apply()
 import functools
 import itertools
 import signal

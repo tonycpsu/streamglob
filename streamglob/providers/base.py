@@ -906,6 +906,7 @@ class SynchronizedPlayerMixin(object):
             scroll_speed = x.scroll or 5
             pause = x.scroll_pause or 3
             x=f"w-w/{scroll_speed}*mod(if(lt(t, {pause}), 0, if(gt(text_w, w), t-{pause}, 0) ),{scroll_speed}*(w+tw/2)/w)-w"
+            # x = "t*20*lte(t*20,w/2) + w/2*gt(t*20,w/2)"
         y = cfg.y or "0"
         color = cfg.color or "white"
         shadow = cfg.shadow or "black"
