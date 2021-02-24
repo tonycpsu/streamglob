@@ -663,14 +663,14 @@ class YouTubeProvider(PaginatedProviderMixin,
             + attrs[idx:]
         )
 
-    @property
-    def default_filter_values(self):
+    # @property
+    # def default_filter_values(self):
 
-        return AttrDict(
-            super().default_filter_values, **AttrDict(
-                preview=self.config.get_path("auto_preview.content", None)
-            )
-        )
+    #     return AttrDict(
+    #         super().default_filter_values, **AttrDict(
+    #             preview=self.config.get_path("auto_preview.content", None)
+    #         )
+    #     )
 
     @property
     def selected_feed(self):
