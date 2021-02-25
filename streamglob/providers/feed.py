@@ -1130,6 +1130,8 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                         await feed.update(resume=resume, replace=replace)
                         # f.updated = datetime.now()
                     # commit()
+                    #
+        self.refresh()
 
 
     def refresh(self):
