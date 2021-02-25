@@ -651,6 +651,9 @@ class BaseProvider(abc.ABC):
     def __repr__(self):
         return f"<{type(self)}: {self.NAME}>"
 
+    def playlist_title(self):
+        return f"[{self.IDENTIFIER}"
+
     @property
     def auto_preview_enabled(self):
         return len(self.config.auto_preview) > 0
@@ -899,7 +902,6 @@ class SynchronizedPlayerMixin(object):
             logger.info("StopIteration")
             pass
 
-        logger.info("foo")
         cfg = config.settings.profile.display.title
         x = cfg.x or "0"
         if isinstance(x, dict):
