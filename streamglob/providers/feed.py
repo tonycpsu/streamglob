@@ -1252,7 +1252,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         if not limit:
             limit = self.limit
 
-        with db_session:
+        with db_session(optimistic=False):
 
             for listing in self.items_query[:limit]:
                 sources = [

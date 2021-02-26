@@ -93,7 +93,7 @@ class InstagramMediaListingMixin(object):
         if self.is_inflated and not force:
             return False
         logger.debug("inflate")
-        with db_session:
+        with db_session(optimistic=False):
             # FIXME: for some reason I don't feel like digging into right now,
             # self.feed is of type FeedMediaChannel instead of InstagramFeedMediaChannel, so
             # we force the issue here
