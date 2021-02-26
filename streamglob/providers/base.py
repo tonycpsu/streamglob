@@ -926,7 +926,7 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
 
         x = "10"
         y = f"{y}+max_glyph_h+10"
-        text = f"{self.playlist_position_text}"
+        text = f"[{self.playlist_title}] {self.playlist_position_text}"
         vf_playlist=f"""@playlist:drawtext=text=\"{text}\":fontfile=\"{font}\":\
 x=\"{x}\":y={y}:fontsize=(h/{size}):fontcolor={color}@{alpha}:\
 shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
@@ -1130,7 +1130,7 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
         return [
             AttrDict(
                 media_listing_id=row.data.media_listing_id,
-                title=f"{self.playlist_title} {utils.sanitize_filename(row.data.title)}",
+                title=utils.sanitize_filename(row.data.title),
                 created=row.data.created,
                 # feed=row.data.channel.name,
                 # locator=row.data.channel.locator,
@@ -1304,7 +1304,7 @@ class MultiSourceListingMixin(object):
             inner_text = f"{self.inner_focus+1}/{len(self.inner_table)}"
         else:
             inner_text=""
-        return f"[{self.focus_position+1}/{len(self)}] {inner_text}"
+        return f"{self.focus_position+1}/{len(self)} {inner_text}"
 
     @property
     def inner_table(self):

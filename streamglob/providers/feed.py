@@ -1294,4 +1294,4 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
     @property
     def playlist_title(self):
         # return f"[{self.provider}]"
-        return f"[{self.IDENTIFIER}/{self.feed.locator if self.feed else 'all'}]"
+        return f"{self.IDENTIFIER}/{self.feed.locator if self.feed else 'all'}"
