@@ -787,7 +787,7 @@ class SynchronizedPlayerMixin(object):
         # self.player = None
         self.player_task = None
         self.queued_task = None
-        self.pending_event_task = None
+        self.pending_event_tasks = []
         self.on_focus_handler = None
         self.sync_player_playlist = False
         self.playlist_lock = asyncio.Lock()
@@ -796,8 +796,9 @@ class SynchronizedPlayerMixin(object):
         state.event_loop.create_task(self.preview_all())
 
     def load_more(self, position):
-        if self.pending_event_task:
-            self.pending_event_task.cancel()
+        while len(self.pending_event_tasks):
+            t = self.pending_event_tasks.pop()
+            t.cancel()
         super().load_more(position)
 
     def extract_sources(self, listing, **kwargs):
@@ -898,8 +899,7 @@ class SynchronizedPlayerMixin(object):
             event = await state.task_manager.preview_player.wait_for_event(
                 "playback-restart", 0.5
             )
-        except StopIteration:
-            logger.info("StopIteration")
+        except StopAsyncIteration:
             pass
 
         cfg = config.settings.profile.display.title
@@ -941,11 +941,11 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
 
     # def run_queued_task(self):
 
-    #     if self.pending_event_task:
+    #     if self.pending_event_tasks:
     #         state.event_loop.create_task(self.queued_task())
-    #         self.pending_event_task = None
+    #         self.pending_event_tasks = []
 
-    # @property
+    @property
     def playlist_position(self):
         return self.row_to_playlist_pos(self.focus_position)
 
@@ -954,14 +954,16 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
 
 
     async def preview_content_thumbnail(self, cfg, position, listing, source_idx=0):
+        logger.info(f"preview_content_thumbnail {position}")
         source = listing.sources[source_idx]
         if source.preview_locator is None:
             logger.info("no thumbnail")
             return
-        logger.info(f"replacing with thumbnail: {source.preview_locator}")
+        logger.info(f"replacing with thumbnail: {source.preview_locator} at pos {position}")
         await self.playlist_replace(source.preview_locator, pos=position)
 
     async def preview_content_full(self, cfg, position, listing, source_idx=0):
+        logger.info(f"preview_content_full {position}")
         source = listing.sources[source_idx]
         if source.preview_locator is None:
             logger.info("no thumbnail")
@@ -969,14 +971,12 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
         if source.locator is None:
             logger.info("no full")
             return
-        logger.info(f"replacing with full: {source.locator}")
+        logger.info(f"replacing with full: {source.locator} at pos {position}")
         await self.playlist_replace(source.locator, pos=position)
 
     async def preview_content(self):
-        try:
-            position = self.playlist_position
-        except AttributeError:
-            return
+
+        position = self.playlist_position
         row_num = self.playlist_pos_to_row(position)
         row = self[row_num]
         listing = row.data_source
@@ -986,8 +986,8 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
             if cfg.delay:
                 logger.info(f"sleeping: {cfg.delay}")
                 await asyncio.sleep(cfg.delay)
-            if i == 0:
-                await self.set_playlist_pos(position)
+            # if i == 0:
+            #     await self.set_playlist_pos(position)
             if self.play_items[position].preview_mode == cfg.mode:
                 continue
             preview_fn = getattr(
@@ -997,42 +997,33 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
             await preview_fn(cfg, position, listing, source_idx=source_idx)
             self.play_items[position].preview_mode = cfg.mode
 
-        # logger.info(f"row_num: {row_num}")
-        # row = self[row_num]
-        # listing = row.data_source
-        # delay = (
-        #     self.config.auto_preview.content_delay
-        #     # if state.listings_view.preview_mode == "full"
-        #     # else self.config.auto_preview.thumbnail_delay
-        # )
-        # if delay:
-        #     await asyncio.sleep(delay)
-        # logger.info("preview")
-        # preview_fn = getattr(self, f"preview_content_{self.config.auto_preview.content}")
-        # logger.info(preview_fn)
-        # await preview_fn(position, listing)
-
 
     # FIXME: inner_focus comes from MultiSourceListingMixin
     async def sync_playlist_position(self):
+
 
         await state.task_manager._preview_player
         if len(self):
 
             try:
-                pos = self.playlist_position
+                position = self.playlist_position
             except AttributeError:
                 return
-            if pos is None:
-                return
+            # if position is None:
+            #     return
+            await self.set_playlist_pos(position)
             if state.listings_view.preview_mode != "full":
-                if self.pending_event_task:
-                    self.pending_event_task.cancel()
-                    self.pending_event_task = None
-                self.pending_event_task = asyncio.create_task(
-                    self.preview_content()
+                while len(self.pending_event_tasks):
+                    t = self.pending_event_tasks.pop()
+                    logger.info(f"cancel {t}")
+                    t.cancel()
+
+                self.pending_event_tasks.append(
+                    asyncio.create_task(
+                        self.preview_content()
+                    )
                 )
-            await self.playlist_position_changed(pos)
+            await self.playlist_position_changed(position)
 
     def on_focus(self, source, position):
         if self.provider.auto_preview_enabled:
@@ -1055,9 +1046,9 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
         # state.loop.draw_screen()
 
     def on_deactivate(self):
-        if self.pending_event_task:
-            self.pending_event_task.cancel()
-            self.pending_event_task = None
+        while len(self.pending_event_tasks):
+            t = self.pending_event_tasks.pop()
+            t.cancel()
         super().on_deactivate()
 
     async def playlist_replace(self, url, pos=None):
@@ -1070,11 +1061,11 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
                 "get_property", "playlist-count"
             )
 
+            logger.info(f"count: {count}")
+
             await state.task_manager.preview_player.command(
                 "loadfile", url, "append"
             )
-
-            logger.info(f"count: {count}")
 
             # if pos == self.focus_position:
             #     logger.info("idle")
@@ -1093,17 +1084,17 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
                 "playlist-remove", str(pos+1)
             )
 
-            if pos == self.focus_position:
-                await state.task_manager.preview_player.command(
-                    "playlist-play-index", pos
-                )
+            # if pos == self.focus_position:
+            #     await state.task_manager.preview_player.command(
+            #         "playlist-play-index", pos
+            #     )
 
 
             # if pos == self.focus_position:
             #     logger.info(f"play: {pos}")
-            #     await state.task_manager.preview_player.command(
-            #         "playlist-play-index", pos
-            #     )
+            await state.task_manager.preview_player.command(
+                "playlist-play-index", pos
+            )
 
 
     # async def download(self):
