@@ -256,6 +256,7 @@ class FeedMediaSourceMixin(object):
 class FeedMediaSource(FeedMediaSourceMixin, model.MediaSource):
 
     seen = Optional(datetime)
+    created = Required(datetime, default=datetime.now)
 
 
 class CachedFeedProviderDetailBox(DetailBox):

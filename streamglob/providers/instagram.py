@@ -7,6 +7,7 @@ from datetime import datetime
 from contextlib import contextmanager
 import traceback
 import asyncio
+from datetime import datetime, timedelta
 
 from .feed import *
 from ..exceptions import *
@@ -68,7 +69,7 @@ class InstagramMediaSourceMixin(object):
         return any(s in (self.locator or self.preview_locator) for s in ["0_0_0", "null.jpg"])
 
     def validate(self):
-        if self.media_type == "image":
+        if self.media_type == "image" or self.created > datetime.now() - timedelta(hours=4):
             return True
         return self.provider.session.head(self.locator).status_code == 200
 
