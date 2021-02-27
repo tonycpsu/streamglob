@@ -1070,41 +1070,33 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
                 "get_property", "playlist-count"
             )
 
-            logger.info(f"count: {count}")
+            logger.debug(f"count: {count}")
 
             await state.task_manager.preview_player.command(
                 "loadfile", url, "append"
             )
 
-            # if pos == self.focus_position:
-            #     logger.info("idle")
-            #     await state.task_manager.preview_player.command(
-            #         "playlist-play-index", "none"
-            #     )
-
-
-            logger.info(f"move: {count} -> {pos}")
+            logger.debug(f"move: {count} -> {pos}")
             await state.task_manager.preview_player.command(
                 "playlist-move", str(count), str(pos)
             )
 
-            # if pos == self.focus_position:
-            #     logger.info(f"play: {pos}")
+            try:
+                event = await state.task_manager.preview_player.wait_for_event(
+                    "playback-restart", 0.5
+                )
+            except StopAsyncIteration:
+                pass
+
             await state.task_manager.preview_player.command(
                 "playlist-play-index", str(pos)
             )
 
-            logger.info(f"remove: {pos+1}")
+
+            logger.debug(f"remove: {pos+1}")
             await state.task_manager.preview_player.command(
                 "playlist-remove", str(pos+1)
             )
-
-            # if pos == self.focus_position:
-            #     await state.task_manager.preview_player.command(
-            #         "playlist-play-index", pos
-            #     )
-
-
 
 
     # async def download(self):
