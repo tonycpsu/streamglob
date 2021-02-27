@@ -525,7 +525,7 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         self.reset()
         super().on_activate()
 
-    async def preview_content_thumbnail(self, cfg, position, listing, source_idx=0):
+    async def preview_content_storyboard(self, cfg, position, listing, source_idx=0):
 
         async def preview(listing):
             storyboard = await self.storyboard_for(listing, cfg)
@@ -572,7 +572,7 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         frame_rate = cfg.frame_rate or 1
         border_color = cfg.border.color or "black"
         border_width = cfg.border.width or 1
-        cfg.skip or None
+        tile_skip = cfg.skip or None
 
         thumbnail = await self.thumbnail_for(listing)
 
