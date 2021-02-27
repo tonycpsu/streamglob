@@ -1,25 +1,54 @@
 import logging
 logger = logging.getLogger(__name__)
 from memoize import *
-from orderedattrdict import AttrDict
+from orderedattrdict import AttrDict, Tree
 import asyncio
 
-from . import providers
+from pony.orm import *
+
 from . import config
+from . import model
+
+class AppData(Tree):
+    def __init__(self, *args, **kwargs):
+        with db_session:
+            saved = model.ApplicationData.select().first() or model.ApplicationData()
+        super().__init__(**saved.to_dict()["settings"])
+        self.__exclude_keys__ |= {"save"}
+
+    def __setitem__(self, key, value):
+        logger.info("__setitem__")
+        super().__setitem__(key, value)
+        self.save()
+
+    def save(self):
+        logger.info("save")
+        with db_session:
+            saved = model.ApplicationData.select().first() or model.ApplicationData()
+            saved.settings = self
+            commit()
 
 class State(AttrDict):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*kwargs, **kwargs)
         self.__exclude_keys__ |= {
-            "_procs", "procs",# "task_manager", "task_manager_task"
+            "_procs", "procs", #"task_manager", "task_manager_task"
         }
+        self._app_data = None
         self._store = {}
         self._memo = Memoizer(self._store)
         self._memo.regions['short'] = {'max_age': 60}
         self._memo.regions['medium'] = {'max_age': 60*5}
         self._memo.regions['long'] = {'max_age': 60*60}
         # self.task_manager = TaskManager()
+
+
+    @property
+    def app_data(self):
+        if not self._app_data:
+            self._app_data = AppData()
+        return self._app_data
 
     @property
     def event_loop(self):
@@ -51,11 +80,5 @@ state = State()
 
 def memo(*args, **kwargs):
     return state.memo(*args, **kwargs)
-
-# def set_provider(p, **kwargs):
-
-#     global provider
-#     provider = providers.get(p, **kwargs)
-#     session = provider.session
 
 __all__ = ["state", "memo"]
