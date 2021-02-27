@@ -753,7 +753,7 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
     def update_fetch_indicator(self, num, count):
 
         spark_vals = [
-            (num, "light green", ("{value}", "black")),
+            (num, "light green", ("{value}", "black", ">")),
             (count-num, "dark green", (count, "black", ">"))
         ]
         indicator_widget = SparkBarWidget(
@@ -1132,7 +1132,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                         # f.updated = datetime.now()
                     # commit()
                     #
-        self.refresh()
+        self.reset()
 
 
     def refresh(self):

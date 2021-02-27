@@ -924,9 +924,17 @@ class SynchronizedPlayerMixin(object):
 x=\"{x}\":y={y}:fontsize=(h/{size}):fontcolor={color}@{alpha}:\
 shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
 
-        x = "10"
-        y = f"{y}+max_glyph_h+10"
+        cfg = config.settings.profile.display.playlist
+
+        x = str(cfg.x).format(title_x=x, title_y=y) if cfg.x else 10
+        y = str(cfg.y).format(title_x=x, title_y=y) if cfg.y else 40
+        if pos < len(self.play_items) - 1:
+            color = cfg.color or "d0d0d0"
+        else:
+            color = cfg.last_color or color
+
         text = f"[{self.playlist_title}] {self.playlist_position_text}"
+
         vf_playlist=f"""@playlist:drawtext=text=\"{text}\":fontfile=\"{font}\":\
 x=\"{x}\":y={y}:fontsize=(h/{size}):fontcolor={color}@{alpha}:\
 shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
@@ -966,7 +974,7 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
         logger.info(f"preview_content_full {position}")
         source = listing.sources[source_idx]
         if source.preview_locator is None:
-            logger.info("no thumbnail")
+            logger.info("full: no thumbnail")
             return
         if source.locator is None:
             logger.info("no full")
