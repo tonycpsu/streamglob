@@ -13,6 +13,8 @@ from contextlib import contextmanager
 from http.cookiejar import LWPCookieJar, Cookie
 from io import StringIO
 import requests
+import asyncio
+import aiohttp
 import lxml
 import lxml, lxml.etree
 import yaml
@@ -47,6 +49,8 @@ class StreamSession(object):
         "User-agent": USER_AGENT
     }
 
+    SESSION_CLASS = requests.Session
+
     def __init__(
             self,
             provider_id,
@@ -55,7 +59,7 @@ class StreamSession(object):
     ):
 
         self.provider_id = provider_id
-        self.session = requests.Session()
+        self.session = self.SESSION_CLASS()
         self.cookies = LWPCookieJar()
         if not os.path.exists(self.COOKIES_FILE):
             self.cookies.save(self.COOKIES_FILE)
@@ -67,6 +71,7 @@ class StreamSession(object):
         if proxies:
             self.proxies = proxies
         self._cache_responses = False
+
 
     @property
     def provider(self):
@@ -213,6 +218,24 @@ class StreamSession(object):
 
     def cache_responses_long(self):
         return self.cache_responses(model.CACHE_DURATION_LONG)
+
+
+class AsyncStreamSession(StreamSession):
+
+    SESSION_CLASS = aiohttp.ClientSession
+
+    # # FIXME: caching?
+    # async def request(self, method, url, *args, **kwargs):
+    #     return await method(url, *args, **kwargs)
+
+    # async def get(self, *args, **kwargs):
+    #     # method = getattr(self.session, "get")
+    #     return await self.session.get(*args, **kwargs)
+
+    def __getattr__(self, attr):
+        if attr in ["delete", "get", "head", "options", "post", "put", "patch"]:
+            session_method = getattr(self.session, attr)
+            return session_method
 
 
 class AuthenticatedStreamSession(StreamSession):

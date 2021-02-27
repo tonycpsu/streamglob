@@ -1040,6 +1040,8 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
 
     @property
     def translate_src(self):
+        if not self.feed:
+            return None
         cfg = self.config.feeds[self.feed.locator]
         if cfg and isinstance(cfg, AttrDict):
             return getattr(cfg, "translate", "auto")

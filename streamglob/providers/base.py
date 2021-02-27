@@ -991,11 +991,8 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
         source_idx = self.play_items[position].index
         for i, cfg in enumerate(self.config.auto_preview):
             logger.info(f"stage: {cfg}")
-            if cfg.delay:
-                logger.info(f"sleeping: {cfg.delay}")
-                await asyncio.sleep(cfg.delay)
-            # if i == 0:
-            #     await self.set_playlist_pos(position)
+            if i == 0:
+                await self.set_playlist_pos(position)
             if self.play_items[position].preview_mode == cfg.mode:
                 continue
             preview_fn = getattr(
@@ -1004,11 +1001,16 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
             logger.info(preview_fn)
             await preview_fn(cfg, position, listing, source_idx=source_idx)
             self.play_items[position].preview_mode = cfg.mode
+            duration = await self.preview_duration(cfg, listing)
+            if duration:
+                logger.info(f"sleeping: {duration}")
+                await asyncio.sleep(duration)
 
+    async def preview_duration(self, cfg, listing):
+        return cfg.duration or 0
 
     # FIXME: inner_focus comes from MultiSourceListingMixin
     async def sync_playlist_position(self):
-
 
         await state.task_manager._preview_player
         if len(self):
@@ -1019,7 +1021,6 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
                 return
             # if position is None:
             #     return
-            await self.set_playlist_pos(position)
             if state.listings_view.preview_mode != "full":
                 while len(self.pending_event_tasks):
                     t = self.pending_event_tasks.pop()
@@ -1087,6 +1088,12 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
                 "playlist-move", str(count), str(pos)
             )
 
+            # if pos == self.focus_position:
+            #     logger.info(f"play: {pos}")
+            await state.task_manager.preview_player.command(
+                "playlist-play-index", str(pos)
+            )
+
             logger.info(f"remove: {pos+1}")
             await state.task_manager.preview_player.command(
                 "playlist-remove", str(pos+1)
@@ -1098,11 +1105,6 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
             #     )
 
 
-            # if pos == self.focus_position:
-            #     logger.info(f"play: {pos}")
-            await state.task_manager.preview_player.command(
-                "playlist-play-index", pos
-            )
 
 
     # async def download(self):

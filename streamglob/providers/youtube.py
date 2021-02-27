@@ -11,14 +11,18 @@ import shutil
 import pathlib
 import tempfile
 import itertools
+import traceback
 
 from pony.orm import *
+import aiohttp
+import aiofiles
 import dateparser
 import isodate
 import wand.image
 import wand.drawing
 import ffmpeg
-
+from orderedattrdict import AttrDict
+from async_property import async_property, async_cached_property
 
 from .feed import *
 
@@ -44,19 +48,20 @@ class YouTubeMediaListingMixin(object):
             else None
         )
 
-    @property
-    def video_info(self):
-        return parse_qs(
-            self.provider.session.get(
+    @async_cached_property
+    async def video_info(self):
+        res = await self.provider.session.get(
                 "https://www.youtube.com/get_video_info"
                 f"?video_id={self.guid}&asv=3&el=detailpage&hl=en_US"
-            ).text
+        )
+        return parse_qs(
+            await res.text()
         )
 
-    @property
-    def storyboards(self):
-
-        pr = json.loads(self.video_info["player_response"][0])
+    @async_cached_property
+    async def storyboards(self):
+        video_info = await self.video_info
+        pr = json.loads(video_info["player_response"][0])
         try:
             spec = pr["storyboards"]["playerStoryboardSpecRenderer"]["spec"]
         except KeyError:
@@ -120,10 +125,18 @@ class YouTubeMediaSourceMixin(object):
 class YouTubeMediaSource(YouTubeMediaSourceMixin, FeedMediaSource, model.InflatableMediaSource):
     pass
 
-class YouTubeSession(session.StreamSession):
+class YouTubeSession(session.AsyncStreamSession):
 
     THUMBNAIL_RESOLUTIONS = ["maxres", "standard", "high", "medium", "default"]
 
+    # def __init__(
+    #         self,
+    #         provider_id,
+    #         *args, **kwargs
+    # ):
+    #     super().__init__(provider_id, *args, **kwargs)
+    #     self.session_aio = aiohttp.ClientSession()
+    
     async def youtube_dl_query(self, query, offset=None, limit=None):
 
         logger.debug(f"youtube_dl_query: {query} {offset}, {limit}")
@@ -166,7 +179,7 @@ class YouTubeSession(session.StreamSession):
             f"&part=snippet,contentDetails"
             f"&key={self.provider.config.credentials.api_key}"
         )
-        return self.provider.session.get(url).json()
+        return await self.provider.session.session_aio.get(url).json()
 
     async def bulk_update(self, entries):
 
@@ -496,7 +509,7 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         return self._storyboards
 
     async def storyboard_for(self, listing, cfg):
-        if not listing.storyboards:
+        if not await listing.storyboards:
             return await self.thumbnail_for(listing)
 
         if listing.guid not in self.storyboards:
@@ -529,15 +542,23 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
 
         async def preview(listing):
             storyboard = await self.storyboard_for(listing, cfg)
-            await self.playlist_replace(storyboard, pos=position)
+            logger.info(storyboard)
+            await self.playlist_replace(storyboard.img_file, pos=position)
             state.loop.draw_screen()
 
-        if not listing.storyboards or listing.guid in self.storyboards:
+        if not await listing.storyboards:
             return
         if getattr(self, "preview_task", False):
             self.preview_task.cancel()
         self.preview_task = state.event_loop.create_task(preview(listing))
         # await self.preview_task
+
+    async def preview_duration(self, cfg, listing):
+        if cfg.mode == "storyboard":
+            storyboard = await self.storyboard_for(listing, cfg)
+            return storyboard.duration
+        else:
+            return await super().preview_duration(cfg, listing)
 
     # FIXME: share temp dir with player and other modules
     @property
@@ -553,11 +574,18 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         else:
             dest = path
 
-        with requests.get(url, stream=True) as res:
-            if res.status_code != 200:
+        async with self.provider.session.get(url) as res:
+            try:
+                res.raise_for_status()
+            except:
+                logger.error("".join(traceback.format_exc()))
                 return None
-            with open(dest, 'wb') as f:
-                shutil.copyfileobj(res.raw, f)
+            async with aiofiles.open(dest, mode="wb") as f:
+                while True:
+                    chunk = await res.content.read(64*1024)
+                    if not chunk:
+                        break
+                    await f.write(chunk)
 
     async def make_preview_storyboard(self, listing, cfg):
 
@@ -569,31 +597,34 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
 
         inset_scale = cfg.scale or 0.25
         inset_offset = cfg.offset or 0
-        frame_rate = cfg.frame_rate or 1
         border_color = cfg.border.color or "black"
         border_width = cfg.border.width or 1
         tile_skip = cfg.skip or None
 
-        thumbnail = await self.thumbnail_for(listing)
 
         board_files = []
-        for i, board in enumerate(listing.storyboards):
+        for i, board in enumerate(await listing.storyboards):
             board_file = os.path.join(self.tmp_dir, f"board.{listing.guid}.{i:02d}.jpg")
             board_files.append(board_file)
             await self.download_file(board, board_file)
+
+        thumbnail = await self.thumbnail_for(listing)
 
         thumbnail = wand.image.Image(filename=thumbnail)
         thumbnail.trim(fuzz=5)
         if thumbnail.width != PREVIEW_WIDTH:
             thumbnail.transform(resize=f"{PREVIEW_WIDTH}x{PREVIEW_HEIGHT}")
         i = 0
+        n = 0
         for board_file in board_files:
+            logger.info(board_file)
             with wand.image.Image(filename=board_file) as img:
                 for h in range(0, img.height, TILE_HEIGHT):
                     for w in range(0, img.width, TILE_WIDTH):
                         i += 1
                         if tile_skip and i % tile_skip:
                             continue
+                        n += 1
                         w_end = w + TILE_WIDTH
                         h_end = h + TILE_HEIGHT
                         with img[w:w_end, h:h_end] as tile:
@@ -606,23 +637,38 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
                                 left=thumbnail.width-tile.width-inset_offset,
                                 top=thumbnail.height-tile.height-inset_offset
                             )
-                            tile_file=os.path.join(self.tmp_dir, f"tile.{listing.guid}.{i:04d}.jpg")
+                            tile_file=os.path.join(self.tmp_dir, f"tile.{listing.guid}.{n:04d}.jpg")
                             thumbnail.save(filename=tile_file)
+
+        if cfg.frame_rate:
+            frame_rate = cfg.frame_rate
+            duration = i/frame_rate
+        elif cfg.duration:
+            duration = cfg.duration
+            frame_rate = n/duration
+        else:
+            duration = n
+            frame_rate = 1
 
         inputs = ffmpeg.concat(
             ffmpeg.input(os.path.join(self.tmp_dir, f"tile.{listing.guid}.*.jpg"),
                                       pattern_type="glob",framerate=frame_rate)
         )
         storyboard_file=os.path.join(self.tmp_dir, f"storyboard.{listing.guid}.mp4")
-        logger.info(storyboard_file)
         proc = await inputs.output(storyboard_file).run_asyncio(overwrite_output=True, quiet=True)
         await proc.wait()
-        for p in itertools.chain(
-            pathlib.Path(self.tmp_dir).glob(f"board.{listing.guid}.*"),
-            pathlib.Path(self.tmp_dir).glob(f"tile.{listing.guid}.*")
-        ):
-            p.unlink()
-        return storyboard_file
+
+        # for p in itertools.chain(
+        #     pathlib.Path(self.tmp_dir).glob(f"board.{listing.guid}.*"),
+        #     pathlib.Path(self.tmp_dir).glob(f"tile.{listing.guid}.*")
+        # ):
+        #     p.unlink()
+
+        # return storyboard_file
+        return AttrDict(
+            img_file=storyboard_file,
+            duration=duration
+        )
 
 
 class YouTubeProvider(PaginatedProviderMixin,

@@ -30,8 +30,11 @@ setup(name=name,
       },
       install_requires = [
           "aio-mpv-jsonipc",
+          "aiofiles",
+          "aiohttp"
           "aiohttp-json-rpc",
           "aiolimiter",
+          "async_property",
           "atoma",
           "bitmath",
           "ffmpeg-python @ git+https://github.com/hdk5/ffmpeg-python@asyncio_support#egg=ffmpeg-python",
