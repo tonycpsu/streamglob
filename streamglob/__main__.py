@@ -526,7 +526,7 @@ def main():
 
     providers.load()
     model.init()
-    providers.load_config()
+    providers.load_config(default=state.app_data.selected_provider)
 
     spec = None
 

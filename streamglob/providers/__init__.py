@@ -7,7 +7,7 @@ from functools import wraps
 import traceback
 
 from stevedore import extension
-from orderedattrdict import AttrDict
+from orderedattrdict import AttrDict, Tree
 
 # from .. import session
 from .. import config
@@ -52,19 +52,22 @@ def parse_uri(uri):
     return (action, p, selection, options)
 
 
-def load_config():
+def load_config(default=None):
 
     global DEFAULT_PROVIDER
 
-    for p in PROVIDERS.values():
-        p.init_config()
-
-    if len(config.settings.profile.providers):
+    if default:
+        DEFAULT_PROVIDER = default
+    elif len(config.settings.profile.providers):
         # first listed in config
         DEFAULT_PROVIDER = list(config.settings.profile.providers.keys())[0]
     else:
         # first loaded
         DEFAULT_PROVIDER = list(PROVIDERS.keys())[0]
+
+    for p in PROVIDERS.values():
+        p.init_config()
+
 
 def log_plugin_exception(manager, entrypoint, exception):
     logger.error("Failed to load {entrypoint}")
@@ -72,7 +75,7 @@ def log_plugin_exception(manager, entrypoint, exception):
 
 def load():
     global PROVIDERS
-    global DEFAULT_PROVIDER
+
     mgr = extension.ExtensionManager(
         namespace='streamglob.providers',
         on_load_failure_callback=log_plugin_exception,

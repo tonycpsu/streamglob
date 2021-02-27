@@ -1,6 +1,7 @@
 import urwid
 from panwid.keymap import *
 
+from ..state import *
 from .. import config
 from .. import providers
 from ..widgets import *
@@ -198,6 +199,8 @@ class ListingsView(StreamglobView):
             if name not in self.SETTINGS:
                 continue
             setattr(self, name, value)
+        state.app_data.selected_provider = self.provider.IDENTIFIER
+        state.app_data.save()
         self.provider.activate()
             # value = self.provider.default_filter_values.get(name, None)
             # if value:
