@@ -98,7 +98,7 @@ class RSSMediaSourceMixin(object):
             return NO_PREVIEW_URI
 
 @model.attrclass()
-class RSSMediaSource(RSSMediaSourceMixin, model.MediaSource):
+class RSSMediaSource(RSSMediaSourceMixin, FeedMediaSource):
     pass
 
 @model.attrclass()

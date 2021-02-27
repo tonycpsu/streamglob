@@ -186,8 +186,8 @@ class FeedMediaListingMixin(object):
     def body(self):
         return self.title
 
-    def validate(self):
-        return all(s.validate() for s in self.sources)
+    def check(self):
+        return all(s.check() for s in self.sources)
 
     def refresh(self):
         pass
@@ -244,7 +244,7 @@ class FeedMediaSourceMixin(object):
             except SGInvalidFilenameTemplate as e:
                 logger.error(e)
 
-    def validate(self):
+    def check(self):
         return True
 
     def refresh(self):
@@ -1268,7 +1268,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                 listing.sources = sources
                 # get last item's sort key and store it as our pagination cursor
                 cursor = getattr(listing, self.view.sort_by[0])
-                if not listing.validate():
+                if not listing.check():
                     logger.debug("listing broken, fixing...")
                     listing.refresh()
                     # have to force a reload here since sources may have changed
