@@ -31,7 +31,6 @@ from marshmallow import fields as mm_fields
 from . import config
 from . import providers
 from . import utils
-from .state import *
 from .exceptions import *
 
 CACHE_DURATION_SHORT = 60 # 60 seconds
@@ -236,7 +235,6 @@ class attrclass(object):
         cls.attach = lambda self: self
         cls.orm_class = cls
         return cls
-
 
 class MediaChannelMixin(object):
 
@@ -526,13 +524,13 @@ class ProgramMediaTaskMixin(object):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.program = state.event_loop.create_future()
-        self.proc = state.event_loop.create_future()
-        self.result = state.event_loop.create_future()
+        self.program = asyncio.get_event_loop().create_future()
+        self.proc = asyncio.get_event_loop().create_future()
+        self.result = asyncio.get_event_loop().create_future()
 
     def reset(self):
-        self.program = state.event_loop.create_future()
-        self.proc = state.event_loop.create_future()
+        self.program = asyncio.get_event_loop().create_future()
+        self.proc = asyncio.get_event_loop().create_future()
 
     def finalize(self):
         logger.debug(f"finalize program: {self.result} {self.proc} {self.proc.result().returncode}")
@@ -556,7 +554,7 @@ class PlayMediaTaskMixin(object):
     async def load_sources(self, sources, **options):
         await self.program
         proc = await self.program.result().load_source(sources, **options)
-        self.proc = state.event_loop.create_future()
+        self.proc = asyncio.get_event_loop().create_future()
         self.proc.set_result(proc)
 
 
@@ -628,6 +626,13 @@ class CacheEntry(db.Entity):
             lambda e: e.last_seen < datetime.now() - timedelta(seconds=age)
         ).delete()
 
+class ApplicationData(db.Entity):
+    """
+    Providers can use this entity to cache data that doesn't belong in the
+    configuration file or deserve a separate entity in the data model
+    """
+    settings = Required(Json, default={})
+
 
 class ProviderData(db.Entity):
     """
@@ -652,13 +657,3 @@ def init(filename=None, *args, **kwargs):
         db.generate_mapping(create_tables=True)
 
     CacheEntry.purge()
-
-def main():
-
-    foo = MediaSource.attr_class()
-    config.init()
-    raise Exception(foo.helper)
-
-
-if __name__ == "__main__":
-    main()
