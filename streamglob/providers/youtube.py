@@ -487,6 +487,7 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.storyboard_lock = asyncio.Lock()
         self.storyboard_tasks = []
 
     @property
@@ -512,8 +513,9 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         if not await listing.storyboards:
             return await self.thumbnail_for(listing)
 
-        if listing.guid not in self.storyboards:
-            self.storyboards[listing.guid] = await self.make_preview_storyboard(listing, cfg)
+        async with self.storyboard_lock:
+            if listing.guid not in self.storyboards:
+                self.storyboards[listing.guid] = await self.make_preview_storyboard(listing, cfg)
         return self.storyboards[listing.guid]
 
     def keypress(self, size, key):
@@ -578,6 +580,7 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
                 while True:
                     chunk = await res.content.read(64*1024)
                     if not chunk:
+                        await f.flush()
                         break
                     await f.write(chunk)
 
@@ -652,11 +655,11 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         proc = await inputs.output(storyboard_file).run_asyncio(overwrite_output=True, quiet=True)
         await proc.wait()
 
-        # for p in itertools.chain(
-        #     pathlib.Path(self.tmp_dir).glob(f"board.{listing.guid}.*"),
-        #     pathlib.Path(self.tmp_dir).glob(f"tile.{listing.guid}.*")
-        # ):
-        #     p.unlink()
+        for p in itertools.chain(
+            pathlib.Path(self.tmp_dir).glob(f"board.{listing.guid}.*"),
+            pathlib.Path(self.tmp_dir).glob(f"tile.{listing.guid}.*")
+        ):
+            p.unlink()
 
         # return storyboard_file
         return AttrDict(
