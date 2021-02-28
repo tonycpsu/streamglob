@@ -179,7 +179,8 @@ class YouTubeSession(session.AsyncStreamSession):
             f"&part=snippet,contentDetails"
             f"&key={self.provider.config.credentials.api_key}"
         )
-        return await self.provider.session.session_aio.get(url).json()
+        res = await self.provider.session.get(url)
+        return await res.json()
 
     async def bulk_update(self, entries):
 
@@ -336,12 +337,11 @@ class YouTubeFeed(FeedMediaChannel):
 
     CHANNEL_URL_TEMPLATE = "https://youtube.com/channel/{locator}/videos"
 
-    @property
-    @memo(region="long")
-    def rss_data(self):
+    @async_cached_property
+    async def rss_data(self):
         url = f"https://www.youtube.com/feeds/videos.xml?channel_id={self.locator}"
-        res = self.session.get(url)
-        content = res.content
+        res = await self.session.get(url)
+        content = await res.content
         tree = ET.fromstring(content)
         entries = tree.findall(
             ".//{http://www.w3.org/2005/Atom}entry"
@@ -574,11 +574,10 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
             try:
                 res.raise_for_status()
             except:
-                logger.error("".join(traceback.format_exc()))
-                return None
+                raise
             async with aiofiles.open(dest, mode="wb") as f:
                 while True:
-                    chunk = await res.content.read(64*1024)
+                    chunk = await res.content.read(1024*1024)
                     if not chunk:
                         await f.flush()
                         break
@@ -600,10 +599,18 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
 
 
         board_files = []
-        for i, board in enumerate(await listing.storyboards):
+        boards = await listing.storyboards
+        for i, board in enumerate(boards):
             board_file = os.path.join(self.tmp_dir, f"board.{listing.guid}.{i:02d}.jpg")
-            board_files.append(board_file)
-            await self.download_file(board, board_file)
+            try:
+                await self.download_file(board, board_file)
+                board_files.append(board_file)
+            except:
+                # sometimes the last one doesn't exist
+                if i == len(boards)-1:
+                    pass
+                else:
+                    logger.error("".join(traceback.format_exc()))
 
         thumbnail = await self.thumbnail_for(listing)
 
