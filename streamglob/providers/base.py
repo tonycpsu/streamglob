@@ -781,8 +781,6 @@ class SynchronizedPlayerMixin(object):
     def __init__(self, *args, **kwargs):
 
         super().__init__(*args, **kwargs)
-        if "focus" in self.signals:
-            self.on_focus_handler = urwid.connect_signal(self, "focus", self.on_focus)
         urwid.connect_signal(self, "requery", self.on_requery)
         # self.player = None
         self.player_task = None
@@ -793,7 +791,10 @@ class SynchronizedPlayerMixin(object):
         self.playlist_lock = asyncio.Lock()
 
     def on_requery(self, source, count):
+
+        self.disable_focus_handler()
         state.event_loop.create_task(self.preview_all())
+        self.enable_focus_handler()
 
     def load_more(self, position):
         while len(self.pending_event_tasks):
@@ -835,16 +836,16 @@ class SynchronizedPlayerMixin(object):
     def new_media_source(self, **kwargs):
         return model.MediaSource.attr_class(**kwargs)
 
-    # def enable_focus_handler(self):
-    #     if self.on_focus_handler:
-    #         return
-    #         # urwid.disconnect_by_key(self, "focus", self.on_focus_handler)
-    #     self.on_focus_handler = urwid.connect_signal(self, "focus", self.on_focus)
+    def enable_focus_handler(self):
+        if self.on_focus_handler:
+            return
+            # urwid.disconnect_by_key(self, "focus", self.on_focus_handler)
+        self.on_focus_handler = urwid.connect_signal(self, "focus", self.on_focus)
 
-    # def disable_focus_handler(self):
-    #     if not self.on_focus_handler:
-    #         return
-    #     self.on_focus_handler = urwid.signals.disconnect_signal_by_key(self, "focus", self.on_focus_handler)
+    def disable_focus_handler(self):
+        if not self.on_focus_handler:
+            return
+        self.on_focus_handler = urwid.signals.disconnect_signal_by_key(self, "focus", self.on_focus_handler)
 
     async def preview_listing(self, listing, **kwargs):
         await state.task_manager.preview(
@@ -853,18 +854,20 @@ class SynchronizedPlayerMixin(object):
 
     @keymap_command()
     async def preview_all(self, playlist_position=None):
-        if not playlist_position:
-            try:
-                playlist_position = self.playlist_position
-            except AttributeError:
-                playlist_position = 0
+
+        # if not playlist_position:
+        #     try:
+        #         playlist_position = self.playlist_position
+        #     except AttributeError:
+        #         playlist_position = 0
 
         if len(self.play_items):
             listing = state.task_manager.make_playlist(self.playlist_title, self.play_items)
         else:
             listing = None
 
-        await self.preview_listing(listing, playlist_position=playlist_position)
+        # await self.preview_listing(listing, playlist_position=playlist_position)
+        await self.preview_listing(listing)
 
     def playlist_pos_to_row(self, pos):
         return self.play_items[pos].row_num
@@ -1088,15 +1091,15 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
             except StopAsyncIteration:
                 pass
 
-            await state.task_manager.preview_player.command(
-                "playlist-play-index", str(pos)
-            )
-
-
             logger.debug(f"remove: {pos+1}")
             await state.task_manager.preview_player.command(
                 "playlist-remove", str(pos+1)
             )
+
+            if pos == self.playlist_position:
+                await state.task_manager.preview_player.command(
+                    "playlist-play-index", str(pos)
+                )
 
 
     # async def download(self):

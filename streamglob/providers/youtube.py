@@ -527,12 +527,6 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
                 task.cancel()
 
         super().reset(*args, **kwargs)
-        for pos, row in enumerate(self):
-            listing = row.data_source
-            if listing.guid in self.storyboards:
-                storyboard = self.storyboards[listing.guid]
-                state.event_loop.create_task(self.playlist_replace(storyboard, pos=pos))
-
 
     def on_activate(self):
         self.reset()

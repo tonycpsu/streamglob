@@ -719,10 +719,9 @@ class FeedProvider(BaseProvider):
 
 class CachedFeedProviderFooter(urwid.WidgetWrap):
 
-    def __init__(self, attrs, bars):
+    def __init__(self, parent):
 
-        self.attrs = attrs
-        self.bars = bars
+        self.parent = parent
         self.indicator_placeholder = urwid.WidgetPlaceholder(urwid.Text(""))
         self.message_placeholder = urwid.WidgetPlaceholder(urwid.Text(""))
         self._width = None
@@ -772,8 +771,8 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
             return
 
         spark_vals = [
-            (func(), attr, (f"{label}{self.attrs[name](): >3}", "black", ">" if i else "<"))
-            for i, (name, label, attr, func) in enumerate(self.bars)
+            (func(), attr, (f"{label}{self.parent.footer_attrs[name](): >3}", "black", ">" if i else "<"))
+            for i, (name, label, attr, func) in enumerate(self.parent.indicator_bars)
         ]
         # logger.error(spark_vals)
         # if not len(spark_vals):
@@ -790,7 +789,7 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
     def update_count(self):
         self.show_message(", ".join((
             f"{label}: {func()}"
-            for label, func in self.attrs.items()
+            for label, func in self.parent.footer_attrs.items()
             if label in ["refreshed", "updated"]
         )))
 
@@ -814,7 +813,7 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
         self.provider = provider
         self.body = body
         self.detail = urwid.WidgetPlaceholder(urwid.Filler(urwid.Text("")))
-        self.footer = CachedFeedProviderFooter(self.footer_attrs, self.indicator_bars)
+        self.footer = CachedFeedProviderFooter(self)
         self.pile = urwid.Pile([
             ("weight", 4, self.body),
             (1, urwid.SolidFill(u"\N{BOX DRAWINGS LIGHT HORIZONTAL}")),
