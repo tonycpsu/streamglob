@@ -625,7 +625,7 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
     async def update(self, force=False, resume=False, replace=False):
         self.provider.view.footer.show_message("Updating...")
         await self.provider.update(force=force, resume=resume, replace=replace)
-        self.reset()
+        # self.reset()
 
     # # FIXME: move to base view
     # @keymap_command
@@ -1132,9 +1132,6 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                         await feed.update(resume=resume, replace=replace)
                         # f.updated = datetime.now()
                     # commit()
-                    #
-        self.reset()
-
 
     def refresh(self):
         logger.info("+feed provider refresh")
