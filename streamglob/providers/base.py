@@ -656,15 +656,11 @@ class BaseProvider(abc.ABC):
 
     @property
     def auto_preview_enabled(self):
-        return len(self.config.auto_preview) > 0
+        return len(self.config.auto_preview.stages) > 0
 
     @property
     def auto_preview_default(self):
-        return self.config.auto_preview[0].mode if self.auto_preview_enabled else None
-
-    @property
-    def auto_preview_content(self):
-        return self.config.auto_preview.content
+        return self.config.auto_preview.stages[0].mode if self.auto_preview_enabled else None
 
     @property
     def strip_emoji(self):
@@ -992,10 +988,22 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
         row = self[row_num]
         listing = row.data_source
         source_idx = self.play_items[position].index
-        for i, cfg in enumerate(self.config.auto_preview):
+
+        logger.info(self.config.auto_preview)
+        if self.config.auto_preview.delay:
+            logger.info(f"sleeping: {self.config.auto_preview.delay}")
+            await asyncio.sleep(self.config.auto_preview.delay)
+
+        await self.set_playlist_pos(position)
+
+        if self.config.auto_preview.duration:
+            logger.info(f"sleeping: {self.config.auto_preview.duration}")
+            await asyncio.sleep(self.config.auto_preview.duration)
+
+        for i, cfg in enumerate(self.config.auto_preview.stages):
+            if self.playlist_position != position:
+                return
             logger.info(f"stage: {cfg}")
-            if i == 0:
-                await self.set_playlist_pos(position)
             if self.play_items[position].preview_mode == cfg.mode:
                 continue
             preview_fn = getattr(
@@ -1024,17 +1032,17 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
                 return
             # if position is None:
             #     return
-            if state.listings_view.preview_mode != "full":
-                while len(self.pending_event_tasks):
-                    t = self.pending_event_tasks.pop()
-                    logger.info(f"cancel {t}")
-                    t.cancel()
 
-                self.pending_event_tasks.append(
-                    asyncio.create_task(
-                        self.preview_content()
-                    )
+            while len(self.pending_event_tasks):
+                t = self.pending_event_tasks.pop()
+                logger.info(f"cancel {t}")
+                t.cancel()
+
+            self.pending_event_tasks.append(
+                asyncio.create_task(
+                    self.preview_content()
                 )
+            )
             await self.playlist_position_changed(position)
 
     def on_focus(self, source, position):
@@ -1065,7 +1073,6 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
 
     async def playlist_replace(self, url, pos=None):
 
-
         async with self.playlist_lock:
             if pos is None:
                 pos = self.playlist_position
@@ -1083,9 +1090,9 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
 
             await asyncio.sleep(0.5)
 
-            count = await state.task_manager.preview_player.command(
-                "seek", "0", "absolute"
-            )
+            # count = await state.task_manager.preview_player.command(
+            #     "set", "pause", "no"
+            # )
 
             # if pos == self.playlist_position:
             #     logger.info(f"playist-play-index: {pos}")
