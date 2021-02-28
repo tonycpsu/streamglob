@@ -855,19 +855,19 @@ class SynchronizedPlayerMixin(object):
     @keymap_command()
     async def preview_all(self, playlist_position=None):
 
-        # if not playlist_position:
-        #     try:
-        #         playlist_position = self.playlist_position
-        #     except AttributeError:
-        #         playlist_position = 0
+        if not playlist_position:
+            try:
+                playlist_position = self.playlist_position
+            except AttributeError:
+                playlist_position = 0
 
         if len(self.play_items):
             listing = state.task_manager.make_playlist(self.playlist_title, self.play_items)
         else:
             listing = None
 
-        # await self.preview_listing(listing, playlist_position=playlist_position)
-        await self.preview_listing(listing)
+        await self.preview_listing(listing, playlist_position=playlist_position)
+        # await self.preview_listing(listing)
 
     def playlist_pos_to_row(self, pos):
         return self.play_items[pos].row_num
@@ -1065,9 +1065,35 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
 
     async def playlist_replace(self, url, pos=None):
 
+
         async with self.playlist_lock:
             if pos is None:
-                pos = self.focus_position
+                pos = self.playlist_position
+
+            logger.info(f"playist_replace: {pos}, {url}")
+            self.play_items[pos].locator = url
+            await self.preview_all(playlist_position=pos)
+
+            try:
+                event = await state.task_manager.preview_player.wait_for_event(
+                    "file-loaded", 0.5
+                )
+            except StopAsyncIteration:
+                pass
+
+            await asyncio.sleep(0.5)
+
+            count = await state.task_manager.preview_player.command(
+                "seek", "0", "absolute"
+            )
+
+            # if pos == self.playlist_position:
+            #     logger.info(f"playist-play-index: {pos}")
+            #     await state.task_manager.preview_player.command(
+            #         "playlist-play-index", str(pos)
+            #     )
+
+            return
 
             count = await state.task_manager.preview_player.command(
                 "get_property", "playlist-count"
@@ -1132,7 +1158,12 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
 
     @property
     def play_items(self):
-        return [
+        if not getattr(self, "_play_items", False):
+            self.load_play_items()
+        return self._play_items
+
+    def load_play_items(self):
+        self._play_items = [
             AttrDict(
                 media_listing_id=row.data.media_listing_id,
                 title=utils.sanitize_filename(row.data.title),
@@ -1156,6 +1187,12 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
                     if not source.is_bad
             ]
         ]
+
+
+    def on_requery(self, source, count):
+        self.load_play_items()
+        super().on_requery(source, count)
+
 
     def create_play_task(self, listing, *args, **kwargs):
         if not listing:
