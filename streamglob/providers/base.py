@@ -281,7 +281,7 @@ class BaseProvider(abc.ABC):
 
     @property
     def PREVIEW_TYPES(self):
-        return ["full"]
+        return ["default"]
 
     @property
     def session(self):
@@ -325,9 +325,7 @@ class BaseProvider(abc.ABC):
         self._active = False
 
     def on_activate(self):
-        return
-        self.reset()
-        self.view.on_activate()
+        pass
 
     def on_deactivate(self):
         self.view.on_deactivate()
@@ -656,11 +654,11 @@ class BaseProvider(abc.ABC):
 
     @property
     def auto_preview_enabled(self):
-        return len(self.config.auto_preview.stages) > 0
+        return not self.config.auto_preview.disabled
 
     @property
     def auto_preview_default(self):
-        return self.config.auto_preview.stages[0].mode if self.auto_preview_enabled else None
+        return self.config.auto_preview.default if self.auto_preview_enabled else "default"
 
     @property
     def strip_emoji(self):
@@ -963,16 +961,16 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
     async def preview_content_thumbnail(self, cfg, position, listing, source_idx=0):
         logger.info(f"preview_content_thumbnail {position}")
         source = listing.sources[source_idx]
-        if source.preview_locator is None:
+        if source.locator_thumbnail is None:
             logger.info("no thumbnail")
             return
-        logger.info(f"replacing with thumbnail: {source.preview_locator} at pos {position}")
-        await self.playlist_replace(source.preview_locator, pos=position)
+        logger.info(f"replacing with thumbnail: {source.locator_thumbnail} at pos {position}")
+        await self.playlist_replace(source.locator_thumbnail, pos=position)
 
     async def preview_content_full(self, cfg, position, listing, source_idx=0):
         logger.info(f"preview_content_full {position}")
         source = listing.sources[source_idx]
-        if source.preview_locator is None:
+        if source.locator_thumbnail is None:
             logger.info("full: no thumbnail")
             return
         if source.locator is None:
@@ -1173,7 +1171,7 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
         self._play_items = [
             AttrDict(
                 media_listing_id=row.data.media_listing_id,
-                title=utils.sanitize_filename(row.data.title),
+                title=sanitize_filename(row.data.title),
                 created=row.data.created,
                 # feed=row.data.channel.name,
                 # locator=row.data.channel.locator,
@@ -1181,12 +1179,14 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
                 row_num=row_num,
                 count=len(row.data.sources),
                 media_type=source.media_type,
-                preview_mode="full" if self.provider.auto_preview_default == "full" else "thumbnail",
-                locator=(
-                    (source.locator or getattr(source, "preview_locator", None))
-                    if self.provider.auto_preview_default == "full"
-                    else (getattr(source, "preview_locator", None) or source.locator)
-                )
+                preview_mode=self.provider.auto_preview_default or "default",
+                # locator=(
+                #     (source.locator or getattr(source, "locator_thumbnail", None))
+                #     if self.provider.auto_preview_default == "full"
+                #     else (getattr(source, "locator_thumbnail", None) or source.locator)
+                # )
+                # locator=source.locator or getattr(source, "locator_thumbnail", None)
+                locator=source.locator_for_preview(state.listings_view.preview_mode)
             )
             for (row_num, row, index, source) in [
                     (row_num, row, index, source) for row_num, row in enumerate(self)

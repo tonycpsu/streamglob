@@ -101,12 +101,9 @@ class ProviderToolbar(urwid.WidgetWrap):
             AttrDict([
                 (pt.title(), pt)
                 for pt in preview_types
-                # ("Full", "full"),
-                # ("Storyboard", "storyboard"),
-                # ("Thumbnail", "thumbnail"),
             ]),
             label="Preview",
-            default=provider_config[0].mode or "full",
+            default=provider_config.default or "default",
             margin=1
         )
 
@@ -189,7 +186,10 @@ class ListingsView(StreamglobView):
         self.provider.deactivate()
         self.provider = providers.get(provider)
         self.listings_view_placeholder.original_widget = self.provider.view
-        self.toolbar.set_preview_types(self.provider.PREVIEW_TYPES, self.provider.config.auto_preview)
+        self.toolbar.set_preview_types(
+            self.provider.PREVIEW_TYPES,
+            self.provider.config.auto_preview
+        )
         if self.provider.config_is_valid:
             self.pile.focus_position = 2
         else:

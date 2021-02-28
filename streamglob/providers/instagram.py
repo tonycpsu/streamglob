@@ -66,7 +66,7 @@ class InstagramMediaSourceMixin(object):
 
     @property
     def is_bad(self):
-        return any(s in (self.locator or self.preview_locator) for s in ["0_0_0", "null.jpg"])
+        return any(s in (self.locator or self.locator_thumbnail) for s in ["0_0_0", "null.jpg"])
 
     def check(self):
         if self.media_type == "image" or self.created > datetime.now() - timedelta(hours=4):
@@ -107,7 +107,7 @@ class InstagramMediaListingMixin(object):
             listing = self.provider.LISTING_CLASS[self.media_listing_id]
             for i, src in enumerate(feed.extract_content(post)):
                 source = listing.provider.new_media_source(rank=i, **src).attach()
-                logger.error(f"{source.locator}, {source.preview_locator}")
+                logger.error(f"{source.locator}, {source.locator_thumbnail}")
                 listing.sources.add(source)
             listing.is_inflated = True
             commit()
@@ -211,7 +211,7 @@ class InstagramFeedMediaChannelMixin(object):
                 content = [
                     dict(
                         url = post.video_url,
-                        preview_url = post.display_url,
+                        url_thumbnail = post.display_url,
                         media_type = media_type,
                         shortcode = post.shortcode
                     )
@@ -220,7 +220,7 @@ class InstagramFeedMediaChannelMixin(object):
                 content = [
                     dict(
                         url = None,
-                        preview_url = post.display_url,
+                        url_thumbnail = post.display_url,
                         media_type = media_type,
                         shortcode = post.shortcode
                     )
@@ -231,7 +231,7 @@ class InstagramFeedMediaChannelMixin(object):
                 content = [
                     dict(
                         url = s.video_url if s.is_video else s.display_url,
-                        preview_url = s.display_url,
+                        url_thumbnail = s.display_url,
                         media_type = "video" if s.is_video else "image",
                         shortcode = post.shortcode
                     )
@@ -241,7 +241,7 @@ class InstagramFeedMediaChannelMixin(object):
                 content = [
                     dict(
                         url = None,
-                        preview_url = post.display_url,
+                        url_thumbnail = post.display_url,
                         media_type = media_type
                     )
                 ]
@@ -485,7 +485,7 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
 
     @property
     def PREVIEW_TYPES(self):
-        return ["full", "thumbnail"]
+        return ["thumbnail", "default", "full"]
 
 
     # @property

@@ -72,7 +72,7 @@ class TaskManager(Observable):
             m3u.write(f"#EXTM3U\n".encode("utf-8"))
             for item in items:
                 m3u.write(ITEM_TEMPLATE.format(
-                    title = item.title.strip() or "(no title)",
+                    title=(item.title or "(no title)").strip(),
                     locator=item.locator
                 ).encode("utf-8"))
             logger.info(m3u.name)

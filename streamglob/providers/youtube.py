@@ -111,7 +111,7 @@ class YouTubeMediaSourceMixin(object):
         return f"https://youtu.be/{self.listing.guid}"
 
     # @property
-    # def preview_locator(self):
+    # def locator_thumbnail(self):
     #     return f"https://i.ytimg.com/vi/{self.listing.guid}/maxresdefault.jpg"
 
     @property
@@ -168,7 +168,7 @@ class YouTubeSession(session.AsyncStreamSession):
                     title = item["title"],
                     duration_seconds = self.parse_duration(item["duration"]),
                     # url = f"https://youtu.be/{item['url']}",
-                    # preview_url = f"http://img.youtube.com/vi/{item['url']}/0.jpg"
+                    # url_thumbnail = f"http://img.youtube.com/vi/{item['url']}/0.jpg"
                 )
 
 
@@ -475,7 +475,7 @@ class YouTubeFeed(FeedMediaChannel):
                 listing = AttrDict(
                     channel = self,
                     sources = [
-                        AttrDict(media_type="video", preview_url=item.thumbnail)
+                        AttrDict(media_type="video", url_thumbnail=item.thumbnail)
                     ],
                     **item
                 )
@@ -499,7 +499,7 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
     async def thumbnail_for(self, listing):
         if listing.guid not in self.thumbnails:
             thumbnail = os.path.join(self.tmp_dir, f"thumbnail.{listing.guid}.jpg")
-            await self.download_file(listing.sources[0].preview_locator, thumbnail)
+            await self.download_file(listing.sources[0].locator_thumbnail, thumbnail)
             self.thumbnails[listing.guid] = thumbnail
         return self.thumbnails[listing.guid]
 
@@ -696,7 +696,7 @@ class YouTubeProvider(PaginatedProviderMixin,
 
     @property
     def PREVIEW_TYPES(self):
-        return ["full", "storyboard", "thumbnail"]
+        return ["default", "storyboard", "full"]
 
     def init_config(self):
         super().init_config()
