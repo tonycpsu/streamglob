@@ -154,7 +154,7 @@ class ListingsView(StreamglobView):
             self.toolbar_placeholder.original_widget = self.toolbar
             urwid.connect_signal(
                 self.toolbar, "provider_change",
-                lambda w, p: self.on_set_provider(p)
+                lambda w, p: self.set_provider(p)
             )
 
             def profile_change(p):
@@ -170,29 +170,10 @@ class ListingsView(StreamglobView):
                 self.toolbar, "preview_change",
                 lambda w, p: self.provider.reset()
             )
-        self.on_set_provider(self.provider)
-
-
-    @property
-    def profile(self):
-        return self.toolbar.profile_dropdown.value
-
-    @profile.setter
-    def profile(self, value):
-        self.toolbar.profile_dropdown.value = value
-
-    @property
-    def preview(self):
-        return self.toolbar.preview_dropdown.value
-
-    @preview.setter
-    def preview(self, value):
-        self.toolbar.preview_dropdown.value = value
-
-    def on_set_provider(self, provider):
 
         if self.provider:
             self.provider.deactivate()
+        logger.info(f"on_set_provider: {self.provider.IDENTIFIER} {self.provider.view}")
         self.provider_view_placeholder.original_widget = self.provider.view
         self.toolbar.set_preview_types(
             self.provider.PREVIEW_TYPES,
@@ -210,9 +191,23 @@ class ListingsView(StreamglobView):
         state.app_data.selected_provider = self.provider.IDENTIFIER
         state.app_data.save()
         self.provider.activate()
-            # value = self.provider.default_filter_values.get(name, None)
-            # if value:
-            #     setattr(self, name, value)
+
+
+    @property
+    def profile(self):
+        return self.toolbar.profile_dropdown.value
+
+    @profile.setter
+    def profile(self, value):
+        self.toolbar.profile_dropdown.value = value
+
+    @property
+    def preview(self):
+        return self.toolbar.preview_dropdown.value
+
+    @preview.setter
+    def preview(self, value):
+        self.toolbar.preview_dropdown.value = value
 
     def cycle_provider(self, step=1):
         self.toolbar.cycle_provider(step)
