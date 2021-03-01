@@ -1199,7 +1199,7 @@ class BAMMediaListingMixin(object):
         return {}
 
 
-@model.attrclass(BAMMediaListingMixin)
+@model.attrclass()
 class BAMMediaListing(BAMMediaListingMixin, model.MediaListing):
 
     FEED_TYPE_ORDER : typing.List[str] = [

@@ -1168,16 +1168,17 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
         return self._play_items
 
     def load_play_items(self):
+        # FIXME: this is gross...
         self._play_items = [
             AttrDict(
                 media_listing_id=row.data.media_listing_id,
-                title=sanitize_filename(row.data.title),
-                created=row.data.created,
+                title=sanitize_filename(row.data_source.title),
+                created=getattr(row.data, "created", None),
                 # feed=row.data.channel.name,
                 # locator=row.data.channel.locator,
                 index=index,
                 row_num=row_num,
-                count=len(row.data.sources),
+                count=len(row.data_source.sources) if hasattr(row.data_source, "sources") else 1,
                 media_type=source.media_type,
                 preview_mode=state.listings_view.preview_mode,
                 # locator=(
@@ -1190,7 +1191,16 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
             )
             for (row_num, row, index, source) in [
                     (row_num, row, index, source) for row_num, row in enumerate(self)
-                    for index, source in enumerate(row.data.sources)
+                    for index, source in enumerate(
+                            row.data_source.sources
+                            if hasattr(row.data_source, "sources")
+                            else [
+                                model.MediaSource.attr_class(
+                                    locator=row.data_source.cover,
+                                    media_type="image"
+                                )
+                            ]
+                    )
                     # if not source.is_bad
             ]
         ]
