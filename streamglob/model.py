@@ -38,6 +38,13 @@ CACHE_DURATION_MEDIUM = 60*60*24 # 1 day
 CACHE_DURATION_LONG = 60*60*24*30  # 30 days
 CACHE_DURATION_DEFAULT = CACHE_DURATION_SHORT
 
+BLANK_IMAGE_URI = """\
+data://image/png;base64,\
+iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAA\
+AAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=\
+"""
+
+
 db = Database()
 
 # Monkey-patch "upsert"-ish functionality into the Pony ORM db.Entity class.
@@ -303,7 +310,7 @@ class MediaSourceMixin(object):
 
     @property
     def locator_default(self):
-        return self.locator
+        return self.locator or BLANK_IMAGE_URI
 
     def locator_for_preview(self, preview_mode):
         attr_name = f"locator_{preview_mode}"
@@ -426,6 +433,10 @@ class MediaListingMixin(object):
         return providers.get(self.provider_id)
         # return self.provider.NAME.lower()
 
+    @property
+    def cover(self):
+        return BLANK_IMAGE_URI
+
 
 @attrclass()
 class MediaListing(MediaListingMixin, db.Entity):
@@ -490,6 +501,7 @@ class ChannelMediaListing(MediaListing):
 class MultiSourceMediaListing(MediaListing):
 
     sources = Set(MediaSource)
+
 
 class TitledMediaListingMixin(object):
 
