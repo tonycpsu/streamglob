@@ -31,7 +31,7 @@ setup(name=name,
       install_requires = [
           "aio-mpv-jsonipc",
           "aiofiles",
-          "aiohttp"
+          "aiohttp",
           "aiohttp-json-rpc",
           "aiolimiter",
           "async_property",
