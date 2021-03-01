@@ -299,10 +299,15 @@ class MediaSourceMixin(object):
     def locator(self):
         return self.url
 
+    @property
+    def locator_default(self):
+        return self.locator
+
     def locator_for_preview(self, preview_mode):
         attr_name = f"locator_{preview_mode}"
         attr = getattr(self.__class__, attr_name, "locator")
         if callable(attr):
+            logger.info(f"locator_for_preview: {attr}")
             return attr(self)
         elif isinstance(attr, property):
             return attr.fget(self)
@@ -402,11 +407,12 @@ class MediaSource(MediaSourceMixin, db.Entity):
 class InflatableMediaSourceMixin(object):
 
     @property
+    def locator_default(self):
+        return self.locator_thumbnail or self.locator
+
+    @property
     def locator_thumbnail(self):
         return self.url_thumbnail
-
-    def locator_for_preview(self, preview_mode):
-        return self.locator
 
     @property
     def is_inflated(self):

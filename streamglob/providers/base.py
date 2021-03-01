@@ -325,7 +325,7 @@ class BaseProvider(abc.ABC):
         self._active = False
 
     def on_activate(self):
-        pass
+        self.reset()
 
     def on_deactivate(self):
         self.view.on_deactivate()
@@ -1179,7 +1179,7 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
                 row_num=row_num,
                 count=len(row.data.sources),
                 media_type=source.media_type,
-                preview_mode=self.provider.auto_preview_default or "default",
+                preview_mode=state.listings_view.preview_mode,
                 # locator=(
                 #     (source.locator or getattr(source, "locator_thumbnail", None))
                 #     if self.provider.auto_preview_default == "full"
@@ -1194,6 +1194,7 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
                     if not source.is_bad
             ]
         ]
+        # raise Exception(self.play_items)
 
 
     def on_requery(self, source, count):

@@ -330,7 +330,9 @@ def run_gui(action, provider, **kwargs):
     tattr[6][termios.VDISCARD] = 0
     termios.tcsetattr(fileno, termios.TCSADRAIN, tattr)
 
-    state.listings_view = ListingsView(provider)
+    # state.listings_view = ListingsView(provider.IDENTIFIER)
+    state.listings_view = ListingsView()
+    state.listings_view.set_provider(provider.IDENTIFIER)
     state.files_view = FilesView()
     state.tasks_view = TasksView()
 

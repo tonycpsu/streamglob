@@ -1149,7 +1149,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
     def on_activate(self):
         super().on_activate()
         self.create_feeds()
-        self.reset()
+        # self.reset()
 
     # def on_deactivate(self):
     #     if self.view.player:

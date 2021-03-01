@@ -127,43 +127,51 @@ class ListingsView(StreamglobView):
 
     SETTINGS = ["provider", "profile", "preview"]
 
-    def __init__(self, provider):
-
-        self.provider = provider
-        self.toolbar = ProviderToolbar(self.provider.IDENTIFIER)
-        urwid.connect_signal(
-            self.toolbar, "provider_change",
-            lambda w, p: self.on_set_provider(p)
+    # def __init__(self, provider_name):
+    def __init__(self):
+        self.provider = None
+        self.provider_view_placeholder = urwid.WidgetPlaceholder(
+            urwid.Filler(urwid.Text(""))
         )
-
-        def profile_change(p):
-            config.settings.toggle_profile(p)
-            player.Player.load()
-
-        urwid.connect_signal(
-            self.toolbar, "profile_change",
-            lambda w, p: profile_change(p)
-        )
-
-        urwid.connect_signal(
-            self.toolbar, "preview_change",
-            lambda w, p: self.provider.reset()
-        )
-
-        self.listings_view_placeholder = urwid.WidgetPlaceholder(
+        self.toolbar_placeholder = urwid.WidgetPlaceholder(
             urwid.Filler(urwid.Text(""))
         )
 
         self.pile  = urwid.Pile([
-            (1, self.toolbar),
+            (1, self.toolbar_placeholder),
             (1, urwid.Filler(urwid.Divider("-"))),
-            ('weight', 1, self.listings_view_placeholder),
+            ('weight', 1, self.provider_view_placeholder),
         ])
+        self.pile.selectable = lambda: True
         super().__init__(self.pile)
-        self.on_set_provider(self.provider.IDENTIFIER)
 
-    def set_provider(self, provider):
-        self.toolbar.provider_dropdown.value = provider
+    def set_provider(self, provider_name):
+        self.provider = providers.get(provider_name)
+        if  getattr(self, "toolbar", None):
+            self.toolbar.provider_dropdown.value = self.provider.IDENTIFIER
+        else:
+            self.toolbar = ProviderToolbar(self.provider.IDENTIFIER)
+            self.toolbar_placeholder.original_widget = self.toolbar
+            urwid.connect_signal(
+                self.toolbar, "provider_change",
+                lambda w, p: self.on_set_provider(p)
+            )
+
+            def profile_change(p):
+                config.settings.toggle_profile(p)
+                player.Player.load()
+
+            urwid.connect_signal(
+                self.toolbar, "profile_change",
+                lambda w, p: profile_change(p)
+            )
+
+            urwid.connect_signal(
+                self.toolbar, "preview_change",
+                lambda w, p: self.provider.reset()
+            )
+        self.on_set_provider(self.provider)
+
 
     @property
     def profile(self):
@@ -183,9 +191,9 @@ class ListingsView(StreamglobView):
 
     def on_set_provider(self, provider):
 
-        self.provider.deactivate()
-        self.provider = providers.get(provider)
-        self.listings_view_placeholder.original_widget = self.provider.view
+        if self.provider:
+            self.provider.deactivate()
+        self.provider_view_placeholder.original_widget = self.provider.view
         self.toolbar.set_preview_types(
             self.provider.PREVIEW_TYPES,
             self.provider.config.auto_preview
