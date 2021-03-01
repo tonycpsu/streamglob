@@ -585,11 +585,11 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
 
     async def make_preview_storyboard(self, listing, cfg):
 
-        TILE_WIDTH = 160
-        TILE_HEIGHT = 90
-
         PREVIEW_WIDTH = 1280
         PREVIEW_HEIGHT = 720
+
+        TILES_X = 5
+        TILES_Y = 5
 
         inset_scale = cfg.scale or 0.25
         inset_offset = cfg.offset or 0
@@ -612,6 +612,7 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
                 else:
                     logger.error("".join(traceback.format_exc()))
 
+        logger.info(board_files)
         thumbnail = await self.thumbnail_for(listing)
 
         thumbnail = wand.image.Image(filename=thumbnail)
@@ -623,14 +624,17 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         for board_file in board_files:
             logger.info(board_file)
             with wand.image.Image(filename=board_file) as img:
-                for h in range(0, img.height, TILE_HEIGHT):
-                    for w in range(0, img.width, TILE_WIDTH):
+                tile_height = img.height // TILES_Y
+                tile_width = img.width // TILES_X
+                # import ipdb; ipdb.set_trace()
+                for h in range(0, img.height, tile_height):
+                    for w in range(0, img.width, tile_width):
                         i += 1
                         if tile_skip and i % tile_skip:
                             continue
                         n += 1
-                        w_end = w + TILE_WIDTH
-                        h_end = h + TILE_HEIGHT
+                        w_end = w + tile_width
+                        h_end = h + tile_height
                         with img[w:w_end, h:h_end] as tile:
                             clone = thumbnail.clone()
                             tile.resize(int(thumbnail.width * inset_scale),
