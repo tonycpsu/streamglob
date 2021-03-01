@@ -76,7 +76,9 @@ class FilesView(SynchronizedPlayerMixin, StreamglobView):
             filename = os.path.basename(self.browser.selection.full_path)
             try:
                 uri = MEDIA_URI_RE.search(filename).groups()[0].replace("+", "/")
-                providers.parse_uri(uri)
+                (_, provider, _, _) = providers.parse_uri(uri)
+                if provider.IDENTIFIER != state.listings_view.provider:
+                    state.listings_view.set_provider(provider.IDENTIFIER)
             except (AttributeError, IndexError):
                 pass
         else:
@@ -130,7 +132,6 @@ class FilesView(SynchronizedPlayerMixin, StreamglobView):
             title=listing.title,
             sources=sources
         )
-
 
     @property
     def play_items(self):

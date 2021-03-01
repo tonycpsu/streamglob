@@ -107,7 +107,6 @@ class InstagramMediaListingMixin(object):
             listing = self.provider.LISTING_CLASS[self.media_listing_id]
             for i, src in enumerate(feed.extract_content(post)):
                 source = listing.provider.new_media_source(rank=i, **src).attach()
-                logger.error(f"{source.locator}, {source.locator_thumbnail}")
                 listing.sources.add(source)
             listing.is_inflated = True
             commit()

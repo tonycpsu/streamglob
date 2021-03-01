@@ -944,6 +944,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.search_filter = None
         self.items_query = None
         self.filters["feed"].connect("changed", self.on_feed_change)
         self.filters["status"].connect("changed", self.on_status_change)
@@ -1167,9 +1168,10 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
             return self.feed_items_query.count()
 
     @db_session
-    def update_query(self, search_filter=None):
+    def update_query(self):
 
         logger.info("update_query")
+        # import ipdb; ipdb.set_trace()
         status_filters =  {
             "all": lambda: True,
             "unread": lambda i: i.read is None,
@@ -1195,13 +1197,14 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
 
         self.items_query = self.items_query.filter(status_filters[self.filters.status.value])
 
-        if search_filter:
-            (field, query) = re.search("(?:(\w+):)?(.*)", search_filter).groups()
+        if self.search_filter:
+            (field, query) = re.search("(?:(\w+):)?(.*)", self.search_filter).groups()
             if field and field in [a.name for a in self.LISTING_CLASS._attrs_]:
                 self.items_query = self.items_query.filter(
                     lambda i: getattr(i, field) == query
                 )
             else:
+                # raise Exception(query, self.pagination_cursor)
                 self.items_query = self.items_query.filter(
                     lambda i: query.lower() in i.title.lower()
                 )
@@ -1209,8 +1212,6 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         (sort_field, sort_desc) = self.view.sort_by
 
         if self.pagination_cursor:
-            # raise Exception(self.pagination_cursor)
-
             op = "<" if sort_desc else ">"
             self.items_query = self.items_query.filter(
                 raw_sql(f"{sort_field} {op} '{self.pagination_cursor}'")
@@ -1230,9 +1231,11 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
 
         self.view.update_count = True
 
-    def apply_search_query(self, query):
-        self.update_query(query)
-        self.refresh()
+    async def apply_search_query(self, query):
+        self.pagination_cursor=None
+        self.search_filter = query
+        self.update_query()
+        self.reset()
 
     def update_fetch_indicator(self, num):
         self.view.update_fetch_indicator(num, self.fetch_limit)

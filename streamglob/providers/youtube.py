@@ -522,17 +522,22 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         return super().keypress(size, key)
 
     def reset(self, *args, **kwargs):
+        self.cancel_pending_tasks()
+        super().reset(*args, **kwargs)
 
+    def cancel_pending_tasks(self):
         while len(self.storyboard_tasks):
             task = self.storyboard_tasks.pop()
             if not task.cancelled:
                 task.cancel()
 
-        super().reset(*args, **kwargs)
-
     def on_activate(self):
         self.reset()
         super().on_activate()
+
+    def on_deactivate(self):
+        self.cancel_pending_tasks()
+        super().on_deactivate()
 
     async def preview_content_storyboard(self, cfg, position, listing, source_idx=0):
 
@@ -544,9 +549,12 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
 
         if not await listing.storyboards:
             return
-        if getattr(self, "preview_task", False):
-            self.preview_task.cancel()
-        self.preview_task = state.event_loop.create_task(preview(listing))
+
+        # if getattr(self, "preview_task", False):
+        #     self.preview_task.cancel()
+        # self.preview_task = state.event_loop.create_task(preview(listing))
+
+        await preview(listing)
         # await self.preview_task
 
     async def preview_duration(self, cfg, listing):

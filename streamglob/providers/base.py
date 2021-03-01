@@ -371,13 +371,14 @@ class BaseProvider(abc.ABC):
 
         if getattr(self, "search_task", False):
             self.search_task.cancel()
-        self.search_task = state.event_loop.call_later(
-            1,
-            self.apply_search_query,
-            value
-        )
 
-    def apply_search_query(self, query):
+        async def apply_search_async():
+            await asyncio.sleep(1)
+            await self.apply_search_query(value)
+
+        self.search_task = state.event_loop.create_task(apply_search_async())
+
+    async def apply_search_query(self, query):
         self.view.apply_search_query(query)
 
     def parse_spec(self, spec):
