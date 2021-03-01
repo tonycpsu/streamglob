@@ -68,8 +68,8 @@ class ProviderDataTable(BaseDataTable):
         "l": "download_selection",
         "ctrl o": "strip_emoji_selection",
         "ctrl t": "translate_selection",
-        "meta o": "toggle_strip_emoji_all",
-        "meta t": "toggle_translate_all",
+        "meta O": "toggle_strip_emoji_all",
+        "meta T": "toggle_translate_all",
     }
 
     def __init__(self, provider, *args, **kwargs):
@@ -247,6 +247,7 @@ class ProviderDataTable(BaseDataTable):
 
     def apply_search_query(self, query):
         self.apply_filters([lambda row: query in row["title"]])
+        # self.reset()
 
     def clear_search_query(self):
         self.reset_filters()

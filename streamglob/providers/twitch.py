@@ -25,7 +25,7 @@ class TwitchMediaSourceMixin(object):
 
         ])
 
-@model.attrclass(TwitchMediaSourceMixin)
+@model.attrclass()
 class TwitchMediaSource(TwitchMediaSourceMixin, model.MediaSource):
     pass
 
@@ -110,9 +110,9 @@ class TwitchSession(StreamSession):
         stream = AttrDict(self.client.streams.get_stream_by_user(user_id) or {})
         logger.error(stream)
         if stream:
-            return self.provider.new_listing(
+            return AttrDict(
                 sources = [
-                    self.provider.new_media_source(
+                    AttrDict(
                         url=self.get_playlist(username),
                         media_type="video"
                     )

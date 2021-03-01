@@ -64,9 +64,9 @@ class InstagramMediaSourceMixin(object):
             ("mpv", None),
         ])
 
-    @property
-    def is_bad(self):
-        return any(s in (self.locator or self.locator_thumbnail) for s in ["0_0_0", "null.jpg"])
+    # @property
+    # def is_bad(self):
+    #     return any(s in (self.locator or self.locator_thumbnail) for s in ["0_0_0", "null.jpg"])
 
     def check(self):
         if self.media_type == "image" or self.created > datetime.now() - timedelta(hours=4):

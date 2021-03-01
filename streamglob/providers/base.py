@@ -325,7 +325,7 @@ class BaseProvider(abc.ABC):
         self._active = False
 
     def on_activate(self):
-        self.reset()
+        self. reset()
 
     def on_deactivate(self):
         self.view.on_deactivate()
@@ -650,6 +650,7 @@ class BaseProvider(abc.ABC):
     def __repr__(self):
         return f"<{type(self)}: {self.NAME}>"
 
+    @property
     def playlist_title(self):
         return f"[{self.IDENTIFIER}"
 
@@ -988,7 +989,6 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
         listing = row.data_source
         source_idx = self.play_items[position].index
 
-        logger.info(self.config.auto_preview)
         if self.config.auto_preview.delay:
             logger.info(f"sleeping: {self.config.auto_preview.delay}")
             await asyncio.sleep(self.config.auto_preview.delay)
@@ -1034,7 +1034,6 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
 
             while len(self.pending_event_tasks):
                 t = self.pending_event_tasks.pop()
-                logger.info(f"cancel {t}")
                 t.cancel()
 
             self.pending_event_tasks.append(
@@ -1192,7 +1191,7 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
             for (row_num, row, index, source) in [
                     (row_num, row, index, source) for row_num, row in enumerate(self)
                     for index, source in enumerate(row.data.sources)
-                    if not source.is_bad
+                    # if not source.is_bad
             ]
         ]
         # raise Exception(self.play_items)

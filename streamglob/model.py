@@ -246,6 +246,8 @@ class MediaChannelMixin(object):
     def session(self):
         return self.provider.session
 
+    def __str__(self):
+        return self.name
 
 
 @attrclass(MediaChannelMixin)
@@ -313,16 +315,6 @@ class MediaSourceMixin(object):
             return attr.fget(self)
         else:
             raise NotImplementedError
-
-    @property
-    def is_bad(self):
-        """
-        Subclasses can override this to check the validity of a source's URL
-        and return True if the source should be filtered or marked as such.
-
-        FIXME: this probably isn't necessary anymore
-        """
-        return False
 
     @property
     def default_name(self):

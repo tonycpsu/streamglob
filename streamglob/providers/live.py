@@ -4,6 +4,7 @@ from .base import *
 
 from dataclasses import *
 import abc
+from datetime import datetime
 
 @model.attrclass()
 class LiveStreamMediaListing(model.ChannelMediaListing, model.TitledMediaListing):
@@ -110,7 +111,6 @@ class LiveStreamProvider(BackgroundTasksMixin, BaseProvider):
     async def update(self):
         self.refresh()
 
-    @db_session
     def refresh(self):
         if self.filters.channel.value:
             channels = [self.filters.channel.selected_label]
@@ -118,16 +118,27 @@ class LiveStreamProvider(BackgroundTasksMixin, BaseProvider):
             channels = self.channels
 
         self.live_channels = list()
-        for locator in channels:
-            channel = self.CHANNEL_CLASS.orm_class.get(locator=locator)
-            if not channel:
-                raise Exception(locator)
+        with db_session:
+            for locator in channels:
+                channel = self.CHANNEL_CLASS.orm_class.get(locator=locator)
+                channel.updated = datetime.now()
+                commit()
+                if not channel:
+                    raise Exception(locator)
 
-            listing = self.check_channel(locator)
-            logger.info(f"listing: {listing}")
-            channel.updated = datetime.now()
-            # if listing and listing.channel not in [l.channel for l in self.live_channels]:
-            if listing:
+                item = self.check_channel(locator)
+                if not item:
+                    continue
+                listing = self.new_listing(
+                    channe=channel.detach(),
+                    **item
+                )
+                listing.sources = [
+                    self.new_media_source(rank=i, **dict(s))
+                    for i, s in enumerate(item.sources)
+                ]
+                logger.info(f"listing: {listing}")
+                # if listing and listing.channel not in [l.channel for l in self.live_channels]:
                 self.live_channels.append(listing)
 
         self.view.refresh()
