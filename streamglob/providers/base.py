@@ -332,7 +332,7 @@ class BaseProvider(abc.ABC):
 
     @property
     def VIEW(self):
-        return SimpleProviderView(self, ProviderDataTable)
+        return SimpleProviderView(self, ProviderDataTable(self))
 
     # @abc.abstractmethod
     def make_view(self):
