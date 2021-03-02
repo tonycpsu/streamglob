@@ -520,7 +520,7 @@ class BaseProvider(abc.ABC):
     def get_source(self, selection, **kwargs):
         sources = sorted(
             selection.sources,
-            key = lambda  s: s.rank
+            key = lambda  s: getattr(s, "rank", 0)
         )
         if not isinstance(sources, list):
             sources = [sources]
