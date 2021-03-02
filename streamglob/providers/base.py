@@ -276,6 +276,10 @@ class BaseProvider(abc.ABC):
         return model.MediaSource
 
     @property
+    def helper(self):
+        return None
+
+    @property
     def session_params(self):
         return {"proxies": config.settings.profile.get("proxies")}
 
@@ -572,7 +576,11 @@ class BaseProvider(abc.ABC):
         if media_types == {"image"}:
             downloader_spec = {None: None}
         else:
-            downloader_spec = getattr(self.config, "helpers", None) or sources[0].helper
+            downloader_spec = (
+                getattr(self.config, "helpers", None)
+                or getattr(sources[0], "helper", None)
+                or self.helper
+            )
 
         return ListingsPlayMediaTask.attr_class(
             provider=self.NAME,
