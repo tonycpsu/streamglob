@@ -26,7 +26,7 @@ class TwitchMediaSourceMixin(object):
         ])
 
 @model.attrclass()
-class TwitchMediaSource(TwitchMediaSourceMixin, model.MediaSource):
+class TwitchMediaSource(TwitchMediaSourceMixin, LiveStreamMediaSource):
     pass
 
 @model.attrclass()

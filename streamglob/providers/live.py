@@ -15,6 +15,10 @@ class ChannelsFilter(ConfigFilter):
     key = "channels"
     with_all = True
 
+@model.attrclass()
+class LiveStreamMediaSource(model.MediaSource):
+    pass
+
 
 class LiveStreamProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataTable):
 
