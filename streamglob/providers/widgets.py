@@ -110,6 +110,9 @@ class ProviderDataTable(BaseDataTable):
         return self.provider.config
 
 
+    def playlist_position(self):
+        return self.focus_position
+
     def listings(self, *args, **kwargs):
         yield from self.provider.listings(*args, **kwargs)
 
@@ -192,7 +195,13 @@ class ProviderDataTable(BaseDataTable):
         return super().keypress(size, key)
 
     async def play_selection(self):
-        raise NotImplementedError
+        row_num = self.focus_position
+        listing = self[row_num].data_source
+        index = self.playlist_position
+
+        # FIXME inner_focus comes from MultiSourceListingMixin
+        async for task in self.provider.play(listing):
+            pass
 
     async def download_selection(self):
 
