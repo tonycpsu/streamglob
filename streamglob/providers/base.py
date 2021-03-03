@@ -792,6 +792,7 @@ class SynchronizedPlayerMixin(object):
         self.pending_event_tasks = []
         self.on_focus_handler = None
         self.sync_player_playlist = False
+        self.video_filters = []
         self.playlist_lock = asyncio.Lock()
 
     def on_requery(self, source, count):
@@ -895,7 +896,7 @@ class SynchronizedPlayerMixin(object):
             return
 
         await state.task_manager.preview_player.command(
-            "vf", "del", "@title,@framerate,@upscale,@playlist"
+            "vf", "del", ",".join([f"@{f}" for f in self.video_filters])
         )
 
         await state.task_manager.preview_player.command(
@@ -909,56 +910,54 @@ class SynchronizedPlayerMixin(object):
         except StopAsyncIteration:
             pass
 
-        cfg = config.settings.profile.display.title
-        x = cfg.x or "0"
-        if isinstance(x, dict):
-            scroll_speed = x.scroll or 5
-            pause = x.scroll_pause or 3
-            x=f"w-w/{scroll_speed}*mod(if(lt(t, {pause}), 0, if(gt(text_w, w), t-{pause}, 0) ),{scroll_speed}*(w+tw/2)/w)-w"
-            # x = "t*20*lte(t*20,w/2) + w/2*gt(t*20,w/2)"
-        y = cfg.y or "0"
-        color = cfg.color or "white"
-        shadow = cfg.shadow or "black"
-        title = self.play_items[pos].title
-        font = cfg.font or "sans"
-        size = cfg.size or 50
-        alpha = cfg.alpha or 1.0
-        shadow_x = cfg.shadow_x or 1
-        shadow_y = cfg.shadow_y or 1
+
+        cfg = config.settings.profile.display.overlay
+
+        vf_framerate = "@framerate:framerate=fps=30"
+
         upscale = cfg.upscale or 1280
-
-        vf_title=f"""@title:drawtext=text=\"{title}\":fontfile=\"{font}\":\
-x=\"{x}\":y={y}:fontsize=(h/{size}):fontcolor={color}@{alpha}:\
-shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
-
-        cfg = config.settings.profile.display.playlist
-
-        x = str(cfg.x).format(title_x=x, title_y=y) if cfg.x else 10
-        y = str(cfg.y).format(title_x=x, title_y=y) if cfg.y else 40
-        if pos < len(self.play_items) - 1:
-            color = cfg.color or "d0d0d0"
-        else:
-            color = cfg.last_color or color
-
-        text = f"[{self.playlist_title}] {self.playlist_position_text}"
-
-        vf_playlist=f"""@playlist:drawtext=text=\"{text}\":fontfile=\"{font}\":\
-x=\"{x}\":y={y}:fontsize=(h/{size}):fontcolor={color}@{alpha}:\
-shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
-
         vf_scale = f"@upscale:lavfi=[scale=w=max(iw\\,{upscale}):h=-2]"
-        vf=f"@framerate:framerate=fps=30,{vf_scale},{vf_title},{vf_playlist}"
 
+        filters = [
+            vf_framerate,
+            vf_scale,
+        ]
+
+        ox = str(cfg.x or 0)
+        oy = str(cfg.y or 0)
+
+        for element, text in dict(
+                playlist=f"[{self.playlist_title}] {self.playlist_position_text}",
+                title= self.play_items[pos].title
+            ).items():
+            el_cfg = cfg.get(element)
+            color = el_cfg.color or cfg.color or "white"
+            shadow = el_cfg.shadow or cfg.shadow or "black"
+            font = el_cfg.font or cfg.font or "sans"
+            size = el_cfg.size or cfg.size or 50
+            alpha = el_cfg.alpha or cfg.alpha or 1.0
+            shadow_x = el_cfg.shadow_x or cfg.shadow_x or 1
+            shadow_y = el_cfg.shadow_y or cfg.shadow_y or 1
+            upscale = el_cfg.upscale or cfg.upscale or 1280
+
+            x = el_cfg.x or ox
+            if isinstance(x, int):
+                x = str(x)
+            if isinstance(x, dict):
+                scroll_speed = x.scroll or 5
+                pause = x.scroll_pause or 3
+                x=f"w-w/{scroll_speed}*mod(if(lt(t, {pause}), 0, if(gt(text_w, w), t-{pause}, 0) ),{scroll_speed}*(w+tw/2)/w)-w"
+            x = x.format(x=ox, y=oy)
+            y = str(el_cfg.y or cfg.x).format(x=ox, y=oy)
+            vf_text=f"""@{element}:drawtext=text=\"{text}\":fontfile=\"{font}\":\
+x=\"{x}\":y={y}:fontsize=(h/{size}):fontcolor={color}@{alpha}:\
+shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
+            filters.append(vf_text)
+
+        logger.error(filters)
         await state.task_manager.preview_player.command(
-            "vf", "add", vf
+            "vf", "add", ",".join(filters)
         )
-
-
-    # def run_queued_task(self):
-
-    #     if self.pending_event_tasks:
-    #         state.event_loop.create_task(self.queued_task())
-    #         self.pending_event_tasks = []
 
     @property
     def playlist_position(self):
