@@ -236,7 +236,10 @@ class BaseProvider(abc.ABC):
         for name, f in self.filters.items():
             value = self.default_filter_values.get(name, None)
             if value:
-                f.value = value
+                try:
+                    f.value = value
+                except ValueError:
+                    pass
 
     @property
     def default_filter_values(self):
