@@ -1,6 +1,7 @@
 import logging
 logger = logging.getLogger(__name__)
 
+import os
 import re
 from datetime import datetime
 from dataclasses import *
@@ -23,7 +24,6 @@ from .base import *
 
 from .widgets import *
 from .filters import *
-
 
 
 @model.attrclass()
@@ -274,7 +274,9 @@ class CachedFeedProviderDetailDataTable(DetailDataTable):
         # if not getattr(row, "seen", False):
         with db_session:
             source = FeedMediaSource[data.media_source_id]
-        if not source.seen:
+        if source.is_downloaded:
+            return "downloaded"
+        elif not source.seen:
             # logger.info("detail unread")
             return "unread"
         return super().row_attr_fn(position, data, row)
@@ -381,7 +383,7 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
     def query_result_count(self):
         if self.update_count:
             with db_session:
-                if not self.provider.items_query:
+                if self.provider.items_query is None:
                     return 0
                 # self._row_count = len(self.provider.feed.items)
                 self._row_count = self.provider.items_query.count()
@@ -1183,7 +1185,6 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
             self.feed_items_query = self.all_items_query
 
         self.items_query = self.feed_items_query
-
         if self.feed_filters:
             for f in self.feed_filters:
                 self.items_query = self.items_query.filter(f)

@@ -614,7 +614,8 @@ class BaseProvider(abc.ABC):
             if index is not None and index != i:
                 continue
             try:
-                filename = source.download_filename(listing=listing, index=index, **kwargs)
+                # filename = source.download_filename(listing=listing, index=index, **kwargs)
+                filename = source.download_filename(**kwargs)
             except SGInvalidFilenameTemplate as e:
                 logger.warning(f"filename template for provider {self.IDENTIFIER} is invalid: {e}")
                 raise
@@ -1389,4 +1390,4 @@ class MultiSourceListingMixin(object):
         return 0
 
     def row_attr_fn(self, position, data, row):
-        return "downloaded" if data.sources[0].is_downloaded else super().row_attr_fn(position, data, row)
+        return "downloaded" if all([s.is_downloaded for s in data.sources]) else super().row_attr_fn(position, data, row)
