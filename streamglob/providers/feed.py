@@ -11,7 +11,7 @@ from orderedattrdict import AttrDict
 from panwid.datatable import *
 from panwid.dialog import *
 from panwid.keymap import *
-from panwid.sparkwidgets import SparkBarWidget
+from panwid.sparkwidgets import SparkBarWidget, SparkBarItem
 from limiter import get_limiter, limit
 from pony.orm import *
 import timeago
@@ -739,37 +739,43 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
     def update_fetch_indicator(self, num, count):
 
         spark_vals = [
-            (num, "light green", ("{value}", "black", ">")),
-            (count-num, "dark green", (count, "black", ">"))
+            SparkBarItem(num, bcolor="light green",
+                         label="{value}", fcolor="black", align=">"),
+            SparkBarItem(count-num, bcolor="dark green",
+                         label=count, fcolor="black", align=">")
         ]
         indicator_widget = SparkBarWidget(
             spark_vals,
             int(self._width *(2/3)),
-            fit_label=True
-            # min_width=3
+            # fit_label=True
+            min_width=5
         )
         self.set_indicator_widget(indicator_widget)
         state.loop.draw_screen()
 
     def update_status_indicator(self, count=0):
 
-        if not (count and self._width):
-            self.set_indicator_widget(urwid.Text(""))
+        if not (self._width):
+            self.set_indicator_widget(urwid.Text("zzz"))
             return
 
         spark_vals = [
-            (func(), attr, (f"{label}{self.parent.footer_attrs[name](): >3}", "black", ">" if i else "<"))
+            SparkBarItem(
+                func(),
+                bcolor=attr,
+                label=f"{label}{self.parent.footer_attrs[name](): >3}",
+                fcolor="black",
+                align=">" if i else "<"
+            )
             for i, (name, label, attr, func) in enumerate(self.parent.indicator_bars)
         ]
-        # logger.error(spark_vals)
-        # if not len(spark_vals):
-        #     self.set_indicator_widget(urwid.Text(""))
-        #     return
+
         self.set_indicator_widget(
             SparkBarWidget(
                 spark_vals,
                 int(self._width *(2/3))-1, # FIXME: urwid/urwid#225 strikes again
-                fit_label=True
+                # fit_label=True
+                min_width=5
             )
         )
 
@@ -842,8 +848,8 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
         return [
             ("selected", "", "dark green",
              lambda: self.footer_attrs["selected"]()),
-            ("shown", "👓", "dark blue",
-             lambda: self.footer_attrs["shown"]()),
+            ("shown", "☼", "dark blue",
+             lambda: self.footer_attrs["shown"]() - self.footer_attrs["selected"]()),
             ("matching", "✓", "light blue",
              # lambda: self.footer_attrs["matching"]() - self.footer_attrs["shown"]()),
              lambda: self.footer_attrs["matching"]()),
