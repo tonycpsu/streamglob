@@ -373,11 +373,12 @@ class MediaSourceMixin(object):
             template = template.replace("{listing.title", "{listing.safe_title")
             try:
                 outfile = template.format(
-                    self=self, listing=listing,
+                    self=self, listing=listing or self.listing, # FIXME
                     uri="uri=" + self.uri.replace("/", "+") +"=",
-                    # index=index, num=num
                     index=self.rank+1, num=len(listing.sources) if listing else 0
                 )
+                if config.settings.profile.unicode_normalization:
+                    outfile = unicodedata.normalize(config.settings.profile.unicode_normalization, outfile)
             except Exception as e:
                 logger.exception("".join(traceback.format_exc()))
                 raise SGInvalidFilenameTemplate(str(e))
@@ -390,8 +391,27 @@ class MediaSourceMixin(object):
     def __str__(self):
         return self.locator
 
+    @property
+    def is_downloaded(self):
+        with db_session:
+            # try:
+            #     source = self.provider.MEDIA_SOURCE_CLASS[self.media_source_id]
+            # except:
+            #     return False
+            # listing = self.provider.LISTING_CLASS.orm_class[self.listing.media_listing_id]
+            try:
+                # FIXME
+                filename = self.download_filename(
+                    listing=self.listing#, index=source.rank+1, num=len(self.listing.sources)
+                )
+                return os.path.exists(filename)
+            except SGInvalidFilenameTemplate as e:
+                logger.error(e)
 
-@attrclass(MediaSourceMixin)
+
+
+
+@attrclass()
 class MediaSource(MediaSourceMixin, db.Entity):
 
     media_source_id = PrimaryKey(int, auto=True)

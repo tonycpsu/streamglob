@@ -231,19 +231,6 @@ class FeedMediaSourceMixin(object):
     def uri(self):
         return f"{self.provider.IDENTIFIER}/{self.listing.channel.locator}.{self.listing.guid}"
 
-    @property
-    def is_downloaded(self):
-        with db_session:
-            try:
-                source = self.provider.MEDIA_SOURCE_CLASS[self.media_source_id]
-            except:
-                return False
-            # listing = self.provider.LISTING_CLASS.orm_class[self.listing.media_listing_id]
-            try:
-                return os.path.exists(source.download_filename(listing=source.listing))
-            except SGInvalidFilenameTemplate as e:
-                logger.error(e)
-
     def check(self):
         return True
 
