@@ -1308,12 +1308,12 @@ class DetailDataTable(ListingDataTable):
 
 
     def keypress(self, size, key):
-        if key == "home":
+        if key in ["home", "K"]:
             if self.focus_position != 0:
                 self.focus_position = 0
             else:
                 self.parent_table.focus_position = 0
-        elif key == "end":
+        elif key in ["end", "J"]:
             if self.focus_position != len(self)-1:
                 self.focus_position = len(self)-1
             else:

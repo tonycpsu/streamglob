@@ -92,6 +92,8 @@ class BaseDataTable(panwid.DataTable):
     KEYMAP = {
         "j": "keypress down",
         "k": "keypress up",
+        "J": "key_end",
+        "K": "key_home",
         "home": "key_home",
         "end": "key_end"
     }
