@@ -157,6 +157,20 @@ class FilesView(SynchronizedPlayerMixin, StreamglobView):
         self.browser.body.set_focus(next_focused)
         selection.get_parent().get_child_keys(reload=True)
 
+
+    def browse_file(self, filename):
+        if filename.startswith(self.root):
+            filename = filename[len(self.root):]
+        if filename.startswith(os.path.sep):
+            filename = filename[1:]
+        logger.info(filename)
+
+        node = self.browser.find_path(filename)
+        if not node:
+            return
+        self.browser.body.set_focus(node)
+        state.main_view.focus_widget(self)
+
     # def on_view_activate(self):
     #     state.event_loop.create_task(self.play_empty())
 

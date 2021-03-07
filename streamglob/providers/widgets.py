@@ -57,7 +57,31 @@ class FilterToolbar(urwid.WidgetWrap):
         return 0
 
 @keymapped()
-class ProviderDataTable(BaseDataTable):
+class ListingDataTable(BaseDataTable):
+
+    KEYMAP = {
+        ".": "browse_selection"
+    }
+
+    @property
+    def selected_listing(self):
+        row_num = self.focus_position
+        listing = self[row_num].data_source
+        return listing
+
+    @property
+    def selected_source(self):
+        return self.selected_listing.sources[0]
+
+    async def browse_selection(self):
+        listing = self.selected_listing
+        filename = self.selected_source.download_filename(listing=listing)
+        state.files_view.browse_file(filename)
+
+
+
+@keymapped()
+class ProviderDataTable(ListingDataTable):
 
     ui_sort = False
 

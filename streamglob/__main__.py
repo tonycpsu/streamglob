@@ -254,6 +254,11 @@ class MainView(urwid.WidgetWrap):
         return self[self.focused_index]
         # return self[self.focused_pane]
 
+    def focus_widget(self, widget):
+        for i in range(len(self)):
+            if self[i] == widget:
+                self._w.set_focus_path(self.focus_paths[i])
+
     def set_focus(self, x, y):
         self._w.set_focus_path(
             [

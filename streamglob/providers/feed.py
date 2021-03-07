@@ -259,7 +259,10 @@ class CachedFeedProviderDetailBox(DetailBox):
             c for c in  self.parent_table._columns.copy()
             if not isinstance(c, DataTableDivider)
         ]
-        return CachedFeedProviderDetailDataTable(self.listing, self.parent_table, columns=columns)
+        return CachedFeedProviderDetailDataTable(
+            self.parent_table.provider,
+            self.listing, self.parent_table, columns=columns
+        )
 
 
 @keymapped()

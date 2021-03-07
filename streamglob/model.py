@@ -380,7 +380,7 @@ class MediaSourceMixin(object):
                 if config.settings.profile.unicode_normalization:
                     outfile = unicodedata.normalize(config.settings.profile.unicode_normalization, outfile)
             except Exception as e:
-                import ipdb; ipdb.set_trace()
+                # import ipdb; ipdb.set_trace()
                 logger.exception("".join(traceback.format_exc()))
                 raise SGInvalidFilenameTemplate(str(e))
         else:

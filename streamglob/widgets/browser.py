@@ -238,6 +238,22 @@ class DirectoryNode(urwid.ParentNode):
         self.get_widget().expanded = False
         self.get_widget().update_expanded_icon()
 
+
+    def find_path(self, path):
+        d, p = os.path.split(path)
+        node = self.get_first_child()
+        while True:
+            if not d:
+                if node.get_key() == p:
+                    return node
+            elif node.get_key() == d:
+                node.expand()
+                return node.find_path(p) or node
+            node = node.next_sibling()
+            if not node:
+                break
+
+
     @property
     def full_path(self):
         path = []
@@ -446,6 +462,8 @@ class FileBrowser(urwid.WidgetWrap):
             if not node:
                 break
 
+    def find_path(self, path):
+        return self.tree_root.find_path(path)
 
     # return dir_sep().join(w.get_display_text() for w in self.body.get_focus())
 

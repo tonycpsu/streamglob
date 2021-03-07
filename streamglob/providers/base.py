@@ -1250,6 +1250,7 @@ class DetailBox(urwid.WidgetWrap):
         columns = self.parent_table.columns.copy()
         next(c for c in columns if c.name=="title").truncate = True
         return DetailDataTable(
+            self.parent_table.provider,
             self.listing,
             self.parent_table, columns=columns
         )
@@ -1263,7 +1264,7 @@ class DetailBox(urwid.WidgetWrap):
 
 
 @keymapped()
-class DetailDataTable(BaseDataTable):
+class DetailDataTable(ListingDataTable):
 
     # KEYMAP = {
     #     "home": "key_home",
@@ -1272,10 +1273,23 @@ class DetailDataTable(BaseDataTable):
 
     with_header = False
 
-    def __init__(self, listing, parent_table, columns=None):
+    def __init__(self, provider, listing, parent_table, columns=None):
+        self.provider = provider
         self.listing = listing
         self.parent_table = parent_table
         super().__init__(columns=columns)
+
+    @property
+    def selected_listing(self):
+        listing_id = self.selected_source.listing.media_listing_id
+        with db_session:
+            return self.provider.LISTING_CLASS[listing_id].detach()
+
+    @property
+    def selected_source(self):
+        source_id = self[self.focus_position].data_source.media_source_id
+        with db_session:
+            return self.provider.MEDIA_SOURCE_CLASS[source_id].detach()
 
     # def key_home(self):
     #     # raise Exception
