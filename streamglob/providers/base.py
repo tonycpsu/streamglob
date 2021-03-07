@@ -934,12 +934,12 @@ class SynchronizedPlayerMixin(object):
         oy = str(cfg.y or 0)
 
 
-        box_color = cfg.box.color or "000000"
-        box_alpha = cfg.box.alpha or 0.5
+        box_color = cfg.box.color.default or "000000@0.5"
+        if self.playlist_position == len(self.play_items)-1:
+            box_color = cfg.box.color.end or box_color
         padding = cfg.text.padding or 0
 
-        vf_box = f"@box:drawbox=x={ox}:y={oy}:w=iw:h=(ih/{cfg.text.size or 50}*2)+{padding}:color={box_color}@{box_alpha}:t=fill"
-        logger.info(vf_box)
+        vf_box = f"@box:drawbox=x={ox}:y={oy}:w=iw:h=(ih/{cfg.text.size or 50}*2)+{padding}:color={box_color}:t=fill"
         filters = [
             vf_framerate,
             vf_scale,
@@ -957,7 +957,6 @@ class SynchronizedPlayerMixin(object):
             shadow = el_cfg.text.shadow or cfg.text.shadow or "black"
             font = el_cfg.text.font or cfg.text.font or "sans"
             size = el_cfg.text.size or cfg.text.size or 50
-            alpha = el_cfg.text.alpha or cfg.text.alpha or 1.0
             shadow_x = el_cfg.text.shadow_x or cfg.text.shadow_x or 1
             shadow_y = el_cfg.text.shadow_y or cfg.text.shadow_y or 1
 
@@ -971,8 +970,8 @@ class SynchronizedPlayerMixin(object):
             x = x.format(x=ox, y=oy, padding=padding)
             y = str(el_cfg.y or cfg.y).format(x=ox, y=oy, padding=padding)
             vf_text=f"""@{element}:drawtext=text=\"{text}\":fontfile=\"{font}\":\
-x=\"{x}\":y={y}:fontsize=(h/{size}):fontcolor={color}@{alpha}:\
-shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
+x=\"{x}\":y={y}:fontsize=(h/{size}):fontcolor={color}:\
+shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}"""
             filters.append(vf_text)
 
         await state.task_manager.preview_player.command(
