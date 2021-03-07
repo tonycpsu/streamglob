@@ -12,7 +12,7 @@ from orderedattrdict import AttrDict
 from panwid.datatable import *
 from panwid.dialog import *
 from panwid.keymap import *
-from panwid.sparkwidgets import SparkBarWidget, SparkBarItem
+from panwid.sparkwidgets import SparkBarWidget, SparkBarItem, ProgressBar
 from limiter import get_limiter, limit
 from pony.orm import *
 import timeago
@@ -698,8 +698,6 @@ class FeedProvider(BaseProvider):
             {}
         )
 
-        raise SGIncompleteIdentifier
-
     def apply_options(self, options):
         if "status" not in options:
             options.status = self.provider_data.get("selected_status", None)
@@ -711,15 +709,17 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
     def __init__(self, parent):
 
         self.parent = parent
+        self.position_placeholder = urwid.WidgetPlaceholder(urwid.Text(""))
         self.indicator_placeholder = urwid.WidgetPlaceholder(urwid.Text(""))
         self.message_placeholder = urwid.WidgetPlaceholder(urwid.Text(""))
         self._width = None
         self.filler = urwid.Filler(
             urwid.AttrMap(
                 urwid.Columns([
+                    ("weight", 1, urwid.Padding(self.position_placeholder)),
                     ("weight", 2, urwid.Padding(self.indicator_placeholder)),
                     ("weight", 1, urwid.Padding(self.message_placeholder)),
-                ], dividechars=1),
+                ], dividechars=0),
                 "footer"
             )
         )
@@ -730,35 +730,49 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
         update = self._width is None
         self._width = size[0]
         if update:
-            self.update_status_indicator()
+            self.update()
         return super().render(size, focus=focus)
 
     def update(self, count=0):
 
         self.update_status_indicator(count)
+        self.update_position_indicator(count)
         self.update_count()
 
     def update_fetch_indicator(self, num, count):
 
-        spark_vals = [
-            SparkBarItem(num, bcolor="light green",
-                         label="{value}", fcolor="black", align=">"),
-            SparkBarItem(count-num, bcolor="dark green",
-                         label=count, fcolor="black", align=">")
-        ]
-        indicator_widget = SparkBarWidget(
-            spark_vals,
-            int(self._width *(2/3)),
-            # fit_label=True
-            min_width=5
+        self.set_position_widget(
+            ProgressBar(
+                width=int(self._width *(1/3)), # FIXME: urwid/urwid#225 strikes again
+                maximum=count,
+                value=num,
+                progress_color="light green",
+                remaining_color="dark green"
+            )
         )
-        self.set_indicator_widget(indicator_widget)
         state.loop.draw_screen()
+
+    def update_position_indicator(self, count=0):
+
+        if not (self._width):
+            self.set_position_widget(urwid.Text(""))
+            return
+
+        self.set_position_widget(
+            ProgressBar(
+                width=int(self._width *(1/3)), # FIXME: urwid/urwid#225 strikes again
+                maximum=self.parent.footer_attrs["shown"](),
+                value=self.parent.footer_attrs["selected"](),
+                progress_color="light blue",
+                remaining_color="dark blue"
+                # min_width=5
+            )
+        )
 
     def update_status_indicator(self, count=0):
 
         if not (self._width):
-            self.set_indicator_widget(urwid.Text("zzz"))
+            self.set_indicator_widget(urwid.Text(""))
             return
 
         spark_vals = [
@@ -772,12 +786,13 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
             for i, (name, label, attr, func) in enumerate(self.parent.indicator_bars)
         ]
 
+        logger.info([i.value for i in spark_vals])
         self.set_indicator_widget(
             SparkBarWidget(
                 spark_vals,
-                int(self._width *(2/3))-1, # FIXME: urwid/urwid#225 strikes again
-                # fit_label=True
-                min_width=5
+                int(self._width *(1/2)) - 2, # FIXME: urwid/urwid#225 strikes again
+                fit_label=True
+                # min_width=5
             )
         )
 
@@ -794,6 +809,9 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
 
     def set_message_widget(self, widget):
         self.message_placeholder.original_widget = widget
+
+    def set_position_widget(self, widget):
+        self.position_placeholder.original_widget = widget
 
     def set_indicator_widget(self, widget):
         self.indicator_placeholder.original_widget = widget
@@ -825,8 +843,8 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
     def footer_attrs(self):
         if self.provider.feed:
             return AttrDict([
-                ("refreshed", lambda: timeago.format(self.provider.feed.fetched, datetime.now())),
-                ("updated", lambda: timeago.format(self.provider.feed.updated, datetime.now())),
+                ("refreshed", lambda: timeago.format(self.provider.feed.fetched, datetime.now(), "en_short")),
+                ("updated", lambda: timeago.format(self.provider.feed.updated, datetime.now(), "en_short")),
                 ("selected", lambda: self.body.focus_position+1 if len(self) else 0),
                 ("shown", lambda: len(self)),
                 ("matching", lambda: self.body.query_result_count()),
@@ -848,10 +866,6 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
     @property
     def indicator_bars(self):
         return [
-            ("selected", "", "dark green",
-             lambda: self.footer_attrs["selected"]()),
-            ("shown", "☼", "dark blue",
-             lambda: self.footer_attrs["shown"]() - self.footer_attrs["selected"]()),
             ("matching", "✓", "light blue",
              # lambda: self.footer_attrs["matching"]() - self.footer_attrs["shown"]()),
              lambda: self.footer_attrs["matching"]()),

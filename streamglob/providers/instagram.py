@@ -27,7 +27,7 @@ import json
 
 class InstagramSession(session.StreamSession):
 
-    DEFAULT_REQUESTS_PER_MINUTE = 20
+    DEFAULT_REQUESTS_PER_MINUTE = 60
 
     def __init__(
             self,
@@ -401,18 +401,25 @@ class InstagramProviderBodyView(CachedFeedProviderBodyView):
 
     @property
     def footer_attrs(self):
+        if not self.provider.feed:
+            return super().footer_attrs
+
         return AttrDict(super().footer_attrs, **AttrDict([
             ("total", lambda: self.provider.feed.attrs.get("posts", 0))
         ]))
 
+
     @property
     def indicator_bars(self):
+        if not self.provider.feed:
+            return super().indicator_bars
         return super().indicator_bars + [
             ("total", "🌐", "dark gray",
              lambda: (
                  self.footer_attrs["total"]()
-                 - self.footer_attrs["fetched"]()
-                 - self.footer_attrs["matching"]())
+                 # - self.footer_attrs["fetched"]()
+                 # - self.footer_attrs["matching"]()
+                 )
              )
         ]
 
