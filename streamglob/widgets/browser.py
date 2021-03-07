@@ -19,11 +19,9 @@ class FileBrowserTreeWidget(urwid.TreeWidget):
             return key
         if key == "right":
             self.get_node().tree.collapse_all()
-            self.expanded = True
-            self.update_expanded_icon()
+            self.get_node().expand()
         if key == "left":
-            self.expanded = False
-            self.update_expanded_icon()
+            self.get_node().collapse()
         elif self._w.selectable():
             return self.__super.keypress(size, key)
         else:
@@ -232,6 +230,14 @@ class DirectoryNode(urwid.ParentNode):
     def load_widget(self):
         return DirectoryWidget(self)
 
+    def expand(self):
+        self.get_widget().expanded = True
+        self.get_widget().update_expanded_icon()
+
+    def collapse(self):
+        self.get_widget().expanded = False
+        self.get_widget().update_expanded_icon()
+
     @property
     def full_path(self):
         path = []
@@ -433,11 +439,13 @@ class FileBrowser(urwid.WidgetWrap):
 
         node = self.tree_root.get_first_child()
         while True:
-            node.get_widget().expanded = False
-            node.get_widget().update_expanded_icon()
+            node.collapse()
+            # node.get_widget().expanded = False
+            # node.get_widget().update_expanded_icon()
             node = node.next_sibling()
             if not node:
                 break
+
 
     # return dir_sep().join(w.get_display_text() for w in self.body.get_focus())
 
