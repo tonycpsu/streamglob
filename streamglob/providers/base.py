@@ -930,39 +930,46 @@ class SynchronizedPlayerMixin(object):
         upscale = cfg.upscale or 1280
         vf_scale = f"@upscale:lavfi=[scale=w=max(iw\\,{upscale}):h=-2]"
 
+        ox = str(cfg.x or 0)
+        oy = str(cfg.y or 0)
+
+
+        box_color = cfg.box.color or "000000"
+        box_alpha = cfg.box.alpha or 0.5
+        padding = cfg.text.padding or 0
+
+        vf_box = f"@box:drawbox=x={ox}:y={oy}:w=iw:h=(ih/{cfg.text.size or 50}*2)+{padding}:color={box_color}@{box_alpha}:t=fill"
+        logger.info(vf_box)
         filters = [
             vf_framerate,
             vf_scale,
+            vf_box
         ]
-
-        ox = str(cfg.x or 0)
-        oy = str(cfg.y or 0)
 
         for element, text in dict(
                 playlist=f"[{self.playlist_title}] {self.playlist_position_text}",
                 title= self.play_items[pos].title
             ).items():
             el_cfg = cfg.get(element)
-            color = el_cfg.color.default or cfg.color.default or "white"
+            color = el_cfg.text.color.default or cfg.text.color.default or "white"
             if self.active_table.selected_source.is_downloaded:
-                color = el_cfg.color.downloaded or cfg.color.downloaded or color
-            shadow = el_cfg.shadow or cfg.shadow or "black"
-            font = el_cfg.font or cfg.font or "sans"
-            size = el_cfg.size or cfg.size or 50
-            alpha = el_cfg.alpha or cfg.alpha or 1.0
-            shadow_x = el_cfg.shadow_x or cfg.shadow_x or 1
-            shadow_y = el_cfg.shadow_y or cfg.shadow_y or 1
-            upscale = el_cfg.upscale or cfg.upscale or 1280
+                color = el_cfg.text.color.downloaded or cfg.text.color.downloaded or color
+            shadow = el_cfg.text.shadow or cfg.text.shadow or "black"
+            font = el_cfg.text.font or cfg.text.font or "sans"
+            size = el_cfg.text.size or cfg.text.size or 50
+            alpha = el_cfg.text.alpha or cfg.text.alpha or 1.0
+            shadow_x = el_cfg.text.shadow_x or cfg.text.shadow_x or 1
+            shadow_y = el_cfg.text.shadow_y or cfg.text.shadow_y or 1
 
-            x = el_cfg.x or ox
+            x = el_cfg.text.x or ox
             if isinstance(x, int):
                 x = str(x)
             if isinstance(x, dict):
                 scroll_speed = x.scroll or 5
                 pause = x.scroll_pause or 3
                 x=f"w-w/{scroll_speed}*mod(if(lt(t, {pause}), 0, if(gt(text_w, w), t-{pause}, 0) ),{scroll_speed}*(w+tw/2)/w)-w"
-            x = x.format(x=ox, y=oy)
-            y = str(el_cfg.y or cfg.x).format(x=ox, y=oy)
+            x = x.format(x=ox, y=oy, padding=padding)
+            y = str(el_cfg.y or cfg.y).format(x=ox, y=oy, padding=padding)
             vf_text=f"""@{element}:drawtext=text=\"{text}\":fontfile=\"{font}\":\
 x=\"{x}\":y={y}:fontsize=(h/{size}):fontcolor={color}@{alpha}:\
 shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
