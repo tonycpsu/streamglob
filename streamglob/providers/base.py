@@ -943,7 +943,9 @@ class SynchronizedPlayerMixin(object):
                 title= self.play_items[pos].title
             ).items():
             el_cfg = cfg.get(element)
-            color = el_cfg.color or cfg.color or "white"
+            color = el_cfg.color.default or cfg.color.default or "white"
+            if self.active_table.selected_source.is_downloaded:
+                color = el_cfg.color.downloaded or cfg.color.downloaded or color
             shadow = el_cfg.shadow or cfg.shadow or "black"
             font = el_cfg.font or cfg.font or "sans"
             size = el_cfg.size or cfg.size or 50
@@ -1288,13 +1290,13 @@ class DetailDataTable(ListingDataTable):
     def selected_listing(self):
         listing_id = self.selected_source.listing.media_listing_id
         with db_session:
-            return self.provider.LISTING_CLASS[listing_id].detach()
+            return self.provider.LISTING_CLASS[listing_id]
 
     @property
     def selected_source(self):
         source_id = self[self.focus_position].data_source.media_source_id
         with db_session:
-            return self.provider.MEDIA_SOURCE_CLASS[source_id].detach()
+            return self.provider.MEDIA_SOURCE_CLASS[source_id]
 
     # def key_home(self):
     #     # raise Exception
@@ -1354,6 +1356,10 @@ class MultiSourceListingMixin(object):
     def listings(self, offset=None, limit=None, *args, **kwargs):
         for listing in super().listings(offset=offset, limit=limit, *args, **kwargs):
             yield (listing, dict(source_count=len(listing.sources)))
+
+    @property
+    def active_table(self):
+        return self.inner_table or self
 
     def decorate(self, row, column, value):
 

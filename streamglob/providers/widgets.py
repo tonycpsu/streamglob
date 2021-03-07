@@ -64,6 +64,11 @@ class ListingDataTable(BaseDataTable):
     }
 
     @property
+    def active_table(self):
+        # subclasses can override to return an inner table
+        return self
+
+    @property
     def selected_listing(self):
         row_num = self.focus_position
         listing = self[row_num].data_source
