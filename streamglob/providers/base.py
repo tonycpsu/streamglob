@@ -420,7 +420,7 @@ class BaseProvider(abc.ABC):
                     continue
                 try:
                     self.filters[f].selected_label = value
-                except StopIteration:
+                except ValueError:
                     self.filters[f].value = value
 
     def parse_options(self, options):
