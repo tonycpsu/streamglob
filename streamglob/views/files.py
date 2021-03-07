@@ -32,8 +32,6 @@ class FilesViewEventHandler(FileSystemEventHandler):
     def on_any_event(self, event):
         self.view.updated = True
 
-MEDIA_URI_RE=re.compile("uri=(.*)=\.")
-
 @keymapped()
 class FilesView(SynchronizedPlayerMixin, StreamglobView):
 
@@ -73,14 +71,7 @@ class FilesView(SynchronizedPlayerMixin, StreamglobView):
         elif key == "D":
             self.browser.toggle_dir_sort_reverse()
         elif key == ".":
-            filename = os.path.basename(self.browser.selection.full_path)
-            try:
-                uri = MEDIA_URI_RE.search(filename).groups()[0].replace("+", "/")
-                (_, provider, _, _) = providers.parse_uri(uri)
-                if provider.IDENTIFIER != state.listings_view.provider:
-                    state.listings_view.set_provider(provider.IDENTIFIER)
-            except (AttributeError, IndexError):
-                pass
+            state.listings_view.find_source(self.browser.selection)
         else:
             return super().keypress(size, key)
 
@@ -170,6 +161,7 @@ class FilesView(SynchronizedPlayerMixin, StreamglobView):
             return
         self.browser.body.set_focus(node)
         state.main_view.focus_widget(self)
+
 
     # def on_view_activate(self):
     #     state.event_loop.create_task(self.play_empty())

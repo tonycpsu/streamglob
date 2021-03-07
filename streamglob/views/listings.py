@@ -1,3 +1,7 @@
+import logging
+logger = logging.getLogger(__name__)
+import os
+
 import urwid
 from panwid.keymap import *
 
@@ -114,6 +118,7 @@ class ProviderToolbar(urwid.WidgetWrap):
 
         self.preview_dropdown_placeholder.original_widget = self.preview_dropdown
 
+MEDIA_URI_RE=re.compile("uri=(.*)=\.")
 
 @keymapped()
 class ListingsView(StreamglobView):
@@ -234,3 +239,15 @@ class ListingsView(StreamglobView):
 
     def keypress(self, size, key):
         return super().keypress(size, key)
+
+    def find_source(self, listing):
+
+        filename = os.path.basename(listing.full_path)
+        try:
+            uri = MEDIA_URI_RE.search(filename).groups()[0].replace("+", "/")
+            (_, provider, _, _) = providers.parse_uri(uri)
+            if provider.IDENTIFIER != self.provider:
+                self.set_provider(provider.IDENTIFIER)
+        except (AttributeError, IndexError):
+            pass
+        state.main_view.focus_widget(self)
