@@ -84,6 +84,7 @@ class SimpleProviderView(BaseProviderView):
         "ctrl p": ("cycle_filter", [0, -1]),
         "ctrl n": ("cycle_filter", [0, 1]),
         "ctrl f": ("focus_filter", ["search"]),
+        "ctrl k": "clear_search_query",
         "/": ("focus_filter", ["search"]),
         "ctrl r": "reset_provider"
         # "ctrl d": "download"
@@ -152,6 +153,10 @@ class SimpleProviderView(BaseProviderView):
             lambda listing: query.lower() in listing["title"].lower()
         ])
         self.body.refresh()
+
+    def clear_search_query(self):
+        self.toolbar.filters["search"].value = ""
+        self.reset()
 
     def focus_filter(self, name):
         self.toolbar.focus_filter(name)
