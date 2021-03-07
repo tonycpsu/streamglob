@@ -366,19 +366,16 @@ class Program(object):
         return self.source.player_integrated
 
     def process_kwargs(self, kwargs):
-        logger.info(kwargs)
         program_args = {
             f"--{self.ARG_MAP.get(k)}": v
             for k, v in kwargs.items()
             if k in self.ARG_MAP
         }
-        logger.info(program_args)
 
         self.extra_args_pre += [
             f"{k}={v}"
             for k, v in program_args.items()
         ]
-        logger.info(self.extra_args_pre)
 
     async def get_output(self):
 
@@ -669,7 +666,6 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
             time.sleep(0.5)
 
     async def load_source(self, sources, **options):
-        logger.info("load_source")
         await self.ready
         self.source = sources
         for i, s in enumerate(self.source_args):
@@ -682,7 +678,7 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
                 s,
                 "replace" if i==0 else "append",
             ] + ([loadfile_options] if loadfile_options else [])
-            logger.info(cmd)
+            logger.debug(cmd)
             await self.command(*cmd)
 
         return self.proc

@@ -229,7 +229,13 @@ class FeedMediaSourceMixin(object):
 
     @property
     def uri(self):
-        return f"{self.provider.IDENTIFIER}/{self.listing.channel.locator}.{self.listing.guid}"
+        with db_session:
+            listing = self.provider.LISTING_CLASS[self.listing.media_listing_id]
+            try:
+                return f"{self.provider.IDENTIFIER}/{listing.channel.locator}.{listing.guid}"
+            except AttributeError:
+                # import ipdb; ipdb.set_trace()
+                raise
 
     def check(self):
         return True
@@ -273,7 +279,7 @@ class CachedFeedProviderDetailDataTable(DetailDataTable):
     def row_attr_fn(self, position, data, row):
         # if not getattr(row, "seen", False):
         with db_session:
-            source = FeedMediaSource[data.media_source_id]
+            source = self.parent_table.provider.MEDIA_SOURCE_CLASS.orm_class[data.media_source_id]
         if source.is_downloaded:
             return "downloaded"
         elif not source.seen:

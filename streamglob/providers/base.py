@@ -616,6 +616,7 @@ class BaseProvider(abc.ABC):
             try:
                 # filename = source.download_filename(listing=listing, index=index, **kwargs)
                 filename = source.download_filename(**kwargs)
+                filename = source.download_filename(**kwargs, listing=listing)
             except SGInvalidFilenameTemplate as e:
                 logger.warning(f"filename template for provider {self.IDENTIFIER} is invalid: {e}")
                 raise
@@ -810,6 +811,7 @@ class SynchronizedPlayerMixin(object):
             t = self.pending_event_tasks.pop()
             t.cancel()
         super().load_more(position)
+        state.event_loop.create_task(self.preview_all())
 
     def extract_sources(self, listing, **kwargs):
         return (listing.sources if listing else [], kwargs)
@@ -899,9 +901,10 @@ class SynchronizedPlayerMixin(object):
         if not state.task_manager.preview_player:
             return
 
-        await state.task_manager.preview_player.command(
-            "vf", "del", ",".join([f"@{f}" for f in self.video_filters])
-        )
+        if self.video_filters:
+            await state.task_manager.preview_player.command(
+                "vf", "del", ",".join([f"@{f}" for f in self.video_filters])
+            )
 
         await state.task_manager.preview_player.command(
             "set_property", "playlist-pos", pos
@@ -958,7 +961,6 @@ x=\"{x}\":y={y}:fontsize=(h/{size}):fontcolor={color}@{alpha}:\
 shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
             filters.append(vf_text)
 
-        logger.error(filters)
         await state.task_manager.preview_player.command(
             "vf", "add", ",".join(filters)
         )
@@ -1007,7 +1009,7 @@ shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}@{alpha}"""
         await self.set_playlist_pos(position)
 
         if self.config.auto_preview.duration:
-            logger.info(f"sleeping: {self.config.auto_preview.duration}")
+            # logger.info(f"sleeping: {self.config.auto_preview.duration}")
             await asyncio.sleep(self.config.auto_preview.duration)
 
         for i, cfg in enumerate(self.config.auto_preview.stages):

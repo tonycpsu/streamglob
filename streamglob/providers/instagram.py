@@ -119,7 +119,6 @@ class InstagramMediaListingMixin(object):
     def on_focus(self, source_count=None):
         with db_session:
             listing = self.attach() # FIXME
-            logger.info("on_focus")
             if (
                     not listing.provider.config.view.get("inflate_on_focus", False)
                     or not listing.should_inflate_on_focus
