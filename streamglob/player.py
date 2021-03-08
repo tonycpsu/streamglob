@@ -119,7 +119,9 @@ class Program(object):
 
     with_progress = False
 
-    def __init__(self, path, args=[], output_args=None,
+    args = []
+
+    def __init__(self, path, args=None, output_args=None,
                  exclude_types=None, with_progress=None,
                  stdin=None, stdout=None, stderr=None,
                  ssh_host=None,
@@ -127,9 +129,9 @@ class Program(object):
 
         self.path = path
         if isinstance(args, str):
-            self.args = args.split()
-        else:
-            self.args = args
+            self.args += args.split()
+        elif isinstance(args, list):
+            self.args += args
 
         # FIXME: only relevant for downloader/postprocessor
         if isinstance(output_args, str):
@@ -600,13 +602,23 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
         "playlist_position": "playlist-start"
     }
 
+    args = [
+        "--idle",
+        "--force-window",
+        "--no-input-default-bindings",
+        "--image-display-duration=inf",
+        "--no-focus-on-open",
+        "--no-border",
+        "--osd-level=0",
+        "--title=streamglob: ${{media-title}}"
+    ]
+
     def __init__(self, *args, **kwargs):
         self._initialized = False
         self.ready = asyncio.Future()
         super().__init__(*args, **kwargs)
         self.ipc_socket_name = None
         self._ipc_socket = None
-        self.extra_args_pre += ["--title=streamglob: ${media-title}"]
         self.create_socket()
 
     @property
