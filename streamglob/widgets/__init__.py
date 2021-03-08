@@ -240,18 +240,23 @@ class IntegerTextFilterWidget(TextFilterWidget):
 
 
 
-class BaseDropdown(Observable, panwid.Dropdown):
+@keymapped()
+class BaseDropdown(Observable, KeymapMovementMixin, panwid.Dropdown):
 
     auto_complete = True
 
     KEYMAP_GLOBAL = {
+        "movement": {
+            "ctrl up": "up",
+            "ctrl down": "down",
+        },
         "dropdown": {
             "k": "up",
             "j": "down",
             "page up": "page up",
             "page down": "page down",
-            "ctrl up": ("cycle", [1]),
-            "ctrl down": ("cycle", [-1]),
+            "ctrl up": ("cycle", [-1]),
+            "ctrl down": ("cycle", [1]),
             "home": "home",
             "end": "end",
             "/": "complete prefix",
@@ -259,13 +264,12 @@ class BaseDropdown(Observable, panwid.Dropdown):
         },
         "dropdown_dialog": {
             "esc": "cancel",
-            "/": "complete substring",
-            "?": "complete prefix",
+            "/": "complete prefix",
+            "?": "complete substring",
             "ctrl p": ("complete", [], {"step": -1, "no_wrap": True}),
             "ctrl n": ("complete", [], {"step": 1, "no_wrap": True}),
         }
     }
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         urwid.connect_signal(
@@ -275,13 +279,8 @@ class BaseDropdown(Observable, panwid.Dropdown):
         )
 
     def keypress(self, size, key):
+        return super().keypress(size, key)
 
-        if key == "ctrl up":
-            self.cycle(-1)
-        elif key == "ctrl down":
-            self.cycle(1)
-        else:
-            return super().keypress(size, key)
 
 class ScrollbackListBox(panwid.listbox.ScrollingListBox):
 
