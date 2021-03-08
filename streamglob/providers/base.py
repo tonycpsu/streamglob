@@ -933,18 +933,19 @@ class SynchronizedPlayerMixin(object):
         ox = str(cfg.x or 0)
         oy = str(cfg.y or 0)
 
-
-        box_color = cfg.box.color.default or "000000@0.5"
-        if self.playlist_position == len(self.play_items)-1:
-            box_color = cfg.box.color.end or box_color
         padding = cfg.text.padding or 0
 
-        vf_box = f"@box:drawbox=x={ox}:y={oy}:w=iw:h=(ih/{cfg.text.size or 50}*2)+{padding}:color={box_color}:t=fill"
         filters = [
             vf_framerate,
-            vf_scale,
-            vf_box
+            vf_scale
         ]
+
+        if cfg.box:
+            box_color = cfg.box.color.default or "000000@0.5"
+            if self.playlist_position == len(self.play_items)-1:
+                box_color = cfg.box.color.end or box_color
+            vf_box = f"@box:drawbox=x={ox}:y={oy}:w=iw:h=(ih/{cfg.text.size or 50}*2)+{padding}:color={box_color}:t=fill"
+            filtersappend(vf_box)
 
         for element, text in dict(
                 playlist=f"[{self.playlist_title}] {self.playlist_position_text}",
@@ -952,13 +953,18 @@ class SynchronizedPlayerMixin(object):
             ).items():
             el_cfg = cfg.get(element)
             color = el_cfg.text.color.default or cfg.text.color.default or "white"
-            if self.active_table.selected_source.is_downloaded:
+            if self.playlist_position == len(self.play_items)-1:
+                color = el_cfg.text.color.end or cfg.text.color.end or color
+            elif self.active_table.selected_source.is_downloaded:
                 color = el_cfg.text.color.downloaded or cfg.text.color.downloaded or color
-            shadow = el_cfg.text.shadow or cfg.text.shadow or "black"
+
             font = el_cfg.text.font or cfg.text.font or "sans"
             size = el_cfg.text.size or cfg.text.size or 50
-            shadow_x = el_cfg.text.shadow_x or cfg.text.shadow_x or 1
-            shadow_y = el_cfg.text.shadow_y or cfg.text.shadow_y or 1
+            shadow_color = el_cfg.text.shadow.color or cfg.text.shadow.color or "black"
+            border_color = el_cfg.text.border.color or cfg.text.border.color or "black"
+            border_width = el_cfg.text.border.width or cfg.text.border.width or 1
+            shadow_x = el_cfg.text.shadow.x or cfg.text.shadow.x or 1
+            shadow_y = el_cfg.text.shadow.y or cfg.text.shadow.y or 1
 
             x = el_cfg.text.x or ox
             if isinstance(x, int):
@@ -970,8 +976,8 @@ class SynchronizedPlayerMixin(object):
             x = x.format(x=ox, y=oy, padding=padding)
             y = str(el_cfg.y or cfg.y).format(x=ox, y=oy, padding=padding)
             vf_text=f"""@{element}:drawtext=text=\"{text}\":fontfile=\"{font}\":\
-x=\"{x}\":y={y}:fontsize=(h/{size}):fontcolor={color}:\
-shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow}"""
+x=\"{x}\":y={y}:fontsize=(h/{size}):fontcolor={color}:bordercolor={border_color}:\
+borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow_color}"""
             filters.append(vf_text)
 
         await state.task_manager.preview_player.command(
