@@ -284,15 +284,15 @@ class MainView(urwid.WidgetWrap):
         else:
             return key
 
-    # def mouse_event(self, size, event, button, col, row, focus):
-    #     try:
-    #         if self.last_focused_index != self.focused_index and hasattr(self.focused_widget, "on_view_activate"):
-    #             self.focused_widget.on_view_activate()
-    #         self.last_focused_index = self.focused_index
-    #     except StopIteration:
-    #         pass
+    def mouse_event(self, size, event, button, col, row, focus):
+        try:
+            if self.last_focused_index != self.focused_index and hasattr(self.focused_widget, "on_view_activate"):
+                self.focused_widget.on_view_activate()
+            self.last_focused_index = self.focused_index
+        except StopIteration:
+            pass
 
-        # return super().mouse_event(size, event, button, col, row, focus)
+        return super().mouse_event(size, event, button, col, row, focus)
 
     def get_column(self, y):
         return self.columns.contents[y][0]
