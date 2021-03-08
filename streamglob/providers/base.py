@@ -868,8 +868,6 @@ class SynchronizedPlayerMixin(object):
 
         cfg = config.settings.profile.display.overlay
 
-        vf_framerate = "@framerate:framerate=fps=30"
-
         upscale = cfg.upscale or 1280
         vf_scale = f"@upscale:lavfi=[scale=w=max(iw\\,{upscale}):h=-2]"
 
@@ -879,16 +877,19 @@ class SynchronizedPlayerMixin(object):
         padding = cfg.text.padding or 0
 
         filters = [
-            vf_framerate,
             vf_scale
         ]
+
+        if self.selected_source.media_type == "image":
+            vf_framerate = f"@framerate:framerate=fps={cfg.fps or 30}"
+            filters.append(vf_framerate)
 
         if cfg.box:
             box_color = cfg.box.color.default or "000000@0.5"
             if self.playlist_position == len(self.play_items)-1:
                 box_color = cfg.box.color.end or box_color
             vf_box = f"@box:drawbox=x={ox}:y={oy}:w=iw:h=(ih/{cfg.text.size or 50}*2)+{padding}:color={box_color}:t=fill"
-            filtersappend(vf_box)
+            filters.append(vf_box)
 
         for element, text in dict(
                 playlist=f"[{self.playlist_title}] {self.playlist_position_text}",
@@ -909,7 +910,7 @@ class SynchronizedPlayerMixin(object):
             shadow_x = el_cfg.text.shadow.x or cfg.text.shadow.x or 1
             shadow_y = el_cfg.text.shadow.y or cfg.text.shadow.y or 1
 
-            x = el_cfg.text.x or ox
+            x = el_cfg.x or ox
             if isinstance(x, int):
                 x = str(x)
             if isinstance(x, dict):
