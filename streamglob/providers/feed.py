@@ -1282,13 +1282,16 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                 listing.channel = listing.channel.detach()
                 listing.channel.listings = None
                 listing.sources = sources
+
                 # get last item's sort key and store it as our pagination cursor
                 cursor = getattr(listing, self.view.sort_by[0])
-                if not listing.check():
-                    logger.debug("listing broken, fixing...")
-                    listing.refresh()
-                    # have to force a reload here since sources may have changed
-                    listing = listing.attach().detach()
+
+                # if not listing.check():
+                #     logger.debug("listing broken, fixing...")
+                #     listing.refresh()
+                #     # have to force a reload here since sources may have changed
+                #     listing = listing.attach().detach()
+
                 yield listing
 
         self.pagination_cursor = cursor

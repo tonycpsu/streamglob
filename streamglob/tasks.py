@@ -8,6 +8,7 @@ import dataclasses
 import itertools
 import textwrap
 import tempfile
+import re
 
 from . import player
 from .state import *
@@ -32,6 +33,8 @@ data://image/png;base64,\
 iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAA\
 AAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=\
 """
+
+FAILED_TO_OPEN_RE=re.compile("Failed to open (.*)\\.")
 
 class TaskManager(Observable):
 
@@ -142,6 +145,24 @@ class TaskManager(Observable):
 
             await self.preview_player.controller.register_unbound_key_callback(
                 handle_mpv_key
+            )
+
+            async def on_log_message(level, prefix, text):
+                if level != "error" or prefix != "stream":
+                    return
+                try:
+                    url = FAILED_TO_OPEN_RE.search(text).groups()[0]
+                    # # logger.warn(url)
+                    # await state.listings_view.provider.on_player_event(
+                    #     "load-failure", url
+                    # )
+                    self.notify("player-load-failed", url)
+                except IndexError:
+                    pass
+
+
+            self.preview_player.controller.listen_for(
+                "log-message", on_log_message
             )
 
             def on_player_done(f):

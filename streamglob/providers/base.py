@@ -337,7 +337,7 @@ class BaseProvider(abc.ABC):
         self._active = False
 
     def on_activate(self):
-        self. reset()
+        self.reset()
 
     def on_deactivate(self):
         self.view.on_deactivate()
@@ -599,10 +599,6 @@ class BaseProvider(abc.ABC):
         )
 
 
-    def on_select(self, widget, selection):
-        # self.play(selection)
-        self.download(selection)
-
     @property
     def limit(self):
         return None
@@ -747,6 +743,8 @@ class SynchronizedPlayerMixin(object):
 
         super().__init__(*args, **kwargs)
         urwid.connect_signal(self, "requery", self.on_requery)
+
+        state.task_manager.connect("player-load-failed", self.on_player_load_failed)
         # self.player = None
         self.player_task = None
         self.queued_task = None
@@ -943,7 +941,7 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             logger.info("no thumbnail")
             return
         logger.info(f"replacing with thumbnail: {source.locator_thumbnail} at pos {position}")
-        await self.playlist_replace(source.locator_thumbnail, pos=position)
+        await self.playlist_replace(source.locator_thumbnail, idx=position)
 
     async def preview_content_full(self, cfg, position, listing, source_idx=0):
         logger.info(f"preview_content_full {position}")
@@ -955,7 +953,7 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             logger.info("no full")
             return
         logger.info(f"replacing with full: {source.locator} at pos {position}")
-        await self.playlist_replace(source.locator, pos=position)
+        await self.playlist_replace(source.locator, idx=position)
 
     async def preview_content(self):
 
@@ -1045,14 +1043,30 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             t.cancel()
         super().on_deactivate()
 
-    async def playlist_replace(self, url, pos=None):
+    def on_player_load_failed(self, url):
+        async def async_handler():
+            try:
+                old_pos = self.playlist_position
+                failed_index = next(
+                    i for i, item in enumerate(self.play_items)
+                    if item.locator == url
+                )
+                await self.playlist_replace(model.BLANK_IMAGE_URI, idx=failed_index, pos=old_pos)
+                # await self.set_playlist_pos(old_pos)
+
+            except StopIteration:
+                logger.warn(f"couldn't find {url} in play items")
+
+        asyncio.create_task(async_handler())
+
+    async def playlist_replace(self, url, idx=None, pos=None):
 
         async with self.playlist_lock:
-            if pos is None:
-                pos = self.playlist_position
+            if idx is None:
+                idx = self.playlist_position
 
-            logger.info(f"playist_replace: {pos}, {url}")
-            self.play_items[pos].locator = url
+            logger.info(f"playist_replace: {idx}, {url}")
+            self.play_items[idx].locator = url
             await self.preview_all(playlist_position=pos)
 
             try:
@@ -1062,61 +1076,6 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             except StopAsyncIteration:
                 pass
 
-            await asyncio.sleep(0.5)
-
-            # count = await state.task_manager.preview_player.command(
-            #     "set", "pause", "no"
-            # )
-
-            # if pos == self.playlist_position:
-            #     logger.info(f"playist-play-index: {pos}")
-            #     await state.task_manager.preview_player.command(
-            #         "playlist-play-index", str(pos)
-            #     )
-
-            return
-
-            count = await state.task_manager.preview_player.command(
-                "get_property", "playlist-count"
-            )
-
-            logger.debug(f"count: {count}")
-
-            await state.task_manager.preview_player.command(
-                "loadfile", url, "append"
-            )
-
-            logger.debug(f"move: {count} -> {pos}")
-            await state.task_manager.preview_player.command(
-                "playlist-move", str(count), str(pos)
-            )
-
-            try:
-                event = await state.task_manager.preview_player.wait_for_event(
-                    "playback-restart", 0.5
-                )
-            except StopAsyncIteration:
-                pass
-
-            logger.debug(f"remove: {pos+1}")
-            await state.task_manager.preview_player.command(
-                "playlist-remove", str(pos+1)
-            )
-
-            if pos == self.playlist_position:
-                await state.task_manager.preview_player.command(
-                    "playlist-play-index", str(pos)
-                )
-
-
-    # async def download(self):
-
-    #     row_num = self.focus_position
-    #     listing = self[row_num].data_source
-    #     index = self.playlist_position
-
-    #     # FIXME inner_focus comes from MultiSourceListingMixin
-    #     self.provider.download(listing, index = self.inner_focus or 0)
 
     def quit_player(self):
         try:

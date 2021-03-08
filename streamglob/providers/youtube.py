@@ -544,7 +544,7 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         async def preview(listing):
             storyboard = await self.storyboard_for(listing, cfg)
             logger.info(storyboard)
-            await self.playlist_replace(storyboard.img_file, pos=position)
+            await self.playlist_replace(storyboard.img_file, idx=position)
             state.loop.draw_screen()
 
         if not await listing.storyboards:
