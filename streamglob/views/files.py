@@ -14,6 +14,7 @@ from .. import model
 from ..utils import strip_emoji
 from .. import config
 from ..widgets import *
+from ..providers.widgets import *
 from .. import providers
 # from ..widgets.browser import FileBrowser, DirectoryNode, FileNode
 from ..providers.base import SynchronizedPlayerMixin
@@ -32,8 +33,9 @@ class FilesViewEventHandler(FileSystemEventHandler):
     def on_any_event(self, event):
         self.view.updated = True
 
+
 @keymapped()
-class FilesView(SynchronizedPlayerMixin, StreamglobView):
+class FilesView(SynchronizedPlayerMixin, PlayListingMixin, StreamglobView):
 
     signals = ["requery"]
 
@@ -128,22 +130,38 @@ class FilesView(SynchronizedPlayerMixin, StreamglobView):
     def play_items(self):
         return [
             AttrDict(
-                title="foo",
-                locator=self.browser.selection.full_path
+                title=self.selected_listing.title,
+                locator = self.selected_listing.sources[0].locator
             )
         ]
+
+    @property
+    def selected_listing(self):
+        path = self.browser.selection.full_path
+        return model.TitledMediaListing.attr_class(
+            title=os.path.basename(path),
+            sources = [
+                model.MediaSource.attr_class(
+                    provider_id="browser", # FIXME
+                    url=path
+                )
+            ]
+        )
+
+    @property
+    def selected_source(self):
+        return self.selected_listing.sources[0]
 
     def refresh(self):
         self.browser.refresh()
 
     def delete_selection(self):
-
-        focus = self.browser.body.get_focus()[1]
         selection = self.browser.selection
+        focus = self.browser.body.get_focus()[1]
         if isinstance(selection, DirectoryNode):
             # TODO: recursive delete with confirmation?
             return
-        os.remove(selection.full_path)
+        os.remove(selection.locator)
         next_focused =  selection.prev_sibling() or selection.next_sibling() or selection.get_parent()
         self.browser.body.set_focus(next_focused)
         selection.get_parent().get_child_keys(reload=True)

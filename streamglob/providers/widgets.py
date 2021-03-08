@@ -57,10 +57,10 @@ class FilterToolbar(urwid.WidgetWrap):
         return 0
 
 @keymapped()
-class ListingDataTable(BaseDataTable):
+class PlayListingMixin(object):
 
     KEYMAP = {
-        ".": "browse_selection"
+        "p": "play_selection",
     }
 
     @property
@@ -78,27 +78,93 @@ class ListingDataTable(BaseDataTable):
     def selected_source(self):
         return self.selected_listing.sources[0]
 
-    async def browse_selection(self):
+    async def play_selection(self):
         listing = self.selected_listing
-        filename = self.selected_source.download_filename(listing=listing)
-        state.files_view.browse_file(filename)
+        async for task in self.play(listing):
+            pass
 
+    async def play(self, listing, **kwargs):
+        # sources, kwargs = self.extract_sources(listing, **kwargs)
+        task = self.create_play_task(listing, **kwargs)
+        yield state.task_manager.play(task)
+
+    def create_play_task(self, listing, *args, **kwargs):
+        return model.PlayMediaTask.attr_class(
+            title=listing.title,
+            sources=listing.sources,
+            args=args,
+            kwargs=kwargs
+        )
+
+@keymapped()
+class DownloadListingMixin(object):
+
+    KEYMAP = {
+        "l": "download_selection"
+    }
+
+    @property
+    def NAME(self):
+        return "downloader"
+
+    async def download(self, listing, index=None, no_task_manager=False, **kwargs):
+        for task in self.create_download_tasks(listing, index=index, **kwargs):
+            yield state.task_manager.download(task)
+
+    async def download_selection(self):
+
+        listing = self.selected_listing
+        # FIXME inner_focus comes from MultiSourceListingMixin
+        async for task in self.download(listing, index = self.inner_focus or 0):
+            pass
+
+
+    def create_download_tasks(self, listing, index=None, downloader_spec=None, **kwargs):
+
+        sources, kwargs = self.extract_sources(listing, **kwargs)
+
+        if not isinstance(sources, list):
+            sources = [sources]
+
+        if "num" not in kwargs:
+            kwargs["num"] = len(sources)
+
+        for i, source in enumerate(sources):
+
+            if index is not None and index != i:
+                continue
+            try:
+                filename = source.download_filename(**kwargs, listing=listing)
+            except SGInvalidFilenameTemplate as e:
+                logger.warning(f"filename template is invalid: {e}")
+                raise
+            downloader_spec = downloader_spec or source.download_helper
+            task = model.DownloadMediaTask.attr_class(
+                provider = self.NAME,
+                title = utils.sanitize_filename(listing.title),
+                sources = [source],
+                listing = listing,
+                dest = filename,
+                args = (downloader_spec,),
+                kwargs = dict(index=index, **kwargs),
+                postprocessors = (self.config.get("postprocessors", None) or []).copy()
+            )
+            yield task
 
 
 @keymapped()
-class ProviderDataTable(ListingDataTable):
+class ProviderDataTable(PlayListingMixin, DownloadListingMixin, BaseDataTable):
 
     ui_sort = False
 
     signals = ["cycle_filter"]
 
     KEYMAP = {
-        "p": "play_selection",
-        "l": "download_selection",
+        ".": "browse_selection",
         "ctrl o": "strip_emoji_selection",
         "ctrl t": "translate_selection",
         "meta O": "toggle_strip_emoji_all",
-        "meta T": "toggle_translate_all",
+        "meta T": "toggle_translate_all"
     }
 
     def __init__(self, provider, *args, **kwargs):
@@ -109,6 +175,10 @@ class ProviderDataTable(ListingDataTable):
         self.strip_emoji = self.provider.strip_emoji
         self._translator = None
         super(ProviderDataTable,  self).__init__(*args, **kwargs)
+
+    @property
+    def NAME(self):
+        return self.provider.NAME
 
     @property
     def columns(self):
@@ -223,25 +293,6 @@ class ProviderDataTable(ListingDataTable):
     def keypress(self, size, key):
         return super().keypress(size, key)
 
-    async def play_selection(self):
-        row_num = self.focus_position
-        listing = self[row_num].data_source
-        index = self.playlist_position
-
-        # FIXME inner_focus comes from MultiSourceListingMixin
-        async for task in self.provider.play(listing):
-            pass
-
-    async def download_selection(self):
-
-        row_num = self.focus_position
-        listing = self[row_num].data_source
-        index = self.playlist_position
-
-        # FIXME inner_focus comes from MultiSourceListingMixin
-        async for task in self.provider.download(listing, index = self.inner_focus or 0):
-            pass
-
     def reset(self, *args, **kwargs):
         super().reset(*args, **kwargs)
         self.translate = self.provider.translate
@@ -282,6 +333,26 @@ class ProviderDataTable(ListingDataTable):
 
     def on_deactivate(self):
         state.event_loop.create_task(state.task_manager.preview(None, self))
+
+
+    def create_download_tasks(self, listing, index=None, **kwargs):
+
+        with db_session:
+            if isinstance(listing, model.InflatableMediaListing) and not listing.is_inflated:
+                listing = selection.attach()
+                state.asyncio.create_task(listing.inflate())
+                listing = listing.detach()
+
+        return super().create_download_tasks(
+            listing,
+            downloader_spec=getattr(self.provider.config, "helpers"),
+            **kwargs
+        )
+
+    async def browse_selection(self):
+        listing = self.selected_listing
+        filename = self.selected_source.download_filename(listing=listing)
+        state.files_view.browse_file(filename)
 
     def apply_search_query(self, query):
         self.apply_filters([lambda row: query in row["title"]])

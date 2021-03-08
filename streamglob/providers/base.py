@@ -598,55 +598,6 @@ class BaseProvider(abc.ABC):
             kwargs = kwargs
         )
 
-    def create_download_tasks(self, listing, index=None, **kwargs):
-
-        with db_session:
-            if isinstance(listing, model.InflatableMediaListing) and not listing.is_inflated:
-                listing = selection.attach()
-                state.asyncio.create_task(listing.inflate())
-                listing = listing.detach()
-
-        sources, kwargs = self.extract_sources(listing, **kwargs)
-
-        if not isinstance(sources, list):
-            sources = [sources]
-
-        if "num" not in kwargs:
-            kwargs["num"] = len(sources)
-
-        for i, source in enumerate(sources):
-
-            if index is not None and index != i:
-                continue
-            try:
-                # filename = source.download_filename(listing=listing, index=index, **kwargs)
-                filename = source.download_filename(**kwargs)
-                filename = source.download_filename(**kwargs, listing=listing)
-            except SGInvalidFilenameTemplate as e:
-                logger.warning(f"filename template for provider {self.IDENTIFIER} is invalid: {e}")
-                raise
-            downloader_spec = getattr(self.config, "helpers") or source.download_helper
-            task = model.DownloadMediaTask.attr_class(
-                provider = self.NAME,
-                title = sanitize_filename(listing.title),
-                sources = [source],
-                listing = listing,
-                dest = filename,
-                args = (downloader_spec,),
-                kwargs = dict(index=index, **kwargs),
-                postprocessors = (self.config.get("postprocessors", None) or []).copy()
-            )
-            yield task
-
-
-    async def play(self, listing, **kwargs):
-        # sources, kwargs = self.extract_sources(listing, **kwargs)
-        task = self.create_play_task(listing, **kwargs)
-        yield state.task_manager.play(task)
-
-    async def download(self, listing, index=None, no_task_manager=False, **kwargs):
-        for task in self.create_download_tasks(listing, index=index, **kwargs):
-            yield state.task_manager.download(task)
 
     def on_select(self, widget, selection):
         # self.play(selection)
@@ -820,14 +771,6 @@ class SynchronizedPlayerMixin(object):
 
     def extract_sources(self, listing, **kwargs):
         return (listing.sources if listing else [], kwargs)
-
-    def create_play_task(self, listing, *args, **kwargs):
-        return model.PlayMediaTask.attr_class(
-            title=listing.title,
-            sources=listing.sources,
-            args=args,
-            kwargs=kwargs
-        )
 
     async def preview_selection(self):
         if not len(self.body):
@@ -1283,7 +1226,7 @@ class DetailBox(urwid.WidgetWrap):
 
 
 @keymapped()
-class DetailDataTable(ListingDataTable):
+class DetailDataTable(PlayListingMixin, BaseDataTable):
 
     # KEYMAP = {
     #     "home": "key_home",
