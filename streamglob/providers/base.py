@@ -921,7 +921,7 @@ class SynchronizedPlayerMixin(object):
             y = str(el_cfg.y or cfg.y).format(x=ox, y=oy, padding=padding)
             vf_text=f"""@{element}:drawtext=text=\"{text}\":fontfile=\"{font}\":\
 x=\"{x}\":y={y}:fontsize=(h/{size}):fontcolor={color}:bordercolor={border_color}:\
-borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow_color}"""
+borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow_color}:expansion=none"""
             filters.append(vf_text)
 
         await state.task_manager.preview_player.command(
