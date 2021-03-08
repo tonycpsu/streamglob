@@ -728,7 +728,7 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
                     ("weight", 1, urwid.Padding(self.position_placeholder)),
                     ("weight", 2, urwid.Padding(self.indicator_placeholder)),
                     ("weight", 1, urwid.Padding(self.message_placeholder)),
-                ], dividechars=0),
+                ], dividechars=1),
                 "footer"
             )
         )
@@ -752,7 +752,7 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
 
         self.set_position_widget(
             ProgressBar(
-                width=int(self._width *(1/3)), # FIXME: urwid/urwid#225 strikes again
+                width=int(self._width *(1/4)), # FIXME: urwid/urwid#225 strikes again
                 maximum=count,
                 value=num,
                 progress_color="light green",
@@ -769,7 +769,7 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
 
         self.set_position_widget(
             ProgressBar(
-                width=int(self._width *(1/3)), # FIXME: urwid/urwid#225 strikes again
+                width=int(self._width *(1/4)), # FIXME: urwid/urwid#225 strikes again
                 maximum=self.parent.footer_attrs["shown"](),
                 value=self.parent.footer_attrs["selected"](),
                 progress_color="light blue",
