@@ -119,7 +119,7 @@ class Program(object):
 
     with_progress = False
 
-    args = []
+    default_args = []
 
     def __init__(self, path, args=None, output_args=None,
                  exclude_types=None, with_progress=None,
@@ -128,10 +128,11 @@ class Program(object):
                  **kwargs):
 
         self.path = path
+        self.args = self.default_args
         if isinstance(args, str):
-            self.args += args.split()
+            self.args = args.split()
         elif isinstance(args, list):
-            self.args += args
+            self.args = args
 
         # FIXME: only relevant for downloader/postprocessor
         if isinstance(output_args, str):
@@ -602,7 +603,7 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
         "playlist_position": "playlist-start"
     }
 
-    args = [
+    default_args = [
         "--idle",
         "--force-window",
         "--no-input-default-bindings",
