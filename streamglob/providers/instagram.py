@@ -69,7 +69,7 @@ class InstagramMediaSourceMixin(object):
     #     return any(s in (self.locator or self.locator_thumbnail) for s in ["0_0_0", "null.jpg"])
 
     def check(self):
-        if self.media_type == "image" or self.created > datetime.now() - timedelta(hours=4):
+        if self.created > datetime.now() - timedelta(hours=4):
             return True
         return self.provider.session.head(self.locator).status_code == 200
 
