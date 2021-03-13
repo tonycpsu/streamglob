@@ -282,7 +282,10 @@ class CachedFeedProviderDetailDataTable(DetailDataTable):
     def row_attr_fn(self, position, data, row):
         # if not getattr(row, "seen", False):
         with db_session:
-            source = self.parent_table.provider.MEDIA_SOURCE_CLASS.orm_class[data.media_source_id]
+            try:
+                source = self.parent_table.provider.MEDIA_SOURCE_CLASS.orm_class[data.media_source_id]
+            except pony.orm.core.ObjectNotFound:
+                return
         if source.is_downloaded:
             return "downloaded"
         elif not source.seen:
