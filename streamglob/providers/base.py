@@ -1167,8 +1167,6 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
 
 
     def create_play_task(self, listing, *args, **kwargs):
-        if not listing:
-            listing = self.empty_listing
         return self.provider.create_play_task(listing, *args, **kwargs)
 
 

@@ -71,7 +71,10 @@ class PlayListingMixin(object):
     @property
     def selected_listing(self):
         row_num = self.focus_position
-        listing = self[row_num].data_source
+        try:
+            listing = self[row_num].data_source
+        except IndexError:
+            return None
         return listing
 
     @property
@@ -80,6 +83,8 @@ class PlayListingMixin(object):
 
     async def play_selection(self):
         listing = self.selected_listing
+        if not listing:
+            return
         async for task in self.play(listing):
             pass
 
