@@ -114,8 +114,8 @@ class DownloadListingMixin(object):
     async def download_selection(self):
 
         listing = self.selected_listing
-        # FIXME inner_focus comes from MultiSourceListingMixin
-        async for task in self.download(listing, index = self.inner_focus or 0):
+        source = self.selected_source
+        async for task in self.download(listing, index=source.rank or 0):
             pass
 
 
@@ -339,13 +339,14 @@ class ProviderDataTable(PlayListingMixin, DownloadListingMixin, BaseDataTable):
 
         with db_session:
             if isinstance(listing, model.InflatableMediaListing) and not listing.is_inflated:
-                listing = selection.attach()
+                listing = listing.attach()
                 state.asyncio.create_task(listing.inflate())
                 listing = listing.detach()
 
         return super().create_download_tasks(
             listing,
             downloader_spec=getattr(self.provider.config, "helpers"),
+            index=index,
             **kwargs
         )
 

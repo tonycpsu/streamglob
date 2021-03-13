@@ -1295,6 +1295,10 @@ class MultiSourceListingMixin(object):
     def active_table(self):
         return self.inner_table or self
 
+    @property
+    def selected_source(self):
+        return self.selected_listing.sources[self.inner_focus]
+
     def decorate(self, row, column, value):
 
         if column.name == "title":
