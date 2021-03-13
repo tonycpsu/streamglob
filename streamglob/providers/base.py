@@ -1052,6 +1052,25 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
                     if item.locator == url
                 )
                 await self.playlist_replace(model.BLANK_IMAGE_URI, idx=failed_index, pos=old_pos)
+                play_item = self.play_items[failed_index]
+                source_rank = play_item.index
+                failed_listing_id = play_item.media_listing_id
+                with db_session:
+                    listing = self.provider.LISTING_CLASS[failed_listing_id]
+                    if not listing.check():
+                        logger.debug("listing broken, fixing...")
+                        listing.refresh()
+                        # have to force a reload here since sources may have changed
+                        listing = listing.attach().detach()
+                        source = next(
+                            s for s in listing.sources
+                            if s.rank == source_rank
+                        )
+                        await self.playlist_replace(
+                            source.locator, idx=failed_index, pos=old_pos
+                        )
+
+
                 # await self.set_playlist_pos(old_pos)
 
             except StopIteration:
