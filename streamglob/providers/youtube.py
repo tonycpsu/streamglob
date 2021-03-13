@@ -423,6 +423,7 @@ class YouTubeFeed(FeedMediaChannel):
                 # add in data from Google API
                 batch = [ l async for l in self.session.bulk_update(batch) ]
 
+            # import ipdb; ipdb.set_trace()
             try:
                 start = next(
                     i for i, item in enumerate(batch)
@@ -439,6 +440,8 @@ class YouTubeFeed(FeedMediaChannel):
                                  if (oldest is None
                                      or l.created <= oldest)
                                  and l.guid != oldest_guid]
+                logger.info(listings)
+
 
             except StopIteration:
                 start = None
@@ -446,6 +449,8 @@ class YouTubeFeed(FeedMediaChannel):
                 offset += limit
                 if resume:
                     continue
+                else:
+                    listings += batch
 
             if len(listings) >= limit:
                 # there's an item in this batch that's newer, so we don't need
@@ -470,7 +475,8 @@ class YouTubeFeed(FeedMediaChannel):
                 i = self.items.select(lambda i: i.guid == item["guid"]).first()
 
                 if i:
-                    raise RuntimeError(f"old listing retrieved: {i}")
+                    continue
+                    # raise RuntimeError(f"old listing retrieved: {i}")
 
                 listing = AttrDict(
                     channel = self,
@@ -630,11 +636,10 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         i = 0
         n = 0
         for board_file in board_files:
-            logger.info(board_file)
+            # logger.debug(board_file)
             with wand.image.Image(filename=board_file) as img:
                 tile_height = img.height // TILES_Y
                 tile_width = img.width // TILES_X
-                # import ipdb; ipdb.set_trace()
                 for h in range(0, img.height, tile_height):
                     for w in range(0, img.width, tile_width):
                         i += 1
