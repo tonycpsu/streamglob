@@ -161,7 +161,7 @@ class FilesView(SynchronizedPlayerMixin, PlayListingMixin, StreamglobView):
         if isinstance(selection, DirectoryNode):
             # TODO: recursive delete with confirmation?
             return
-        os.remove(selection.locator)
+        os.remove(selection.full_path)
         next_focused =  selection.prev_sibling() or selection.next_sibling() or selection.get_parent()
         self.browser.body.set_focus(next_focused)
         selection.get_parent().get_child_keys(reload=True)
