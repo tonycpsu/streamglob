@@ -1055,7 +1055,7 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
                 play_item = self.play_items[failed_index]
                 source_rank = play_item.index
                 failed_listing_id = play_item.media_listing_id
-                with db_session:
+                with db_session(optimistic=False):
                     listing = self.provider.LISTING_CLASS[failed_listing_id]
                     if not listing.check():
                         logger.debug("listing broken, fixing...")
