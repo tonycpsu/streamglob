@@ -296,7 +296,7 @@ class ChannelTreeBrowser(urwid.WidgetWrap):
                 identifier = tuple(identifier)
             node = self.tree.find_node(identifier)
             if not node:
-                raise Exception(identifier)
+                continue
             node.get_widget().mark()
             if i == 0:
                 self.listbox.focus_position = node

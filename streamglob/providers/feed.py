@@ -194,6 +194,10 @@ class FeedMediaListingMixin(object):
     def refresh(self):
         pass
 
+    @property
+    def translate_src(self):
+        return self.feed.attrs.get("translate", "auto")
+
 
 
 @model.attrclass()
@@ -211,13 +215,6 @@ class FeedMediaListing(FeedMediaListingMixin, model.ChannelMediaListing, model.T
     watched = Optional(datetime)
     downloaded = Optional(datetime)
 
-    # was_downloaded = Required(bool, default=False)
-    #
-#     @property
-#     def read(self):
-#         seen = self.sources.seen.select()
-#         return all(seen)
-# #
 
 class FeedMediaSourceMixin(object):
 
@@ -721,7 +718,7 @@ class FeedProvider(BaseProvider):
             else:
                 return node.get_leaf_keys()
 
-        logger.info(f"selection: {selection}")
+        # logger.info(f"selection: {selection}")
         if selection:
             locators = list(chain.from_iterable([
                 parse_node(node)
@@ -1162,10 +1159,11 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
 
     @property
     def feeds(self):
-        return AttrDict([
-            FeedConfig.from_kv(k, v)
-            for k, v in self.config.feeds.items()
-        ])
+        return list(self.view.all_channels)
+        # return AttrDict([
+        #     FeedConfig.from_kv(k, v)
+        #     for k, v in self.config.feeds.items()
+        # ])
         # return self.filters.feed.items
 
         # if isinstance(self.config.feeds, dict):
@@ -1185,28 +1183,21 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
     def translate(self):
         return (self.translate_src and super().translate)
 
-    @property
-    def translate_src(self):
-        # FIXME
-        return None
-        if not self.selected_channels:
-            return None
-        cfg = self.config.feeds[self.feed_entity.locator]
-        if cfg and isinstance(cfg, AttrDict):
-            return getattr(cfg, "translate", "auto")
-        return None
-
     def create_feeds(self):
 
+        all_channels = list(self.view.all_channels)
         with db_session:
-            for channel in self.view.all_channels:
+            for channel in all_channels:
+                attrs = {}
                 locator = channel.get_key()
                 value = channel.get_value()
                 if isinstance(value, dict):
-                    name = value.get("name")
+                    name = value.pop("name", None)
+                    attrs = value
                 elif value:
                     name = value
-                else:
+
+                if not name:
                     name = locator
 
                 self.FEED_CLASS.upsert(
@@ -1214,8 +1205,15 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                         provider_id=self.IDENTIFIER,
                         locator=locator
                     ),
-                    dict(name=name)
+                    dict(
+                        name=name,
+                        attrs=attrs
+                    )
                 )
+
+            for channel in self.FEED_CLASS.select():
+                if channel.locator not in [ c.get_key() for c in  all_channels ]:
+                    self.FEED_CLASS[channel.channel_id].delete()
 
 
     def feed_attrs(self, feed_name):

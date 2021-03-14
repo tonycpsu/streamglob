@@ -185,10 +185,6 @@ class ProviderDataTable(PlayListingMixin, DownloadListingMixin, BaseDataTable):
     def NAME(self):
         return self.provider.NAME
 
-    # @property
-    # def translate(self):
-    #     return self.provider.translate
-
     @property
     def columns(self):
         return [
@@ -252,7 +248,7 @@ class ProviderDataTable(PlayListingMixin, DownloadListingMixin, BaseDataTable):
             if "_title_translated" not in self.df.columns or not self.df.get(index, "_title_translated"):
                 translated = self.translator.translate(
                     self.selection.data_source.title,
-                    src=self.provider.translate_src or "auto",
+                    src=self.selection.data_source.translate_src,
                     dest=self.provider.translate_dest
                 ).text
                 self.df.set(index, "_title_translated", translated)
