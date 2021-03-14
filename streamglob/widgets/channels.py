@@ -263,6 +263,8 @@ class ChannelTreeBrowser(urwid.WidgetWrap):
         self.listbox = urwid.TreeListBox(urwid.TreeWalker(self.tree))
         self.listbox.offset_rows = 1
         super().__init__(self.listbox)
+        self.selection.get_widget().mark()
+
 
     @property
     def body(self):
