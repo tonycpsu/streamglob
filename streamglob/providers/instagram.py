@@ -400,12 +400,13 @@ class InstagramProviderBodyView(CachedFeedProviderBodyView):
 
     @property
     def footer_attrs(self):
-        return AttrDict() # FIXME
-        if not self.provider.selected_channels:
+
+        if not len(self.provider.feeds) == 1:
             return super().footer_attrs
 
+        feed = self.provider.feeds[0]
         return AttrDict(super().footer_attrs, **AttrDict([
-            ("total", lambda: self.provider.feed.attrs.get("posts", 0))
+            ("total", lambda: feed.attrs.get("posts", 0))
         ]))
 
 

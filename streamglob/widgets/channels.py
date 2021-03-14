@@ -125,7 +125,30 @@ class ChannelGroupWidget(ChannelTreeWidget):
         for node in self.get_node().get_nodes():
             node.get_widget().unmark()
 
-class ChannelNode(urwid.TreeNode):
+class ChannelPropertiesMixin(object):
+
+    @property
+    def locator(self):
+        return self.get_key()
+
+    @property
+    def name(self):
+        value = self.get_value()
+        if isinstance(value, dict):
+            name = value.get("name", None)
+        elif isinstance(value,str):
+            return value
+        return self.locator
+
+    @property
+    def attrs(self):
+        value = self.get_value()
+        if not isinstance(value, dict):
+            return {}
+        value.pop("name", None)
+        return value
+
+class ChannelNode(ChannelPropertiesMixin, urwid.TreeNode):
 
     @property
     def is_leaf(self):
@@ -144,7 +167,7 @@ class ChannelNode(urwid.TreeNode):
 
 
 
-class ChannelGroupNode(urwid.ParentNode):
+class ChannelGroupNode(ChannelPropertiesMixin, urwid.ParentNode):
 
     @property
     def is_leaf(self):

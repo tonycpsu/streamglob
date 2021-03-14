@@ -825,10 +825,6 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
 
     def update_position_indicator(self, count=0):
 
-        # FIXME
-        return
-
-
         if not (self._width):
             self.set_position_widget(urwid.Text(""))
             return
@@ -845,9 +841,6 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
         )
 
     def update_status_indicator(self, count=0):
-
-        # FIXME
-        return
 
         if not (self._width):
             self.set_indicator_widget(urwid.Text(""))
@@ -868,7 +861,7 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
         self.set_indicator_widget(
             SparkBarWidget(
                 spark_vals,
-                int(self._width *(1/2)) - 2, # FIXME: urwid/urwid#225 strikes again
+                int(self._width *(1/2)) - 5, # FIXME: urwid/urwid#225 strikes again
                 fit_label=True
                 # min_width=5
             )
@@ -964,13 +957,11 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
     @property
     def footer_attrs(self):
 
-        # FIXME
-        return AttrDict()
-
-        if self.provider.selected_channels:
+        if len(self.provider.feeds) == 1:
+            feed = self.provider.feeds[0]
             return AttrDict([
-                ("refreshed", lambda: timeago.format(self.provider.feed.fetched, datetime.now(), "en_short")),
-                ("updated", lambda: timeago.format(self.provider.feed.updated, datetime.now(), "en_short")),
+                ("refreshed", lambda: timeago.format(feed.fetched, datetime.now(), "en_short")),
+                ("updated", lambda: timeago.format(feed.updated, datetime.now(), "en_short")),
                 ("selected", lambda: self.body.focus_position+1 if len(self) else 0),
                 ("shown", lambda: len(self)),
                 ("matching", lambda: self.body.query_result_count()),
@@ -991,7 +982,6 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
 
     @property
     def indicator_bars(self):
-        return [] # FIXME
         return [
             ("matching", "✓", "light blue",
              # lambda: self.footer_attrs["matching"]() - self.footer_attrs["shown"]()),
@@ -1039,10 +1029,6 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
         return getattr(self.body, attr)
 
     def update_fetch_indicator(self, num, count):
-        # FIXME
-        return
-        if not self.provider.feed:
-            return
         self.footer.update_fetch_indicator(num, count)
 
 
@@ -1102,7 +1088,6 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         self.items_query = None
         urwid.connect_signal(self.view, "feed_change", self.on_feed_change)
         urwid.connect_signal(self.view, "feed_select", self.on_feed_select)
-        # self.filters["feed"].connect("changed", self.on_feed_change)
         self.filters["status"].connect("changed", self.on_status_change)
         self.pagination_cursor = None
         self.game_map = AttrDict()
@@ -1159,21 +1144,12 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
 
     @property
     def feeds(self):
-        return list(self.view.all_channels)
-        # return AttrDict([
-        #     FeedConfig.from_kv(k, v)
-        #     for k, v in self.config.feeds.items()
-        # ])
-        # return self.filters.feed.items
-
-        # if isinstance(self.config.feeds, dict):
-        #     return self.config.feeds
-        # else:
-        #     return AttrDict([
-        #         reversed(list(f.items())[0]) if isinstance(f, dict) else (f, f)
-        #         for f in self.config.feeds
-        #     ])
-
+        locators = [c.locator for c in self.view.selected_channels]
+        with db_session:
+            return [
+                self.FEED_CLASS.get(locator=locator)
+                for locator in locators
+            ]
 
     @property
     def fetch_limit(self):
@@ -1188,28 +1164,14 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         all_channels = list(self.view.all_channels)
         with db_session:
             for channel in all_channels:
-                attrs = {}
-                locator = channel.get_key()
-                value = channel.get_value()
-                if isinstance(value, dict):
-                    name = value.pop("name", None)
-                    attrs = value
-                elif value:
-                    name = value
 
-                if not name:
-                    name = locator
-
-                self.FEED_CLASS.upsert(
-                    dict(
-                        provider_id=self.IDENTIFIER,
-                        locator=locator
-                    ),
-                    dict(
-                        name=name,
-                        attrs=attrs
-                    )
+                feed = self.FEED_CLASS.get(
+                    provider_id=self.IDENTIFIER,
+                    locator=channel.locator
                 )
+                feed.name=channel.name
+                feed.attrs.update(channel.attrs)
+
 
             for channel in self.FEED_CLASS.select():
                 if channel.locator not in [ c.get_key() for c in  all_channels ]:
