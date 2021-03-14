@@ -26,19 +26,6 @@ class Filter(Observable):
         self.provider = provider
         self.name = name
 
-    @property
-    def value(self):
-        return self.widget.value
-
-    @value.setter
-    def value(self, value):
-        # logger.info(f"filter {self} = {value}")
-        changed = (self.widget.value != value)
-        # self.widget.set_value(value)
-        self.widget.value = value
-        if changed and self.provider.is_active:
-            self.changed()
-
 
 class MaybeLabeledWidget(urwid.WidgetWrap):
 
@@ -84,6 +71,19 @@ class WidgetFilter(Filter):
                 self._widget.connect("changed", lambda v: self.changed())
                 # self.changed()
         return self._widget
+
+    @property
+    def value(self):
+        return self.widget.value
+
+    @value.setter
+    def value(self, value):
+        # logger.info(f"filter {self} = {value}")
+        changed = (self.widget.value != value)
+        # self.widget.set_value(value)
+        self.widget.value = value
+        if changed and self.provider.is_active:
+            self.changed()
 
     @property
     def placeholder(self):
@@ -162,6 +162,17 @@ class BooleanFilter(WidgetFilter, abc.ABC):
 class TextFilter(WidgetFilter):
 
     WIDGET_CLASS = TextFilterWidget
+
+class PropertyFilter(TextFilter):
+
+    @property
+    def value(self):
+        return self.provider.value
+
+    @value.setter
+    def value(self, value):
+        self.provider.value = value
+
 
 class IntegerFilter(WidgetFilter):
 

@@ -20,6 +20,13 @@ class ChannelTreeWidget(urwid.TreeWidget):
     expanded_icon = urwid.AttrMap(urwid.TreeWidget.expanded_icon,
         'browser_dirmark')
 
+    def __init__(self, node):
+        super().__init__(node)
+        # insert an extra AttrWrap for our own use
+        self._w = urwid.AttrWrap(self._w, None)
+        self.flagged = False
+        self.update_w()
+
     def get_display_text(self):
         key = self.get_node().get_key()
         value = self.get_node().get_value()
@@ -42,10 +49,13 @@ class ChannelTreeWidget(urwid.TreeWidget):
 
         if self.is_leaf:
             return key
-        if key == "right":
+        elif key == "right":
             self.get_node().expand()
-        if key == "left":
+        elif key == "left":
             self.get_node().collapse()
+        elif key == " ":
+            self.flagged = not self.flagged
+            self.update_w()
         elif self._w.selectable():
             return self.__super.keypress(size, key)
         else:
@@ -70,13 +80,6 @@ class ChannelGroupWidget(ChannelTreeWidget):
         'dirmark')
     expanded_icon = urwid.AttrMap(urwid.TreeWidget.expanded_icon,
         'dirmark')
-
-    def __init__(self, node):
-        self.__super.__init__(node)
-        # insert an extra AttrWrap for our own use
-        self._w = urwid.AttrWrap(self._w, None)
-        self.flagged = False
-        self.update_w()
 
     def get_display_text(self):
         return self.get_node().get_key() or "none"
@@ -104,7 +107,7 @@ class ChannelGroupWidget(ChannelTreeWidget):
 
 
 
-class ChanneleNode(urwid.TreeNode):
+class ChannelNode(urwid.TreeNode):
 
     def load_widget(self):
         return ChannelWidget(self)
@@ -129,8 +132,17 @@ class ChannelGroupNode(urwid.ParentNode):
         if isinstance(key, config.Folder):
             childclass = ChannelGroupNode
         else:
-            childclass = ChanneleNode
+            childclass = ChannelNode
         return childclass(childdata[key], parent=self, key=key, depth=childdepth)
+
+    def leaf_values(self):
+        for key in self.get_child_keys():
+            child = self.get_child_node(key)
+            if isinstance(child, urwid.ParentNode):
+                yield from child.leaf_values()
+            else:
+                yield(child.get_key())
+
 
     def expand(self):
         self.get_widget().expanded = True
@@ -157,6 +169,9 @@ class ChannelGroupNode(urwid.ParentNode):
 
 
 class ChannelTreeBrowser(urwid.WidgetWrap):
+
+    signals = ["change"]
+
     palette = [
         ('body', 'light gray', 'black'),
         ('focus', 'light green', 'black', 'standout'),
@@ -199,16 +214,28 @@ class ChannelTreeBrowser(urwid.WidgetWrap):
     def selection(self):
         return self.body.get_focus()[1]
 
+    def keypress(self, size, key):
+
+        node = self.selection
+
+        if key == "enter":
+            if isinstance(node, ChannelNode):
+                # channels = [node.get_key()]
+                channel = node.get_key()
+            else:
+                channel = ("channel", node.get_key())
+                # channels = list(node.leaf_values())
+
+            self._emit("change", channel)
+        else:
+            return super().keypress(size, key)
+
     @selection.setter
     def set_selection(self, path):
         self.find_path(path)
 
     def find_path(self, path):
         return self.tree_root.find_path(path)
-
-    def unhandled_input(self, k):
-        if k in ('q','Q'):
-            raise urwid.ExitMainLoop()
 
 
 def get_example_tree(root):

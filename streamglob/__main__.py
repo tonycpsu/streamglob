@@ -531,6 +531,7 @@ def main():
     sh = logging.StreamHandler()
     state.logger = setup_logging(options.verbose - options.quiet, quiet_stdout=False)
 
+    state.task_manager = tasks.TaskManager()
     providers.load()
     model.init()
     providers.load_config(default=state.app_data.selected_provider)
@@ -538,7 +539,6 @@ def main():
     spec = None
 
     logger.debug(f"{PACKAGE_NAME} starting")
-    state.task_manager = tasks.TaskManager()
 
     state.task_manager_task = state.event_loop.create_task(state.task_manager.start())
 

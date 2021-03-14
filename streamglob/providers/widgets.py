@@ -176,14 +176,18 @@ class ProviderDataTable(PlayListingMixin, DownloadListingMixin, BaseDataTable):
 
         self.provider = provider
         self.translate = self.provider.translate
-        logger.error(f"translate_init: {self.translate} {self.provider.translate_src}")
         self.strip_emoji = self.provider.strip_emoji
         self._translator = None
         super(ProviderDataTable,  self).__init__(*args, **kwargs)
 
+
     @property
     def NAME(self):
         return self.provider.NAME
+
+    # @property
+    # def translate(self):
+    #     return self.provider.translate
 
     @property
     def columns(self):

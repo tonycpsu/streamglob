@@ -400,7 +400,8 @@ class InstagramProviderBodyView(CachedFeedProviderBodyView):
 
     @property
     def footer_attrs(self):
-        if not self.provider.feed:
+        return AttrDict() # FIXME
+        if not self.provider.selected_feeds:
             return super().footer_attrs
 
         return AttrDict(super().footer_attrs, **AttrDict([
@@ -410,7 +411,7 @@ class InstagramProviderBodyView(CachedFeedProviderBodyView):
 
     @property
     def indicator_bars(self):
-        if not self.provider.feed:
+        if not self.provider.selected_feeds:
             return super().indicator_bars
         return super().indicator_bars + [
             ("total", "🌐", "dark gray",
@@ -423,7 +424,7 @@ class InstagramProviderBodyView(CachedFeedProviderBodyView):
         ]
 
 
-class InstagramProviderView(CachedFeedProviderView):
+class InstagramProviderView(FeedProviderView):
 
     PROVIDER_BODY_CLASS = InstagramDataTable
 
@@ -447,7 +448,7 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
 
     @property
     def VIEW(self):
-        return CachedFeedProviderView(self, InstagramProviderBodyView(self, InstagramDataTable(self)))
+        return FeedProviderView(self, InstagramProviderBodyView(self, InstagramDataTable(self)))
 
 
     @property

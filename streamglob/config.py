@@ -42,6 +42,9 @@ def from_yaml_for_type(dict_type, loader, node):
                 'found unacceptable key (%s)' % exc, key_node.start_mark)
         d[key] = loader.construct_object(value_node, deep=False)
 
+class Folder(str):
+    pass
+
 def yaml_loader(node_type, base_dir=None):
 
     from_yaml = functools.partial(from_yaml_for_type, node_type)
@@ -58,12 +61,16 @@ def yaml_loader(node_type, base_dir=None):
             orig, remove = node.value
             args = loader.construct_scalar(orig)
             return " ".join(a for a in args.split() if a != remove.value)
+
+        def folder_constructor(loader, node):
+            return Folder(node.value)
+
         self.add_constructor(u'tag:yaml.org,2002:map', from_yaml)
         self.add_constructor(u'tag:yaml.org,2002:omap', from_yaml)
         self.add_constructor('!join', yaml_join)
         self.add_constructor('!remove_arg', yaml_remove_arg)
+        self.add_constructor("!folder", folder_constructor)
         self.add_constructor('!include', YamlIncludeConstructor(base_dir=base_dir))
-
 
     d = {"__init__": __init__}
 

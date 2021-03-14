@@ -176,7 +176,7 @@ class InvalidConfigView(BaseProviderView):
 
 MEDIA_SPEC_RE=re.compile(r"(?:/([^:]+))?(?::(.*))?")
 
-class BaseProvider(abc.ABC):
+class BaseProvider(abc.ABC, Observable):
     """
     Abstract base class from which providers should inherit from
     """
@@ -1342,7 +1342,7 @@ class MultiSourceListingMixin(object):
 
     @property
     def inner_table(self):
-        if self.selection.details_open and self.selection.details:
+        if self.selection and self.selection.details_open and self.selection.details:
             return self.selection.details.contents.table
         return None
 

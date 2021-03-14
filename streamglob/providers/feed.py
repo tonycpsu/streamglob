@@ -22,6 +22,7 @@ from .. import utils
 
 from .base import *
 
+from ..widgets.channels import ChannelTreeBrowser
 from .widgets import *
 from .filters import *
 
@@ -645,11 +646,13 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
         return super().keypress(size, key)
 
 
-class FeedsFilter(ConfigFilter):
+# class FeedsFilter(ConfigFilter):
 
-    key = "feeds"
-    with_all = True
+#     key = "feeds"
+#     with_all = True
 
+class FeedsFilter(PropertyFilter):
+    pass
 
 class ItemStatusFilter(ListingFilter):
 
@@ -677,9 +680,6 @@ class FeedProvider(BaseProvider):
             ("search", TextFilter)
         ],**super().FILTERS_OPTIONS)
 
-    @property
-    def selected_feed_label(self):
-        return self.filters.feed.selected_label
 
     @property
     def default_filter_values(self):
@@ -691,7 +691,36 @@ class FeedProvider(BaseProvider):
 
     @property
     def selected_feed(self):
-        return self.filters.feed.value
+        return self.view.feed
+
+    @property
+    def selected_feed_label(self):
+        return getattr(self.feed, "name", self.selected_feed)
+
+
+    @property
+    def selected_feeds(self):
+        locators = [self.view.feed.get_key()]
+
+        with db_session:
+            return list(
+                select(
+                    f for f in self.FEED_CLASS
+                    if f.provider_id == self.IDENTIFIER
+                    and f.locator in locators
+                )
+            )
+    # @property
+    # def feed_entity(self):
+    #     if not self.selected_feed:
+    #         return None
+    #     with db_session:
+    #         feed = self.FEED_CLASS.get(
+    #             provider_id = self.IDENTIFIER,
+    #             locator = self.selected_feed.locator
+    #         )
+    #     return feed
+
 
     def parse_identifier(self, identifier):
         try:
@@ -766,6 +795,10 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
 
     def update_position_indicator(self, count=0):
 
+        # FIXME
+        return
+
+
         if not (self._width):
             self.set_position_widget(urwid.Text(""))
             return
@@ -782,6 +815,9 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
         )
 
     def update_status_indicator(self, count=0):
+
+        # FIXME
+        return
 
         if not (self._width):
             self.set_indicator_widget(urwid.Text(""))
@@ -832,15 +868,21 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
 
 class CachedFeedProviderBodyView(urwid.WidgetWrap):
 
-    signals = ["select", "cycle_filter", "keypress"]
+    signals = ["select", "cycle_filter", "keypress", "feed_change"]
 
     def __init__(self, provider, body):
         self.provider = provider
         self.body = body
         self.detail = urwid.WidgetPlaceholder(urwid.Filler(urwid.Text("")))
         self.footer = CachedFeedProviderFooter(self)
+        self.channels = ChannelTreeBrowser(self.provider.config.feeds, label="feeds")
+        self.columns = urwid.Columns([
+            (32, self.channels),
+            ("weight", 3, self.body),
+        ], dividechars=1)
+        self.columns.focus_position=1
         self.pile = urwid.Pile([
-            ("weight", 4, self.body),
+            ("weight", 4, self.columns),
             (1, urwid.SolidFill(u"\N{BOX DRAWINGS LIGHT HORIZONTAL}")),
             ("weight", 1, self.detail),
             (1, self.footer),
@@ -850,10 +892,16 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
         self.pile.focus_position = 0
         urwid.connect_signal(self.body, "keypress", lambda *args: self._emit(*args))
         urwid.connect_signal(self.body, "focus", self.on_focus)
+        urwid.connect_signal(self.channels, "change",
+                             lambda s, *args: self._emit("feed_change", *args))
+
+    @property
+    def feed(self):
+        return self.channels.selection
 
     @property
     def footer_attrs(self):
-        if self.provider.feed:
+        if self.provider.selected_feeds:
             return AttrDict([
                 ("refreshed", lambda: timeago.format(self.provider.feed.fetched, datetime.now(), "en_short")),
                 ("updated", lambda: timeago.format(self.provider.feed.updated, datetime.now(), "en_short")),
@@ -877,6 +925,7 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
 
     @property
     def indicator_bars(self):
+        return [] # FIXME
         return [
             ("matching", "✓", "light blue",
              # lambda: self.footer_attrs["matching"]() - self.footer_attrs["shown"]()),
@@ -924,26 +973,35 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
         return getattr(self.body, attr)
 
     def update_fetch_indicator(self, num, count):
+        # FIXME
+        return
         if not self.provider.feed:
             return
         self.footer.update_fetch_indicator(num, count)
 
 
 @keymapped()
-class CachedFeedProviderView(SimpleProviderView):
+class FeedProviderView(SimpleProviderView):
+
+    signals = ["feed_change"]
 
     KEYMAP = {
-        "ctrl e": ("focus_filter", ["feed"]),
+        # "ctrl e": ("focus_filter", ["feed"]),
         "ctrl s": ("focus_filter", ["status"]),
     }
 
     def __init__(self, provider, body):
         self.provider = provider
         self.body = body
+        urwid.connect_signal(self.body, "feed_change", lambda *args: self._emit(*args))
         super().__init__(self.provider, self.body)
 
     def keypress(self, size, key):
         return super().keypress(size, key)
+
+    @property
+    def feed(self):
+        return self.body.feed
 
     def __getattr__(self, attr):
         return getattr(self.body, attr)
@@ -967,7 +1025,8 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         super().__init__(*args, **kwargs)
         self.search_filter = None
         self.items_query = None
-        self.filters["feed"].connect("changed", self.on_feed_change)
+        urwid.connect_signal(self.view, "feed_change", self.on_feed_change)
+        # self.filters["feed"].connect("changed", self.on_feed_change)
         self.filters["status"].connect("changed", self.on_status_change)
         self.pagination_cursor = None
         self.game_map = AttrDict()
@@ -975,7 +1034,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
 
     @property
     def VIEW(self):
-        return CachedFeedProviderView(self, CachedFeedProviderBodyView(self, CachedFeedProviderDataTable(self)))
+        return FeedProviderView(self, CachedFeedProviderBodyView(self, CachedFeedProviderDataTable(self)))
 
     def init_config(self):
         super().init_config()
@@ -1018,18 +1077,6 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
     def status(self):
         return self.filters["status"].value
 
-
-    @property
-    def feed(self):
-        if not self.selected_feed:
-            return None
-        with db_session:
-            feed = self.FEED_CLASS.get(
-                provider_id = self.IDENTIFIER,
-                locator = self.selected_feed.locator
-            )
-        return feed
-
     # @property
     # def search_string(self):
     #     return self.filters["search"].value
@@ -1061,14 +1108,18 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
 
     @property
     def translate_src(self):
-        if not self.feed:
+        # FIXME
+        return None
+        if not self.selected_feeds:
             return None
-        cfg = self.config.feeds[self.feed.locator]
+        cfg = self.config.feeds[self.feed_entity.locator]
         if cfg and isinstance(cfg, AttrDict):
             return getattr(cfg, "translate", "auto")
         return None
 
     def create_feeds(self):
+        print("FIXME")
+        return
         with db_session:
             for n, f in self.feeds.items():
                 feed = self.FEED_CLASS.get(locator=f.locator)
@@ -1088,11 +1139,11 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
     def feed_filters(self):
         return None
 
-    def on_feed_change(self, feed):
-        if feed and hasattr(feed, "locator"):
-            self.provider_data["selected_feed"] = feed.locator
-        else:
-            self.provider_data["selected_feed"] = None
+    def on_feed_change(self, source, channel):
+        # if feed and hasattr(feed, "locator"):
+        self.provider_data["selected_feed"] = channel
+        # else:
+        #     self.provider_data["selected_feed"] = None
         self.save_provider_data()
 
         if not self.is_active:
@@ -1137,12 +1188,13 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
     async def update_feeds(self, force=False, resume=False, replace=False):
         logger.info(f"update_feeds: {force} {resume}")
         with db_session:
-            if not self.feed:
-                feeds = self.FEED_CLASS.select()
-            else:
-                feeds = [self.feed]
+            # feeds = select(f for f in self.FEED_CLASS if f in self.selected_feeds)
+            # if not self.feed_entity:
+            #     feeds = self.FEED_CLASS.select()
+            # else:
+            #     feeds = [self.feed_entity]
 
-            for feed in feeds:
+            for feed in self.selected_feeds:
                 if (force
                     or
                     feed.updated is None
@@ -1203,9 +1255,9 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
             self.LISTING_CLASS.select()
         )
 
-        if self.feed:
+        if self.selected_feeds:
             self.feed_items_query = self.all_items_query.filter(
-                lambda i: i.channel == self.feed
+                lambda i: i.channel in self.selected_feeds
             )
         else:
             self.feed_items_query = self.all_items_query
@@ -1317,5 +1369,5 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
 
     @property
     def playlist_title(self):
-        # return f"[{self.provider}]"
-        return f"{self.IDENTIFIER}/{self.feed.locator if self.feed else 'all'}"
+        return f"[{self.IDENTIFIER}]"
+        # return f"{self.IDENTIFIER}/{self.feed.locator if self.selected_feeds else 'all'}"

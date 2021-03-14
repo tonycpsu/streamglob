@@ -309,13 +309,13 @@ class YouTubeChannelsFilter(FeedsFilter):
     def items(self):
         return AttrDict(super().items, **{"Search": "search"})
 
-    @property
-    def value(self):
-        return self.widget.value
+    # @property
+    # def value(self):
+    #     return self.widget.value
 
-    @value.setter
-    def value(self, value):
-        self.widget.value = value
+    # @value.setter
+    # def value(self, value):
+    #     self.widget.value = value
 
     @property
     def search(self):
@@ -695,9 +695,9 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
 class YouTubeProvider(PaginatedProviderMixin,
                       CachedFeedProvider):
 
-    FILTERS_BROWSE = AttrDict([
-        ("feed", YouTubeChannelsFilter),
-    ])
+    # FILTERS_BROWSE = AttrDict([
+    #     ("feed", YouTubeChannelsFilter),
+    # ])
 
     FEED_CLASS = YouTubeFeed
 
@@ -709,7 +709,7 @@ class YouTubeProvider(PaginatedProviderMixin,
 
     @property
     def VIEW(self):
-        return CachedFeedProviderView(self, CachedFeedProviderBodyView(self, YouTubeDataTable(self)))
+        return FeedProviderView(self, CachedFeedProviderBodyView(self, YouTubeDataTable(self)))
 
     @property
     def PREVIEW_TYPES(self):
