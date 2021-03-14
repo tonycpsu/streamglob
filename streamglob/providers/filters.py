@@ -177,6 +177,13 @@ class PropertyFilter(TextFilter):
     def value(self, value):
         self.provider.value = value
 
+    def cycle(self, step=1):
+        fn_name = f"cycle_{self.name}"
+        fn = getattr(self.provider.view, fn_name)
+        if not fn:
+            raise RuntimeError(f"must define {self.provider.IDENTIFER}.view.{fn_name}")
+        fn(step=step)
+
 
 class IntegerFilter(WidgetFilter):
 

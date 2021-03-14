@@ -685,6 +685,8 @@ class FeedProvider(BaseProvider):
 
     REQUIRED_CONFIG = ["feeds"]
 
+    CHANNELS_LABEL = "channels"
+
     @property
     def FILTERS_OPTIONS(self):
         return AttrDict([
@@ -895,12 +897,9 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
         self.indicator_placeholder.original_widget = widget
 
 
-
 class CachedFeedProviderBodyView(urwid.WidgetWrap):
 
     signals = ["select", "cycle_filter", "keypress", "feed_change"]
-
-    CHANNELS_LABEL = "channels"
 
     def __init__(self, provider, body):
         self.provider = provider
@@ -909,12 +908,12 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
         self.footer = CachedFeedProviderFooter(self)
         self.channels_header = urwid.Filler(
             urwid.AttrMap(
-                urwid.Text(self.CHANNELS_LABEL),
+                urwid.Text(self.provider.CHANNELS_LABEL),
                 "header"
             )
         )
         self.channels = ChannelTreeBrowser(
-            self.provider.config.feeds, label="All " + self.CHANNELS_LABEL
+            self.provider.config.feeds, label="All " + self.provider.CHANNELS_LABEL
         )
         self.channels_pile = urwid.Pile([
             (1, self.channels_header),
@@ -938,6 +937,9 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
         urwid.connect_signal(self.body, "focus", self.on_focus)
         urwid.connect_signal(self.channels, "change",
                              lambda s, *args: self._emit("feed_change", *args))
+
+    def cycle_feed(self, step=1):
+        self.channels.cycle(step)
 
     def keypress(self, size, key):
         if key == "enter" and self.columns.focus_position == 0:

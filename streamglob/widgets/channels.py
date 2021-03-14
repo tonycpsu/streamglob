@@ -296,14 +296,17 @@ class ChannelTreeBrowser(urwid.WidgetWrap):
 
         return selection
 
+    def update_selection(self):
+        marked = list(self.tree.get_marked_nodes())
+        if len(marked) <= 1:
+            self.unmark_all()
+            self.selection.get_widget().mark()
+        self._emit("change", self.selected_items)
+
     def keypress(self, size, key):
 
         if key == "enter":
-            marked = list(self.tree.get_marked_nodes())
-            if len(marked) <= 1:
-                self.unmark_all()
-                self.selection.get_widget().mark()
-            self._emit("change", self.selected_items)
+            self.update_selection()
         elif key == ";":
             marked = list(self.tree.get_marked_nodes())
             if marked:
@@ -319,6 +322,18 @@ class ChannelTreeBrowser(urwid.WidgetWrap):
     def find_key(self, key):
         return self.tree.find_key(key)
 
+    def cycle(self, step=1):
+        focus = self.listbox.body.get_focus()[1]
+        for i in range(abs(step)):
+            nxt = self.listbox.body.get_next(focus) if step > 0 else self.listbox.body.get_prev(focus)
+            if not nxt:
+                return
+            focus = nxt[1]
+            if not focus:
+                return
+        self.unmark_all()
+        self.listbox.set_focus(focus)
+        self.update_selection()
 
 def get_example_tree(root):
     """ generate a quick leaf tree for demo purposes """

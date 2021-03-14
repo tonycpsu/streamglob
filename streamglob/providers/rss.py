@@ -203,6 +203,8 @@ class RSSProvider(PaginatedProviderMixin,
 
     SESSION_CLASS = RSSSession
 
+    CHANNELS_LABEL = "feeds"
+
     @property
     def FILTERS_OPTIONS(self):
         return super().FILTERS_OPTIONS
