@@ -458,14 +458,13 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
             **self.config.get("rate_limit", {})
         )
 
-
-    def init_config(self):
-        super().init_config()
-        attrs = list(self.ATTRIBUTES.items())
+    @property
+    def ATTRIBUTES(self):
+        attrs = list(super().ATTRIBUTES.items())
         idx, attr = next(  (i, a ) for i, a in enumerate(attrs) if a[0] == "title")
         attr[1]["label"] = "caption"
         # attr[1]["truncate"] = True
-        self.ATTRIBUTES = AttrDict(
+        return AttrDict(
             attrs[:idx]
             + [
                 ("media_type", {
@@ -479,6 +478,9 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
             + attrs[idx:]
         )
 
+
+    def init_config(self):
+        super().init_config()
         if not "user_map" in self.provider_data:
             self.provider_data["user_map"] = {}
             self.save_provider_data()
