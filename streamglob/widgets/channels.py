@@ -145,11 +145,17 @@ class ChannelNode(urwid.TreeNode):
         return self.get_widget().marked
 
 
+
 class ChannelGroupNode(urwid.ParentNode):
 
     @property
     def is_leaf(self):
         return False
+
+    @property
+    def marked(self):
+        return self.get_widget().marked
+
 
     def load_widget(self):
         return ChannelGroupWidget(self)
@@ -171,27 +177,15 @@ class ChannelGroupNode(urwid.ParentNode):
             childclass = ChannelNode
         return childclass(childdata[key], parent=self, key=key, depth=childdepth)
 
-    # @property
-    # def leaf_values(self):
-    #     for key in self.get_child_keys():
-    #         child = self.get_child_node(key)
-    #         if isinstance(child, urwid.ParentNode):
-    #             yield from child.leaf_values
-    #         else:
-    #             yield(child.get_key())
-
-    # @property
-    # def leaf_nodes(self):
-    #     for key in self.get_child_keys():
-    #         child = self.get_child_node(key)
-    #         if isinstance(child, urwid.ParentNode):
-    #             yield from child.leaf_nodes
-    #         else:
-    #             yield child
-
     def find_key(self, key):
         try:
             return next(self.get_nodes(lambda n: n.get_key() == key))
+        except StopIteration:
+            return None
+
+    def find_node(self, identifier):
+        try:
+            return next(self.get_nodes(lambda n: n.identifier == identifier))
         except StopIteration:
             return None
 
@@ -213,7 +207,7 @@ class ChannelGroupNode(urwid.ParentNode):
 
     def get_marked_nodes(self):
         yield from self.get_nodes(
-            lambda n: n.is_leaf and n.marked
+            lambda n: n.marked
         )
 
 
