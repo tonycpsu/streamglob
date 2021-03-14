@@ -1164,15 +1164,16 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                 if isinstance(value, dict):
                     name = value.get("name")
                 else:
-                    name = value
-                feed = self.FEED_CLASS.get(locator=locator)
-                if not feed:
-                    feed = self.FEED_CLASS(
-                        provider_id = self.IDENTIFIER,
-                        name = name,
-                        locator= locator
-                    )
-                    commit()
+                    name = locator
+
+                self.FEED_CLASS.upsert(
+                    dict(
+                        provider_id=self.IDENTIFIER,
+                        locator=locator
+                    ),
+                    dict(name=name)
+                )
+
 
     def feed_attrs(self, feed_name):
         return {}
