@@ -121,6 +121,10 @@ class WidgetFilter(Filter):
     def widget_sizing(self):
         return lambda w: ("weight", 1)
 
+    @property
+    def filter_sizing(self):
+        return ("weight", 1)
+
     def cycle(self, step=1):
         pass
 

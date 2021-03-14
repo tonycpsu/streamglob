@@ -657,7 +657,14 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
 #     with_all = True
 
 class FeedsFilter(PropertyFilter):
-    pass
+
+    @property
+    def filter_sizing(self):
+        return ("weight", 0)
+
+    @property
+    def widget_sizing(self):
+        return lambda w: ("given", 0)
 
 class ItemStatusFilter(ListingFilter):
 
@@ -893,14 +900,28 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
 
     signals = ["select", "cycle_filter", "keypress", "feed_change"]
 
+    CHANNELS_LABEL = "channels"
+
     def __init__(self, provider, body):
         self.provider = provider
         self.body = body
         self.detail = urwid.WidgetPlaceholder(urwid.Filler(urwid.Text("")))
         self.footer = CachedFeedProviderFooter(self)
-        self.channels = ChannelTreeBrowser(self.provider.config.feeds, label="feeds")
+        self.channels_header = urwid.Filler(
+            urwid.AttrMap(
+                urwid.Text(self.CHANNELS_LABEL),
+                "header"
+            )
+        )
+        self.channels = ChannelTreeBrowser(
+            self.provider.config.feeds, label="All " + self.CHANNELS_LABEL
+        )
+        self.channels_pile = urwid.Pile([
+            (1, self.channels_header),
+            ("weight", 1, self.channels)
+        ])
         self.columns = urwid.Columns([
-            (32, self.channels),
+            (32, self.channels_pile),
             ("weight", 3, self.body),
         ], dividechars=1)
         self.columns.focus_position=1

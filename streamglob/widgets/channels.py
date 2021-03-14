@@ -15,11 +15,6 @@ from .. import config
 class ChannelTreeWidget(urwid.TreeWidget):
     """ Display widget for leaf nodes """
 
-    unexpanded_icon = urwid.AttrMap(urwid.TreeWidget.unexpanded_icon,
-        'browser_dirmark')
-    expanded_icon = urwid.AttrMap(urwid.TreeWidget.expanded_icon,
-        'browser_dirmark')
-
     def __init__(self, node):
         super().__init__(node)
         # insert an extra AttrWrap for our own use
@@ -89,10 +84,13 @@ class ChannelWidget(ChannelTreeWidget):
 
 class ChannelGroupWidget(ChannelTreeWidget):
     # apply an attribute to the expand/unexpand icons
-    unexpanded_icon = urwid.AttrMap(urwid.TreeWidget.unexpanded_icon,
-        'dirmark')
-    expanded_icon = urwid.AttrMap(urwid.TreeWidget.expanded_icon,
-        'dirmark')
+    unexpanded_icon = urwid.AttrMap(
+        urwid.TreeWidget.unexpanded_icon,
+        "dirmark", "dirmark_focus"
+    )
+    expanded_icon = urwid.AttrMap(
+        urwid.TreeWidget.expanded_icon,
+        "dirmark", "dirmark_focus")
 
     def get_display_text(self):
         return self.get_node().get_key() or "none"
@@ -260,36 +258,8 @@ class ChannelTreeBrowser(urwid.WidgetWrap):
 
     signals = ["change"]
 
-    palette = [
-        ('body', 'light gray', 'black'),
-        ('focus', 'light green', 'black', 'standout'),
-        ('marked', 'black', 'dark green', ('bold','underline')),
-        ('focus', 'light gray', 'dark blue', 'standout'),
-        ('marked focus', 'yellow', 'dark cyan',
-                ('bold','standout','underline')),
-        ('head', 'yellow', 'black', 'standout'),
-        ('foot', 'light gray', 'black'),
-        ('key', 'light cyan', 'black','underline'),
-        ('title', 'white', 'black', 'bold'),
-        ('mark', 'dark gray', 'light gray'),
-        ('error', 'dark red', 'light gray'),
-        ]
-
-    footer_text = [
-        ('title', "Example Data Browser"), "    ",
-        ('key', "UP"), ",", ('key', "DOWN"), ",",
-        ('key', "PAGE UP"), ",", ('key', "PAGE DOWN"),
-        "  ",
-        ('key', "+"), ",",
-        ('key', "-"), "  ",
-        ('key', "LEFT"), "  ",
-        ('key', "HOME"), "  ",
-        ('key', "END"), "  ",
-        ('key', "Q"),
-        ]
-
     def __init__(self, data, label="channels"):
-        self.tree = ChannelGroupNode(data, key=label + "/")
+        self.tree = ChannelGroupNode(data, key=label)
         self.listbox = urwid.TreeListBox(urwid.TreeWalker(self.tree))
         self.listbox.offset_rows = 1
         super().__init__(self.listbox)

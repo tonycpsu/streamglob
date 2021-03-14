@@ -10,8 +10,13 @@ import urwid
 
 class FileBrowserTreeWidget(urwid.TreeWidget):
     indent_cols = 2
-    # unexpanded_icon = urwid.Text("")
-    # expanded_icon = urwid.Text("")
+
+    def __init__(self, node):
+        super().__init__(node)
+        # insert an extra AttrWrap for our own use
+        self._w = urwid.AttrWrap(self._w, None)
+        self.marked = False
+        self.update_w()
 
     def keypress(self, size, key):
 
@@ -27,13 +32,26 @@ class FileBrowserTreeWidget(urwid.TreeWidget):
         else:
             return key
 
+    def update_w(self):
+        """Update the attributes of self.widget based on self.marked.
+        """
+        if self.marked:
+            self._w.attr = 'marked'
+            self._w.focus_attr = 'marked_focus'
+        else:
+            self._w.attr = "normal"
+            self._w.focus_attr = 'focus'
+
 
 class FlagFileWidget(FileBrowserTreeWidget):
     # apply an attribute to the expand/unexpand icons
-    unexpanded_icon = urwid.AttrMap(FileBrowserTreeWidget.unexpanded_icon,
-        'browser_dirmark')
-    expanded_icon = urwid.AttrMap(FileBrowserTreeWidget.expanded_icon,
-        'browser_dirmark')
+    unexpanded_icon = urwid.AttrMap(
+        urwid.TreeWidget.unexpanded_icon,
+        "dirmark", "dirmark_focus"
+    )
+    expanded_icon = urwid.AttrMap(
+        urwid.TreeWidget.expanded_icon,
+        "dirmark", "dirmark_focus")
 
     def __init__(self, node):
         self.__super.__init__(node)
@@ -62,16 +80,6 @@ class FlagFileWidget(FileBrowserTreeWidget):
             self.update_w()
         else:
             return key
-
-    def update_w(self):
-        """Update the attributes of self.widget based on self.flagged.
-        """
-        if self.flagged:
-            self._w.attr = 'flagged'
-            self._w.focus_attr = 'flagged focus'
-        else:
-            self._w.attr = 'browser_body'
-            self._w.focus_attr = 'browser_focus'
 
 
 class FileTreeWidget(FlagFileWidget):

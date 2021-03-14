@@ -27,7 +27,7 @@ class FilterToolbar(urwid.WidgetWrap):
         self.columns = urwid.Columns([], dividechars=1)
         for n, f in self.filters.items():
             self.columns.contents += [
-                (f.placeholder, self.columns.options("weight", 1)),
+                (f.placeholder, self.columns.options(*f.filter_sizing)),
             ]
 
         self.filler = urwid.Filler(urwid.Padding(self.columns))
