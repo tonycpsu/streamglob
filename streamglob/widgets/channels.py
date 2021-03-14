@@ -78,8 +78,7 @@ class ChannelWidget(ChannelTreeWidget):
     def keypress(self, size, key):
         if key == "enter":
             self.mark()
-        else:
-            return super().keypress(size, key)
+        return super().keypress(size, key)
 
 
 class ChannelGroupWidget(ChannelTreeWidget):
@@ -125,7 +124,6 @@ class ChannelGroupWidget(ChannelTreeWidget):
         super().unmark()
         for node in self.get_node().get_nodes():
             node.get_widget().unmark()
-
 
 class ChannelNode(urwid.TreeNode):
 
@@ -192,10 +190,10 @@ class ChannelGroupNode(urwid.ParentNode):
     def get_nodes(self, pred=None):
         for key in self.get_child_keys():
             child = self.get_child_node(key)
-            if pred is None or pred(child):
-                yield child
             if isinstance(child, urwid.ParentNode):
                 yield from child.get_nodes(pred)
+            if pred is None or pred(child):
+                yield child
 
     def get_leaf_nodes(self):
         yield from self.get_nodes(
@@ -250,14 +248,13 @@ class ChannelGroupNode(urwid.ParentNode):
 
 class ChannelTreeBrowser(urwid.WidgetWrap):
 
-    signals = ["change"]
+    signals = ["change", "select"]
 
     def __init__(self, data, label="channels"):
         self.tree = ChannelGroupNode(data, key=label)
         self.listbox = urwid.TreeListBox(urwid.TreeWalker(self.tree))
         self.listbox.offset_rows = 1
         super().__init__(self.listbox)
-        self.selection.get_widget().mark()
 
 
     @property
@@ -284,7 +281,6 @@ class ChannelTreeBrowser(urwid.WidgetWrap):
         marked = list(self.tree.get_marked_nodes())
 
         if marked:
-            logger.info(f"marked: {marked}")
             # selection = [node.identifier for node in marked]
             selection = marked
         else:
@@ -292,17 +288,35 @@ class ChannelTreeBrowser(urwid.WidgetWrap):
 
         return selection
 
+    @selected_items.setter
+    def selected_items(self, value):
+        for i, identifier in enumerate(value):
+            if isinstance(identifier, list):
+                # JSON can't store tuples
+                identifier = tuple(identifier)
+            node = self.tree.find_node(identifier)
+            if not node:
+                raise Exception(identifier)
+            node.get_widget().mark()
+            if i == 0:
+                self.listbox.focus_position = node
+        self.update_selection()
+
     def update_selection(self):
-        marked = list(self.tree.get_marked_nodes())
-        if len(marked) <= 1:
-            self.unmark_all()
-            self.selection.get_widget().mark()
         self._emit("change", self.selected_items)
+        self._emit("select", self.selected_items)
 
     def keypress(self, size, key):
 
         if key == "enter":
+            marked = list(self.tree.get_marked_nodes())
+            if len(marked) <= 1:
+                self.unmark_all()
+                self.selection.get_widget().mark()
             self.update_selection()
+        elif key == " ":
+            super().keypress(size, key)
+            self._emit("change", self.selected_items)
         elif key == ";":
             marked = list(self.tree.get_marked_nodes())
             if marked:
@@ -329,6 +343,7 @@ class ChannelTreeBrowser(urwid.WidgetWrap):
                 return
         self.unmark_all()
         self.listbox.set_focus(focus)
+        self.selection.get_widget().mark()
         self.update_selection()
 
 def get_example_tree(root):

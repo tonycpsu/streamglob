@@ -704,25 +704,22 @@ class FeedProvider(BaseProvider):
         )
 
     @property
-    def selected_feed(self):
-        return self.view.selection
+    def feed(self):
+        return self.view.selected_channels
 
-    # @property
-    # def selected_feed_label(self):
-    #     return getattr(self.feed, "name", self.selected_feed)
-
+    @feed.setter
+    def feed(self, value):
+        self.view.selected_channels = value
 
     @property
     def selected_channels(self):
-
+        selection = self.view.selected_channels
         def parse_node(node):
 
             if node.is_leaf:
                 return [node.get_key()]
             else:
                 return node.get_leaf_keys()
-
-        selection = self.view.selected_channels
 
         logger.info(f"selection: {selection}")
         if selection:
@@ -733,7 +730,7 @@ class FeedProvider(BaseProvider):
         else:
             locators = []
 
-        logger.info(f"locators: {locators}")
+        # logger.info(f"locators: {locators}")
         with db_session:
             return list(
                 select(
@@ -742,8 +739,12 @@ class FeedProvider(BaseProvider):
                     and f.locator in locators
                 )
             )
-    # @property
-    # def feed_entity(self):
+
+    # @selected_channels.setter
+    # def selected_channels(self, value):
+    #     self.view.selected_channels = value
+
+    # # def feed_entity(self):
     #     if not self.selected_feed:
     #         return None
     #     with db_session:
@@ -899,7 +900,7 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
 
 class CachedFeedProviderBodyView(urwid.WidgetWrap):
 
-    signals = ["select", "cycle_filter", "keypress", "feed_change"]
+    signals = ["select", "cycle_filter", "keypress", "feed_change", "feed_select"]
 
     def __init__(self, provider, body):
         self.provider = provider
@@ -935,6 +936,8 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
         self.pile.focus_position = 0
         urwid.connect_signal(self.body, "keypress", lambda *args: self._emit(*args))
         urwid.connect_signal(self.body, "focus", self.on_focus)
+        urwid.connect_signal(self.channels, "select",
+                             lambda s, *args: self._emit("feed_select", *args))
         urwid.connect_signal(self.channels, "change",
                              lambda s, *args: self._emit("feed_change", *args))
 
@@ -950,7 +953,12 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
 
     @property
     def selected_channels(self):
+
         return self.channels.selected_items
+
+    @selected_channels.setter
+    def selected_channels(self, value):
+        self.channels.selected_items = value
 
     @property
     def all_channels(self):
@@ -1044,7 +1052,7 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
 @keymapped()
 class FeedProviderView(SimpleProviderView):
 
-    signals = ["feed_change"]
+    signals = ["feed_change", "feed_select"]
 
     KEYMAP = {
         # "ctrl e": ("focus_filter", ["feed"]),
@@ -1055,6 +1063,7 @@ class FeedProviderView(SimpleProviderView):
         self.provider = provider
         self.body = body
         urwid.connect_signal(self.body, "feed_change", lambda *args: self._emit(*args))
+        urwid.connect_signal(self.body, "feed_select", lambda *args: self._emit(*args))
         super().__init__(self.provider, self.body)
 
     def keypress(self, size, key):
@@ -1063,6 +1072,14 @@ class FeedProviderView(SimpleProviderView):
     @property
     def feed(self):
         return self.body.feed
+
+    @property
+    def selected_channels(self):
+        return self.body.selected_channels
+
+    @selected_channels.setter
+    def selected_channels(self, value):
+        self.body.selected_channels = value
 
     def __getattr__(self, attr):
         return getattr(self.body, attr)
@@ -1087,6 +1104,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         self.search_filter = None
         self.items_query = None
         urwid.connect_signal(self.view, "feed_change", self.on_feed_change)
+        urwid.connect_signal(self.view, "feed_select", self.on_feed_select)
         # self.filters["feed"].connect("changed", self.on_feed_change)
         self.filters["status"].connect("changed", self.on_status_change)
         self.pagination_cursor = None
@@ -1208,12 +1226,10 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         return None
 
     def on_feed_change(self, source, selection):
-        # if feed and hasattr(feed, "locator"):
         self.provider_data["selected_feed"] = [n.identifier for n in selection]
-        # else:
-        #     self.provider_data["selected_feed"] = None
         self.save_provider_data()
 
+    def on_feed_select(self, source, selection):
         if not self.is_active:
             return
         self.update_count = True

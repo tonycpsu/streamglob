@@ -171,11 +171,12 @@ class PropertyFilter(TextFilter):
 
     @property
     def value(self):
-        return self.provider.value
+        return getattr(self.provider, self.name)
 
     @value.setter
     def value(self, value):
-        self.provider.value = value
+        # import ipdb; ipdb.set_trace()
+        setattr(self.provider, self.name, value)
 
     def cycle(self, step=1):
         fn_name = f"cycle_{self.name}"

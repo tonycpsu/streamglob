@@ -144,8 +144,8 @@ class SimpleProviderView(BaseProviderView):
     def reset(self):
         self.body.reset()
 
-    def __getattr__(self, attr):
-        return getattr(self.body, attr)
+    # def __getattr__(self, attr):
+    #     return getattr(self.body, attr)
 
     def apply_search_query(self, query):
         # FIXME: assumes body is a data table
@@ -223,7 +223,7 @@ class BaseProvider(abc.ABC, Observable):
             + "|".join([k.pattern for k in self.highlight_map.keys()])
             + ")", re.IGNORECASE
         )
-        print(self.filters)
+        # print(self.filters)
         self.filters["search"].connect("changed", self.on_search_change)
 
     def init_config(self):
@@ -232,18 +232,14 @@ class BaseProvider(abc.ABC, Observable):
                 self.provider_data = model.ProviderData.get(name=self.IDENTIFIER).settings
             except AttributeError:
                 self.provider_data = model.ProviderData(name=self.IDENTIFIER).settings
-        # try:
-        #     self.view.init_config(self.config.view)
-        # except:
-        #     raise
-        #     logger.warn(f"couldn't initialize configuration for {self.IDENTIFIER}")
 
         for name, f in self.filters.items():
             value = self.default_filter_values.get(name, None)
             if value:
                 try:
                     f.value = value
-                except ValueError:
+                except (ValueError,):
+                    # import ipdb; ipdb.set_trace()
                     pass
 
     @property
