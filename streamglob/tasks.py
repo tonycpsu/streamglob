@@ -113,8 +113,6 @@ class TaskManager(Observable):
 
     async def preview(self, listing, caller, **kwargs):
 
-        logger.info(listing)
-        # logger.error(kwargs)
         if listing:
             logger.info(listing)
             task = caller.create_play_task(listing, **kwargs)
@@ -132,6 +130,23 @@ class TaskManager(Observable):
             logger.info(self.preview_task)
             self._preview_player.set_result(await self.preview_task.program)
             await self.preview_task.proc
+
+            def on_player_done(f):
+                logger.info("player done")
+                self.preview_task = None
+                self._preview_player = asyncio.Future()
+
+
+            async def wait_for_player_exit(proc):
+                await proc.wait()
+                logger.error("player exit, restarting")
+                await asyncio.sleep(1)
+                self.preview_task = None
+                self._preview_player = asyncio.Future()
+                # FIXME
+                await state.listings_view.provider.view.preview_all()
+
+            asyncio.create_task(wait_for_player_exit(self.preview_task.proc.result()))
 
             async def handle_mpv_key(key_state, key_name, key_string):
                 key = self.preview_player.key_to_urwid(key_name)
@@ -164,11 +179,6 @@ class TaskManager(Observable):
             self.preview_player.controller.listen_for(
                 "log-message", on_log_message
             )
-
-            def on_player_done(f):
-                logger.info("player done")
-                self.preview_task = None
-                self._preview_player = asyncio.Future()
 
             self.preview_task.result.add_done_callback(on_player_done)
 
