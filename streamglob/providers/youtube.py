@@ -545,7 +545,7 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         self.cancel_pending_tasks()
         super().on_deactivate()
 
-    async def preview_content_storyboard(self, cfg, position, listing, source_idx=0):
+    async def preview_content_storyboard(self, cfg, position, listing, source):
 
         async def preview(listing):
             storyboard = await self.storyboard_for(listing, cfg)

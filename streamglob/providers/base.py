@@ -930,18 +930,16 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
         pass
 
 
-    async def preview_content_thumbnail(self, cfg, position, listing, source_idx=0):
+    async def preview_content_thumbnail(self, cfg, position, listing, source):
         logger.info(f"preview_content_thumbnail {position}")
-        source = listing.sources[source_idx]
         if source.locator_thumbnail is None:
             logger.info("no thumbnail")
             return
         logger.info(f"replacing with thumbnail: {source.locator_thumbnail} at pos {position}")
         await self.playlist_replace(source.locator_thumbnail, idx=position)
 
-    async def preview_content_full(self, cfg, position, listing, source_idx=0):
+    async def preview_content_full(self, cfg, position, listing, source):
         logger.info(f"preview_content_full {position}")
-        source = listing.sources[source_idx]
         if source.locator_thumbnail is None:
             logger.info("full: no thumbnail")
             return
@@ -953,11 +951,9 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
 
     async def preview_content(self):
 
+        listing = self.selected_listing
+        source = self.selected_source
         position = self.playlist_position
-        row_num = self.playlist_pos_to_row(position)
-        row = self[row_num]
-        listing = row.data_source
-        source_idx = self.play_items[position].index
 
         if self.config.auto_preview.delay:
             logger.info(f"sleeping: {self.config.auto_preview.delay}")
@@ -970,16 +966,19 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             await asyncio.sleep(self.config.auto_preview.duration)
 
         for i, cfg in enumerate(self.config.auto_preview.stages):
-            if self.playlist_position != position:
-                return
+            # if self.playlist_position != position:
+            #     return
             logger.info(f"stage: {cfg}")
             if self.play_items[position].preview_mode == cfg.mode:
+                continue
+            # import ipdb; ipdb.set_trace()
+            if cfg.media_types and source.media_type not in cfg.media_types:
                 continue
             preview_fn = getattr(
                 self, f"preview_content_{cfg.mode}"
             )
             logger.info(preview_fn)
-            await preview_fn(cfg, position, listing, source_idx=source_idx)
+            await preview_fn(cfg, position, listing, source=source)
             self.play_items[position].preview_mode = cfg.mode
             duration = await self.preview_duration(cfg, listing)
             if duration:
