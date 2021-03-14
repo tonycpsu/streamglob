@@ -1184,6 +1184,8 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                 value = channel.get_value()
                 if isinstance(value, dict):
                     name = value.get("name")
+                elif value:
+                    name = value
                 else:
                     name = locator
 
