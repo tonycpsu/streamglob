@@ -401,7 +401,7 @@ class InstagramProviderBodyView(CachedFeedProviderBodyView):
     @property
     def footer_attrs(self):
         return AttrDict() # FIXME
-        if not self.provider.selected_feeds:
+        if not self.provider.selected_channels:
             return super().footer_attrs
 
         return AttrDict(super().footer_attrs, **AttrDict([
@@ -411,7 +411,7 @@ class InstagramProviderBodyView(CachedFeedProviderBodyView):
 
     @property
     def indicator_bars(self):
-        if not self.provider.selected_feeds:
+        if not self.provider.selected_channels:
             return super().indicator_bars
         return super().indicator_bars + [
             ("total", "🌐", "dark gray",

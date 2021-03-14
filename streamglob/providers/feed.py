@@ -7,6 +7,7 @@ from datetime import datetime
 from dataclasses import *
 import functools
 import textwrap
+from itertools import chain
 
 from orderedattrdict import AttrDict
 from panwid.datatable import *
@@ -235,7 +236,6 @@ class FeedMediaSourceMixin(object):
             try:
                 return f"{self.provider.IDENTIFIER}/{listing.channel.locator}.{listing.guid}"
             except AttributeError:
-                # import ipdb; ipdb.set_trace()
                 raise
 
     def check(self):
@@ -691,17 +691,35 @@ class FeedProvider(BaseProvider):
 
     @property
     def selected_feed(self):
-        return self.view.feed
+        return self.view.selection
+
+    # @property
+    # def selected_feed_label(self):
+    #     return getattr(self.feed, "name", self.selected_feed)
+
 
     @property
-    def selected_feed_label(self):
-        return getattr(self.feed, "name", self.selected_feed)
+    def selected_channels(self):
 
+        def parse_node(node):
 
-    @property
-    def selected_feeds(self):
-        locators = [self.view.feed.get_key()]
+            if node.is_leaf:
+                return [node.get_key()]
+            else:
+                return node.get_leaf_keys()
 
+        selection = self.view.selected_channels
+
+        logger.info(f"selection: {selection}")
+        if selection:
+            locators = list(chain.from_iterable([
+                parse_node(node)
+                for node in selection
+            ]))
+        else:
+            locators = []
+
+        logger.info(f"locators: {locators}")
         with db_session:
             return list(
                 select(
@@ -895,13 +913,25 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
         urwid.connect_signal(self.channels, "change",
                              lambda s, *args: self._emit("feed_change", *args))
 
+    def keypress(self, size, key):
+        if key == "enter" and self.columns.focus_position == 0:
+            super().keypress(size, key)
+            self.columns.focus_position = 1
+        else:
+            return super().keypress(size, key)
+
     @property
-    def feed(self):
-        return self.channels.selection
+    def selected_channels(self):
+        # import ipdb; ipdb.set_trace()
+        return self.channels.selected_channels
 
     @property
     def footer_attrs(self):
-        if self.provider.selected_feeds:
+
+        # FIXME
+        return AttrDict()
+
+        if self.provider.selected_channels:
             return AttrDict([
                 ("refreshed", lambda: timeago.format(self.provider.feed.fetched, datetime.now(), "en_short")),
                 ("updated", lambda: timeago.format(self.provider.feed.updated, datetime.now(), "en_short")),
@@ -1110,7 +1140,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
     def translate_src(self):
         # FIXME
         return None
-        if not self.selected_feeds:
+        if not self.selected_channels:
             return None
         cfg = self.config.feeds[self.feed_entity.locator]
         if cfg and isinstance(cfg, AttrDict):
@@ -1139,9 +1169,9 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
     def feed_filters(self):
         return None
 
-    def on_feed_change(self, source, channel):
+    def on_feed_change(self, source, selection):
         # if feed and hasattr(feed, "locator"):
-        self.provider_data["selected_feed"] = channel
+        self.provider_data["selected_feed"] = [n.identifier for n in selection]
         # else:
         #     self.provider_data["selected_feed"] = None
         self.save_provider_data()
@@ -1188,13 +1218,13 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
     async def update_feeds(self, force=False, resume=False, replace=False):
         logger.info(f"update_feeds: {force} {resume}")
         with db_session:
-            # feeds = select(f for f in self.FEED_CLASS if f in self.selected_feeds)
+            # feeds = select(f for f in self.FEED_CLASS if f in self.selected_channels)
             # if not self.feed_entity:
             #     feeds = self.FEED_CLASS.select()
             # else:
             #     feeds = [self.feed_entity]
 
-            for feed in self.selected_feeds:
+            for feed in self.selected_channels:
                 if (force
                     or
                     feed.updated is None
@@ -1244,7 +1274,6 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
     def update_query(self):
 
         logger.info("update_query")
-        # import ipdb; ipdb.set_trace()
         status_filters =  {
             "all": lambda: True,
             "unread": lambda i: i.read is None,
@@ -1255,9 +1284,9 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
             self.LISTING_CLASS.select()
         )
 
-        if self.selected_feeds:
+        if self.selected_channels:
             self.feed_items_query = self.all_items_query.filter(
-                lambda i: i.channel in self.selected_feeds
+                lambda i: i.channel in self.selected_channels
             )
         else:
             self.feed_items_query = self.all_items_query
@@ -1370,4 +1399,4 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
     @property
     def playlist_title(self):
         return f"[{self.IDENTIFIER}]"
-        # return f"{self.IDENTIFIER}/{self.feed.locator if self.selected_feeds else 'all'}"
+        # return f"{self.IDENTIFIER}/{self.feed.locator if self.selected_channels else 'all'}"

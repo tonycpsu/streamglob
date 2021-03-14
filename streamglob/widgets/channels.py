@@ -24,7 +24,7 @@ class ChannelTreeWidget(urwid.TreeWidget):
         super().__init__(node)
         # insert an extra AttrWrap for our own use
         self._w = urwid.AttrWrap(self._w, None)
-        self.flagged = False
+        self.marked = False
         self.update_w()
 
     def get_display_text(self):
@@ -47,32 +47,45 @@ class ChannelTreeWidget(urwid.TreeWidget):
 
     def keypress(self, size, key):
 
-        if self.is_leaf:
-            return key
-        elif key == "right":
-            self.get_node().expand()
-        elif key == "left":
-            self.get_node().collapse()
-        elif key == " ":
-            self.flagged = not self.flagged
-            self.update_w()
+        if key == " ":
+            self.toggle_mark()
         elif self._w.selectable():
             return self.__super.keypress(size, key)
         else:
             return key
 
-    def update_w(self):
-        """Update the attributes of self.widget based on self.flagged.
-        """
-        if self.flagged:
-            self._w.attr = 'flagged'
-            self._w.focus_attr = 'flagged focus'
+    def mark(self):
+        self.marked = True
+        self.update_w()
+
+    def unmark(self):
+        self.marked = False
+        self.update_w()
+
+    def toggle_mark(self):
+        if self.marked:
+            self.unmark()
         else:
-            self._w.attr = 'browser_body'
-            self._w.focus_attr = 'browser_focus'
+            self.mark()
+
+    def update_w(self):
+        """Update the attributes of self.widget based on self.marked.
+        """
+        if self.marked:
+            self._w.attr = 'marked'
+            self._w.focus_attr = 'marked_focus'
+        else:
+            self._w.attr = "normal"
+            self._w.focus_attr = 'focus'
 
 class ChannelWidget(ChannelTreeWidget):
-    pass
+
+    def keypress(self, size, key):
+        if key == "enter":
+            self.mark()
+        else:
+            return super().keypress(size, key)
+
 
 class ChannelGroupWidget(ChannelTreeWidget):
     # apply an attribute to the expand/unexpand icons
@@ -97,23 +110,48 @@ class ChannelGroupWidget(ChannelTreeWidget):
     def unhandled_keys(self, size, key):
         """
         Override this method to intercept keystrokes in subclasses.
-        Default behavior: Toggle flagged on space, ignore other keys.
         """
-        if key == " ":
-            self.flagged = not self.flagged
-            self.update_w()
+        if key == "right":
+            self.get_node().expand()
+        elif key == "left":
+            self.get_node().collapse()
         else:
             return key
 
+    def mark(self):
+        super().mark()
+        for node in self.get_node().find_descendants():
+            node.get_widget().mark()
+
+    def unmark(self):
+        super().unmark()
+        for node in self.get_node().find_descendants():
+            node.get_widget().unmark()
 
 
 class ChannelNode(urwid.TreeNode):
 
+    @property
+    def is_leaf(self):
+        return True
+
     def load_widget(self):
         return ChannelWidget(self)
 
+    @property
+    def identifier(self):
+        return self.get_key()
+
+    @property
+    def marked(self):
+        return self.get_widget().marked
+
 
 class ChannelGroupNode(urwid.ParentNode):
+
+    @property
+    def is_leaf(self):
+        return False
 
     def load_widget(self):
         return ChannelGroupWidget(self)
@@ -135,13 +173,59 @@ class ChannelGroupNode(urwid.ParentNode):
             childclass = ChannelNode
         return childclass(childdata[key], parent=self, key=key, depth=childdepth)
 
-    def leaf_values(self):
+    # @property
+    # def leaf_values(self):
+    #     for key in self.get_child_keys():
+    #         child = self.get_child_node(key)
+    #         if isinstance(child, urwid.ParentNode):
+    #             yield from child.leaf_values
+    #         else:
+    #             yield(child.get_key())
+
+    # @property
+    # def leaf_nodes(self):
+    #     for key in self.get_child_keys():
+    #         child = self.get_child_node(key)
+    #         if isinstance(child, urwid.ParentNode):
+    #             yield from child.leaf_nodes
+    #         else:
+    #             yield child
+
+    def find_key(self, key):
+        try:
+            return next(self.find_descendants(lambda n: n.get_key() == key))
+        except StopIteration:
+            return None
+
+    def find_descendants(self, pred=None):
         for key in self.get_child_keys():
             child = self.get_child_node(key)
+            if pred is None or pred(child):
+                yield child
             if isinstance(child, urwid.ParentNode):
-                yield from child.leaf_values()
-            else:
-                yield(child.get_key())
+                yield from child.find_descendants(pred)
+
+    def get_leaf_nodes(self):
+        yield from self.find_descendants(
+            lambda n: n.is_leaf
+        )
+
+    def get_leaf_keys(self):
+        yield from (n.get_key() for n in self.get_leaf_nodes())
+
+    def get_marked_descendants(self):
+        yield from self.find_descendants(
+            lambda n: n.is_leaf and n.marked
+        )
+
+
+    #     for key in self.get_child_keys():
+    #         child = self.get_child_node(key)
+    #         if isinstance(child, urwid.ParentNode):
+    #             yield from child.get_marked_descendants()
+    #         elif child.get_widget().marked:
+    #             yield child
+
 
 
     def expand(self):
@@ -167,6 +251,10 @@ class ChannelGroupNode(urwid.ParentNode):
             if not node:
                 break
 
+    @property
+    def identifier(self):
+        return ("group", self.get_key())
+
 
 class ChannelTreeBrowser(urwid.WidgetWrap):
 
@@ -175,15 +263,15 @@ class ChannelTreeBrowser(urwid.WidgetWrap):
     palette = [
         ('body', 'light gray', 'black'),
         ('focus', 'light green', 'black', 'standout'),
-        ('flagged', 'black', 'dark green', ('bold','underline')),
+        ('marked', 'black', 'dark green', ('bold','underline')),
         ('focus', 'light gray', 'dark blue', 'standout'),
-        ('flagged focus', 'yellow', 'dark cyan',
+        ('marked focus', 'yellow', 'dark cyan',
                 ('bold','standout','underline')),
         ('head', 'yellow', 'black', 'standout'),
         ('foot', 'light gray', 'black'),
         ('key', 'light cyan', 'black','underline'),
         ('title', 'white', 'black', 'bold'),
-        ('flag', 'dark gray', 'light gray'),
+        ('mark', 'dark gray', 'light gray'),
         ('error', 'dark red', 'light gray'),
         ]
 
@@ -214,28 +302,44 @@ class ChannelTreeBrowser(urwid.WidgetWrap):
     def selection(self):
         return self.body.get_focus()[1]
 
+    def mark_all(self):
+        self.tree.get_widget().mark()
+
+    def unmark_all(self):
+        self.tree.get_widget().unmark()
+
+    @property
+    def selected_channels(self):
+
+        marked = list(self.tree.get_marked_descendants())
+
+        if marked:
+            logger.info(f"marked: {marked}")
+            # selection = [node.identifier for node in marked]
+            selection = marked
+        else:
+            selection = [self.selection]
+
+        return selection
+
     def keypress(self, size, key):
 
-        node = self.selection
-
         if key == "enter":
-            if isinstance(node, ChannelNode):
-                # channels = [node.get_key()]
-                channel = node.get_key()
+            self._emit("change", self.selected_channels)
+        elif key == ";":
+            marked = list(self.tree.get_marked_descendants())
+            if marked:
+                self.unmark_all()
             else:
-                channel = ("channel", node.get_key())
-                # channels = list(node.leaf_values())
-
-            self._emit("change", channel)
+                self.mark_all()
         else:
             return super().keypress(size, key)
 
-    @selection.setter
-    def set_selection(self, path):
-        self.find_path(path)
-
     def find_path(self, path):
-        return self.tree_root.find_path(path)
+        return self.tree.find_path(path)
+
+    def find_key(self, key):
+        return self.tree.find_key(key)
 
 
 def get_example_tree(root):
