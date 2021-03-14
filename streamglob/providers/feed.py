@@ -296,7 +296,10 @@ class CachedFeedProviderDetailDataTable(DetailDataTable):
 
     async def mark_selection_seen(self):
         with db_session:
-            source = FeedMediaSource[self.selection.data.media_source_id]
+            try:
+                source = FeedMediaSource[self.selection.data.media_source_id]
+            except ObjectNotFound:
+                return
             source.mark_seen()
         self.selection.clear_attr("unread")
         # logger.info("mark seen")
@@ -502,10 +505,12 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
     @keymap_command
     def mark_all_read(self):
         with db_session:
-            if self.provider.feed:
-                self.provider.feed.mark_all_items_read()
-            else:
-                self.provider.FEED_CLASS.mark_all_feeds_read()
+            for f in self.provider.selected_channels:
+                f.mark_all_items_read()
+            # if self.provider.feed:
+            #     self.provider.feed.mark_all_items_read()
+            # else:
+            #     self.provider.FEED_CLASS.mark_all_feeds_read()
         self.reset()
 
 
@@ -922,8 +927,11 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
 
     @property
     def selected_channels(self):
-        # import ipdb; ipdb.set_trace()
-        return self.channels.selected_channels
+        return self.channels.selected_items
+
+    @property
+    def all_channels(self):
+        return self.channels.all_channels
 
     @property
     def footer_attrs(self):
@@ -1148,17 +1156,21 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         return None
 
     def create_feeds(self):
-        print("FIXME")
-        return
+
         with db_session:
-            for n, f in self.feeds.items():
-                feed = self.FEED_CLASS.get(locator=f.locator)
+            for channel in self.view.all_channels:
+                locator = channel.get_key()
+                value = channel.get_value()
+                if isinstance(value, dict):
+                    name = value.get("name")
+                else:
+                    name = value
+                feed = self.FEED_CLASS.get(locator=locator)
                 if not feed:
                     feed = self.FEED_CLASS(
                         provider_id = self.IDENTIFIER,
-                        name = n,
-                        locator= f.locator
-                        # **self.feed_attrs(name)
+                        name = name,
+                        locator= locator
                     )
                     commit()
 

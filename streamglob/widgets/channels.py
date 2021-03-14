@@ -120,12 +120,12 @@ class ChannelGroupWidget(ChannelTreeWidget):
 
     def mark(self):
         super().mark()
-        for node in self.get_node().find_descendants():
+        for node in self.get_node().get_nodes():
             node.get_widget().mark()
 
     def unmark(self):
         super().unmark()
-        for node in self.get_node().find_descendants():
+        for node in self.get_node().get_nodes():
             node.get_widget().unmark()
 
 
@@ -193,28 +193,28 @@ class ChannelGroupNode(urwid.ParentNode):
 
     def find_key(self, key):
         try:
-            return next(self.find_descendants(lambda n: n.get_key() == key))
+            return next(self.get_nodes(lambda n: n.get_key() == key))
         except StopIteration:
             return None
 
-    def find_descendants(self, pred=None):
+    def get_nodes(self, pred=None):
         for key in self.get_child_keys():
             child = self.get_child_node(key)
             if pred is None or pred(child):
                 yield child
             if isinstance(child, urwid.ParentNode):
-                yield from child.find_descendants(pred)
+                yield from child.get_nodes(pred)
 
     def get_leaf_nodes(self):
-        yield from self.find_descendants(
+        yield from self.get_nodes(
             lambda n: n.is_leaf
         )
 
     def get_leaf_keys(self):
         yield from (n.get_key() for n in self.get_leaf_nodes())
 
-    def get_marked_descendants(self):
-        yield from self.find_descendants(
+    def get_marked_nodes(self):
+        yield from self.get_nodes(
             lambda n: n.is_leaf and n.marked
         )
 
@@ -222,7 +222,7 @@ class ChannelGroupNode(urwid.ParentNode):
     #     for key in self.get_child_keys():
     #         child = self.get_child_node(key)
     #         if isinstance(child, urwid.ParentNode):
-    #             yield from child.get_marked_descendants()
+    #             yield from child.get_marked_nodes()
     #         elif child.get_widget().marked:
     #             yield child
 
@@ -309,9 +309,13 @@ class ChannelTreeBrowser(urwid.WidgetWrap):
         self.tree.get_widget().unmark()
 
     @property
-    def selected_channels(self):
+    def all_channels(self):
+        return self.tree.get_leaf_nodes()
 
-        marked = list(self.tree.get_marked_descendants())
+    @property
+    def selected_items(self):
+
+        marked = list(self.tree.get_marked_nodes())
 
         if marked:
             logger.info(f"marked: {marked}")
@@ -325,9 +329,13 @@ class ChannelTreeBrowser(urwid.WidgetWrap):
     def keypress(self, size, key):
 
         if key == "enter":
-            self._emit("change", self.selected_channels)
+            marked = list(self.tree.get_marked_nodes())
+            if len(marked) <= 1:
+                self.unmark_all()
+                self.selection.get_widget().mark()
+            self._emit("change", self.selected_items)
         elif key == ";":
-            marked = list(self.tree.get_marked_descendants())
+            marked = list(self.tree.get_marked_nodes())
             if marked:
                 self.unmark_all()
             else:
