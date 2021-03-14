@@ -931,22 +931,22 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
 
 
     async def preview_content_thumbnail(self, cfg, position, listing, source):
-        logger.info(f"preview_content_thumbnail {position}")
+        logger.debug(f"preview_content_thumbnail {position}")
         if source.locator_thumbnail is None:
-            logger.info("no thumbnail")
+            logger.debug("no thumbnail")
             return
-        logger.info(f"replacing with thumbnail: {source.locator_thumbnail} at pos {position}")
+        logger.debug(f"replacing with thumbnail: {source.locator_thumbnail} at pos {position}")
         await self.playlist_replace(source.locator_thumbnail, idx=position)
 
     async def preview_content_full(self, cfg, position, listing, source):
-        logger.info(f"preview_content_full {position}")
+        logger.debug(f"preview_content_full {position}")
         if source.locator_thumbnail is None:
-            logger.info("full: no thumbnail")
+            logger.debug("full: no thumbnail")
             return
         if source.locator is None:
-            logger.info("no full")
+            logger.debug("no full")
             return
-        logger.info(f"replacing with full: {source.locator} at pos {position}")
+        logger.debug(f"replacing with full: {source.locator} at pos {position}")
         await self.playlist_replace(source.locator, idx=position)
 
     async def preview_content(self):
@@ -956,19 +956,18 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
         position = self.playlist_position
 
         if self.config.auto_preview.delay:
-            logger.info(f"sleeping: {self.config.auto_preview.delay}")
+            logger.debug(f"sleeping: {self.config.auto_preview.delay}")
             await asyncio.sleep(self.config.auto_preview.delay)
 
         await self.set_playlist_pos(position)
 
         if self.config.auto_preview.duration:
-            # logger.info(f"sleeping: {self.config.auto_preview.duration}")
             await asyncio.sleep(self.config.auto_preview.duration)
 
         for i, cfg in enumerate(self.config.auto_preview.stages):
             # if self.playlist_position != position:
             #     return
-            logger.info(f"stage: {cfg}")
+            logger.debug(f"stage: {cfg}")
             if self.play_items[position].preview_mode == cfg.mode:
                 continue
             # import ipdb; ipdb.set_trace()
@@ -977,7 +976,6 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             preview_fn = getattr(
                 self, f"preview_content_{cfg.mode}"
             )
-            logger.info(preview_fn)
             await preview_fn(cfg, position, listing, source=source)
             self.play_items[position].preview_mode = cfg.mode
             duration = await self.preview_duration(cfg, listing)

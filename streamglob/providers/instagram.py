@@ -412,7 +412,7 @@ class InstagramProviderBodyView(CachedFeedProviderBodyView):
 
     @property
     def indicator_bars(self):
-        if not self.provider.selected_channels:
+        if not len(self.provider.feeds) == 1:
             return super().indicator_bars
         return super().indicator_bars + [
             ("total", "🌐", "dark gray",
