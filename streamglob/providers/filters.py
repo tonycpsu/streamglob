@@ -387,47 +387,12 @@ class ListingFilter(WidgetFilter, abc.ABC):
     def __getitem__(self, key):
         return self.widget.items[key]
 
-@dataclass
-class FeedConfig:
-
-    locator: str
-    _name: typing.Optional[str] = None
-    translate: typing.Optional[str] = None
-
-    def __str__(self):
-        return self.name
-
-    def __iter__(self):
-        return iter([self.name, self])
-
-    def __eq__(self, other):
-        return self.locator == (
-            other.locator
-            if hasattr(other, "locator")
-            else other
-        )
-
-    @property
-    def name(self):
-        if self._name:
-            return self._name
-        return self.locator
-
-    @classmethod
-    def from_kv(cls, k, v):
-        return cls(k, **(
-                { kk if kk != "name" else "_name": vv
-                 for kk, vv in v.items() if k != "_name"}
-                if isinstance(v, dict)
-                else {"_name": v}
-            ))
-
 
 class ConfigFilter(ListingFilter, abc.ABC):
 
     label_attr = "label"
 
-    CONFIG_CLASS = FeedConfig
+    # CONFIG_CLASS = FeedConfig
 
     @property
     @abc.abstractmethod
@@ -440,56 +405,27 @@ class ConfigFilter(ListingFilter, abc.ABC):
 
     @property
     def items(self):
-        cfg = getattr(self.provider.config, self.key)
-
+        cfg = self.provider.config.get_path(self.key)
+        if not cfg:
+            return AttrDict()
         if self.with_all:
             items = [("All", None)]
         else:
             items = list()
 
-        return AttrDict(items, **AttrDict([
-            self.CONFIG_CLASS.from_kv(k, v)
-            for k, v in cfg.items()
-        ]))
-
-    #     def parse_list_item(item):
-    #         if isinstance(item, dict):
-    #             if len(item.keys()) == 1:
-    #                 k = list(item.keys())[0]
-
-    #                 # raise Exception(item)
-    #                 # return reversed(list(item.items())[0])
-    #                 if isinstance(item[k], dict):
-    #                     return (
-    #                         list(item.keys())[0],
-    #                         list(item.values())[0].get(self.label_attr)
-    #                         if self.label_attr in list(item.values())[0]
-    #                         else list(item.keys())[0]
-    #                     )
-    #                 else:
-    #                     return reversed(list(item.items())[0])
-    #         else:
-    #             return (item, item)
-
-    #     if isinstance(cfg, dict):
-    #         return AttrDict(items, **cfg)
-    #     elif isinstance(cfg, list):
-    #         return AttrDict(items, **AttrDict([
-    #             parse_list_item(i)
-    #             # [ (i, i) for i in cfg ])
-    #             # [reversed(list(i.items())[0]) if isinstance(i, dict) else (i, i)
-    #             for i in cfg]
-    #         ))
-
-    # # @property
-    # # def widget_kwargs(self):
-    # #     return {"label": "foo"}
-
-    # # @property
-    # # def widget_sizing(self):
-    # #     return lambda w: ("given", 40)
+        return AttrDict(items, **cfg)
 
 
+class CustomFilter(ListingFilter):
+
+    @property
+    def items(self):
+        cfg = self.provider.config.get_path("filters")
+        if not cfg:
+            return AttrDict()
+        items = [("---", None)]
+
+        return AttrDict(items, **cfg)
 
 
 def with_filters(*filters):

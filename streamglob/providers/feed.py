@@ -588,7 +588,6 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
                 self.focus_position = len(self)-1
         if idx:
             pos = self.index_to_position(idx)
-            logger.info(pos)
             focus_position_orig = self.focus_position
             self.focus_position = pos
             self.mark_read_on_focus = True
@@ -647,12 +646,6 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
     def keypress(self, size, key):
         return super().keypress(size, key)
 
-
-# class FeedsFilter(ConfigFilter):
-
-#     key = "feeds"
-#     with_all = True
-
 class FeedsFilter(PropertyFilter):
 
     @property
@@ -688,6 +681,7 @@ class FeedProvider(BaseProvider):
     def FILTERS_OPTIONS(self):
         return AttrDict([
             ("status", ItemStatusFilter),
+            ("filters", CustomFilter),
             ("search", TextFilter)
         ],**super().FILTERS_OPTIONS)
 
@@ -1086,11 +1080,12 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         super().__init__(*args, **kwargs)
         self.search_filter = None
         self.items_query = None
+        self.custom_filters = AttrDict()
         urwid.connect_signal(self.view, "feed_change", self.on_feed_change)
         urwid.connect_signal(self.view, "feed_select", self.on_feed_select)
         self.filters["status"].connect("changed", self.on_status_change)
+        self.filters["filters"].connect("changed", self.on_custom_change)
         self.pagination_cursor = None
-        self.game_map = AttrDict()
         self.limiter = get_limiter(rate=self.RATE_LIMIT, capacity=self.BURST_LIMIT)
 
     @property
@@ -1200,6 +1195,11 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         self.save_provider_data()
         if not self.is_active:
             return
+        self.reset()
+
+    def on_custom_change(self, custom, *args):
+        logger.info(f"{custom}, {args}")
+        self.custom_filters = custom
         self.reset()
 
     def open_popup(self, text):
@@ -1323,6 +1323,10 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                 self.items_query = self.items_query.filter(
                     lambda i: query.lower() in i.title.lower()
                 )
+
+        if self.custom_filters:
+            for k, v in self.custom_filters.items():
+                self.items_query = self.items_query.filter(lambda i: v in getattr(i, k))
 
         (sort_field, sort_desc) = self.view.sort_by
 
