@@ -646,15 +646,9 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
     def keypress(self, size, key):
         return super().keypress(size, key)
 
-class FeedsFilter(PropertyFilter):
 
-    @property
-    def filter_sizing(self):
-        return ("weight", 0)
-
-    @property
-    def widget_sizing(self):
-        return lambda w: ("given", 0)
+class FeedsFilter(HiddenFilterMixin, PropertyFilter):
+    pass
 
 class ItemStatusFilter(ListingFilter):
 
@@ -680,8 +674,8 @@ class FeedProvider(BaseProvider):
     @property
     def FILTERS_OPTIONS(self):
         return AttrDict([
-            ("status", ItemStatusFilter),
             ("filters", CustomFilter),
+            ("status", ItemStatusFilter),
             ("search", TextFilter)
         ],**super().FILTERS_OPTIONS)
 

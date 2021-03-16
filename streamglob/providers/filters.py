@@ -140,6 +140,16 @@ class BooleanFilterWidget(urwid.CheckBox):
         self.set_state(value)
 
 
+class HiddenFilterMixin(object):
+
+    @property
+    def filter_sizing(self):
+        return ("weight", 0)
+
+    @property
+    def widget_sizing(self):
+        return lambda w: ("given", 0)
+
 class BooleanFilter(WidgetFilter, abc.ABC):
 
     WIDGET_CLASS = BooleanFilterWidget
