@@ -1164,6 +1164,11 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                     provider_id=self.IDENTIFIER,
                     locator=channel.locator
                 )
+                if not feed:
+                    feed = self.FEED_CLASS(
+                        provider_id=self.IDENTIFIER,
+                        locator=channel.locator
+                    )
                 feed.name=channel.name
                 feed.attrs.update(channel.attrs)
 

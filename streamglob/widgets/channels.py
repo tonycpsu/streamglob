@@ -136,7 +136,7 @@ class ChannelPropertiesMixin(object):
         value = self.get_value()
         if isinstance(value, dict):
             name = value.get("name", None)
-        elif isinstance(value,str):
+        elif isinstance(value, str):
             return value
         return self.locator
 
