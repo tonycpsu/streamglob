@@ -377,18 +377,18 @@ class MediaSourceMixin(object):
 
         if template:
             # import ipdb; ipdb.set_trace()
-            if not glob:
-                template = self.provider.translate_template(template)
             # template = self.TEMPLATE_RE.sub(r"{self.\1}", template)
             template = template.replace("{listing.title", "{listing.safe_title")
             try:
                 outfile = template.format_map(
                     SafeDict(
                         self=self, listing=listing or self.listing, # FIXME
-                        uri="uri=" + self.uri.replace("/", "+") +"=",
+                        uri="uri=" + self.uri.replace("/", "+") +"=" if not glob else "*",
                         index=self.rank+1, num=num or len(listing.sources) if listing else 0
                     )
                 )
+                if not glob:
+                    outfile = self.provider.translate_template(outfile)
                 if config.settings.profile.unicode_normalization:
                     outfile = unicodedata.normalize(config.settings.profile.unicode_normalization, outfile)
             except Exception as e:
@@ -408,10 +408,6 @@ class MediaSourceMixin(object):
     @property
     def is_downloaded(self):
         with db_session:
-            # try:
-            #     source = self.provider.MEDIA_SOURCE_CLASS[self.media_source_id]
-            # except:
-            #     return False
             listing = self.provider.LISTING_CLASS.orm_class[self.listing.media_listing_id]
             try:
                 # FIXME
@@ -419,7 +415,12 @@ class MediaSourceMixin(object):
                     listing=listing, num=len(listing.sources),
                     glob=True
                 )
-                # logger.info(filename)
+                if glob.glob(filename):
+                    return True
+                if not getattr(self, "uri", None):
+                    return False
+                dirname = os.path.dirname(filename)
+                filename=os.path.join(dirname, f"*{self.uri}*")
                 return glob.glob(filename)
             except SGInvalidFilenameTemplate as e:
                 logger.error(e)
