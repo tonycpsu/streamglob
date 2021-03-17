@@ -52,6 +52,7 @@ class FeedMediaChannel(model.MediaChannel):
 
         fetched = 0
         self.provider.update_fetch_indicator(0)
+        self.provider.view.footer.show_message(f"Updating {self.name}...")
         async for item in self.fetch(limit=self.provider.fetch_limit, *args, **kwargs):
             with db_session:
                 old = self.provider.LISTING_CLASS.get(guid=item["guid"])
@@ -631,7 +632,6 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
 
     @keymap_command
     async def update(self, force=False, resume=False, replace=False):
-        self.provider.view.footer.show_message("Updating...")
         await self.provider.update(force=force, resume=resume, replace=replace)
         # self.reset()
 
