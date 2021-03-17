@@ -826,6 +826,9 @@ class YouTubeDLDownloader(Downloader):
     def is_simple(self):
         return False
 
+    def process_args(self, task, outfile, **kwargs):
+        self.extra_args_post += ["-o", outfile]
+
     def process_kwargs(self, kwargs):
         format = kwargs.pop("format", None)
         if format:
@@ -833,6 +836,7 @@ class YouTubeDLDownloader(Downloader):
 
     def pipe_to_dst(self):
         self.extra_args_post += ["-o", "-"]
+
 
     @classmethod
     def supports_url(cls, url):

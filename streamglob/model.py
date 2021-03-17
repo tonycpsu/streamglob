@@ -13,6 +13,7 @@ import shutil
 import unicodedata
 import tempfile
 import traceback
+import glob
 
 import pony.options
 pony.options.CUT_TRACEBACK = False
@@ -282,6 +283,9 @@ class MediaChannel(MediaChannelMixin, db.Entity):
     listings = Set(lambda: ChannelMediaListing, reverse="channel")
     attrs = Required(Json, default={})
 
+class SafeDict(dict):
+    def __missing__(self, key):
+        return '{' + key + '}'
 
 class MediaSourceMixin(object):
 
@@ -346,7 +350,10 @@ class MediaSourceMixin(object):
         return f"{self.provider_id}_dl" # *shrug*
 
 
-    def download_filename(self, listing=None, index=0, num=0, **kwargs):
+    def download_filename(
+            self, listing=None, index=0, num=0,
+            glob=False, **kwargs
+    ):
 
         if isinstance(index, int):
             index += 1
@@ -369,13 +376,18 @@ class MediaSourceMixin(object):
         )
 
         if template:
-            template = self.TEMPLATE_RE.sub(r"{self.\1}", template)
+            # import ipdb; ipdb.set_trace()
+            if not glob:
+                template = self.provider.translate_template(template)
+            # template = self.TEMPLATE_RE.sub(r"{self.\1}", template)
             template = template.replace("{listing.title", "{listing.safe_title")
             try:
-                outfile = template.format(
-                    self=self, listing=listing or self.listing, # FIXME
-                    uri="uri=" + self.uri.replace("/", "+") +"=",
-                    index=self.rank+1, num=num or len(listing.sources) if listing else 0
+                outfile = template.format_map(
+                    SafeDict(
+                        self=self, listing=listing or self.listing, # FIXME
+                        uri="uri=" + self.uri.replace("/", "+") +"=",
+                        index=self.rank+1, num=num or len(listing.sources) if listing else 0
+                    )
                 )
                 if config.settings.profile.unicode_normalization:
                     outfile = unicodedata.normalize(config.settings.profile.unicode_normalization, outfile)
@@ -386,6 +398,7 @@ class MediaSourceMixin(object):
         else:
             template = "{listing.provider}.{self.default_name}.{self.timestamp}.{self.ext}"
             outfile = template.format(self=self)
+        outfile = re.sub("({[^}]+})", "*", outfile)
         # logger.info(f"template: {template}, outfile: {outfile}")
         return os.path.join(outpath, outfile)
 
@@ -403,10 +416,11 @@ class MediaSourceMixin(object):
             try:
                 # FIXME
                 filename = self.download_filename(
-                    listing=listing, num=len(listing.sources)#, index=source.rank+1, num=len(self.listing.sources)
+                    listing=listing, num=len(listing.sources),
+                    glob=True
                 )
                 # logger.info(filename)
-                return os.path.exists(filename)
+                return glob.glob(filename)
             except SGInvalidFilenameTemplate as e:
                 logger.error(e)
 

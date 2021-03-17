@@ -680,6 +680,19 @@ class YouTubeProvider(PaginatedProviderMixin,
     def PREVIEW_TYPES(self):
         return ["default", "storyboard", "full"]
 
+    def translate_template(self, template):
+
+        TAG_MAP={
+            "listing.title": "title",
+            "listing.created_date": "upload_date",
+            "listing.guid": "id"
+        }
+        SRC_TAG_RE=re.compile(r"{([^}]+)}")
+
+        for s, d in TAG_MAP.items():
+            template = template.replace(s, d)
+        return SRC_TAG_RE.sub(r"%(\1)s", template)
+
     def init_config(self):
         super().init_config()
         attrs = list(self.ATTRIBUTES.items())
@@ -695,14 +708,6 @@ class YouTubeProvider(PaginatedProviderMixin,
             + attrs[idx:]
         )
 
-    # @property
-    # def default_filter_values(self):
-
-    #     return AttrDict(
-    #         super().default_filter_values, **AttrDict(
-    #             preview=self.config.get_path("auto_preview.content", None)
-    #         )
-    #     )
 
     @property
     def selected_feed(self):
@@ -711,31 +716,6 @@ class YouTubeProvider(PaginatedProviderMixin,
             return None
         return self.filters.feed.value
 
-    # def listings(self, offset=None, limit=None, *args, **kwargs):
-    #     # if self.filters.feed.value == "search":
-    #     if self.filters.feed.channel == "search":
-    #         if self.filters.feed.search:
-    #             query = f"ytsearch{offset+self.view.table.limit}:{self.filters.feed.search}"
-    #             return [
-    #                 # SearchResult(r)
-    #                 AttrDict(
-    #                     title = r.title,
-    #                     guid = r.guid,
-    #                     sources = [
-    #                         AttrDict(
-    #                             locator=r.url, media_type="video"
-    #                         )
-    #                     ]
-    #                 )
-    #                 for r in self.session.youtube_dl_query(query, offset, limit)
-    #             ]
-    #         else:
-    #             logger.info("no search")
-    #             return AttrDict()
-    #     else:
-    #         return super().listings(
-    #             offset=offset, limit=limit, *args, **kwargs
-    #         )
 
     def feed_attrs(self, feed_name):
         return dict(locator=self.filters.feed[feed_name])

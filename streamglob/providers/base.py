@@ -458,6 +458,8 @@ class BaseProvider(abc.ABC, Observable):
             **kwargs
         )
 
+    def translate_template(self, template):
+        return template
 
     # def new_listing_attr(self, **kwargs):
     #     return self.LISTING_CLASS.attr_class(
