@@ -8,6 +8,7 @@ import dataclasses
 import itertools
 import textwrap
 import tempfile
+import traceback
 import re
 
 from . import player
@@ -270,7 +271,7 @@ class TaskManager(Observable):
             proc = await run_task
         except Exception as e:
             task.result.set_result(e)
-            logger.error(e)
+            logger.error(traceback.format_exc())
             return
         task.proc.set_result(proc)
         # logger.debug(f"proc: {task.proc}")
