@@ -363,23 +363,12 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
     KEYMAP = {
         "cursor up": "prev_item",
         "cursor down": "next_item",
-        # "ctrl r": "reset",
-        # "ctrl d": "download",
-        "A": "mark_all_read",
-        "ctrl a": "mark_visible_read",
-        "meta a": ("mark_visible_read", [-1]),
-        "meta A": ("mark_visible_read", [1]),
         "n": "next_unread",
         "N": ("next_unread", [True]),
         "b": "prev_unread",
         "m": "toggle_selection_read",
         "i": "inflate_selection",
-        "meta ctrl k": "kill_all",
-        "r": ("update", [], {"force": True}),
-        "R": ("update", [], {"force": True, "resume": True}),
-        # "f": ("update", [], {"force": True, "resume": True}),
-        # "F": ("update", [], {"force": True, "resume": True, "replace": True}),
-        # "q": "quit_app"
+
     }
 
     def __init__(self, *args, **kwargs):
@@ -500,39 +489,14 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
             self.mark_item_read(position)
         # self.invalidate_rows([self[position].data.media_listing_id])
 
-    @keymap_command
     def toggle_selection_read(self):
         logger.info("toggle_selection_read")
         self.toggle_item_read(self.focus_position)
 
-    @keymap_command
-    def mark_all_read(self):
-        with db_session:
-            for f in self.provider.selected_channels:
-                f.mark_all_items_read()
-            # if self.provider.feed:
-            #     self.provider.feed.mark_all_items_read()
-            # else:
-            #     self.provider.FEED_CLASS.mark_all_feeds_read()
-        self.reset()
-
-
-    def mark_visible_read(self, direction=None):
-        for n, item in enumerate(self):
-            if direction and (
-                    direction < 0 and n > self.focus_position
-                    or direction> 0 and n < self.focus_position
-            ):
-                continue
-            self.mark_item_read(n)
-        self.reset()
-
-    @keymap_command
     async def prev_item(self):
         if self.focus_position > 0:
             self.focus_position -= 1
 
-    @keymap_command
     async def next_item(self):
         if self.focus_position < len(self)-1:
             self.focus_position += 1
@@ -541,7 +505,6 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
     def is_unread(listing):
         return not listing.data_source.attach().read
 
-    @keymap_command
     async def next_unread(self, no_sources=False):
         return await self.next_matching(self.is_unread, no_sources=no_sources)
 
@@ -625,27 +588,6 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
         return self.provider.LISTING_CLASS.get(
             guid=self[position].data.get("guid")
         )
-
-    # def refresh(self, *args, **kwargs):
-    #     logger.info("datatable refresh")
-    #     super().refresh(*args, **kwargs)
-
-    @keymap_command
-    async def update(self, force=False, resume=False, replace=False):
-        await self.provider.update(force=force, resume=resume, replace=replace)
-        # self.reset()
-
-    # # FIXME: move to base view
-    # @keymap_command
-    # def quit_app(self):
-    #     self.view.quit_app()
-
-    @db_session
-    def kill_all(self):
-        for feed in self.provider.selected_channels:
-            logger.info(f"killing all messages for {feed.locator}")
-            feed.reset()
-        self.reset()
 
     def keypress(self, size, key):
         return super().keypress(size, key)
@@ -880,9 +822,20 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
         self.indicator_placeholder.original_widget = widget
 
 
+@keymapped()
 class CachedFeedProviderBodyView(urwid.WidgetWrap):
 
     signals = ["select", "cycle_filter", "keypress", "feed_change", "feed_select"]
+
+    KEYMAP = {
+        "A": "mark_all_read",
+        "ctrl a": "mark_visible_read",
+        "meta a": ("mark_visible_read", [-1]),
+        "meta A": ("mark_visible_read", [1]),
+        "meta ctrl k": "kill_all",
+        "r": ("update", [], {"force": True}),
+        "R": ("update", [], {"force": True, "resume": True})
+    }
 
     def __init__(self, provider, body):
         self.provider = provider
@@ -922,6 +875,36 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
                              lambda s, *args: self._emit("feed_select", *args))
         urwid.connect_signal(self.channels, "change",
                              lambda s, *args: self._emit("feed_change", *args))
+
+    def keypress(self, size, key):
+        return super().keypress(size, key)
+
+    def mark_all_read(self):
+        with db_session:
+            for f in self.provider.selected_channels:
+                f.mark_all_items_read()
+        self.reset()
+
+    def mark_visible_read(self, direction=None):
+        for n, item in enumerate(self.body):
+            if direction and (
+                    direction < 0 and n > self.body.focus_position
+                    or direction> 0 and n < self.body.focus_position
+            ):
+                continue
+            self.body.mark_item_read(n)
+        self.reset()
+
+    @keymap_command
+    async def update(self, force=False, resume=False, replace=False):
+        await self.provider.update(force=force, resume=resume, replace=replace)
+        # self.reset()
+    @db_session
+    def kill_all(self):
+        for feed in self.provider.selected_channels:
+            logger.info(f"killing all messages for {feed.locator}")
+            feed.reset()
+        self.reset()
 
     def cycle_feed(self, step=1):
         self.channels.cycle(step)
