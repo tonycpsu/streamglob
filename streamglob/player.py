@@ -827,7 +827,7 @@ class YouTubeDLDownloader(Downloader):
         return False
 
     def process_kwargs(self, kwargs):
-        format = kwargs.pop("format")
+        format = kwargs.pop("format", None)
         if format:
             self.extra_args_post += ["-f", str(format)]
 
