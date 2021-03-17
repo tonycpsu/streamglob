@@ -15,6 +15,7 @@ from io import StringIO
 import requests
 import asyncio
 import aiohttp
+from aiolimiter import AsyncLimiter
 import lxml
 import lxml, lxml.etree
 import yaml
@@ -223,6 +224,19 @@ class StreamSession(object):
 class AsyncStreamSession(StreamSession):
 
     SESSION_CLASS = aiohttp.ClientSession
+
+    DEFAULT_REQUESTS_PER_MINUTE = 60
+
+    def __init__(self,
+                 provider_id,
+                 requests_per_minute=DEFAULT_REQUESTS_PER_MINUTE,
+                 *args, **kwargs):
+        super().__init__(provider_id, *args, **kwargs)
+        self._limiter = AsyncLimiter(requests_per_minute, 60)
+
+    @property
+    def limiter(self):
+        return self._limiter
 
     # # FIXME: caching?
     # async def request(self, method, url, *args, **kwargs):

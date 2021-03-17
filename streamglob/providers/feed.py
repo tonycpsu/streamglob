@@ -194,8 +194,8 @@ class FeedMediaListingMixin(object):
     def body(self):
         return self.title
 
-    def check(self):
-        return all(s.check() for s in self.sources)
+    async def check(self):
+        return all([await s.check() for s in self.sources])
 
     def refresh(self):
         pass
@@ -241,7 +241,7 @@ class FeedMediaSourceMixin(object):
             except AttributeError:
                 raise
 
-    def check(self):
+    async def check(self):
         return True
 
     def refresh(self):
@@ -950,7 +950,7 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
     def footer_attrs(self):
 
         if len(self.provider.feeds) == 1:
-            feed = self.provider.feeds[0]
+            feed = self.provider.selected_channels[0]
             return AttrDict([
                 ("refreshed", lambda: timeago.format(feed.fetched, datetime.now(), "en_short")),
                 ("updated", lambda: timeago.format(feed.updated, datetime.now(), "en_short")),

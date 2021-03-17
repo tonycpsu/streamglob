@@ -25,23 +25,22 @@ from aiolimiter import AsyncLimiter
 import json
 
 
-class InstagramSession(session.StreamSession):
+class InstagramSession(session.AsyncStreamSession):
+    pass
+    # DEFAULT_REQUESTS_PER_MINUTE = 60
 
-    DEFAULT_REQUESTS_PER_MINUTE = 60
+    # def __init__(
+    #         self,
+    #         provider_id,
+    #         *args, **kwargs
+    # ):
+    #     super().__init__(provider_id, *args, **kwargs)
+    #     self.requests_per_minute = requests_per_minute
+    #     self._limiter = AsyncLimiter(requests_per_minute, 60)
 
-    def __init__(
-            self,
-            provider_id,
-            requests_per_minute = DEFAULT_REQUESTS_PER_MINUTE,
-            *args, **kwargs
-    ):
-        super().__init__(provider_id, *args, **kwargs)
-        self.requests_per_minute = requests_per_minute
-        self._limiter = AsyncLimiter(requests_per_minute, 60)
-
-    @property
-    def limiter(self):
-        return self._limiter
+    # @property
+    # def limiter(self):
+    #     return self._limiter
 
 
 class InstagramMediaSourceMixin(object):
@@ -68,10 +67,11 @@ class InstagramMediaSourceMixin(object):
     # def is_bad(self):
     #     return any(s in (self.locator or self.locator_thumbnail) for s in ["0_0_0", "null.jpg"])
 
-    def check(self):
+    async def check(self):
         if self.created > datetime.now() - timedelta(hours=4):
             return True
-        return self.provider.session.head(self.locator).status_code == 200
+        res = await self.provider.session.head(self.locator)
+        return res.status == 200
 
     @property
     def download_helper(self):

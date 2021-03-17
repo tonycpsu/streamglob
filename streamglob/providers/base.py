@@ -1052,7 +1052,7 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
                 failed_listing_id = play_item.media_listing_id
                 with db_session(optimistic=False):
                     listing = self.provider.LISTING_CLASS[failed_listing_id]
-                    if not listing.check():
+                    if not await listing.check():
                         logger.debug("listing broken, fixing...")
                         listing.refresh()
                         # have to force a reload here since sources may have changed
