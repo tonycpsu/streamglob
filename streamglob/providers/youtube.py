@@ -97,7 +97,7 @@ class YouTubeMediaListingMixin(object):
 class YouTubeMediaListing(YouTubeMediaListingMixin, model.ContentMediaListing, FeedMediaListing):
 
     duration_seconds = Optional(int)
-    definition = Optional(str)
+    definition = Optional(str) # move to attrs
 
 
 class YouTubeMediaSourceMixin(object):
@@ -151,7 +151,7 @@ class YouTubeSession(session.AsyncStreamSession):
                 yield AttrDict(
                     guid = item["id"],
                     title = item["title"],
-                    duration_seconds = self.parse_duration(item["duration"]),
+                    duration_seconds=item["duration"],
                 )
 
 
@@ -172,7 +172,7 @@ class YouTubeSession(session.AsyncStreamSession):
         entry.created = dateparser.parse(
             vi["microformat"]["playerMicroformatRenderer"]["publishDate"]
         )
-        entry.duration_seconds = int(vi["videoDetails"]["lengthSeconds"])
+        entry.duration = int(vi["videoDetails"]["lengthSeconds"])
 
         try:
             entry.thumbnail = sorted(
@@ -191,6 +191,45 @@ class YouTubeSession(session.AsyncStreamSession):
         return entry
 
 
+    async def fetch_google_data(self, video_ids):
+        url = (
+            f"https://www.googleapis.com/youtube/v3/videos?"
+            f"id={','.join(video_ids)}"
+            f"&part=snippet,contentDetails"
+            f"&key={self.provider.config.credentials.api_key}"
+        )
+        res = await self.provider.session.get(url)
+        return await res.json()
+
+
+    async def bulk_update(self, entries):
+
+        vids = [entry.guid for entry in entries]
+        data = await self.fetch_google_data(vids)
+        logger.debug(f"bulk_update: {vids}")
+
+        for entry in entries:
+            item = next(
+                item for item in data["items"]
+                if item["id"] == entry.guid
+            )
+
+            entry.created = dateparser.parse(item["snippet"]["publishedAt"][:-1]) # FIXME: Time zone convert from UTC
+            entry.content = item["snippet"]["description"]
+            entry.duration_seconds = int(
+                isodate.parse_duration(
+                    item["contentDetails"]["duration"]
+                ).total_seconds()
+            )
+            entry.definition = item["contentDetails"]["definition"]
+            entry.thumbnail = next(
+                item["snippet"]["thumbnails"][res]["url"]
+                for res in self.THUMBNAIL_RESOLUTIONS
+                if res in item["snippet"]["thumbnails"]
+            )
+            yield entry
+
+
     async def fetch(self, query, offset=None, limit=None):
 
         async for entry in self.youtube_dl_query(query, offset=offset, limit=limit):
@@ -200,7 +239,8 @@ class YouTubeSession(session.AsyncStreamSession):
     def parse_duration(cls, s):
         if not s:
             return None
-        return (dateparser.parse(s) - datetime.now().replace(
+        import ipdb; ipdb.set_trace()
+        return (dateparser.parse(str(s)) - datetime.now().replace(
                 hour=0,minute=0,second=0)
              ).seconds
 
@@ -387,10 +427,15 @@ class YouTubeFeed(FeedMediaChannel):
                 ):
                     break
 
-                batch = [
-                    await self.session.extract_video_info(entry)
-                    for entry in batch
-                ]
+                if self.provider.config.credentials.api_key:
+                    batch = [
+                        l async for l in self.session.bulk_update(batch)
+                    ]
+                else:
+                    batch = [
+                        await self.session.extract_video_info(entry)
+                        for entry in batch
+                    ]
 
             try:
                 start = next(
