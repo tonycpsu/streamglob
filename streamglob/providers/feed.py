@@ -637,10 +637,9 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
 
     @db_session
     def kill_all(self):
-        if not self.provider.feed:
-            return
-        logger.info(f"killing all messages for {self.provider.feed.locator}")
-        self.provider.feed.reset()
+        for feed in self.provider.selected_channels:
+            logger.info(f"killing all messages for {feed.locator}")
+            feed.reset()
         self.reset()
 
     def keypress(self, size, key):
