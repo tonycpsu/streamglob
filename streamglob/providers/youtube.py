@@ -50,23 +50,19 @@ class YouTubeMediaListingMixin(object):
 
     @async_cached_property
     async def video_info(self):
-        res = await self.provider.session.get(
-                "https://www.youtube.com/get_video_info"
-                f"?video_id={self.guid}&asv=3&el=detailpage&hl=en_US"
-        )
-        return parse_qs(
-            await res.text()
-        )
+        return await self.provider.session.get_video_info(self.guid)
 
     @async_cached_property
     async def storyboards(self):
-        video_info = await self.video_info
-        pr = json.loads(video_info["player_response"][0])
+
+        vi = await self.video_info
+
         try:
-            spec = pr["storyboards"]["playerStoryboardSpecRenderer"]["spec"]
+            spec = vi["storyboards"]["playerStoryboardSpecRenderer"]["spec"]
         except KeyError:
             return None
-        duration = int(pr["videoDetails"]["lengthSeconds"])
+
+        duration = self.duration_seconds or int(vi["videoDetails"]["lengthSeconds"])
 
         spec_parts = spec.split('|')
         base_url = spec_parts[0].split('$')[0] + "2/"
@@ -110,9 +106,6 @@ class YouTubeMediaSourceMixin(object):
     def locator(self):
         return f"https://youtu.be/{self.listing.guid}"
 
-    # @property
-    # def locator_thumbnail(self):
-    #     return f"https://i.ytimg.com/vi/{self.listing.guid}/maxresdefault.jpg"
 
     @property
     def helper(self):
@@ -129,14 +122,6 @@ class YouTubeSession(session.AsyncStreamSession):
 
     THUMBNAIL_RESOLUTIONS = ["maxres", "standard", "high", "medium", "default"]
 
-    # def __init__(
-    #         self,
-    #         provider_id,
-    #         *args, **kwargs
-    # ):
-    #     super().__init__(provider_id, *args, **kwargs)
-    #     self.session_aio = aiohttp.ClientSession()
-    
     async def youtube_dl_query(self, query, offset=None, limit=None):
 
         logger.debug(f"youtube_dl_query: {query} {offset}, {limit}")
@@ -167,49 +152,41 @@ class YouTubeSession(session.AsyncStreamSession):
                     guid = item["id"],
                     title = item["title"],
                     duration_seconds = self.parse_duration(item["duration"]),
-                    # url = f"https://youtu.be/{item['url']}",
-                    # url_thumbnail = f"http://img.youtube.com/vi/{item['url']}/0.jpg"
                 )
 
 
-    async def fetch_google_data(self, video_ids):
-        url = (
-            f"https://www.googleapis.com/youtube/v3/videos?"
-            f"id={','.join(video_ids)}"
-            f"&part=snippet,contentDetails"
-            f"&key={self.provider.config.credentials.api_key}"
+    async def get_video_info(self, vid):
+        res = await self.provider.session.get(
+            "https://www.youtube.com/get_video_info"
+            f"?video_id={vid}&asv=3&el=detailpage&hl=en_US"
         )
-        res = await self.provider.session.get(url)
-        return await res.json()
-
-    async def bulk_update(self, entries):
-
+        return json.loads(parse_qs(
+            await res.text()
+        )["player_response"][0])
 
 
-        vids = [entry.guid for entry in entries]
-        data = await self.fetch_google_data(vids)
-        logger.debug(f"bulk_update: {vids}")
+    async def extract_video_info(self, entry):
 
-        for entry in entries:
-            item = next(
-                item for item in data["items"]
-                if item["id"] == entry.guid
-            )
+        vi = await self.get_video_info(entry["guid"])
 
-            entry.created = dateparser.parse(item["snippet"]["publishedAt"][:-1]) # FIXME: Time zone convert from UTC
-            entry.content = item["snippet"]["description"]
-            entry.duration_seconds = int(
-                isodate.parse_duration(
-                    item["contentDetails"]["duration"]
-                ).total_seconds()
-            )
-            entry.definition = item["contentDetails"]["definition"]
-            entry.thumbnail = next(
-                item["snippet"]["thumbnails"][res]["url"]
-                for res in self.THUMBNAIL_RESOLUTIONS
-                if res in item["snippet"]["thumbnails"]
-            )
-            yield entry
+        entry.duration_seconds = int(vi["videoDetails"]["lengthSeconds"])
+
+        try:
+            entry.thumbnail = sorted(
+                [ (t["url"], t["height"]) for t in vi["videoDetails"]["thumbnail"]["thumbnails"] ],
+                key=lambda t: -t[1]
+            )[0][0]
+        except (IndexError, AttributeError):
+            pass
+
+        entry.content = (
+            vi["microformat"]
+            ["playerMicroformatRenderer"]
+            .get("description", {})
+            .get("simpleText")
+        )
+        return entry
+
 
     async def fetch(self, query, offset=None, limit=None):
 
@@ -291,10 +268,6 @@ class YouTubeChannelsDropdown(Observable, urwid.WidgetWrap):
     @property
     def value(self):
         return self.channel
-        # if self.channel == "search":
-        #     return ("search", self.search)
-        # else:
-        #     return self.channel
 
     @value.setter
     def value(self, value):
@@ -308,14 +281,6 @@ class YouTubeChannelsFilter(FeedsFilter):
     @property
     def items(self):
         return AttrDict(super().items, **{"Search": "search"})
-
-    # @property
-    # def value(self):
-    #     return self.widget.value
-
-    # @value.setter
-    # def value(self, value):
-    #     self.widget.value = value
 
     @property
     def search(self):
@@ -346,7 +311,6 @@ class YouTubeFeed(FeedMediaChannel):
         entries = tree.findall(
             ".//{http://www.w3.org/2005/Atom}entry"
         )
-        # raise Exception(entries[0].find("./{http://www.w3.org/2005/Atom}title"))
 
         res = {
             tag: entry.find(ns+tag).text
@@ -420,10 +384,11 @@ class YouTubeFeed(FeedMediaChannel):
                 ):
                     break
 
-                # add in data from Google API
-                batch = [ l async for l in self.session.bulk_update(batch) ]
+                batch = [
+                    await self.session.extract_video_info(entry)
+                    for entry in batch
+                ]
 
-            # import ipdb; ipdb.set_trace()
             try:
                 start = next(
                     i for i, item in enumerate(batch)
