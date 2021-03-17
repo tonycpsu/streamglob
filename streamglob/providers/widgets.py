@@ -120,7 +120,11 @@ class DownloadListingMixin(object):
     async def download_selection(self):
 
         listing = self.selected_listing
+        if not listing:
+            return
         source = self.selected_source
+        if not source:
+            return
         async for task in self.download(listing, index=source.rank or 0):
             pass
 

@@ -1290,6 +1290,8 @@ class MultiSourceListingMixin(object):
 
     @property
     def selected_source(self):
+        if not self.selected_listing:
+            return None
         return self.selected_listing.sources[self.inner_focus]
 
     def decorate(self, row, column, value):
