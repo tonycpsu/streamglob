@@ -169,6 +169,9 @@ class YouTubeSession(session.AsyncStreamSession):
 
         vi = await self.get_video_info(entry["guid"])
 
+        entry.created = dateparser.parse(
+            vi["microformat"]["playerMicroformatRenderer"]["publishDate"]
+        )
         entry.duration_seconds = int(vi["videoDetails"]["lengthSeconds"])
 
         try:
@@ -685,7 +688,8 @@ class YouTubeProvider(PaginatedProviderMixin,
         TAG_MAP={
             "listing.title": "title",
             "listing.created_date": "upload_date",
-            "listing.guid": "id"
+            "listing.guid": "id",
+            "listing.feed_locator": "channel_id"
         }
         SRC_TAG_RE=re.compile(r"{([^}]+)}")
 
