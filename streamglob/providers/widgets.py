@@ -37,9 +37,7 @@ class FilterToolbar(urwid.WidgetWrap):
     def cycle_filter(self, index, step=1):
         if index >= len(self.filters):
             return
-        visible_filters = [ f for f in self.filters.values()
-                            if not isinstance(f, HiddenFilterMixin) ]
-        visible_filters[index].cycle(step)
+        list(self.filters.values())[index].cycle(step)
 
     def focus_filter(self, name):
         try:

@@ -678,10 +678,10 @@ class FeedProvider(BaseProvider):
     @property
     def FILTERS_OPTIONS(self):
         return AttrDict([
-            ("filters", CustomFilter),
             ("status", ItemStatusFilter),
+            ("filters", CustomFilter),
             ("search", TextFilter)
-        ],**super().FILTERS_OPTIONS)
+        ], **super().FILTERS_OPTIONS)
 
 
     @property
