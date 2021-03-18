@@ -61,7 +61,7 @@ class TabularProviderMixin(object):
             # if name == "title":
             #
         attrs = self.ATTRIBUTES
-        for name, opts in self.config.view.columns.items():
+        for name, opts in self.config.display.columns.items():
             for optname, optvalue in opts.items():
                 print(name, optname, optvalue)
                 attr = next(a for a in self.ATTRIBUTES if a == name)
@@ -161,6 +161,12 @@ class SimpleProviderView(BaseProviderView):
     def focus_filter(self, name):
         self.toolbar.focus_filter(name)
         self.pile.focus_position = 0
+
+    def sort(self, field, reverse=False):
+        # import ipdb; ipdb.set_trace()
+        self.body.sort_by_column(field, reverse=reverse)
+        self.body.reset()
+
 
 class InvalidConfigView(BaseProviderView):
 
@@ -317,6 +323,10 @@ class BaseProvider(abc.ABC, Observable):
         return self._view
 
     @property
+    def toolbar(self):
+        return self.view.toolbar
+
+    @property
     def is_active(self):
         return self._active
 
@@ -467,6 +477,8 @@ class BaseProvider(abc.ABC, Observable):
     #         **kwargs
     #     )
 
+    def sort(self, field, reverse=False):
+        self.view.sort(field, reverse=reverse)
 
     @abc.abstractmethod
     def listings(self, filters=None):

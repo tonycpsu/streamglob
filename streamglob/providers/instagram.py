@@ -120,7 +120,7 @@ class InstagramMediaListingMixin(object):
         with db_session:
             listing = self.attach() # FIXME
             if (
-                    not listing.provider.config.view.get("inflate_on_focus", False)
+                    not listing.provider.config.display.get("inflate_on_focus", False)
                     or not listing.should_inflate_on_focus
                     or listing.is_inflated
             ):

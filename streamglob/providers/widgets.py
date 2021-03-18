@@ -57,6 +57,19 @@ class FilterToolbar(urwid.WidgetWrap):
     def get_pref_col(self, size):
         return 0
 
+    @property
+    def filter_state(self):
+        return AttrDict([
+            (f.name, f.value)
+            for f in self.filters
+        ])
+
+    def apply_filter_state(self, state):
+        for k, v in state.items():
+            self.filters[k].value = v
+
+
+
 @keymapped()
 class PlayListingMixin(object):
 

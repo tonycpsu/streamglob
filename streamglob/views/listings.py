@@ -13,7 +13,7 @@ from ..providers.base import SynchronizedPlayerMixin
 
 class ProviderToolbar(urwid.WidgetWrap):
 
-    signals = ["provider_change", "profile_change", "preview_change"]
+    signals = ["provider_change", "profile_change", "view_change"] # "preview_change"
     def __init__(self, default_provider):
 
         def format_provider(n, p):
@@ -42,6 +42,20 @@ class ProviderToolbar(urwid.WidgetWrap):
             lambda w, b, v: self._emit("provider_change", v)
         )
 
+        self.preview_dropdown_placeholder = urwid.WidgetPlaceholder(urwid.Text(""))
+
+        self.view_dropdown_placeholder = urwid.WidgetPlaceholder(urwid.Text(""))
+
+        self.max_concurrent_tasks_widget = providers.filters.IntegerTextFilterWidget(
+            default=config.settings.tasks.max,
+                minimum=1
+        )
+
+        def set_max_concurrent_tasks(v):
+            config.settings.tasks.max = int(v)
+
+        self.max_concurrent_tasks_widget.connect("changed", set_max_concurrent_tasks)
+
         self.profile_dropdown = BaseDropdown(
             AttrDict(
                 [ (k, k) for k in config.settings.profiles.keys()]
@@ -55,29 +69,12 @@ class ProviderToolbar(urwid.WidgetWrap):
             lambda w, b, v: self._emit("profile_change", v)
         )
 
-
-        self.preview_dropdown_placeholder = urwid.WidgetPlaceholder(urwid.Text(""))
-
-        self.max_concurrent_tasks_widget = providers.filters.IntegerTextFilterWidget(
-            default=config.settings.tasks.max,
-                minimum=1
-        )
-
-        def set_max_concurrent_tasks(v):
-            config.settings.tasks.max = int(v)
-
-        self.max_concurrent_tasks_widget.connect("changed", set_max_concurrent_tasks)
-        # urwid.connect_signal(
-        #     self.max_concurrent_tasks_widget,
-        #     "change",
-        #     set_max_concurrent_tasks
-        # )
-
         self.columns = urwid.Columns([
             # ('weight', 1, urwid.Padding(urwid.Edit("foo"))),
             (self.provider_dropdown.width, self.provider_dropdown),
             ("weight", 1, urwid.Padding(urwid.Text(""))),
-            (20, self.preview_dropdown_placeholder),
+            (20, self.view_dropdown_placeholder),
+            # (20, self.preview_dropdown_placeholder),
             # (1, urwid.Divider(u"\N{BOX DRAWINGS LIGHT VERTICAL}")),
             ("pack", urwid.Text(("Downloads"))),
             (5, self.max_concurrent_tasks_widget),
@@ -99,7 +96,21 @@ class ProviderToolbar(urwid.WidgetWrap):
     def provider(self):
         return (self.provider_dropdown.selected_label)
 
-    def set_preview_types(self, preview_types, provider_config):
+    def update_provider_config(self, preview_types, provider_config):
+
+        self.view_dropdown = BaseDropdown(
+            AttrDict(
+                [ (k, k) for k in provider_config.views.keys()]
+            ),
+            label="View", margin=1
+        )
+
+        urwid.connect_signal(
+            self.view_dropdown, "change",
+            lambda w, b, v: self._emit("view_change", v)
+        )
+
+        self.view_dropdown_placeholder.original_widget = self.view_dropdown
 
         self.preview_dropdown = BaseDropdown(
             AttrDict([
@@ -107,7 +118,7 @@ class ProviderToolbar(urwid.WidgetWrap):
                 for pt in preview_types
             ]),
             label="Preview",
-            default=provider_config.default or "default",
+            default=provider_config.auto_preview.default or "default",
             margin=1
         )
 
@@ -123,6 +134,7 @@ MEDIA_URI_RE=re.compile("uri=(.*)=\.")
 @keymapped()
 class ListingsView(StreamglobView):
 
+
     KEYMAP = {
         "meta [": ("cycle_provider", [-1]),
         "meta ]": ("cycle_provider", [1]),
@@ -131,6 +143,8 @@ class ListingsView(StreamglobView):
     }
 
     SETTINGS = ["provider", "profile", "preview"]
+
+    VIEW_KEYS = "!@#$%^&*()"
 
     # def __init__(self, provider_name):
     def __init__(self):
@@ -162,6 +176,11 @@ class ListingsView(StreamglobView):
                 lambda w, p: self.set_provider(p)
             )
 
+            urwid.connect_signal(
+                self.toolbar, "view_change",
+                lambda w, v: self.set_view(v)
+            )
+
             def profile_change(p):
                 config.settings.toggle_profile(p)
                 player.Player.load()
@@ -171,24 +190,25 @@ class ListingsView(StreamglobView):
                 lambda w, p: profile_change(p)
             )
 
-            urwid.connect_signal(
-                self.toolbar, "preview_change",
-                lambda w, p: self.provider.reset()
-            )
+            # urwid.connect_signal(
+            #     self.toolbar, "preview_change",
+            #     lambda w, p: self.provider.reset()
+            # )
 
         if self.provider:
             self.provider.deactivate()
         logger.info(f"on_set_provider: {self.provider.IDENTIFIER} {self.provider.view}")
         self.provider_view_placeholder.original_widget = self.provider.view
-        self.toolbar.set_preview_types(
+        self.toolbar.update_provider_config(
             self.provider.PREVIEW_TYPES,
-            self.provider.config.auto_preview
+            self.provider.config
         )
+        if len(self.provider.config.views):
+            self.set_view(list(self.provider.config.views.keys())[0])
         if self.provider.config_is_valid:
             self.pile.focus_position = 2
         else:
             self.pile.focus_position = 0
-        logger.error(self.provider.default_filter_values)
         for name, value in self.provider.default_filter_values.items():
             if name not in self.SETTINGS:
                 continue
@@ -197,6 +217,11 @@ class ListingsView(StreamglobView):
         state.app_data.save()
         self.provider.activate()
 
+    def set_view(self, name):
+        view = self.provider.config.views[name]
+        self.provider.toolbar.apply_filter_state(view.filters)
+        if view.sort:
+            self.provider.sort(*view.sort)
 
     @property
     def profile(self):
@@ -238,6 +263,12 @@ class ListingsView(StreamglobView):
             state.event_loop.create_task(activate_preview_player())
 
     def keypress(self, size, key):
+        if key in self.VIEW_KEYS:
+            idx = self.VIEW_KEYS.index(key)
+            if idx >= len(self.provider.config.views):
+                return
+            self.toolbar.view_dropdown.focus_position = idx
+            return
         return super().keypress(size, key)
 
     def find_source(self, listing):
