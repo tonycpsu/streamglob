@@ -1271,9 +1271,9 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
             return self.feed_items_query.count()
 
     @db_session
-    def update_query(self):
+    def update_query(self, sort=None, cursor=None):
 
-        logger.info("update_query")
+        logger.info(f"update_query: {cursor}")
         status_filters =  {
             "all": lambda: True,
             "unread": lambda i: i.read is None,
@@ -1314,26 +1314,27 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
             for k, v in self.custom_filters.items():
                 self.items_query = self.items_query.filter(lambda i: v in getattr(i, k))
 
-        (sort_field, sort_desc) = self.view.sort_by
-
-        if self.pagination_cursor:
+        (sort_field, sort_desc) = sort if sort else self.view.sort_by
+        logger.info(f"{sort_field}, {sort_desc}")
+        if cursor:
             op = "<" if sort_desc else ">"
             self.items_query = self.items_query.filter(
-                raw_sql(f"{sort_field} {op} '{self.pagination_cursor}'")
+                raw_sql(f"{sort_field} {op} '{cursor}'")
             )
 
         if sort_field:
-            sort_fn = lambda i: desc(getattr(i, sort_field))
             if sort_desc:
-                sort_fn = desc(sort_fn)
+                sort_fn = lambda i: desc(getattr(i, sort_field))
+            else:
+                sort_fn = lambda i: getattr(i, sort_field)
 
             # break ties with primary key to ensure pagination cursor is correct
             pk_sort_attr = self.LISTING_CLASS._pk_
             if sort_desc:
                 pk_sort_attr = desc(pk_sort_attr)
-            self.items_query = self.items_query.order_by(pk_sort_attr)
+            # self.items_query = self.items_query.order_by(pk_sort_attr)
             self.items_query = self.items_query.order_by(sort_fn)
-
+            logger.info(self.items_query.get_sql())
         self.view.update_count = True
 
     async def apply_search_query(self, query):
@@ -1348,16 +1349,18 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
     def show_message(self, message):
         self.view.show_message(message)
 
-    def listings(self, offset=None, limit=None, *args, **kwargs):
+    def listings(self, sort=None, cursor=None, offset=None, limit=None, *args, **kwargs):
 
         count = 0
-        cursor = None
+        # cursor = None
 
         if not offset:
             offset = 0
 
         if not limit:
             limit = self.limit
+
+        self.update_query(sort=sort, cursor=cursor)
 
         with db_session(optimistic=False):
 
@@ -1372,7 +1375,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                 listing.sources = sources
 
                 # get last item's sort key and store it as our pagination cursor
-                cursor = getattr(listing, self.view.sort_by[0])
+                # cursor = getattr(listing, self.view.sort_by[0])
 
                 # if not listing.check():
                 #     logger.debug("listing broken, fixing...")
@@ -1382,8 +1385,10 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
 
                 yield listing
 
+        self.update_query(sort=sort, cursor=cursor)
+
         self.pagination_cursor = cursor
-        self.update_query()
+        # self.update_query(cursor, sort=sort)
 
     @db_session
     def mark_items_read(self, request):

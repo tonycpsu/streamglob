@@ -1276,13 +1276,14 @@ class MultiSourceListingMixin(object):
     KEYMAP = {
 
     }
-    with_sidecar = True
+    # with_sidecar = True
 
     DETAIL_BOX_CLASS = DetailBox
 
     def listings(self, offset=None, limit=None, *args, **kwargs):
         for listing in super().listings(offset=offset, limit=limit, *args, **kwargs):
-            yield (listing, dict(source_count=len(listing.sources)))
+            yield listing
+            # yield (listing, dict(source_count=len(listing.sources)))
 
     @property
     def active_table(self):

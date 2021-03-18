@@ -165,7 +165,8 @@ class DownloadListingMixin(object):
 @keymapped()
 class ProviderDataTable(PlayListingMixin, DownloadListingMixin, BaseDataTable):
 
-    ui_sort = False
+    ui_sort = True
+    query_sort = True
 
     signals = ["cycle_filter"]
 
