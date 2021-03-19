@@ -107,27 +107,47 @@ class MarkableMixin(object):
 
 class ChannelWidget(MarkableMixin, ChannelTreeWidget):
 
-    def get_display_text(self):
-        key = self.get_node().get_key()
-        provider = self.get_node().get_parent().tree.provider
+    @property
+    def channel(self):
         with db_session:
-            channel = model.MediaChannel.get(
-                provider_id=provider.IDENTIFIER,
+            return model.MediaChannel.get(
+                provider_id=self.provider.IDENTIFIER,
                 locator=self.get_node().locator
             )
-            head = channel.unread_count if channel else None
-            tail = channel.attrs.get("tail_fetched") if channel else None
-            if head and tail:
-                attr = "browser head_tail"
-            elif head:
-                attr = "browser head"
-            elif tail:
-                attr = "browser tail"
-            else:
-                attr = "browser normal"
-        name = super().get_display_text()
-        text = f"{name} ({head})" if head else name
-        return (attr, text)
+
+    @property
+    def name(self):
+        return super().get_display_text()
+
+    @property
+    def text(self):
+        if self.unread_count:
+            return f"{self.name} ({self.unread_count})"
+        else:
+            return self.name
+
+    @property
+    def unread_count(self):
+        return self.channel.unread_count if self.channel else None
+
+    @property
+    def provider(self):
+        return self.get_node().get_parent().tree.provider
+
+    @property
+    def attr(self):
+        tail = self.channel.attrs.get("tail_fetched") if self.channel else None
+        if self.unread_count and tail:
+            return "browser head_tail"
+        elif self.unread_count:
+            return "browser head"
+        elif tail:
+            return "browser tail"
+        else:
+            return "browser normal"
+
+    def get_display_text(self):
+        return (self.attr, self.text)
 
     def keypress(self, size, key):
         if key == "enter":
@@ -144,6 +164,14 @@ class ChannelUnionWidget(ChannelWidget):
         self.is_leaf = True
         self.expanded = False
         self.update_expanded_icon()
+
+    @property
+    def unread_count(self):
+        return sum([
+            n.get_widget().unread_count
+            for n in self.get_node().get_nodes()
+        ])
+
 
     def get_indented_widget(self):
         widget = self.get_inner_widget()
