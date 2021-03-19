@@ -112,15 +112,11 @@ class MarkableMixin(object):
             }
 
 
-class ChannelWidget(MarkableMixin, ChannelTreeWidget):
+class UnreadCountMixin(object):
 
     @property
-    def channel(self):
-        with db_session:
-            return model.MediaChannel.get(
-                provider_id=self.provider.IDENTIFIER,
-                locator=self.get_node().locator
-            )
+    def unread_count(self):
+        return self.channel.unread_count if self.channel else None
 
     @property
     def text(self):
@@ -129,9 +125,26 @@ class ChannelWidget(MarkableMixin, ChannelTreeWidget):
         else:
             return self.name
 
+class AggregateUnreadCountMixin(UnreadCountMixin):
+
     @property
     def unread_count(self):
-        return self.channel.unread_count if self.channel else None
+        return sum([
+            n.get_widget().unread_count
+            for n in self.get_node().get_nodes()
+        ])
+
+
+
+class ChannelWidget(UnreadCountMixin, MarkableMixin, ChannelTreeWidget):
+
+    @property
+    def channel(self):
+        with db_session:
+            return model.MediaChannel.get(
+                provider_id=self.provider.IDENTIFIER,
+                locator=self.get_node().locator
+            )
 
     @property
     def provider(self):
@@ -154,24 +167,13 @@ class ChannelWidget(MarkableMixin, ChannelTreeWidget):
             self.mark()
         return super().keypress(size, key)
 
-class ChannelUnionWidget(ChannelWidget):
 
-    # indent_cols = 0
-    # unexpanded_icon = urwid.SelectableIcon(" ", 0)
+class ChannelUnionWidget(AggregateUnreadCountMixin, ChannelWidget):
+
 
     def __init__(self, node):
         super().__init__(node)
         self.is_leaf = True
-        self.expanded = False
-        self.update_expanded_icon()
-
-    @property
-    def unread_count(self):
-        return sum([
-            n.get_widget().unread_count
-            for n in self.get_node().get_nodes()
-        ])
-
 
     def get_indented_widget(self):
         widget = self.get_inner_widget()
@@ -184,12 +186,7 @@ class ChannelUnionWidget(ChannelWidget):
             width=('relative', 100), left=indent_cols)
 
 
-
-    def update_expanded_icon(self):
-        return
-
-
-class ChannelGroupWidget(MarkableMixin, ChannelTreeWidget):
+class ChannelGroupWidget(AggregateUnreadCountMixin, MarkableMixin, ChannelTreeWidget):
 
     indent_cols = 3
 
@@ -203,11 +200,11 @@ class ChannelGroupWidget(MarkableMixin, ChannelTreeWidget):
         "browser dirmark", "browser dirmark_focus")
 
     @property
-    def unread_count(self):
-        return sum([
-            n.get_widget().unread_count
-            for n in self.get_node().get_nodes()
-        ])
+    def text(self):
+        if self.unread_count:
+            return f"{self.name} ({self.unread_count})"
+        else:
+            return self.name
 
     def selectable(self):
         return True
