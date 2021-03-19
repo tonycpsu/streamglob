@@ -406,7 +406,7 @@ class MediaSourceMixin(object):
         return self.locator
 
     @property
-    def is_downloaded(self):
+    def local_path(self):
         with db_session:
             listing = self.provider.LISTING_CLASS.orm_class[self.listing.media_listing_id]
             try:
@@ -415,13 +415,18 @@ class MediaSourceMixin(object):
                     listing=listing, num=len(listing.sources),
                     glob=True
                 )
-                if glob.glob(filename):
-                    return True
+                try:
+                    return glob.glob(filename)[0]
+                except IndexError:
+                    pass
                 if not getattr(self, "uri", None):
-                    return False
+                    return None
                 dirname = os.path.dirname(filename)
                 filename=os.path.join(dirname, f"*{self.uri}*")
-                return glob.glob(filename)
+                try:
+                    return glob.glob(filename)[0]
+                except IndexError:
+                    return None
             except SGInvalidFilenameTemplate as e:
                 logger.error(e)
 

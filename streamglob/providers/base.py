@@ -63,7 +63,6 @@ class TabularProviderMixin(object):
         attrs = self.ATTRIBUTES
         for name, opts in self.config.display.columns.items():
             for optname, optvalue in opts.items():
-                print(name, optname, optvalue)
                 attr = next(a for a in self.ATTRIBUTES if a == name)
                 self.ATTRIBUTES[attr].update({optname: optvalue})
 
@@ -658,6 +657,14 @@ class BaseProvider(abc.ABC, Observable):
                 config.settings.profile.tables.get("translate_dest")
                 or "en")
 
+    @property
+    def output_path(self):
+        return (
+            config.settings.profile.get_path("output.path")
+            or
+            self.provider.config.get_path("output.path")
+        )
+
 class PaginatedProviderMixin(object):
 
     DEFAULT_PAGE_SIZE = 50
@@ -780,15 +787,25 @@ class SynchronizedPlayerMixin(object):
         return (listing.sources if listing else [], kwargs)
 
     async def preview_selection(self):
+
         if not len(self.body):
             return
 
-        if state.listings_view.preview_mode != "full":
-            listing = self.selection.data_source
-            source = listing.sources[0]
-            await self.playlist_replace(source.locator)
-        else:
-            await self.preview_all(playlist_position=self.playlist_position)
+        while len(self.pending_event_tasks):
+            t = self.pending_event_tasks.pop()
+            t.cancel()
+
+        path = self.selected_source.local_path
+
+        location = path or self.selected_source.locator
+        await self.playlist_replace(location)
+
+        # if state.listings_view.preview_mode != "full":
+            # listing = self.selection.data_source
+            # source = listing.sources[0]
+
+        # else:
+        #     await self.preview_all(playlist_position=self.playlist_position)
 
         # await self.set_playlist_pos(self.playlist_position)
 
@@ -906,7 +923,7 @@ class SynchronizedPlayerMixin(object):
             color = el_cfg.text.color.default or cfg.text.color.default or "white"
             if self.playlist_position == len(self.play_items)-1:
                 color = el_cfg.text.color.end or cfg.text.color.end or color
-            elif self.active_table.selected_source.is_downloaded:
+            elif self.active_table.selected_source.local_path:
                 color = el_cfg.text.color.downloaded or cfg.text.color.downloaded or color
 
             font = el_cfg.text.font or cfg.text.font or "sans"
@@ -1361,4 +1378,4 @@ class MultiSourceListingMixin(object):
         return 0
 
     def row_attr_fn(self, position, data, row):
-        return "downloaded" if all([s.is_downloaded for s in data.sources]) else super().row_attr_fn(position, data, row)
+        return "downloaded" if all([s.local_path for s in data.sources]) else super().row_attr_fn(position, data, row)

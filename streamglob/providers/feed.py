@@ -290,7 +290,7 @@ class CachedFeedProviderDetailDataTable(DetailDataTable):
                 source = self.parent_table.provider.MEDIA_SOURCE_CLASS.orm_class[data.media_source_id]
             except pony.orm.core.ObjectNotFound:
                 return
-        if source.is_downloaded:
+        if source.local_path:
             return "downloaded"
         elif not source.seen:
             # logger.info("detail unread")
