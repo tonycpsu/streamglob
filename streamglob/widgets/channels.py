@@ -119,9 +119,14 @@ class UnreadCountMixin(object):
         return self.channel.unread_count if self.channel else None
 
     @property
+    def unread_attr(self):
+        return "browser faint"
+
+    @property
     def text(self):
         if self.unread_count:
-            return f"{self.name} ({self.unread_count})"
+            return [ (self.attr, self.name), " ", (self.unread_attr, f"({self.unread_count})") ]
+            # return f"{self.name} ({self.unread_count})"
         else:
             return self.name
 
@@ -133,7 +138,6 @@ class AggregateUnreadCountMixin(UnreadCountMixin):
             n.get_widget().unread_count
             for n in self.get_node().get_nodes()
         ])
-
 
 
 class ChannelWidget(UnreadCountMixin, MarkableMixin, ChannelTreeWidget):
@@ -198,13 +202,6 @@ class ChannelGroupWidget(AggregateUnreadCountMixin, MarkableMixin, ChannelTreeWi
     expanded_icon = urwid.AttrMap(
         urwid.TreeWidget.expanded_icon,
         "browser dirmark", "browser dirmark_focus")
-
-    @property
-    def text(self):
-        if self.unread_count:
-            return f"{self.name} ({self.unread_count})"
-        else:
-            return self.name
 
     def selectable(self):
         return True
