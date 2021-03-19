@@ -52,7 +52,7 @@ class FeedMediaChannel(model.MediaChannel):
 
         fetched = 0
         self.provider.update_fetch_indicator(0)
-        self.provider.view.footer.show_message(f"Updating {self.name}...")
+        self.provider.view.footer.show_message(f"{'Fetching' if resume else 'Updating'} {self.name}...")
         async for item in self.fetch(limit=self.provider.fetch_limit, *args, **kwargs):
             with db_session:
                 old = self.provider.LISTING_CLASS.get(guid=item["guid"])
@@ -562,7 +562,7 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
                     if self.focus_position < len(self) - 1:
                         self.focus_position += 1
                 else:
-                    await self.provider.view.update(force=True, resume=True) # FIXME
+                    await self.provider.view.body.update(force=True, resume=True) # FIXME
 
             else:
                 self.focus_position = len(self)-1
