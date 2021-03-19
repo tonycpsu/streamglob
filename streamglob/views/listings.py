@@ -92,9 +92,9 @@ class ProviderToolbar(urwid.WidgetWrap):
 
         self.preview_dropdown.cycle(step)
 
-    @property
-    def provider(self):
-        return (self.provider_dropdown.selected_label)
+    # @property
+    # def provider(self):
+    #     return (self.provider_dropdown.selected_label)
 
     def update_provider_config(self, preview_types, provider_config):
 
@@ -181,6 +181,8 @@ class ListingsView(StreamglobView):
                 lambda w, v: self.set_view(v)
             )
 
+            # self.set_view(self.provider.provider_data.get("selected_view"))
+
             def profile_change(p):
                 config.settings.toggle_profile(p)
                 player.Player.load()
@@ -203,8 +205,6 @@ class ListingsView(StreamglobView):
             self.provider.PREVIEW_TYPES,
             self.provider.config
         )
-        if len(self.provider.config.views):
-            self.set_view(list(self.provider.config.views.keys())[0])
         if self.provider.config_is_valid:
             self.pile.focus_position = 2
         else:
@@ -213,6 +213,9 @@ class ListingsView(StreamglobView):
             if name not in self.SETTINGS:
                 continue
             setattr(self, name, value)
+        if self.provider.provider_data.get("selected_view"):
+            self.toolbar.view_dropdown.selected_label = self.provider.provider_data.get("selected_view")
+
         state.app_data.selected_provider = self.provider.IDENTIFIER
         state.app_data.save()
         self.provider.activate()
@@ -222,6 +225,8 @@ class ListingsView(StreamglobView):
         self.provider.toolbar.apply_filter_state(view.filters)
         if view.sort:
             self.provider.sort(*view.sort)
+        self.provider.provider_data["selected_view"] = name
+        self.provider.save_provider_data()
 
     @property
     def profile(self):

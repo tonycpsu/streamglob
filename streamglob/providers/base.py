@@ -163,7 +163,6 @@ class SimpleProviderView(BaseProviderView):
         self.pile.focus_position = 0
 
     def sort(self, field, reverse=False):
-        # import ipdb; ipdb.set_trace()
         self.body.sort_by_column(field, reverse=reverse)
         self.body.reset()
 
@@ -900,7 +899,7 @@ class SynchronizedPlayerMixin(object):
             filters.append(vf_box)
 
         for element, text in dict(
-                playlist=f"[{self.playlist_title}] {self.playlist_position_text}",
+                playlist=f"{self.playlist_title} {self.playlist_position_text}",
                 title= self.play_items[pos].title
             ).items():
             el_cfg = cfg.get(element)
@@ -984,7 +983,6 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             logger.debug(f"stage: {cfg}")
             if self.play_items[position].preview_mode == cfg.mode:
                 continue
-            # import ipdb; ipdb.set_trace()
             if cfg.media_types and source.media_type not in cfg.media_types:
                 continue
             preview_fn = getattr(

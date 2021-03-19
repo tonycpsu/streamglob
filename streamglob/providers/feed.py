@@ -1315,7 +1315,6 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                 self.items_query = self.items_query.filter(lambda i: v in getattr(i, k))
 
         (sort_field, sort_desc) = sort if sort else self.view.sort_by
-        logger.info(f"{sort_field}, {sort_desc}")
         if cursor:
             op = "<" if sort_desc else ">"
             self.items_query = self.items_query.filter(
@@ -1334,7 +1333,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                 pk_sort_attr = desc(pk_sort_attr)
             # self.items_query = self.items_query.order_by(pk_sort_attr)
             self.items_query = self.items_query.order_by(sort_fn)
-            logger.info(self.items_query.get_sql())
+            # logger.info(self.items_query.get_sql())
         self.view.update_count = True
 
     async def apply_search_query(self, query):
