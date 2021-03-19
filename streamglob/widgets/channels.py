@@ -16,8 +16,15 @@ from .. import model
 class ChannelTreeWidget(urwid.TreeWidget):
     """ Display widget for leaf nodes """
 
-
     def get_display_text(self):
+        return (self.attr, self.text)
+
+    @property
+    def attr(self):
+        return "browser normal"
+
+    @property
+    def name(self):
         key = self.get_node().get_key()
         value = self.get_node().get_value()
         if not value:
@@ -30,11 +37,10 @@ class ChannelTreeWidget(urwid.TreeWidget):
             return key
         else:
             return "no name"
-        # elif key:
-        #     return value.get(key, f"no value: {key}")
-        # else:
-        #     return "no key"
-        # return value.get("name", "none")
+
+    @property
+    def text(self):
+        return self.name
 
     def selectable(self):
         return True
@@ -105,6 +111,7 @@ class MarkableMixin(object):
                 "browser head_tail": "browser head_tail focus",
             }
 
+
 class ChannelWidget(MarkableMixin, ChannelTreeWidget):
 
     @property
@@ -114,10 +121,6 @@ class ChannelWidget(MarkableMixin, ChannelTreeWidget):
                 provider_id=self.provider.IDENTIFIER,
                 locator=self.get_node().locator
             )
-
-    @property
-    def name(self):
-        return super().get_display_text()
 
     @property
     def text(self):
@@ -145,9 +148,6 @@ class ChannelWidget(MarkableMixin, ChannelTreeWidget):
             return "browser tail"
         else:
             return "browser normal"
-
-    def get_display_text(self):
-        return (self.attr, self.text)
 
     def keypress(self, size, key):
         if key == "enter":
@@ -202,8 +202,12 @@ class ChannelGroupWidget(MarkableMixin, ChannelTreeWidget):
         urwid.TreeWidget.expanded_icon,
         "browser dirmark", "browser dirmark_focus")
 
-    def get_display_text(self):
-        return self.get_node().get_key() or "none"
+    @property
+    def unread_count(self):
+        return sum([
+            n.get_widget().unread_count
+            for n in self.get_node().get_nodes()
+        ])
 
     def selectable(self):
         return True
