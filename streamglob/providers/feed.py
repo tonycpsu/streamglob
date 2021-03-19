@@ -48,7 +48,7 @@ class FeedMediaChannel(model.MediaChannel):
     async def fetch(self):
         pass
 
-    async def update(self, *args, **kwargs):
+    async def update(self, resume=False, replace=False, *args, **kwargs):
 
         fetched = 0
         self.provider.update_fetch_indicator(0)
@@ -81,6 +81,12 @@ class FeedMediaChannel(model.MediaChannel):
                 self.provider.update_fetch_indicator(fetched)
 
         self.fetched = datetime.now()
+
+        if resume and fetched == 0:
+            self.attrs["tail_fetched"] = True
+            node = self.provider.view.channels.find_node(self.locator)
+            node.get_widget(reload=True).update_w()
+
 
     @db_session
     def mark_all_items_read(self):
@@ -130,6 +136,11 @@ class FeedMediaChannel(model.MediaChannel):
                 i.time_since_fetched >= timedelta(days=max_age)):
                 i.delete()
         commit()
+
+    @property
+    def unread_count(self):
+        with db_session:
+            return self.items.select(lambda i: not i.read).count()
 
 
 class FeedMediaListingMixin(object):
@@ -849,7 +860,9 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
             )
         )
         self.channels = ChannelTreeBrowser(
-            self.provider.config.feeds, label="All " + self.provider.CHANNELS_LABEL
+            self.provider.config.feeds,
+            self.provider,
+            label="All " + self.provider.CHANNELS_LABEL
         )
         self.channels_pile = urwid.Pile([
             (1, self.channels_header),

@@ -8,9 +8,10 @@ from functools import partial
 
 import urwid
 import yaml
+from pony.orm import *
 
 from .. import config
-
+from .. import model
 
 class ChannelTreeWidget(urwid.TreeWidget):
     """ Display widget for leaf nodes """
@@ -18,7 +19,7 @@ class ChannelTreeWidget(urwid.TreeWidget):
     def __init__(self, node):
         super().__init__(node)
         # insert an extra AttrWrap for our own use
-        self._w = urwid.AttrWrap(self._w, None)
+        self._w = urwid.AttrMap(self._w, "browser_normal")
         self.marked = False
         self.update_w()
 
@@ -67,13 +68,58 @@ class ChannelTreeWidget(urwid.TreeWidget):
         """Update the attributes of self.widget based on self.marked.
         """
         if self.marked:
-            self._w.attr = 'marked'
-            self._w.focus_attr = 'marked_focus'
+            self._w.attr_map = {
+                None: "browser normal",
+                "browser normal": "browser marked",
+                "browser head": "browser head marked",
+                "browser tail": "browser tail marked",
+                "browser head_tail": "browser head_tail marked",
+            }
+            self._w.focus_map = {
+                "browser normal": "browser marked_focus",
+                "browser head": "browser head marked_focus",
+                "browser tail": "browser tail marked_focus",
+                "browser head_tail": "browser head_tail marked_focus",
+            }
         else:
-            self._w.attr = "normal"
-            self._w.focus_attr = 'focus'
+            self._w.attr_map = {
+                None: "browser normal",
+                "browser normal": "browser normal",
+                "browser head": "browser head",
+                "browser tail": "browser tail",
+                "browser head_tail": "browser head_tail",
+            }
+            self._w.focus_map = {
+                # None: "browser normal",
+                "browser normal": "browser focus",
+                "browser head": "browser head focus",
+                "browser tail": "browser tail focus",
+                "browser head_tail": "browser head_tail focus",
+            }
 
 class ChannelWidget(ChannelTreeWidget):
+
+    def get_display_text(self):
+        key = self.get_node().get_key()
+        provider = self.get_node().get_parent().tree.provider
+        with db_session:
+            channel = model.MediaChannel.get(
+                provider_id=provider.IDENTIFIER,
+                locator=self.get_node().locator
+            )
+            head = channel.unread_count
+            tail = channel.attrs.get("tail_fetched")
+            if head and tail:
+                attr = "browser head_tail"
+            elif head:
+                attr = "browser head"
+            elif tail:
+                attr = "browser tail"
+            else:
+                attr = "browser normal"
+        name = super().get_display_text()
+        text = f"{name} ({head})" if head else name
+        return (attr, text)
 
     def keypress(self, size, key):
         if key == "enter":
@@ -85,11 +131,11 @@ class ChannelGroupWidget(ChannelTreeWidget):
     # apply an attribute to the expand/unexpand icons
     unexpanded_icon = urwid.AttrMap(
         urwid.TreeWidget.unexpanded_icon,
-        "dirmark", "dirmark_focus"
+        "browser dirmark", "browser dirmark_focus"
     )
     expanded_icon = urwid.AttrMap(
         urwid.TreeWidget.expanded_icon,
-        "dirmark", "dirmark_focus")
+        "browser dirmark", "browser dirmark_focus")
 
     def get_display_text(self):
         return self.get_node().get_key() or "none"
@@ -169,6 +215,10 @@ class ChannelNode(ChannelPropertiesMixin, urwid.TreeNode):
 
 class ChannelGroupNode(ChannelPropertiesMixin, urwid.ParentNode):
 
+    def __init__(self, tree, value, parent=None, key=None, depth=None):
+        self.tree = tree
+        super().__init__(value, parent=parent, key=key, depth=depth)
+
     @property
     def is_leaf(self):
         return False
@@ -193,10 +243,12 @@ class ChannelGroupNode(ChannelPropertiesMixin, urwid.ParentNode):
         childdata = self.get_value()
         childdepth = self.get_depth() + 1
         if isinstance(key, config.Folder):
-            childclass = ChannelGroupNode
+            return ChannelGroupNode(self.tree, childdata[key], parent=self, key=key, depth=childdepth)
+            # childclass = ChannelGroupNode
         else:
-            childclass = ChannelNode
-        return childclass(childdata[key], parent=self, key=key, depth=childdepth)
+            # childclass = ChannelNode
+            return ChannelNode(childdata[key], parent=self, key=key, depth=childdepth)
+        # return childclass(childdata[key], parent=self, key=key, depth=childdepth)
 
     def find_key(self, key):
         try:
@@ -273,12 +325,12 @@ class ChannelTreeBrowser(urwid.WidgetWrap):
 
     signals = ["change", "select"]
 
-    def __init__(self, data, label="channels"):
-        self.tree = ChannelGroupNode(data, key=label)
+    def __init__(self, data, provider, label="channels"):
+        self.provider = provider
+        self.tree = ChannelGroupNode(self, data, key=label)
         self.listbox = urwid.TreeListBox(urwid.TreeWalker(self.tree))
         self.listbox.offset_rows = 1
         super().__init__(self.listbox)
-
 
     @property
     def body(self):
@@ -317,13 +369,16 @@ class ChannelTreeBrowser(urwid.WidgetWrap):
             if isinstance(identifier, list):
                 # JSON can't store tuples
                 identifier = tuple(identifier)
-            node = self.tree.find_node(identifier)
+            node = self.find_node(identifier)
             if not node:
                 continue
             node.get_widget().mark()
             if i == 0:
                 self.listbox.focus_position = node
         self.update_selection()
+
+    def find_node(self, identifier):
+        return self.tree.find_node(identifier)
 
     def update_selection(self):
         self._emit("change", self.selected_items)
@@ -368,18 +423,6 @@ class ChannelTreeBrowser(urwid.WidgetWrap):
         self.listbox.set_focus(focus)
         self.selection.get_widget().mark()
         self.update_selection()
-
-def get_example_tree(root):
-    """ generate a quick leaf tree for demo purposes """
-    retval = {"name":"parent","children":[]}
-    for i in range(11):
-        retval['children'].append({"name":"child " + str(i)})
-        retval['children'][i]['children']=[]
-        for j in range(5):
-            retval['children'][i]['children'].append({"name":"grandchild " +
-                                                      str(i) + "." + str(j)})
-    return retval
-
 
 def main():
     config.load("channels.yml")
