@@ -405,6 +405,7 @@ class InstagramProviderBodyView(CachedFeedProviderBodyView):
             return super().footer_attrs
 
         feed = self.provider.feeds[0]
+
         return AttrDict(super().footer_attrs, **AttrDict([
             ("total", lambda: feed.attrs.get("posts", 0))
         ]))
@@ -414,6 +415,10 @@ class InstagramProviderBodyView(CachedFeedProviderBodyView):
     def indicator_bars(self):
         if not len(self.provider.feeds) == 1:
             return super().indicator_bars
+        feed = self.provider.feeds[0]
+        if not feed:
+            return super().indicator_bars
+
         return super().indicator_bars + [
             ("total", "🌐", "dark gray",
              lambda: (

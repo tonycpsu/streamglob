@@ -45,6 +45,9 @@ def from_yaml_for_type(dict_type, loader, node):
 class Folder(str):
     pass
 
+class Union(str):
+    pass
+
 def yaml_loader(node_type, base_dir=None):
 
     from_yaml = functools.partial(from_yaml_for_type, node_type)
@@ -65,11 +68,15 @@ def yaml_loader(node_type, base_dir=None):
         def folder_constructor(loader, node):
             return Folder(node.value)
 
+        def union_constructor(loader, node):
+            return Union(node.value)
+
         self.add_constructor(u'tag:yaml.org,2002:map', from_yaml)
         self.add_constructor(u'tag:yaml.org,2002:omap', from_yaml)
         self.add_constructor('!join', yaml_join)
         self.add_constructor('!remove_arg', yaml_remove_arg)
         self.add_constructor("!folder", folder_constructor)
+        self.add_constructor("!union", union_constructor)
         self.add_constructor('!include', YamlIncludeConstructor(base_dir=base_dir))
 
     d = {"__init__": __init__}

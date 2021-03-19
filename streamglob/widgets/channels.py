@@ -16,12 +16,6 @@ from .. import model
 class ChannelTreeWidget(urwid.TreeWidget):
     """ Display widget for leaf nodes """
 
-    def __init__(self, node):
-        super().__init__(node)
-        # insert an extra AttrWrap for our own use
-        self._w = urwid.AttrMap(self._w, "browser_normal")
-        self.marked = False
-        self.update_w()
 
     def get_display_text(self):
         key = self.get_node().get_key()
@@ -30,8 +24,12 @@ class ChannelTreeWidget(urwid.TreeWidget):
             return key
         elif isinstance(value, str):
             return value
+        elif isinstance(value, dict) and "name" in value:
+            return value["name"]
+        elif key:
+            return key
         else:
-            return value.get("name", "no name")
+            return "no name"
         # elif key:
         #     return value.get(key, f"no value: {key}")
         # else:
@@ -49,6 +47,16 @@ class ChannelTreeWidget(urwid.TreeWidget):
             return self.__super.keypress(size, key)
         else:
             return key
+
+
+class MarkableMixin(object):
+
+    def __init__(self, node):
+        super().__init__(node)
+        # insert an extra AttrWrap for our own use
+        self._w = urwid.AttrMap(self._w, "browser_normal")
+        self.marked = False
+        self.update_w()
 
     def mark(self):
         self.marked = True
@@ -97,7 +105,7 @@ class ChannelTreeWidget(urwid.TreeWidget):
                 "browser head_tail": "browser head_tail focus",
             }
 
-class ChannelWidget(ChannelTreeWidget):
+class ChannelWidget(MarkableMixin, ChannelTreeWidget):
 
     def get_display_text(self):
         key = self.get_node().get_key()
@@ -107,8 +115,8 @@ class ChannelWidget(ChannelTreeWidget):
                 provider_id=provider.IDENTIFIER,
                 locator=self.get_node().locator
             )
-            head = channel.unread_count
-            tail = channel.attrs.get("tail_fetched")
+            head = channel.unread_count if channel else None
+            tail = channel.attrs.get("tail_fetched") if channel else None
             if head and tail:
                 attr = "browser head_tail"
             elif head:
@@ -126,8 +134,37 @@ class ChannelWidget(ChannelTreeWidget):
             self.mark()
         return super().keypress(size, key)
 
+class ChannelUnionWidget(ChannelWidget):
 
-class ChannelGroupWidget(ChannelTreeWidget):
+    # indent_cols = 0
+    # unexpanded_icon = urwid.SelectableIcon(" ", 0)
+
+    def __init__(self, node):
+        super().__init__(node)
+        self.is_leaf = True
+        self.expanded = False
+        self.update_expanded_icon()
+
+    def get_indented_widget(self):
+        widget = self.get_inner_widget()
+        if not self.is_leaf:
+            widget = urwid.Columns([('fixed', 0,
+                [self.unexpanded_icon, self.expanded_icon][self.expanded]),
+                widget], dividechars=1)
+        indent_cols = self.get_indent_cols()
+        return urwid.Padding(widget,
+            width=('relative', 100), left=indent_cols)
+
+
+
+    def update_expanded_icon(self):
+        return
+
+
+class ChannelGroupWidget(MarkableMixin, ChannelTreeWidget):
+
+    indent_cols = 3
+
     # apply an attribute to the expand/unexpand icons
     unexpanded_icon = urwid.AttrMap(
         urwid.TreeWidget.unexpanded_icon,
@@ -211,9 +248,7 @@ class ChannelNode(ChannelPropertiesMixin, urwid.TreeNode):
     def marked(self):
         return self.get_widget().marked
 
-
-
-class ChannelGroupNode(ChannelPropertiesMixin, urwid.ParentNode):
+class ChannelUnionNode(ChannelPropertiesMixin, urwid.ParentNode):
 
     def __init__(self, tree, value, parent=None, key=None, depth=None):
         self.tree = tree
@@ -223,49 +258,21 @@ class ChannelGroupNode(ChannelPropertiesMixin, urwid.ParentNode):
     def is_leaf(self):
         return False
 
+    def load_widget(self):
+        return ChannelUnionWidget(self)
+
+    @property
+    def identifier(self):
+        return self.get_key()
+
     @property
     def marked(self):
         return self.get_widget().marked
 
-
-    def load_widget(self):
-        return ChannelGroupWidget(self)
-
-    def load_child_keys(self):
-        data = self.get_value()
-        try:
-            return list(data.keys())
-        except AttributeError:
-            raise Exception(data)
-
-    def load_child_node(self, key):
-
-        childdata = self.get_value()
-        childdepth = self.get_depth() + 1
-        if isinstance(key, config.Folder):
-            return ChannelGroupNode(self.tree, childdata[key], parent=self, key=key, depth=childdepth)
-            # childclass = ChannelGroupNode
-        else:
-            # childclass = ChannelNode
-            return ChannelNode(childdata[key], parent=self, key=key, depth=childdepth)
-        # return childclass(childdata[key], parent=self, key=key, depth=childdepth)
-
-    def find_key(self, key):
-        try:
-            return next(self.get_nodes(lambda n: n.get_key() == key))
-        except StopIteration:
-            return None
-
-    def find_node(self, identifier):
-        try:
-            return next(self.get_nodes(lambda n: n.identifier == identifier))
-        except StopIteration:
-            return None
-
     def get_nodes(self, pred=None):
         for key in self.get_child_keys():
             child = self.get_child_node(key)
-            if isinstance(child, urwid.ParentNode):
+            if not child.is_leaf:
                 yield from child.get_nodes(pred)
             if pred is None or pred(child):
                 yield child
@@ -283,15 +290,38 @@ class ChannelGroupNode(ChannelPropertiesMixin, urwid.ParentNode):
             lambda n: n.marked
         )
 
+    def load_child_keys(self):
+        data = self.get_value()
+        try:
+            return list(data.keys())
+        except AttributeError:
+            raise Exception(data)
 
-    #     for key in self.get_child_keys():
-    #         child = self.get_child_node(key)
-    #         if isinstance(child, urwid.ParentNode):
-    #             yield from child.get_marked_nodes()
-    #         elif child.get_widget().marked:
-    #             yield child
+    def load_child_node(self, key):
 
+        childdata = self.get_value()
+        childdepth = self.get_depth() + 1
+        if isinstance(key, config.Folder):
+            return ChannelGroupNode(self.tree, childdata[key], parent=self, key=key, depth=childdepth)
+        elif isinstance(key, config.Union):
+            return ChannelUnionNode(self.tree, childdata[key], parent=self, key=key, depth=childdepth)
+            # node.collapse()
+            # return node
+        else:
+            return ChannelNode(childdata[key], parent=self, key=key, depth=childdepth)
+        # return childclass(childdata[key], parent=self, key=key, depth=childdepth)
 
+    def find_key(self, key):
+        try:
+            return next(self.get_nodes(lambda n: n.get_key() == key))
+        except StopIteration:
+            return None
+
+    def find_node(self, identifier):
+        try:
+            return next(self.get_nodes(lambda n: n.identifier == identifier))
+        except StopIteration:
+            return None
 
     def expand(self):
         self.get_widget().expanded = True
@@ -300,6 +330,20 @@ class ChannelGroupNode(ChannelPropertiesMixin, urwid.ParentNode):
     def collapse(self):
         self.get_widget().expanded = False
         self.get_widget().update_expanded_icon()
+
+
+class ChannelGroupNode(ChannelUnionNode):
+
+    @property
+    def is_leaf(self):
+        return False
+
+    def load_widget(self):
+        return ChannelGroupWidget(self)
+
+    @property
+    def marked(self):
+        return self.get_widget().marked
 
     def find_path(self, path):
         node = self.get_first_child()
