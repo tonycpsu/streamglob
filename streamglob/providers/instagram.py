@@ -418,7 +418,7 @@ class InstagramProviderBodyView(CachedFeedProviderBodyView):
             ("total", "🌐", "dark gray",
              lambda: (
                  self.footer_attrs["total"]()
-                 # - self.footer_attrs["fetched"]()
+                 - self.footer_attrs["fetched"]()
                  # - self.footer_attrs["matching"]()
                  )
              )

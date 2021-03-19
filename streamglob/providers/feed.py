@@ -551,7 +551,7 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
                     if self.focus_position < len(self) - 1:
                         self.focus_position += 1
                 else:
-                    await self.update(force=True, resume=True)
+                    await self.provider.view.update(force=True, resume=True) # FIXME
 
             else:
                 self.focus_position = len(self)-1
@@ -959,11 +959,11 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
     def indicator_bars(self):
         return [
             ("matching", "✓", "light blue",
-             # lambda: self.footer_attrs["matching"]() - self.footer_attrs["shown"]()),
              lambda: self.footer_attrs["matching"]()),
+             # lambda: self.footer_attrs["matching"]()),
             ("fetched", "↓", "dark red",
-             # lambda: self.footer_attrs["fetched"]() - self.footer_attrs["matching"]()),
-             lambda: self.footer_attrs["fetched"]()),
+             lambda: self.footer_attrs["fetched"]() - self.footer_attrs["matching"]()),
+             # lambda: self.footer_attrs["fetched"]()),
         ]
 
     def on_requery(self, source, count):
