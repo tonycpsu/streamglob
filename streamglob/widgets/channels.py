@@ -9,14 +9,24 @@ from functools import partial
 import urwid
 import yaml
 from pony.orm import *
+from panwid.autocomplete import AutoCompleteMixin
+from panwid.highlightable import HighlightableTextMixin
+from panwid.keymap import *
+from unidecode import unidecode
 
 from .. import config
 from .. import model
+from ..state import *
 
-class ChannelTreeWidget(urwid.TreeWidget):
+class ChannelTreeWidget(HighlightableTextMixin, urwid.TreeWidget):
     """ Display widget for leaf nodes """
 
     def get_display_text(self):
+        # return self.highlight_content
+        return self.display_text
+
+    @property
+    def display_text(self):
         return (self.attr, self.text)
 
     @property
@@ -46,13 +56,33 @@ class ChannelTreeWidget(urwid.TreeWidget):
         return True
 
     def keypress(self, size, key):
-
         if key == " ":
             self.toggle_mark()
         elif self._w.selectable():
             return self.__super.keypress(size, key)
         else:
             return key
+
+    @property
+    def highlight_source(self):
+        return self._innerwidget.text
+
+    @property
+    def highlightable_attr_normal(self):
+        return self.attr
+
+    @property
+    def highlightable_attr_highlight(self):
+        return "browser highlight"
+
+    def on_highlight(self):
+        self._innerwidget.set_text(self.highlight_content)
+
+    def on_unhighlight(self):
+        self._innerwidget.set_text(self.display_text)
+
+    def __str__(self):
+        return self._innerwidget.text
 
 
 class MarkableMixin(object):
@@ -139,8 +169,9 @@ class AggregateUnreadCountMixin(UnreadCountMixin):
             for n in self.get_node().get_nodes()
         ])
 
-
-class ChannelWidget(UnreadCountMixin, MarkableMixin, ChannelTreeWidget):
+class ChannelWidget(UnreadCountMixin,
+                    MarkableMixin,
+                    ChannelTreeWidget):
 
     @property
     def channel(self):
@@ -167,9 +198,18 @@ class ChannelWidget(UnreadCountMixin, MarkableMixin, ChannelTreeWidget):
             return "browser normal"
 
     def keypress(self, size, key):
-        if key == "enter":
-            self.mark()
         return super().keypress(size, key)
+    #     if key == "enter":
+    #         self.mark()
+
+    @property
+    def highlightable_attr_normal(self):
+        return self.attr
+
+    @property
+    def highlightable_attr_highlight(self):
+        return "browser highlight"
+
 
 
 class ChannelUnionWidget(AggregateUnreadCountMixin, ChannelWidget):
@@ -244,7 +284,7 @@ class ChannelPropertiesMixin(object):
     def name(self):
         value = self.get_value()
         if isinstance(value, dict):
-            name = value.get("name", None)
+            return value.get("name", None)
         elif isinstance(value, str):
             return value
         return self.locator
@@ -254,8 +294,7 @@ class ChannelPropertiesMixin(object):
         value = self.get_value()
         if not isinstance(value, dict):
             return {}
-        value.pop("name", None)
-        return value
+        return {k: v for k, v in value.items() if k != "name"}
 
 class ChannelNode(ChannelPropertiesMixin, urwid.TreeNode):
 
@@ -273,6 +312,8 @@ class ChannelNode(ChannelPropertiesMixin, urwid.TreeNode):
     @property
     def marked(self):
         return self.get_widget().marked
+
+
 
 class ChannelUnionNode(ChannelPropertiesMixin, urwid.ParentNode):
 
@@ -391,16 +432,83 @@ class ChannelGroupNode(ChannelUnionNode):
         return ("group", self.get_key())
 
 
-class ChannelTreeBrowser(urwid.WidgetWrap):
+class MyTreeWalker(urwid.TreeWalker):
+
+    def positions(self, reverse=False):
+
+        widget, pos = self.get_focus()
+        rootnode = pos.get_root()
+        if reverse:
+            rootwidget = rootnode.get_widget()
+            lastwidget = rootwidget.last_child()
+            first = lastwidget.get_node()
+        else:
+            first = rootnode
+
+        pos = first
+        while pos:
+            yield pos
+            if reverse:
+                pos = self.get_prev(pos)[1]
+            else:
+                pos = self.get_next(pos)[1]
+
+
+@keymapped()
+class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
 
     signals = ["change", "select"]
+
+    KEYMAP = {
+        "/": "complete substring",
+        "?": "complete prefix",
+        "enter": "confirm",
+        "esc": "cancel",
+        "ctrl p": "complete_prev",
+        "ctrl n": "complete_next"
+    }
 
     def __init__(self, data, provider, label="channels"):
         self.provider = provider
         self.tree = ChannelGroupNode(self, data, key=label)
-        self.listbox = urwid.TreeListBox(urwid.TreeWalker(self.tree))
+        self.listbox = urwid.TreeListBox(MyTreeWalker(self.tree))
         self.listbox.offset_rows = 1
-        super().__init__(self.listbox)
+        self.pile = urwid.Pile([
+            ("weight", 1, self.listbox)
+        ])
+        super().__init__(self.pile)
+
+    # def selectable(self):
+    #     return True
+
+    @property
+    def focus_position(self):
+        return self.listbox.focus_position
+
+    @focus_position.setter
+    def focus_position(self, pos):
+        self.listbox.focus_position = pos
+
+    @property
+    def complete_container(self):
+        return self.pile
+
+    @property
+    def complete_body(self):
+        return self.listbox.body
+
+    def complete_widget_at_pos(self, pos):
+        return pos.get_widget()
+
+    def on_complete_select(self, pos):
+        return
+        self.update_selection()
+
+    def complete_compare_substring(self, search, candidate):
+        try:
+            return unidecode(candidate).index(unidecode(search))
+        except ValueError:
+            return None
 
     @property
     def body(self):
@@ -456,6 +564,7 @@ class ChannelTreeBrowser(urwid.WidgetWrap):
 
     def keypress(self, size, key):
 
+        key = super().keypress(size, key)
         if key == "enter":
             marked = list(self.tree.get_marked_nodes())
             if len(marked) <= 1:
@@ -463,7 +572,6 @@ class ChannelTreeBrowser(urwid.WidgetWrap):
                 self.selection.get_widget().mark()
             self.update_selection()
         elif key == " ":
-            super().keypress(size, key)
             self._emit("change", self.selected_items)
         elif key == ";":
             marked = list(self.tree.get_marked_nodes())
@@ -472,7 +580,8 @@ class ChannelTreeBrowser(urwid.WidgetWrap):
             else:
                 self.mark_all()
         else:
-            return super().keypress(size, key)
+            return key
+
 
     def find_path(self, path):
         return self.tree.find_path(path)
@@ -494,10 +603,3 @@ class ChannelTreeBrowser(urwid.WidgetWrap):
         self.selection.get_widget().mark()
         self.update_selection()
 
-def main():
-    config.load("channels.yml")
-    ChannelTreeBrowser({"channels/": config.settings}).main()
-
-
-if __name__=="__main__":
-    main()

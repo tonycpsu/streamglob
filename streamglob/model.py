@@ -173,7 +173,7 @@ class attrclass(object):
                 ns["__annotations__"][attr] = annotation
 
             def attach(self):
-                with db_session:
+                with db_session(optimistic=False):
 
                     keys = {
                         k.name: getattr(self, k.name, None)

@@ -13,7 +13,8 @@ from orderedattrdict import AttrDict
 from panwid.datatable import *
 from panwid.dialog import *
 from panwid.keymap import *
-from panwid.sparkwidgets import SparkBarWidget, SparkBarItem, ProgressBar
+from panwid.sparkwidgets import SparkBarWidget, SparkBarItem
+from panwid.progressbar import ProgressBar
 from limiter import get_limiter, limit
 from pony.orm import *
 import timeago
@@ -889,9 +890,6 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
         urwid.connect_signal(self.channels, "change",
                              lambda s, *args: self._emit("feed_change", *args))
 
-    def keypress(self, size, key):
-        return super().keypress(size, key)
-
     def mark_all_read(self):
         with db_session:
             for f in self.provider.selected_channels:
@@ -923,11 +921,14 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
         self.channels.cycle(step)
 
     def keypress(self, size, key):
-        if key == "enter" and self.columns.focus_position == 0:
-            super().keypress(size, key)
-            self.columns.focus_position = 1
-        else:
-            return super().keypress(size, key)
+        return super().keypress(size, key)
+
+    # def keypress(self, size, key):
+    #     if key == "enter" and self.columns.focus_position == 0:
+    #         super().keypress(size, key)
+    #         self.columns.focus_position = 1
+    #     else:
+    #         return super().keypress(size, key)
 
     @property
     def selected_channels(self):
@@ -1372,9 +1373,10 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         if not limit:
             limit = self.limit
 
-        self.update_query(sort=sort, cursor=cursor)
-
         with db_session(optimistic=False):
+
+            self.update_query(sort=sort, cursor=cursor)
+
 
             for listing in self.items_query[:limit]:
                 sources = [

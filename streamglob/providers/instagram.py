@@ -456,7 +456,6 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
     def VIEW(self):
         return FeedProviderView(self, InstagramProviderBodyView(self, InstagramDataTable(self)))
 
-
     @property
     def session_params(self):
         return dict(

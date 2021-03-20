@@ -1050,13 +1050,13 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
                     return
                 # listing.on_focus()
                 if hasattr(listing, "on_focus") and listing.on_focus():
-                    async def reload():
-                        self.invalidate_rows([listing.media_listing_id])
+                    async def reload(listing_id):
+                        self.invalidate_rows([listing_id])
                         self.selection.close_details()
                         self.selection.open_details()
                         self.refresh()
                         await self.preview_all(playlist_position=self.playlist_position)
-                    state.event_loop.create_task(reload())
+                    state.event_loop.create_task(reload(listing.media_listing_id))
         # state.loop.draw_screen()
 
     def on_deactivate(self):
