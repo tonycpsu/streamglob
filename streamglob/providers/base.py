@@ -870,13 +870,13 @@ class SynchronizedPlayerMixin(object):
 
     async def set_playlist_pos(self, pos):
 
-        if not state.task_manager.preview_player:
-            return
-
         if self.video_filters:
             await state.task_manager.preview_player.command(
                 "vf", "del", ",".join([f"@{f}" for f in self.video_filters])
             )
+
+        if not (state.task_manager.preview_player and len(self)):
+            return
 
         await state.task_manager.preview_player.command(
             "set_property", "playlist-pos", pos
