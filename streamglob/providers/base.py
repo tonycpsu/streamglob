@@ -61,7 +61,7 @@ class TabularProviderMixin(object):
             # if name == "title":
             #
         attrs = self.ATTRIBUTES
-        for name, opts in self.config.display.columns.items():
+        for name, opts in self.config.display.tables.columns.items():
             for optname, optvalue in opts.items():
                 attr = next(a for a in self.ATTRIBUTES if a == name)
                 self.ATTRIBUTES[attr].update({optname: optvalue})

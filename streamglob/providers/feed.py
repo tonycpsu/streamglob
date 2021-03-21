@@ -384,7 +384,6 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
         "b": "prev_unread",
         "m": "toggle_selection_read",
         "i": "inflate_selection",
-
     }
 
     def __init__(self, *args, **kwargs):
@@ -874,8 +873,12 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
             ("weight", 1, self.channels)
         ])
         self.columns = urwid.Columns([
-            (32, self.channels_pile),
-            ("weight", 3, self.body),
+            (*(self.provider.config.get_path(
+                "display.columns.channels"
+            ) or ("weight", 1)), self.channels_pile),
+            (*(self.provider.config.get_path(
+                "display.columns.listings"
+            ) or ("weight", 1)), self.body)
         ], dividechars=1)
         self.columns.focus_position=1
         self.pile = urwid.Pile([
