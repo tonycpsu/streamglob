@@ -16,6 +16,9 @@ from unidecode import unidecode
 
 from .. import config
 from .. import model
+from .. import utils
+from ..widgets import StreamglobScrollBar
+
 from ..state import *
 
 class ChannelTreeWidget(HighlightableTextMixin, urwid.TreeWidget):
@@ -165,7 +168,7 @@ class AggregateUnreadCountMixin(UnreadCountMixin):
     @property
     def unread_count(self):
         return sum([
-            n.get_widget().unread_count
+            n.get_widget().unread_count or 0
             for n in self.get_node().get_nodes()
         ])
 
@@ -359,6 +362,8 @@ class ChannelUnionNode(ChannelPropertiesMixin, urwid.ParentNode):
 
     def load_child_keys(self):
         data = self.get_value()
+        if not data:
+            return []
         try:
             return list(data.keys())
         except AttributeError:
@@ -432,6 +437,7 @@ class ChannelGroupNode(ChannelUnionNode):
         return ("group", self.get_key())
 
 
+
 class MyTreeWalker(urwid.TreeWalker):
 
     def positions(self, reverse=False):
@@ -441,7 +447,10 @@ class MyTreeWalker(urwid.TreeWalker):
         if reverse:
             rootwidget = rootnode.get_widget()
             lastwidget = rootwidget.last_child()
-            first = lastwidget.get_node()
+            if lastwidget:
+                first = lastwidget.get_node()
+            else:
+                return
         else:
             first = rootnode
 
@@ -453,6 +462,44 @@ class MyTreeWalker(urwid.TreeWalker):
             else:
                 pos = self.get_next(pos)[1]
 
+
+class MyTreeListBox(urwid.TreeListBox):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._rows_max = None
+
+    def get_scrollpos(self, size, focus=False):
+        """Current scrolling position
+        Lower limit is 0, upper limit is the highest index of `body`.
+        """
+        middle, top, bottom = self.calculate_visible(size, focus)
+        if middle is None:
+            return 0
+        else:
+            offset_rows, _, focus_pos, _, _ = middle
+            maxcol, maxrow = size
+            flow_size = (maxcol,)
+
+            positions = tuple(self.body.positions())
+            focus_index = positions.index(focus_pos)
+            widgets_above_focus = (
+                pos.get_widget() for pos in positions[:focus_index]
+            )
+
+            rows_above_focus = sum(w.rows(flow_size) for w in widgets_above_focus)
+            rows_above_top = rows_above_focus - offset_rows
+            return rows_above_top
+
+    def rows_max(self, size, focus=False):
+        if self._rows_max is None:
+            flow_size = (size[0],)
+            body = self.body
+            self._rows_max = sum(
+                pos.get_widget().rows(flow_size)
+                for pos in body.positions()
+            )
+        return self._rows_max
 
 @keymapped()
 class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
@@ -471,10 +518,12 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
     def __init__(self, data, provider, label="channels"):
         self.provider = provider
         self.tree = ChannelGroupNode(self, data, key=label)
-        self.listbox = urwid.TreeListBox(MyTreeWalker(self.tree))
+        self.listbox = MyTreeListBox(MyTreeWalker(self.tree))
+        self.scrollbar = StreamglobScrollBar(self.listbox)
         self.listbox.offset_rows = 1
         self.pile = urwid.Pile([
-            ("weight", 1, self.listbox)
+            ("weight", 1, self.scrollbar)
+            # ("weight", 1, self.listbox)
         ])
         super().__init__(self.pile)
 

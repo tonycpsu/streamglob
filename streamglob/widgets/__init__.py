@@ -11,11 +11,12 @@ import urwid
 import panwid
 from panwid.keymap import *
 from panwid.tabview import *
+from panwid.scroll import ScrollBar
 from orderedattrdict import AttrDict, DefaultAttrDict
 
 from ..state import *
 from .. import utils
-
+from .. import config
 from .browser import *
 
 
@@ -86,6 +87,45 @@ class SquareButton(urwid.Button):
 
         return ( cols, )
 
+
+class StreamglobScrollBar(ScrollBar):
+
+    @property
+    def _thumb_char(self):
+        return (
+        "scroll_thumb"
+        if config.settings.profile.get_path("display.scroll.thumb")
+        else None,
+        config.settings.profile.get_path("display.scroll.thumb") or None
+    )
+
+    @property
+    def _trough_char(self):
+        return (
+        "scroll_trough"
+        if config.settings.profile.get_path("display.scroll.trough")
+        else None,
+        config.settings.profile.get_path("display.scroll.trough") or None
+    )
+
+    @property
+    def _thumb_indicator_top(self):
+        return (
+        "scroll_top"
+        if config.settings.profile.get_path("display.scroll.indicator_top")
+        else None,
+        config.settings.profile.get_path("display.scroll.indicator_top") or None
+    )
+
+    @property
+    def _thumb_indicator_bottom(self):
+        return (
+        "scroll_bottom"
+        if config.settings.profile.get_path("display.scroll.indicator_bottom")
+        else None,
+        config.settings.profile.get_path("display.scroll.indicator_bottom") or None
+    )
+
 @keymapped()
 class BaseDataTable(panwid.DataTable):
 
@@ -97,6 +137,8 @@ class BaseDataTable(panwid.DataTable):
         "home": "key_home",
         "end": "key_end"
     }
+
+    with_scrollbar = StreamglobScrollBar
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

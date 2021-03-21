@@ -364,7 +364,6 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
 
     HOVER_DELAY = 0.25
 
-    with_scrollbar=True
     sort_by = ("created", True)
     index = "media_listing_id"
     no_load_on_init = True
@@ -946,7 +945,7 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
     @property
     def footer_attrs(self):
 
-        if len(self.provider.feeds) == 1:
+        if len(self.provider.selected_channels) == 1:
             feed = self.provider.selected_channels[0]
             return AttrDict([
                 ("refreshed", lambda: timeago.format(feed.fetched, datetime.now(), "en_short")),
@@ -1191,8 +1190,9 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         self.reset()
 
     def on_status_change(self, status, *args):
-        self.provider_data["selected_status"] = status
-        self.save_provider_data()
+        with db_session:
+            self.provider_data["selected_status"] = status
+            self.save_provider_data()
         if not self.is_active:
             return
         self.reset()
