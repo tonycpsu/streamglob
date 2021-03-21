@@ -145,34 +145,62 @@ class MarkableMixin(object):
             }
 
 
-class UnreadCountMixin(object):
+class ListingCountMixin(object):
+
+    @property
+    def listing_count(self):
+        return self.channel.listing_count if self.channel else None
 
     @property
     def unread_count(self):
         return self.channel.unread_count if self.channel else None
 
     @property
-    def unread_attr(self):
+    def count_attr(self):
         return "browser faint"
 
     @property
-    def text(self):
-        if self.unread_count:
-            return [ (self.attr, self.name), " ", (self.unread_attr, f"({self.unread_count})") ]
-            # return f"{self.name} ({self.unread_count})"
-        else:
-            return self.name
+    def count_unread_attr(self):
+        return "light red"
 
-class AggregateUnreadCountMixin(UnreadCountMixin):
+    @property
+    def count_total_attr(self):
+        return "light blue"
+
+    @property
+    def text(self):
+        unread = self.unread_count
+        total = self.listing_count
+        return [
+            (self.attr, self.name), " ",
+            (self.count_attr, "("),
+            (self.count_unread_attr if unread else self.count_attr,
+             str(unread)
+             ),
+            (self.count_attr, "/"),
+            (self.count_total_attr if total else self.count_attr,
+             str(total)
+             ),
+            (self.count_attr, ")")
+        ]
+
+class AggregateListingCountMixin(ListingCountMixin):
+
+    @property
+    def listing_count(self):
+        return sum([
+            n.get_widget().listing_count or 0
+            for n in self.get_node().get_leaf_nodes()
+        ])
 
     @property
     def unread_count(self):
         return sum([
             n.get_widget().unread_count or 0
-            for n in self.get_node().get_nodes()
+            for n in self.get_node().get_leaf_nodes()
         ])
 
-class ChannelWidget(UnreadCountMixin,
+class ChannelWidget(ListingCountMixin,
                     MarkableMixin,
                     ChannelTreeWidget):
 
@@ -215,7 +243,7 @@ class ChannelWidget(UnreadCountMixin,
 
 
 
-class ChannelUnionWidget(AggregateUnreadCountMixin, ChannelWidget):
+class ChannelUnionWidget(AggregateListingCountMixin, ChannelWidget):
 
 
     def __init__(self, node):
@@ -233,7 +261,7 @@ class ChannelUnionWidget(AggregateUnreadCountMixin, ChannelWidget):
             width=('relative', 100), left=indent_cols)
 
 
-class ChannelGroupWidget(AggregateUnreadCountMixin, MarkableMixin, ChannelTreeWidget):
+class ChannelGroupWidget(AggregateListingCountMixin, MarkableMixin, ChannelTreeWidget):
 
     indent_cols = 3
 

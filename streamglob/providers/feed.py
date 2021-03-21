@@ -139,6 +139,11 @@ class FeedMediaChannel(model.MediaChannel):
         commit()
 
     @property
+    def listing_count(self):
+        with db_session:
+            return self.items.select().count()
+
+    @property
     def unread_count(self):
         with db_session:
             return self.items.select(lambda i: not i.read).count()
