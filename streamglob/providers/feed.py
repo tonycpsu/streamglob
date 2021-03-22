@@ -8,6 +8,7 @@ from dataclasses import *
 import functools
 import textwrap
 from itertools import chain
+import asyncio
 
 from orderedattrdict import AttrDict
 from panwid.datatable import *
@@ -54,7 +55,10 @@ class FeedMediaChannel(model.MediaChannel):
         fetched = 0
         self.provider.update_fetch_indicator(0)
         self.provider.view.footer.show_message(f"{'Fetching' if resume else 'Updating'} {self.name}...")
-        async for item in self.fetch(limit=self.provider.fetch_limit, *args, **kwargs):
+        async for item in self.fetch(
+                limit=self.provider.fetch_limit, resume=resume, replace=replace,
+                *args, **kwargs
+        ):
             with db_session:
                 old = self.provider.LISTING_CLASS.get(guid=item["guid"])
                 if old:
@@ -426,15 +430,16 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
 
     @keymap_command()
     async def inflate_selection(self):
-        with db_session:
-            listing = self.selection.data_source.attach()
-            if await listing.inflate(force=True):
-                # position = self.focus_position
-                self.invalidate_rows([listing.media_listing_id])
-                self.selection.close_details()
-                self.selection.open_details()
-                self.refresh()
-                # self.focus_position = position
+        async with self.listing_lock:
+            with db_session:
+                listing = self.selection.data_source.attach()
+                if await listing.inflate(force=True):
+                    # position = self.focus_position
+                    self.invalidate_rows([listing.media_listing_id])
+                    self.selection.close_details()
+                    self.selection.open_details()
+                    self.refresh()
+                    # self.focus_position = position
 
     # FIXME
     # def on_focus(self, source, position):
@@ -535,21 +540,22 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
         if not self.selection:
             return
 
-        with db_session:
-            for i, s in enumerate(self.selection.data.sources):
-            # # now = datetime.now()
-                source = FeedMediaSource[s.media_source_id]
-                # logger.info(f"{i}, {source}")
-                # source.attach().read = now
-                source.mark_seen()
-                # commit()
-                if len(self.selection.data.sources) > 1:
-                    logger.info(f"{len(self.selection.data.sources)}, {len(self.selection.details.contents.table)}")
-                    self.selection.details.contents.table[i].clear_attr("unread")
-                # else:
-                #     self.selection.data_source.attach().read = now
-            self.selection.close_details()
-            self.selection.clear_attr("unread")
+
+        async with self.provider.listing_lock:
+            with db_session:
+                for i, s in enumerate(self.selection.data.sources):
+                    source = FeedMediaSource[s.media_source_id]
+                    # logger.info(f"{i}, {source}")
+                    # source.attach().read = now
+                    source.mark_seen()
+                    # commit()
+                    if len(self.selection.data.sources) > 1:
+                        logger.info(f"{len(self.selection.data.sources)}, {len(self.selection.details.contents.table)}")
+                        self.selection.details.contents.table[i].clear_attr("unread")
+                    # else:
+                    #     self.selection.data_source.attach().read = now
+                self.selection.close_details()
+                self.selection.clear_attr("unread")
 
         rc = self.mark_item_read(self.focus_position)
 
@@ -849,7 +855,8 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
         "meta A": ("mark_visible_read", [1]),
         "meta ctrl k": "kill_all",
         "r": ("update", [], {"force": True}),
-        "R": ("update", [], {"force": True, "resume": True})
+        "R": ("update", [], {"force": True, "resume": True}),
+        "meta R": ("update", [], {"force": True, "resume": True, "replace": True})
     }
 
     def __init__(self, provider, body):
@@ -878,7 +885,7 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
             ) or ("weight", 1)), self.channels_pile),
             (*(self.provider.config.get_path(
                 "display.columns.listings"
-            ) or ("weight", 1)), self.body)
+            ) or ("weight", 3)), self.body)
         ], dividechars=1)
         self.columns.focus_position=1
         self.pile = urwid.Pile([
@@ -913,10 +920,9 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
             self.body.mark_item_read(n)
         self.reset()
 
-    @keymap_command
     async def update(self, force=False, resume=False, replace=False):
         await self.provider.update(force=force, resume=resume, replace=replace)
-        # self.reset()
+
     @db_session
     def kill_all(self):
         for feed in self.provider.selected_channels:
@@ -1089,6 +1095,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         self.filters["filters"].connect("changed", self.on_custom_change)
         self.pagination_cursor = None
         self.limiter = get_limiter(rate=self.RATE_LIMIT, capacity=self.BURST_LIMIT)
+        self.listing_lock = asyncio.Lock()
 
     @property
     def VIEW(self):
@@ -1238,7 +1245,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         # update_task = state.event_loop.run_in_executor(None, update_feeds)
 
     async def update_feeds(self, force=False, resume=False, replace=False):
-        logger.info(f"update_feeds: {force} {resume}")
+        logger.info(f"update_feeds: {force} {resume} {replace}")
         with db_session:
             # feeds = select(f for f in self.FEED_CLASS if f in self.selected_channels)
             # if not self.feed_entity:

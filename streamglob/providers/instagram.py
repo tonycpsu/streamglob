@@ -94,22 +94,23 @@ class InstagramMediaListingMixin(object):
         if self.is_inflated and not force:
             return False
         logger.debug("inflate")
-        with db_session(optimistic=False):
-            # FIXME: for some reason I don't feel like digging into right now,
-            # self.feed is of type FeedMediaChannel instead of InstagramFeedMediaChannel, so
-            # we force the issue here
-            feed = self.provider.FEED_CLASS[self.feed.channel_id]
-            # with self.provider.session.limiter():
-            async with self.provider.session.limiter:
-                post_info = feed.get_post_info(self.shortcode)
-                post = AttrDict(post_info)
-            delete(s for s in self.sources)
-            listing = self.provider.LISTING_CLASS[self.media_listing_id]
-            for i, src in enumerate(feed.extract_content(post)):
-                source = listing.provider.new_media_source(rank=i, **src).attach()
-                listing.sources.add(source)
-            listing.is_inflated = True
-            commit()
+        async with self.provider.listing_lock:
+            with db_session(optimistic=False):
+                # FIXME: for some reason I don't feel like digging into right now,
+                # self.feed is of type FeedMediaChannel instead of InstagramFeedMediaChannel, so
+                # we force the issue here
+                feed = self.provider.FEED_CLASS[self.feed.channel_id]
+                # with self.provider.session.limiter():
+                async with self.provider.session.limiter:
+                    post_info = feed.get_post_info(self.shortcode)
+                    post = AttrDict(post_info)
+                delete(s for s in self.sources)
+                listing = self.provider.LISTING_CLASS[self.media_listing_id]
+                for i, src in enumerate(feed.extract_content(post)):
+                    source = listing.provider.new_media_source(rank=i, **src).attach()
+                    listing.sources.add(source)
+                listing.is_inflated = True
+                commit()
         return True
 
     @property
@@ -252,7 +253,7 @@ class InstagramFeedMediaChannelMixin(object):
 
     async def fetch(self, limit=None, resume=False, replace=False):
 
-        logger.info(f"fetching {self.locator}")
+        logger.info(f"fetching {self.locator} {resume}, {replace}")
 
         # update cached post count
         with db_session:
