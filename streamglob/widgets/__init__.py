@@ -89,42 +89,42 @@ class SquareButton(urwid.Button):
 
 
 class StreamglobScrollBar(ScrollBar):
+    pass
+    # @property
+    # def _thumb_char(self):
+    #     return (
+    #     "scroll_thumb"
+    #     if config.settings.profile.get_path("display.scroll.thumb")
+    #     else None,
+    #     config.settings.profile.get_path("display.scroll.thumb") or None
+    # )
 
-    @property
-    def _thumb_char(self):
-        return (
-        "scroll_thumb"
-        if config.settings.profile.get_path("display.scroll.thumb")
-        else None,
-        config.settings.profile.get_path("display.scroll.thumb") or None
-    )
+    # @property
+    # def _trough_char(self):
+    #     return (
+    #     "scroll_trough"
+    #     if config.settings.profile.get_path("display.scroll.trough")
+    #     else None,
+    #     config.settings.profile.get_path("display.scroll.trough") or None
+    # )
 
-    @property
-    def _trough_char(self):
-        return (
-        "scroll_trough"
-        if config.settings.profile.get_path("display.scroll.trough")
-        else None,
-        config.settings.profile.get_path("display.scroll.trough") or None
-    )
+    # @property
+    # def _thumb_indicator_top(self):
+    #     return (
+    #     "scroll_top"
+    #     if config.settings.profile.get_path("display.scroll.indicator_top")
+    #     else None,
+    #     config.settings.profile.get_path("display.scroll.indicator_top") or None
+    # )
 
-    @property
-    def _thumb_indicator_top(self):
-        return (
-        "scroll_top"
-        if config.settings.profile.get_path("display.scroll.indicator_top")
-        else None,
-        config.settings.profile.get_path("display.scroll.indicator_top") or None
-    )
-
-    @property
-    def _thumb_indicator_bottom(self):
-        return (
-        "scroll_bottom"
-        if config.settings.profile.get_path("display.scroll.indicator_bottom")
-        else None,
-        config.settings.profile.get_path("display.scroll.indicator_bottom") or None
-    )
+    # @property
+    # def _thumb_indicator_bottom(self):
+    #     return (
+    #     "scroll_bottom"
+    #     if config.settings.profile.get_path("display.scroll.indicator_bottom")
+    #     else None,
+    #     config.settings.profile.get_path("display.scroll.indicator_bottom") or None
+    # )
 
 @keymapped()
 class BaseDataTable(panwid.DataTable):
