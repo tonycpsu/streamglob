@@ -89,8 +89,8 @@ class FeedMediaChannel(model.MediaChannel):
 
         if resume and fetched == 0:
             self.attrs["tail_fetched"] = True
-            node = self.provider.view.channels.find_node(self.locator)
-            node.get_widget(reload=True).update_w()
+
+        await self.provider.view.channels.find_node(self.locator).refresh()
 
 
     @db_session
@@ -369,7 +369,7 @@ class CachedFeedProviderDetailDataTable(DetailDataTable):
 @keymapped()
 class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataTable):
 
-    signals = ["focus", "keypress"]
+    signals = ["focus", "keypress", "unread_change"]
 
     HOVER_DELAY = 0.25
 
@@ -453,32 +453,33 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
     #         )
 
 
-    @db_session
-    def mark_item_read(self, position):
+    async def mark_item_read(self, position):
         logger.debug(f"mark_item_read: {position}")
 
         row = self[position]
-        item = self.item_at_position(position)
-        if not item:
-            return
-        item.mark_read()
-        row.clear_attr("unread")
-        self.set_value(position, "read", item.read)
-        self.invalidate_rows([self[position].data.media_listing_id])
-        # return self.inner_table is not None
+        with db_session:
+            listing = row.data_source
+            item = self.item_at_position(position)
+            if not item:
+                return
+            item.mark_read()
+            row.clear_attr("unread")
+            self.set_value(position, "read", item.read)
+            self.invalidate_rows([self[position].data.media_listing_id])
+            self._emit("unread_change", listing.channel.detach())
 
-    @db_session
-    def mark_item_unread(self, position):
-        logger.debug(f"mark_item_unread: {position}")
-        # if not isinstance(self[position].data, model.TitledMediaListing):
-        #     return
-        item = self.item_at_position(position)
-        if not item:
-            return
-        item.mark_unread()
-        self[position].set_attr("unread")
-        self.set_value(position, "read", item.read)
-        self.invalidate_rows([self[position].data.media_listing_id])
+    async def mark_item_unread(self, position):
+        row = self[position]
+        with db_session:
+            listing = row.data_source
+            item = self.item_at_position(position)
+            if not item:
+                return
+            item.mark_unread()
+            row.set_attr("unread")
+            self.set_value(position, "read", item.read)
+            self.invalidate_rows([self[position].data.media_listing_id])
+            self._emit("unread_change", listing.channel.detach())
 
         # partial = self.inner_table is not None
         # # FIXME: HACK until there's a better UI for marking parts read
@@ -496,22 +497,18 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
 
 
     @db_session
-    def toggle_item_read(self, position):
-        # if not isinstance(self[position].data, model.TitledMediaListing):
-        #     return
-        # logger.info(self.get_value(position, "read"))
+    async def toggle_item_read(self, position):
+        listing = self[position].data_source
         if position >= len(self):
             return
-        if self[position].data_source.read:
-        # if self.get_value(position, "read") is not None:
-            self.mark_item_unread(position)
+        if listing.read:
+            await self.mark_item_unread(position)
         else:
-            self.mark_item_read(position)
-        # self.invalidate_rows([self[position].data.media_listing_id])
+            await self.mark_item_read(position)
 
-    def toggle_selection_read(self):
+    async def toggle_selection_read(self):
         logger.info("toggle_selection_read")
-        self.toggle_item_read(self.focus_position)
+        await self.toggle_item_read(self.focus_position)
 
     async def prev_item(self):
         if self.focus_position > 0:
@@ -557,8 +554,7 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
                 self.selection.close_details()
                 self.selection.clear_attr("unread")
 
-        rc = self.mark_item_read(self.focus_position)
-
+        old_pos =  self.focus_position
         try:
             idx = next(
                 r.data.media_listing_id
@@ -576,12 +572,18 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
 
             else:
                 self.focus_position = len(self)-1
+
+        rc = await self.mark_item_read(self.focus_position)
+
         if idx:
             pos = self.index_to_position(idx)
             focus_position_orig = self.focus_position
             self.focus_position = pos
             self.mark_read_on_focus = True
             self._modified()
+
+
+
 
 
     @keymap_command
@@ -592,7 +594,7 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
                 for r in self[self.focus_position-1::-1]
                 if not r.data.read
             )
-            self.mark_item_read(self.focus_position)
+            await self.mark_item_read(self.focus_position)
             pos = self.index_to_position(idx)
         except StopIteration:
             if self.focus_position >= 1:
@@ -898,6 +900,7 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
         super().__init__(self.pile)
         self.pile.focus_position = 0
         urwid.connect_signal(self.body, "keypress", lambda *args: self._emit(*args))
+        urwid.connect_signal(self.body, "unread_change", self.on_unread_change)
         urwid.connect_signal(self.body, "focus", self.on_focus)
         urwid.connect_signal(self.channels, "select",
                              lambda s, *args: self._emit("feed_select", *args))
@@ -910,16 +913,23 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
                 f.mark_all_items_read()
         self.reset()
 
-    def mark_visible_read(self, direction=None):
+    async def mark_visible_read(self, direction=None):
         for n, item in enumerate(self.body):
             if direction and (
                     direction < 0 and n > self.body.focus_position
                     or direction> 0 and n < self.body.focus_position
             ):
                 continue
-            self.body.mark_item_read(n)
+            await self.body.mark_item_read(n)
         self.reset()
 
+    def on_unread_change(self, source, listing):
+        async def refresh_channels():
+            await self.channels.find_node(listing.locator).refresh()
+        asyncio.create_task(refresh_channels())
+        # self.channels._invalidate()
+
+    @keymap_command
     async def update(self, force=False, resume=False, replace=False):
         await self.provider.update(force=force, resume=resume, replace=replace)
 
@@ -1132,11 +1142,11 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
     #         title = {"width": ("weight", 1), "truncate": False},
     #     )
 
-    @property
-    def RPC_METHODS(self):
-        return [
-            ("mark_items_read", self.mark_items_read)
-        ]
+    # @property
+    # def RPC_METHODS(self):
+    #     return [
+    #         ("mark_items_read", self.mark_items_read)
+    #     ]
 
     @property
     def status(self):
@@ -1420,7 +1430,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         # self.update_query(cursor, sort=sort)
 
     @db_session
-    def mark_items_read(self, request):
+    async def mark_items_read(self, request):
         media_listing_ids = list(set(request.params))
         logger.info(f"mark_items_read: {media_listing_ids}")
         with db_session:

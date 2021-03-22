@@ -157,15 +157,15 @@ class ListingCountMixin(object):
 
     @property
     def count_attr(self):
-        return "browser faint"
+        return "browser count"
 
     @property
     def count_unread_attr(self):
-        return "light red"
+        return "browser count_unread"
 
     @property
     def count_total_attr(self):
-        return "light blue"
+        return "browser count_total"
 
     @property
     def text(self):
@@ -306,6 +306,15 @@ class ChannelGroupWidget(AggregateListingCountMixin, MarkableMixin, ChannelTreeW
             node.get_widget().unmark()
 
 class ChannelPropertiesMixin(object):
+
+    async def refresh(self):
+        node = self
+        while node:
+            widget = node.get_widget(reload=True)
+            widget._invalidate()
+            node = node.get_parent()
+        self.get_parent().tree.listbox._invalidate()
+        # self.get_parent().tree.listbox.body._modified()
 
     @property
     def locator(self):
