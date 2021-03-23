@@ -453,7 +453,7 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
     #         )
 
 
-    async def mark_item_read(self, position):
+    async def mark_item_read(self, position, no_signal=False):
         logger.debug(f"mark_item_read: {position}")
 
         row = self[position]
@@ -466,9 +466,10 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
             row.clear_attr("unread")
             self.set_value(position, "read", item.read)
             self.invalidate_rows([self[position].data.media_listing_id])
-            self._emit("unread_change", listing.channel.detach())
+            if not no_signal:
+                self._emit("unread_change", listing.channel.detach())
 
-    async def mark_item_unread(self, position):
+    async def mark_item_unread(self, position, no_signal=False):
         row = self[position]
         with db_session:
             listing = row.data_source
@@ -479,21 +480,8 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
             row.set_attr("unread")
             self.set_value(position, "read", item.read)
             self.invalidate_rows([self[position].data.media_listing_id])
-            self._emit("unread_change", listing.channel.detach())
-
-        # partial = self.inner_table is not None
-        # # FIXME: HACK until there's a better UI for marking parts read
-        # # partial = False
-        # if partial:
-        #     pos = self.inner_focus
-        #     item.mark_part_unread(pos)
-        #     self.inner_table.set_value(pos, "read", False)
-        #     self.inner_table[pos].set_attr("unread")
-        # else:
-        #     item.mark_unread()
-        #     self[position].set_attr("unread")
-        #     self.set_value(position, "read", item.read)
-        # self.invalidate_rows([self[position].data.media_listing_id])
+            if not no_signal:
+                self._emit("unread_change", listing.channel.detach())
 
 
     @db_session
@@ -534,27 +522,28 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
         count = 0
         last_count = None
 
-        if not self.selection:
+        row = self.selection
+        if not row:
             return
 
-
+        listing = row.data_source
         async with self.provider.listing_lock:
             with db_session:
-                for i, s in enumerate(self.selection.data.sources):
+                for i, s in enumerate(listing.sources):
                     source = FeedMediaSource[s.media_source_id]
                     # logger.info(f"{i}, {source}")
                     # source.attach().read = now
                     source.mark_seen()
                     # commit()
-                    if len(self.selection.data.sources) > 1:
-                        logger.info(f"{len(self.selection.data.sources)}, {len(self.selection.details.contents.table)}")
-                        self.selection.details.contents.table[i].clear_attr("unread")
+                    if len(listing.sources) > 1:
+                        logger.info(f"{len(listing.sources)}, {len(row.details.contents.table)}")
+                        row.details.contents.table[i].clear_attr("unread")
                     # else:
-                    #     self.selection.data_source.attach().read = now
-                self.selection.close_details()
-                self.selection.clear_attr("unread")
+                    #     listing_source.attach().read = now
+                row.close_details()
+                row.clear_attr("unread")
 
-        old_pos =  self.focus_position
+        old_pos = self.focus_position
         try:
             idx = next(
                 r.data.media_listing_id
@@ -573,7 +562,7 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
             else:
                 self.focus_position = len(self)-1
 
-        rc = await self.mark_item_read(self.focus_position)
+        await self.mark_item_read(self.focus_position, no_signal=True)
 
         if idx:
             pos = self.index_to_position(idx)
@@ -581,7 +570,7 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
             self.focus_position = pos
             self.mark_read_on_focus = True
             self._modified()
-
+        self._emit("unread_change", listing.channel.detach())
 
 
 
