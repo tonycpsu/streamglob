@@ -398,7 +398,8 @@ class MediaSourceMixin(object):
         else:
             template = "{listing.provider}.{self.default_name}.{self.timestamp}.{self.ext}"
             outfile = template.format(self=self)
-        outfile = re.sub("({[^}]+})", "*", outfile)
+        if glob:
+            outfile = re.sub("({[^}]+})", "*", outfile)
         # logger.info(f"template: {template}, outfile: {outfile}")
         return os.path.join(outpath, outfile)
 
