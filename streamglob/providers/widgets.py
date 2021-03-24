@@ -163,14 +163,14 @@ class DownloadListingMixin(object):
                 raise
             downloader_spec = downloader_spec or source.download_helper
             task = model.DownloadMediaTask.attr_class(
-                provider = self.NAME,
-                title = utils.sanitize_filename(listing.title),
-                sources = [source],
-                listing = listing,
-                dest = filename,
-                args = (downloader_spec,),
-                kwargs = dict(index=index, **kwargs),
-                postprocessors = (self.config.get("postprocessors", None) or []).copy()
+                provider=self.NAME,
+                title=utils.sanitize_filename(listing.title),
+                sources=[source],
+                listing=listing,
+                dest=filename,
+                args=(downloader_spec,),
+                kwargs=dict(index=index, **kwargs),
+                postprocessors=(self.config.get("postprocessors", None) or []).copy()
             )
             yield task
 

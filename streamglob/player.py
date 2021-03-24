@@ -146,7 +146,7 @@ class Program(object):
         # we have a cross-platform solution, force with_progress to False if
         # running on Windows
 
-        if with_progress is None:
+        if self.with_progress is None:
             self.with_progress = False if platform.system() == "Windows" else with_progress
 
         self.extra_args_pre = []
@@ -397,7 +397,7 @@ class Program(object):
         # async def update_progress(self):
         #     async for line in self.get_output():
         #         if line:
-        #             print(f"line1: {line}")
+        #             print(f"line1: {line}"
         #             return line
 
 
@@ -484,8 +484,6 @@ class Program(object):
                     fcntl.ioctl(pty_stream, termios.TIOCSWINSZ,
                                 struct.pack('HHHH', 50, 100, 0, 0)
                     )
-                    if self.stdout is not None:
-                        logger.info(f"stdout: {self.stdout}")
                     self.stdout = pty_stream
 
                 if self.stdin is None:
@@ -854,7 +852,7 @@ class YouTubeDLDownloader(Downloader):
             async for line in self.get_output():
                 if not line:
                     continue
-                logger.debug(line)
+                logger.info(line)
                 if "[download] Destination:" in line:
                     self.source.dest = line.split(":")[1].strip()
                     continue
@@ -1068,28 +1066,23 @@ def play_test():
 
 def download_test():
 
-    task = model.DownloadMediaTask(
-        provider="rss",
-        title= "foo",
-        sources = [
-            model.MediaSource(
-                "rss",
-                "https://www.nasa.gov/sites/all/themes/custom/nasatwo/images/nasa-logo.svg",
+    downloader_spec=None
+    task = model.DownloadMediaTask.attr_class(
+        provider="youtube",
+        title="foo",
+        sources=[
+            model.MediaSource.attr_class(
+                provider="rss",
+                url="https://www.youtube.com/watch?v=-kaysm_xhM8",
                 media_type="image")
         ],
-        postprocessors = ["test", "test"],
-        dest="foo.svg",
+        # listing=listing,
+        dest="foo.mp4",
+        args=(downloader_spec,),
+        kwargs={"format": "22"}
     )
 
-
-    result = asyncio.run(
-        state.task_manager.download(
-            task,
-            downloader_spec = lambda d: d.is_simple,
-        ).result
-    )
-    logger.info(f"result: {result}")
-    return result
+    state.event_loop.run_until_complete(state.task_manager.download(task).result)
 
 
 def postprocessor_test():
