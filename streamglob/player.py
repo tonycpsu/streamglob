@@ -852,7 +852,7 @@ class YouTubeDLDownloader(Downloader):
             async for line in self.get_output():
                 if not line:
                     continue
-                logger.info(line)
+                logger.debug(line)
                 if "[download] Destination:" in line:
                     self.source.dest = line.split(":")[1].strip()
                     continue
@@ -866,7 +866,8 @@ class YouTubeDLDownloader(Downloader):
                     self.progress.rate = bitmath.parse_string(rate.split("/")[0]) if rate else None
                     self.progress.eta = eta
                 except AttributeError as e:
-                    logger.error(e)
+                    continue
+                    # logger.debug(e)
 
         t = asyncio.create_task(process_lines())
         await asyncio.sleep(1)

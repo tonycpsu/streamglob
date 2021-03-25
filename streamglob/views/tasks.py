@@ -1,10 +1,227 @@
 import urwid
 from panwid.datatable import *
+from panwid.progressbar import *
+from panwid.keymap import *
 
 from .. import model
+from .. import utils
 from ..widgets import *
 
+class TaskWidget(urwid.WidgetWrap):
+
+    def __init__(self, task, details=False):
+
+        self.task = task
+        self.details = details
+        self.pile = urwid.Pile([
+            ("pack", line)
+            for line in self.display_lines
+        ])
+        super().__init__(self.pile)
+
+    @property
+    def display_lines(self):
+        if self.details:
+            return self.display_lines_details
+        else:
+            return getattr(self, f"display_lines_{self.task.status}",
+                           self.display_lines_default)
+
+    @property
+    def display_lines_default(self):
+        return [
+            self.display_line_default
+        ]
+
+    @property
+    def display_lines_downloading(self):
+        return self.display_lines_default + [
+            self.display_line_progress
+        ]
+
+
+    @property
+    def display_lines_details(self):
+        return self.display_lines_default + [
+            self.display_line_source,
+            self.display_line_destination
+        ]
+
+    @property
+    def display_line_default(self):
+        return urwid.Columns([
+            ("pack", self.provider),
+            ("weight", 1, urwid.Padding(self.title)),
+            ("pack", self.status),
+            ("pack", self.elapsed)
+        ], dividechars=1)
+
+    @property
+    def display_line_source(self):
+        return urwid.Columns([
+            ("weight", 1, self.pad_text(self.task.sources))
+        ])
+
+    @property
+    def display_line_destination(self):
+        return urwid.Columns([
+            ("weight", 1, self.pad_text(self.task.dest))
+        ])
+
+
+    @property
+    def display_line_progress(self):
+        return urwid.Columns([
+                    ("weight", 1, urwid.Padding(
+                        ProgressBar(
+                            width=40,
+                            maximum=self.progress.size_total or 1,
+                            value=self.progress.size_downloaded or 0,
+                            progress_color="light blue",
+                            remaining_color="dark blue"
+                        )
+                    )# if None not in (
+                    #     self.progress.size_total,
+                    #     self.progress.size_downloaded
+                    # ) else urwid.Text("")
+                  )
+                ])
+
+    @property
+    def provider(self):
+        return urwid.Text(self.task.provider)
+
+    @property
+    def title(self):
+        return urwid.Text(self.task.title)
+
+    @property
+    def status(self):
+        return urwid.Text(self.task.status)
+
+    @property
+    def elapsed(self):
+        return urwid.Text(utils.format_timedelta(self.task.elapsed))
+
+
+    def pad_text(self, text):
+        return urwid.Padding(urwid.Text(str(text)))
+
+    @property
+    def sources(self):
+        if len(self.sources) == 1:
+            return str(self.sources[0])
+        else:
+            return str(len(self.sources))
+
+    @property
+    def dest(self):
+        return utils.strip_emoji(
+            getattr(self.sources[0], "dest", None)
+            or
+            self.dest
+        )
+
+    @property
+    def started(self):
+        return utils.format_datetime(self.started)
+
+    @property
+    def program(self):
+        return self.task.program.result()
+
+    @property
+    def progress(self):
+        return self.program.progress
+
+    @property
+    def size(self):
+        return self.progress.size_total or "?"
+
+    @property
+    def size_total(self):
+        return f"""{self.progress.size_downloaded or "?"}/{self.progress.size_total or "?"}"""
+
+    @property
+    def pct(self):
+        return self.progress.percent_downloaded or "?"
+
+    @property
+    def rate(self):
+        return self.progress.transfer_rate or "?"
+
+
+def format_task(task):
+
+    return TaskWidget(task)
+
+@keymapped()
+class TaskTable(BaseDataTable):
+
+    KEYMAP = {
+        " ": "toggle_details"
+    }
+
+    columns = [
+        DataTableColumn("task", format_fn=format_task)
+    ]
+
+    # FIXME
+    STATUS_MAP = AttrDict(
+        playing="playing",
+        to_download="pending",
+        active="downloading",
+        postprocessing="processing",
+        done="done"
+    )
+
+    def detail_fn(self, data):
+        return TaskWidget(data.task, details=True)
+
+    def toggle_details(self):
+        self.selection.toggle_details()
+
+    def get_tasks(self):
+
+        for task_list, status in self.STATUS_MAP.items():
+            for task in getattr(state.task_manager, task_list):
+                yield AttrDict(
+                    task,
+                    status=status
+                )
+        # # return [ t for t in state.task_manager.playing ]
+        # for t in state.task_manager.playing:
+        #     yield t
+        # for t in state.task_manager.to_download:
+        #     yield t
+        # for t in state.task_manager.active:
+        #     yield t
+        # for t in state.task_manager.postprocessing:
+        #     yield t
+        # for t in state.task_manager.done:
+        #     yield t
+
+    def query(self, *args, **kwargs):
+
+        for task in self.get_tasks():
+            yield AttrDict(task=task)
+
+
+        
 class TasksView(StreamglobView):
+
+    def __init__(self):
+        self.table = TaskTable()
+        self.pile = urwid.Pile([
+            ("weight", 1, self.table)
+        ])
+        super().__init__(self.pile)
+
+    def refresh(self):
+        self.table.refresh()
+
+
+class TasksView2(StreamglobView):
 
     def __init__(self):
 
