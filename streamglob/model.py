@@ -388,6 +388,7 @@ class MediaSourceMixin(object):
                     )
                 )
                 if not glob:
+                    outfile = outfile.format_map(SafeDict(ext=self.ext))
                     outfile = self.provider.translate_template(outfile)
                 if config.settings.profile.unicode_normalization:
                     outfile = unicodedata.normalize(config.settings.profile.unicode_normalization, outfile)
