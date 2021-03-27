@@ -21,7 +21,6 @@ class AppData(Tree):
         self.save()
 
     def save(self):
-        logger.info("save")
         with db_session:
             saved = model.ApplicationData.select().first() or model.ApplicationData()
             saved.settings = self

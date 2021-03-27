@@ -370,9 +370,6 @@ class YouTubeFeed(FeedMediaChannel):
     @property
     @db_session
     def end_cursor(self):
-        num_listings = self.provider.LISTING_CLASS.select(
-            lambda l: l.channel == self
-        ).count()
         try:
             oldest, guid = select(
                 (l.created, l.guid)
@@ -382,7 +379,17 @@ class YouTubeFeed(FeedMediaChannel):
         except TypeError:
             oldest, guid = (None, None)
 
-        return (oldest, num_listings, guid)
+        return (oldest, self.last_offset, guid)
+
+    @property
+    @db_session
+    def last_offset(self):
+        return self.attrs.get("last_offset", 0)
+
+    @db_session
+    def save_last_offset(self, offset):
+        self.attrs["last_offset"] = offset
+        commit()
 
 
     @property
@@ -407,7 +414,7 @@ class YouTubeFeed(FeedMediaChannel):
 
             with db_session:
 
-                logger.info(f"fetch: offset={offset}, limit={limit}")
+                logger.info(f"fetch: resume={resume}, offset={offset}, limit={limit}, cursor={self.end_cursor}")
                 batch = [
                     item async for item in self.session.fetch(
                         url, offset=offset, limit=limit
@@ -425,6 +432,7 @@ class YouTubeFeed(FeedMediaChannel):
                             lambda i: i.guid == batch[0]["guid"]
                     ).first()
                 ):
+                    logger.debug("nothing new")
                     break
 
                 if self.provider.config.credentials.api_key:
@@ -437,6 +445,7 @@ class YouTubeFeed(FeedMediaChannel):
                         for entry in batch
                     ]
 
+            logger.debug(batch)
             try:
                 start = next(
                     i for i, item in enumerate(batch)
@@ -461,6 +470,7 @@ class YouTubeFeed(FeedMediaChannel):
                 # these are all newer, so advance and continue
                 offset += limit
                 if resume:
+                    logger.debug("all newer, getting next batch")
                     continue
                 else:
                     listings += batch
@@ -499,6 +509,8 @@ class YouTubeFeed(FeedMediaChannel):
                     **item
                 )
                 yield listing
+
+        self.save_last_offset(offset)
 
 
 @keymapped()
