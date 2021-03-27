@@ -65,6 +65,7 @@ class ProgressStats:
     pct: typing.Optional[float] = None
     rate: typing.Optional[bitmath.Byte] = None
     eta: typing.Optional[timedelta] = None
+    dest: typing.Optional[str] = None
 
     @property
     def size_downloaded(self):
@@ -382,33 +383,11 @@ class Program(object):
 
     async def get_output(self):
 
-        # FIXME: use loop.add_reader() instead of select
-
-        # state.event_loop.add_reader(
-        #     postprocessor.progress_stream,
-        #     postprocessor.get_result
-        # )
-        # res = state.event_loop.create_future()
-        # task.stage_results[-1].set_result( (await postprocessor.progress_queue.get()).split(":")[1].strip())
-        # res.set_result(await postprocessor.progress_queue.get())
-        # task.stage_results.append(res)
-        # state.event_loop.remove_reader(postprocessor.progress_stream)
-
-        # async def update_progress(self):
-        #     async for line in self.get_output():
-        #         if line:
-        #             print(f"line1: {line}"
-        #             return line
-
-
-        # async def get_output(self):
-        #     for line in os.read(self.progress_stream, 1024).decode("utf-8").split("\n"):
-        #         if line:
-        #             await self.progress_queue.put(line.rstrip())
-        # yield os.read(self.progress_stream, 1024).decode("utf-8")
         r, w, e = select.select([ self.progress_stream ], [], [], 0)
+        print(f"get_output: {r, w, e}, {self.progress_stream}")
         if self.progress_stream in r:
-            for line in os.read(self.progress_stream, 1024).decode("utf-8").split("\n"):
+            print("reading")
+            for line in os.read(self.progress_stream, 8192).decode("utf-8").split("\n"):
                 yield line
 
     @property
@@ -467,6 +446,7 @@ class Program(object):
                 os.close(write)
                 self.stdin = read
                 self.stdout = subprocess.PIPE
+                self.stderr = subprocess.PIPE
 
         else:
             logger.info(f"full cmd: {' '.join(self.full_command)}")
@@ -484,7 +464,10 @@ class Program(object):
                     fcntl.ioctl(pty_stream, termios.TIOCSWINSZ,
                                 struct.pack('HHHH', 50, 100, 0, 0)
                     )
-                    self.stdout = pty_stream
+                    if self.with_progress == "stderr":
+                        self.stderr = pty_stream
+                    else:
+                        self.stdout = pty_stream
 
                 if self.stdin is None:
                     self.stdin = subprocess.DEVNULL #open(os.devnull, 'w')
@@ -504,7 +487,24 @@ class Program(object):
             except SGException as e:
                 logger.warning(e)
             finally:
+
                 if pty_stream is not None:
+                    async def read_progress():
+                        while True:
+                            res = await reader.read(8192)
+
+                            for line in res.decode("utf-8").split("\n"):
+                                await self.update_progress_line(line)
+                            await asyncio.sleep(1)
+
+                    reader = asyncio.StreamReader()
+                    protocol = asyncio.StreamReaderProtocol(reader)
+                    await state.event_loop.connect_read_pipe(
+                        lambda: protocol,
+                         os.fdopen(self.progress_stream)
+                    )
+                    asyncio.create_task(read_progress())
+
                     os.close(pty_stream)
 
         return self.proc
@@ -772,6 +772,8 @@ class Downloader(Program):
         proc = await downloader.run(**kwargs)
         return proc
 
+    async def update_progress_line(self, line):
+        pass
 
     @classmethod
     def get(cls, spec, url=None, **kwargs):
@@ -845,33 +847,24 @@ class YouTubeDLDownloader(Downloader):
                 return True
         return False
 
-    async def update_progress(self):
-
-        async def process_lines():
-
-            async for line in self.get_output():
-                if not line:
-                    continue
-                logger.debug(line)
-                if "[download] Destination:" in line:
-                    self.source.dest = line.split(":")[1].strip()
-                    continue
-                try:
-                    (pct, total, rate, eta) = self.PROGRESS_RE.search(line).groups()
-                    self.progress.pct = float(pct)/100
-                    self.progress.total = bitmath.parse_string(
-                            total
-                    )
-                    self.progress.dled = (self.progress.pct * self.progress.total)
-                    self.progress.rate = bitmath.parse_string(rate.split("/")[0]) if rate else None
-                    self.progress.eta = eta
-                except AttributeError as e:
-                    continue
-                    # logger.debug(e)
-
-        t = asyncio.create_task(process_lines())
-        await asyncio.sleep(1)
-        t.cancel()
+    async def update_progress_line(self, line):
+        if not line:
+            return
+        logger.debug(line)
+        if "[download] Destination:" in line:
+            self.progress.dest = line.split(":")[1].strip()
+            return
+        try:
+            (pct, total, rate, eta) = self.PROGRESS_RE.search(line).groups()
+            self.progress.pct = float(pct)/100
+            self.progress.total = bitmath.parse_string(
+                    total
+            )
+            self.progress.dled = (self.progress.pct * self.progress.total)
+            self.progress.rate = bitmath.parse_string(rate.split("/")[0]) if rate else None
+            self.progress.eta = eta
+        except AttributeError as e:
+            return
 
 
 class StreamlinkDownloader(Downloader):
@@ -941,36 +934,76 @@ class StreamlinkDownloader(Downloader):
         except streamlink.exceptions.NoPluginError:
             return False
 
-
-    async def update_progress(self):
-
-        async def process_lines():
-            async for line in self.get_output():
-                logger.debug(line)
-                if not line:
-                    return
-                try:
-                    (dled, elapsed, rate) = self.PROGRESS_RE.search(line).groups()
-                except AttributeError:
-                    return
-                self.progress.dled = bitmath.parse_string(dled)
-                self.progress.rate = bitmath.parse_string(rate.split("/")[0]) if rate else None
-                    # pass
-
-
-                # logger.info(line)
-
-        t = asyncio.create_task(process_lines())
-        await asyncio.sleep(1)
-        t.cancel()
+    async def update_progress_line(self, line):
+        logger.debug(line)
+        if not line:
+            return
+        try:
+            (dled, elapsed, rate) = self.PROGRESS_RE.search(line).groups()
+        except AttributeError:
+            return
+        self.progress.dled = bitmath.parse_string(dled)
+        self.progress.rate = bitmath.parse_string(rate.split("/")[0]) if rate else None
 
 
 class WgetDownloader(Downloader):
 
+    with_progress = "stderr"
+
+    default_args = [
+        "--show-progress", "--progress=bar:force",
+        "--limit-rate=1000"
+    ]
+
+    SIZE_LINE_RE=re.compile(
+        "Length: (\d+)"
+    )
+
+    DEST_LINE_RE=re.compile(
+        "Saving to:\s*.(.+?).$"
+    )
+
+    PROGRESS_LINE_RE=re.compile(
+        "(\d+)%\[[^]]+\]\s+(\S+)\s+(\S+\s*\S+)\s*(?:eta (.*))?"
+    )
+
+    def __init__(self, path, *args, **kwargs):
+        super().__init__(path, *args, **kwargs)
+        self.stderr = asyncio.subprocess.STDOUT
+
+
+    async def update_progress_line(self, line):
+        if not line:
+            return
+        line = line.strip()
+
+        try:
+            (total,) = self.SIZE_LINE_RE.search(line).groups()
+            self.progress.total = bitmath.parse_string(total + "b")
+        except AttributeError:
+            pass
+
+        try:
+            (self.progress.dest,) = self.DEST_LINE_RE.search(line).groups()
+        except AttributeError:
+            pass
+
+        try:
+            (pct, dled, rate, eta) = self.PROGRESS_LINE_RE.search(line).groups()
+            rate = rate.replace("K", "k")
+            self.progress.pct = float(pct)/100
+            self.progress.dled = (self.progress.pct * self.progress.total)
+            if not "-" in rate:
+                self.progress.rate = bitmath.parse_string(rate.split("/")[0]) if rate else None
+            if eta:
+                self.progress.eta = eta
+
+        except AttributeError:
+            pass
+
     @property
     def is_simple(self):
         return True
-
 
     @classmethod
     def supports_url(cls, url):
@@ -1037,9 +1070,10 @@ async def get():
 
 async def check_progress(program):
     while True:
-        await asyncio.sleep(2)
+        print("foo")
         # r = await program.proc.stdout.read()
-        await program.update_progress()
+        # await program.update_progress()
+        await asyncio.sleep(1)
         print(program.progress)
         # print(program.progress.size)
         # print(r)
@@ -1049,7 +1083,7 @@ def play_test():
         provider="rss",
         title= "foo",
         sources = [
-            model.MediaSource("youtube", "https://www.youtube.com/watch?v=5aVU_0a8-A4")
+            model.MediaSource("youtube", "https://www.youtube.com/watch?v=qTtP9NKuxxY")
         ]
     )
 
@@ -1065,7 +1099,7 @@ def play_test():
     return result
 
 
-def download_test():
+async def download_test():
 
     downloader_spec=None
     task = model.DownloadMediaTask.attr_class(
@@ -1073,17 +1107,25 @@ def download_test():
         title="foo",
         sources=[
             model.MediaSource.attr_class(
-                provider="rss",
-                url="https://www.youtube.com/watch?v=-kaysm_xhM8",
-                media_type="image")
+                provider="youtube",
+                url="https://youtu.be/44Wyn1aqoOM",
+                media_type="video")
         ],
         # listing=listing,
         dest="foo.mp4",
-        args=(downloader_spec,),
-        kwargs={"format": "22"}
+        args=(downloader_spec,)
     )
 
-    state.event_loop.run_until_complete(state.task_manager.download(task).result)
+    async def run_and_check(task):
+        download = state.task_manager.download(task)
+        program = await download.program
+
+        asyncio.create_task(check_progress(program))
+        await task.result
+        # await asyncio.sleep(10)
+
+    # state.event_loop.run_until_complete(state.task_manager.download(task).result)
+    state.event_loop.create_task(run_and_check(task))
 
 
 def postprocessor_test():
@@ -1142,7 +1184,9 @@ def main():
     # fh = logging.FileHandler(log_file)
     # add_log_handler(fh)
 
-    download_test()
+    state.event_loop.create_task(download_test())
+    print("running forever")
+    state.event_loop.run_forever()
 
     state.event_loop.create_task(state.task_manager.stop())
     state.task_manager_task.cancel()

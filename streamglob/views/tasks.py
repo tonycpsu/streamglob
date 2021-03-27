@@ -33,28 +33,29 @@ class TaskWidget(urwid.WidgetWrap):
             self.display_line_default
         ]
 
-    @property
-    def display_lines_downloading(self):
-        return self.display_lines_default + [
-            self.display_line_progress
-        ]
+    # @property
+    # def display_lines_downloading(self):
+    #     return self.display_lines_default + [
+    #         self.display_line_progress
+    #     ]
 
-
-    @property
-    def display_lines_details(self):
-        return self.display_lines_default + [
-            self.display_line_source,
-            self.display_line_destination
-        ]
 
     @property
     def display_line_default(self):
         return urwid.Columns([
             ("pack", self.provider),
             ("weight", 1, urwid.Padding(self.title)),
+            ("pack", self.progress_bar),
             ("pack", self.status),
-            ("pack", self.elapsed)
+            # ("pack", self.elapsed)
         ], dividechars=1)
+
+    @property
+    def display_lines_details(self):
+        return [
+            self.display_line_source,
+            self.display_line_destination
+        ]
 
     @property
     def display_line_source(self):
@@ -68,24 +69,15 @@ class TaskWidget(urwid.WidgetWrap):
             ("weight", 1, self.pad_text(self.task.dest))
         ])
 
-
     @property
-    def display_line_progress(self):
-        return urwid.Columns([
-                    ("weight", 1, urwid.Padding(
-                        ProgressBar(
-                            width=40,
-                            maximum=self.progress.size_total or 1,
-                            value=self.progress.size_downloaded or 0,
-                            progress_color="light blue",
-                            remaining_color="dark blue"
-                        )
-                    )# if None not in (
-                    #     self.progress.size_total,
-                    #     self.progress.size_downloaded
-                    # ) else urwid.Text("")
-                  )
-                ])
+    def progress_bar(self):
+        return ProgressBar(
+                width=20,
+                maximum=self.progress.size_total or 1,
+                value=self.progress.size_downloaded or 0,
+                progress_color="light blue",
+                remaining_color="dark blue"
+            )
 
     @property
     def provider(self):
@@ -162,7 +154,10 @@ class TaskTable(BaseDataTable):
         " ": "toggle_details"
     }
 
+    index = "task_id"
+
     columns = [
+        DataTableColumn("task_id", hide=True),
         DataTableColumn("task", format_fn=format_task)
     ]
 
@@ -174,6 +169,10 @@ class TaskTable(BaseDataTable):
         postprocessing="processing",
         done="done"
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.tasks = AttrDict()
 
     def detail_fn(self, data):
         return TaskWidget(data.task, details=True)
@@ -189,22 +188,14 @@ class TaskTable(BaseDataTable):
                     task,
                     status=status
                 )
-        # # return [ t for t in state.task_manager.playing ]
-        # for t in state.task_manager.playing:
-        #     yield t
-        # for t in state.task_manager.to_download:
-        #     yield t
-        # for t in state.task_manager.active:
-        #     yield t
-        # for t in state.task_manager.postprocessing:
-        #     yield t
-        # for t in state.task_manager.done:
-        #     yield t
 
     def query(self, *args, **kwargs):
 
         for task in self.get_tasks():
-            yield AttrDict(task=task)
+            yield AttrDict(
+                task_id=task.task_id,
+                task=task
+            )
 
 
         
@@ -218,7 +209,7 @@ class TasksView(StreamglobView):
         super().__init__(self.pile)
 
     def refresh(self):
-        self.table.refresh()
+        self.table.requery()
 
 
 class TasksView2(StreamglobView):

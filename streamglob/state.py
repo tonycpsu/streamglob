@@ -17,7 +17,6 @@ class AppData(Tree):
         self.__exclude_keys__ |= {"save"}
 
     def __setitem__(self, key, value):
-        logger.info("__setitem__")
         super().__setitem__(key, value)
         self.save()
 
