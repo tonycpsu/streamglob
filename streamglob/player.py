@@ -100,6 +100,8 @@ class ProgressStats:
     def transfer_rate(self):
         return self.rate.best_prefix(system=bitmath.SI) if self.rate else None
 
+progress_tasks = set()
+
 class Program(object):
 
     SUBCLASSES = Tree()
@@ -490,21 +492,23 @@ class Program(object):
 
                 if pty_stream is not None:
                     async def read_progress():
-                        while True:
-                            res = await reader.read(8192)
-
+                        reader = asyncio.StreamReader()
+                        protocol = asyncio.StreamReaderProtocol(reader)
+                        await state.event_loop.connect_read_pipe(
+                            lambda: protocol,
+                             os.fdopen(self.progress_stream)
+                        )
+                        while not self.proc.returncode:
+                            # import ipdb; ipdb.set_trace()
+                            res = await reader.read(1024)
                             for line in res.decode("utf-8").split("\n"):
                                 await self.update_progress_line(line)
                             await asyncio.sleep(1)
 
-                    reader = asyncio.StreamReader()
-                    protocol = asyncio.StreamReaderProtocol(reader)
-                    await state.event_loop.connect_read_pipe(
-                        lambda: protocol,
-                         os.fdopen(self.progress_stream)
-                    )
-                    asyncio.create_task(read_progress())
 
+                    task = state.event_loop.create_task(read_progress())
+                    progress_tasks.add(task)
+                    task.add_done_callback(lambda t: progress_tasks.remove(t))
                     os.close(pty_stream)
 
         return self.proc
