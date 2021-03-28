@@ -51,7 +51,7 @@ class FilesView(SynchronizedPlayerMixin, PlayListingMixin, StreamglobView):
         self.pile  = urwid.Pile([
             ('weight', 1, self.browser_placeholder),
         ])
-        super().__init__(self.pile)
+        super().__init__(self.browser_placeholder)
         self.pile.focus_position = 0
         self.updated = False
         state.event_loop.create_task(self.check_updated())

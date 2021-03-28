@@ -463,7 +463,8 @@ class FileBrowser(urwid.WidgetWrap):
 
         node = self.tree_root.get_first_child()
         while True:
-            node.collapse()
+            if isinstance(node, DirectoryNode):
+                node.collapse()
             # node.get_widget().expanded = False
             # node.get_widget().update_expanded_icon()
             node = node.next_sibling()
