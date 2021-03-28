@@ -117,6 +117,7 @@ class TaskManager(Observable):
         if listing:
             logger.info(listing)
             task = caller.create_play_task(listing, **kwargs)
+            task.args = (config.settings.profile.preview.player, None)
             logger.info(task)
         else:
             listing = self.empty_listing(caller.playlist_title)

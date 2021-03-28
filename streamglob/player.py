@@ -537,7 +537,7 @@ class Player(Program):
         # FIXME: remove task arg an just pass in sources
         downloader = None
         source = task.sources
-        logger.debug(f"source: {source}, player: {player_spec}, downloader: {downloader_spec}")
+        logger.debug(f"source: {source}, player: {player_spec}, downloader: {downloader_spec}, kwargs: {kwargs}")
 
         player = next(cls.get(player_spec))
         if isinstance(downloader_spec, MutableMapping):
@@ -606,17 +606,6 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
     ARG_MAP = {
         "playlist_position": "playlist-start"
     }
-
-    default_args = [
-        "--idle",
-        "--force-window",
-        "--no-input-default-bindings",
-        "--image-display-duration=inf",
-        "--no-focus-on-open",
-        "--no-border",
-        "--osd-level=0",
-        "--title=streamglob: ${{media-title}}"
-    ]
 
     def __init__(self, *args, **kwargs):
         self._initialized = False
