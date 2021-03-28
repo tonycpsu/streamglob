@@ -100,8 +100,6 @@ class ProgressStats:
     def transfer_rate(self):
         return self.rate.best_prefix(system=bitmath.SI) if self.rate else None
 
-progress_tasks = set()
-
 class Program(object):
 
     SUBCLASSES = Tree()
@@ -170,6 +168,7 @@ class Program(object):
 
         self.progress = ProgressStats()
         self.progress_stream = None
+        self.progress_task = None
         self.progress_queue = asyncio.Queue()
 
 
@@ -400,7 +399,12 @@ class Program(object):
         if self.source_is_program:
             return [repr(self.source)]
         elif isinstance(self.source[0], (model.MediaSource, model.MediaSource.attr_class)):
-            return [s.local_path or s.locator for s in self.source]
+            return [
+                (s.local_path or s.locator
+                 if isinstance(self, Player)
+                 else s.locator
+                ) for s in self.source
+            ]
         elif isinstance(self.source[0], (model.MediaTask, model.MediaTask.attr_class)):
             return [s.locator for s in self.source.sources]
         elif isinstance(self.source[0], str):
@@ -488,6 +492,7 @@ class Program(object):
                     stdout = self.stdout,
                     stderr = self.stderr,
                 )
+
             except SGException as e:
                 logger.warning(e)
             finally:
@@ -501,16 +506,17 @@ class Program(object):
                              os.fdopen(self.progress_stream)
                         )
                         while not self.proc.returncode:
-                            # import ipdb; ipdb.set_trace()
-                            res = await reader.read(1024)
-                            for line in res.decode("utf-8").split("\n"):
-                                await self.update_progress_line(line)
-                            await asyncio.sleep(1)
+                            line = await reader.readline()
+                            if not line:
+                                break
+                            line = line.strip()
+                            if not line:
+                                continue
+                            await self.update_progress_line(line.decode("utf-8"))
 
-
-                    task = state.event_loop.create_task(read_progress())
-                    progress_tasks.add(task)
-                    task.add_done_callback(lambda t: progress_tasks.remove(t))
+                    self.progress_task = state.event_loop.create_task(
+                        read_progress()
+                    )
                     os.close(pty_stream)
 
         return self.proc
