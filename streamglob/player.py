@@ -400,7 +400,7 @@ class Program(object):
         if self.source_is_program:
             return [repr(self.source)]
         elif isinstance(self.source[0], (model.MediaSource, model.MediaSource.attr_class)):
-            return [s.locator for s in self.source]
+            return [s.local_path or s.locator for s in self.source]
         elif isinstance(self.source[0], (model.MediaTask, model.MediaTask.attr_class)):
             return [s.locator for s in self.source.sources]
         elif isinstance(self.source[0], str):

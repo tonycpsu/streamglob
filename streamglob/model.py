@@ -355,6 +355,9 @@ class MediaSourceMixin(object):
             glob=False, **kwargs
     ):
 
+        if not self.provider:
+            return None
+
         if isinstance(index, int):
             index += 1
 
@@ -409,13 +412,19 @@ class MediaSourceMixin(object):
     @property
     def local_path(self):
         with db_session:
-            listing = self.provider.LISTING_CLASS.orm_class[self.listing.media_listing_id]
+            listing = (
+                self.provider.LISTING_CLASS.orm_class[self.listing.media_listing_id]
+                if self.provider
+                else None
+            )
             try:
                 # FIXME
                 filename = self.download_filename(
-                    listing=listing, num=len(listing.sources),
+                    listing=listing, num=len(listing.sources) if listing else 1,
                     glob=True
                 )
+                if not filename:
+                    return None
                 try:
                     return glob.glob(filename)[0]
                 except IndexError:
