@@ -393,7 +393,8 @@ class YouTubeFeed(FeedMediaChannel):
 
     @db_session
     def save_last_offset(self, offset):
-        self.attrs["last_offset"] = offset
+        if offset > self.attrs.get("last_offset", 0):
+            self.attrs["last_offset"] = offset
         commit()
 
 
