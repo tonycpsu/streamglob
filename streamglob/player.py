@@ -131,11 +131,13 @@ class Program(object):
                  **kwargs):
 
         self.path = path
-        self.args = self.default_args
+
+        self.args = list(self.default_args)
         if isinstance(args, str):
-            self.args = args.split()
+            self.args += args.split()
         elif isinstance(args, list):
-            self.args = args
+            self.args += args
+
 
         # FIXME: only relevant for downloader/postprocessor
         if isinstance(output_args, str):
