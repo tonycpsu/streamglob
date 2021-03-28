@@ -106,10 +106,7 @@ class FilesView(SynchronizedPlayerMixin, PlayListingMixin, StreamglobView):
 
     @property
     def root(self):
-        return os.path.expanduser(
-            config.settings.profile.get_path("output.path")
-            or "."
-        )
+        return self.browser.root
 
     def on_focus(self, source, selection):
 

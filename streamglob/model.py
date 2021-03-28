@@ -376,7 +376,6 @@ class MediaSourceMixin(object):
         )
 
         if template:
-            # import ipdb; ipdb.set_trace()
             # template = self.TEMPLATE_RE.sub(r"{self.\1}", template)
             template = template.replace("{listing.title", "{listing.safe_title")
             try:
