@@ -66,6 +66,7 @@ class ProgressStats:
     rate: typing.Optional[bitmath.Byte] = None
     eta: typing.Optional[timedelta] = None
     dest: typing.Optional[str] = None
+    status: typing.Optional[str] = None
 
     @property
     def size_downloaded(self):
@@ -816,12 +817,25 @@ class YouTubeDLDownloader(Downloader):
         r"(\d+\.\d+)% of ~?(\d+.\d+\S+)(?: at\s+(\d+\.\d{2}\d*\S+) ETA (\d+:\d+))?"
     )
 
+    FORMATS_RE = re.compile(
+        r"Invoking downloader on '.*&itag=(\d+)&.*'"
+    )
+
+    MUXING_RE = re.compile(
+        r'''Merging formats into "([^"]+)"'''
+    )
+
+    FORMATS =  AttrDict({
+        k: AttrDict(video=v.get("vcodec"), audio=v.get("acodec"))
+        for k, v in youtube_dl.extractor.youtube.YoutubeIE._formats.items()
+    })
+
     with_progress = True
 
     def __init__(self, path, *args, **kwargs):
         super().__init__(path, *args, **kwargs)
         if self.with_progress:
-            self.extra_args_pre += ["--newline"]
+            self.extra_args_pre += ["--newline", "--verbose"]
 
     @property
     def is_simple(self):
@@ -851,21 +865,48 @@ class YouTubeDLDownloader(Downloader):
     async def update_progress_line(self, line):
         if not line:
             return
+
         logger.debug(line)
         if "[download] Destination:" in line:
             self.progress.dest = line.split(":")[1].strip()
             return
-        try:
-            (pct, total, rate, eta) = self.PROGRESS_RE.search(line).groups()
-            self.progress.pct = float(pct)/100
-            self.progress.total = bitmath.parse_string(
-                    total
-            )
-            self.progress.dled = (self.progress.pct * self.progress.total)
-            self.progress.rate = bitmath.parse_string(rate.split("/")[0]) if rate else None
-            self.progress.eta = eta
-        except AttributeError as e:
-            return
+        elif "Invoking downloader" in line:
+            try:
+                format = self.FORMATS_RE.search(line).groups()[0]
+            except AttributeError:
+                return
+            video = self.FORMATS[format].video
+            audio = self.FORMATS[format].audio
+            if video and audio:
+                self.progress.status = "downloading 1/1"
+            elif video:
+                self.progress.status = "downloading 1/2"
+            elif audio:
+                self.progress.status = "downloading 2/2"
+        elif "Merging formats" in line:
+            self.progress.status = "muxing"
+            try:
+                if isinstance(line, bytes):
+                    logger.debug("mux bytes")
+                    import ipdb; ipdb.set_trace()
+                    self.progress.dest = self.MUXING_RE.search(line.decode("utf-8")).groups()[0]
+                else:
+                    logger.debug("mux str")
+                    self.progress.dest = self.MUXING_RE.search(line).groups()[0]
+            except AttributeError:
+                return
+        else:
+            try:
+                (pct, total, rate, eta) = self.PROGRESS_RE.search(line).groups()
+                self.progress.pct = float(pct)/100
+                self.progress.total = bitmath.parse_string(
+                        total
+                )
+                self.progress.dled = (self.progress.pct * self.progress.total)
+                self.progress.rate = bitmath.parse_string(rate.split("/")[0]) if rate else None
+                self.progress.eta = eta
+            except AttributeError as e:
+                return
 
 
 class StreamlinkDownloader(Downloader):

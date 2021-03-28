@@ -91,7 +91,10 @@ class TaskWidget(urwid.WidgetWrap):
 
     @property
     def status(self):
-        return self.task.status
+        if self.task.status == "downloading":
+            return self.progress.status or self.task.status
+        else:
+            return self.task.status
 
     @property
     def elapsed(self):
@@ -185,7 +188,10 @@ class TaskTable(BaseDataTable):
     def get_tasks(self):
 
         for task_list, status in self.STATUS_MAP.items():
-            for task in getattr(state.task_manager, task_list):
+            for task in sorted(
+                    getattr(state.task_manager, task_list),
+                    key=lambda t:t.started
+                ):
                 yield AttrDict(
                     task,
                     status=status
