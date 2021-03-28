@@ -601,6 +601,7 @@ class BaseProvider(abc.ABC, Observable):
         return ListingsPlayMediaTask.attr_class(
             provider=self.NAME,
             title=listing.title,
+            listing=listing,
             sources = sources,
             args = (player_spec, downloader_spec),
             kwargs = kwargs

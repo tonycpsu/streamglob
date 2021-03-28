@@ -311,8 +311,9 @@ class TaskManager(Observable):
             self.playing)
 
         playing_done = TaskList(playing_done)
+
         for task in playing_done:
-            task.result.set_result(task.proc.result().returncode)
+            task.finalize()
 
         self.playing = TaskList(playing)
 

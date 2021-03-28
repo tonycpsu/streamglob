@@ -453,6 +453,8 @@ class MediaSource(MediaSourceMixin, db.Entity):
     media_type = Optional(str)
     rank = Required(int, default=0)
     task = Optional(lambda: MediaTask, reverse="sources")
+    downloaded = Optional(datetime)
+    viewed = Optional(datetime)
 
 
 class InflatableMediaSourceMixin(object):
@@ -497,6 +499,9 @@ class MediaListing(MediaListingMixin, db.Entity):
     provider_id = Required(str, index=True)
     attrs = Required(Json, default={})
     task = Optional(lambda: MediaTask, reverse="listing")
+    downloaded = Optional(datetime)
+    viewed = Optional(datetime)
+
 
 class ContentMediaListingMixin(object):
 
@@ -591,9 +596,6 @@ class MediaTask(db.Entity):
     args = Required(Json, default=[])
     kwargs = Required(Json, default={})
 
-    def finalize(self):
-        pass
-
 
 class ProgramMediaTaskMixin(object):
 
@@ -611,9 +613,10 @@ class ProgramMediaTaskMixin(object):
         logger.debug(f"finalize program: {self.result} {self.proc} {self.proc.result().returncode}")
         self.result.set_result(self.proc.result().returncode)
         logger.debug("-finalize program")
+        super().finalize()
 
 
-@attrclass(ProgramMediaTaskMixin)
+@attrclass()
 class ProgramMediaTask(ProgramMediaTaskMixin, MediaTask):
 
     pid = Optional(int)
@@ -632,8 +635,18 @@ class PlayMediaTaskMixin(object):
         self.proc = asyncio.get_event_loop().create_future()
         self.proc.set_result(proc)
 
+    def finalize(self):
+        logger.info("finalize")
+        self.result.set_result(self.proc.result().returncode)
+        with db_session:
+            now = datetime.now()
+            for s in self.sources:
+                s.attach().viewed = now
+            if self.listing:
+                self.listing.attach().viewed = now
 
-@attrclass(PlayMediaTaskMixin)
+
+@attrclass()
 class PlayMediaTask(PlayMediaTaskMixin, ProgramMediaTask):
     pass
 
@@ -667,6 +680,7 @@ class DownloadMediaTaskMixin(object):
             return self.dest
 
     def finalize(self):
+        logger.info("finalize")
         if len(self.stage_results) and self.stage_results[-1] != self.dest:
             logger.debug(f"moving {self.stage_results[-1]} => {self.dest}")
             if config.settings.profile.unicode_normalization:
@@ -676,7 +690,12 @@ class DownloadMediaTaskMixin(object):
                 os.makedirs(d)
             shutil.move(self.stage_results[-1], self.dest)
         shutil.rmtree(self.tempdir)
-        super().finalize()
+        with db_session:
+            now = datetime.now()
+            for s in self.sources:
+                s.attach().downloaded = now
+            if self.listing:
+                self.listing.attach().downloaded = now
 
 
 @attrclass(DownloadMediaTaskMixin)

@@ -239,8 +239,6 @@ class FeedMediaListing(FeedMediaListingMixin, model.ChannelMediaListing, model.T
     created = Required(datetime, default=datetime.now)
     fetched = Required(datetime, default=datetime.now)
     read = Optional(datetime)
-    watched = Optional(datetime)
-    downloaded = Optional(datetime)
 
 
 class FeedMediaSourceMixin(object):
