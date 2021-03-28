@@ -376,8 +376,8 @@ class ProviderDataTable(PlayListingMixin, DownloadListingMixin, BaseDataTable):
 
     async def browse_selection(self):
         listing = self.selected_listing
-        filename = self.selected_source.download_filename(listing=listing)
-        state.files_view.browse_file(filename)
+        # import ipdb; ipdb.set_trace()
+        state.files_view.browse_file(self.selected_source.local_path)
 
     def apply_search_query(self, query):
         self.apply_filters([lambda row: query in row["title"]])

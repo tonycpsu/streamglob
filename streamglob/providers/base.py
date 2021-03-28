@@ -660,9 +660,9 @@ class BaseProvider(abc.ABC, Observable):
     @property
     def output_path(self):
         return (
-            config.settings.profile.get_path("output.path")
+            self.config.get_path("output.path")
             or
-            self.provider.config.get_path("output.path")
+            config.settings.profile.get_path("output.path")
         )
 
 class PaginatedProviderMixin(object):

@@ -45,8 +45,10 @@ class TaskWidget(urwid.WidgetWrap):
         return urwid.Columns([
             ("pack", self.provider),
             ("weight", 1, urwid.Padding(self.title)),
+            (18, urwid.Padding(
+                urwid.Text(self.status, align="right"),
+                right=1)),
             ("pack", self.progress_bar),
-            ("pack", self.status),
             # ("pack", self.elapsed)
         ], dividechars=1)
 
@@ -89,7 +91,7 @@ class TaskWidget(urwid.WidgetWrap):
 
     @property
     def status(self):
-        return urwid.Text(self.task.status)
+        return self.task.status
 
     @property
     def elapsed(self):
@@ -209,7 +211,7 @@ class TasksView(StreamglobView):
         super().__init__(self.pile)
 
     def refresh(self):
-        self.table.requery()
+        self.table.refresh()
 
 
 class TasksView2(StreamglobView):

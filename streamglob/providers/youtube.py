@@ -106,6 +106,11 @@ class YouTubeMediaSourceMixin(object):
     def locator(self):
         return f"https://youtu.be/{self.listing.guid}"
 
+    @property
+    def ext(self):
+        # FIXME
+        return "mp4"
+
 
     @property
     def helper(self):

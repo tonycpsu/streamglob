@@ -219,6 +219,7 @@ class ListingsView(StreamglobView):
         state.app_data.selected_provider = self.provider.IDENTIFIER
         state.app_data.save()
         self.provider.activate()
+        state.files_view.load_browser(self.provider.output_path)
 
     def set_view(self, name):
         view = self.provider.config.views[name]

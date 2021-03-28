@@ -210,7 +210,7 @@ class MainView(urwid.WidgetWrap):
 
     def focus_changed(self, foo, x, y):
         logger.info(f"focus_changed: {foo}, {x}, {y}")
-        self.get_widget(x, y).on_view_activate()
+        # self.get_widget(x, y).on_view_activate()
         if hasattr(state, "loop"):
             state.loop.draw_screen()
         # self.get_widget(x, y).activate
@@ -336,9 +336,9 @@ def run_gui(action, provider, **kwargs):
     termios.tcsetattr(fileno, termios.TCSADRAIN, tattr)
 
     # state.listings_view = ListingsView(provider.IDENTIFIER)
+    state.files_view = FilesView()
     state.listings_view = ListingsView()
     state.listings_view.set_provider(provider.IDENTIFIER)
-    state.files_view = FilesView()
     state.tasks_view = TasksView()
 
     set_stdout_level(logging.CRITICAL)

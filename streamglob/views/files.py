@@ -47,20 +47,30 @@ class FilesView(SynchronizedPlayerMixin, PlayListingMixin, StreamglobView):
 
     def __init__(self):
 
+        self.browser_placeholder = urwid.WidgetPlaceholder(urwid.Text(""))
+        self.pile  = urwid.Pile([
+            ('weight', 1, self.browser_placeholder),
+        ])
+        super().__init__(self.pile)
+        self.pile.focus_position = 0
+        self.updated = False
+        state.event_loop.create_task(self.check_updated())
+        # self._emit("requery", self)
+
+    def selectable(self):
+        return True
+
+    def load_browser(self, root):
+
         self.browser = FileBrowser(
-            self.root,
+            root,
             dir_sort = config.settings.profile.get_path("files.dir_sort"),
             file_sort = config.settings.profile.get_path("files.file_sort"),
             ignore_files=False
         )
-        self.pile  = urwid.Pile([
-            ('weight', 1, self.browser),
-        ])
-        super().__init__(self.pile)
         urwid.connect_signal(self.browser, "focus", self.on_focus)
-        self.updated = False
-        state.event_loop.create_task(self.check_updated())
-        # self._emit("requery", self)
+        self.browser_placeholder.original_widget = self.browser
+
 
     def keypress(self, size, key):
 
@@ -181,8 +191,9 @@ class FilesView(SynchronizedPlayerMixin, PlayListingMixin, StreamglobView):
         state.main_view.focus_widget(self)
 
 
-    # def on_view_activate(self):
-    #     state.event_loop.create_task(self.play_empty())
+    def on_view_activate(self):
+        pass
+        # state.event_loop.create_task(self.play_empty())
 
     def __len__(self):
         return 1
