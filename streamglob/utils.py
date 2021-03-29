@@ -123,7 +123,7 @@ def format_str_truncated(length, s, end_char=ELLIPSIS, encoding=None):
 # still confuse Urwid as shown in urwid/urwid#225
 EMOJI_RE = re.compile(
     "["
-        u"\U00000080-\U000002AF"
+        # u"\U00000080-\U000002AF"
         u"\U00000300-\U000003FF"
         u"\U00000600-\U000006FF"
         u"\U00000C00-\U00000C7F"
