@@ -9,10 +9,9 @@ from ..widgets import *
 
 class TaskWidget(urwid.WidgetWrap):
 
-    def __init__(self, task, details=False):
+    def __init__(self, task):
 
         self.task = task
-        self.details = details
         self.pile = urwid.Pile([
             ("pack", line)
             for line in self.display_lines
@@ -21,24 +20,14 @@ class TaskWidget(urwid.WidgetWrap):
 
     @property
     def display_lines(self):
-        if self.details:
-            return self.display_lines_details
-        else:
-            return getattr(self, f"display_lines_{self.task.status}",
-                           self.display_lines_default)
+        return getattr(self, f"display_lines_{self.task.status}",
+                       self.display_lines_default)
 
     @property
     def display_lines_default(self):
         return [
             self.display_line_default
         ]
-
-    # @property
-    # def display_lines_downloading(self):
-    #     return self.display_lines_default + [
-    #         self.display_line_progress
-    #     ]
-
 
     @property
     def display_line_default(self):
@@ -52,17 +41,11 @@ class TaskWidget(urwid.WidgetWrap):
             # ("pack", self.elapsed)
         ], dividechars=1)
 
-    @property
-    def display_lines_details(self):
-        return [
-            self.display_line_source,
-            self.display_line_destination
-        ]
 
     @property
     def display_line_source(self):
         return urwid.Columns([
-            ("weight", 1, self.pad_text(self.task.sources))
+            ("weight", 1, self.pad_text(self.task.sources[0]))
         ])
 
     @property
@@ -102,7 +85,7 @@ class TaskWidget(urwid.WidgetWrap):
 
 
     def pad_text(self, text):
-        return urwid.Padding(urwid.Text(str(text)))
+        return urwid.Padding(urwid.Text(str(text), wrap="clip"))
 
     @property
     def sources(self):
@@ -155,9 +138,9 @@ def format_task(task):
 @keymapped()
 class TaskTable(BaseDataTable):
 
-    KEYMAP = {
-        " ": "toggle_details"
-    }
+    # KEYMAP = {
+    #     "ctrl r": "reset"
+    # }
 
     index = "task_id"
 
@@ -216,4 +199,4 @@ class TasksView(StreamglobView):
         super().__init__(self.pile)
 
     def refresh(self):
-        self.table.refresh()
+        self.table.reset()
