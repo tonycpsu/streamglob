@@ -117,14 +117,14 @@ class TaskManager(Observable):
         if listing:
             logger.info(listing)
             task = caller.create_play_task(listing, **kwargs)
-            task.args = (config.settings.profile.preview.player, None)
-            logger.info(task)
         else:
             listing = self.empty_listing(caller.playlist_title)
             task = model.PlayMediaTask.attr_class(
                 title = listing.title,
                 sources = listing.sources
             )
+
+        task.args = (config.settings.profile.preview.player, None)
 
         async def start_player():
             self.preview_task = task
@@ -154,7 +154,7 @@ class TaskManager(Observable):
                 key = self.preview_player.key_to_urwid(key_name)
                 if key.startswith("mbtn"):
                     return
-                logger.info(f"debug: {key_name}")
+                logger.debug(f"mpv key: {key_name}")
                 # key = self.view.keypress((100, 100), key)
                 state.loop.process_input([key])
                 # if not state.loop.process_input([key]):
