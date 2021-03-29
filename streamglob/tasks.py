@@ -129,7 +129,6 @@ class TaskManager(Observable):
         async def start_player():
             self.preview_task = task
             await self.start_task(self.preview_task)
-            logger.info(self.preview_task)
             self._preview_player.set_result(await self.preview_task.program)
             await self.preview_task.proc
 

@@ -386,6 +386,7 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
         "b": "prev_unread",
         "m": "toggle_selection_read",
         "i": "inflate_selection",
+        "a": "mark_feed_read"
     }
 
     def __init__(self, *args, **kwargs):
@@ -495,6 +496,11 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
     async def toggle_selection_read(self):
         logger.info("toggle_selection_read")
         await self.toggle_item_read(self.focus_position)
+
+    def mark_feed_read(self):
+        with db_session:
+            self.selection.data_source.feed.attach().mark_all_items_read()
+        self.reset()
 
     async def prev_item(self):
         if self.focus_position > 0:
@@ -838,6 +844,7 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
     signals = ["select", "cycle_filter", "keypress", "feed_change", "feed_select"]
 
     KEYMAP = {
+        "a": "mark_feed_read",
         "A": "mark_all_read",
         "ctrl a": "mark_visible_read",
         "meta a": ("mark_visible_read", [-1]),
@@ -908,6 +915,12 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
             ):
                 continue
             await self.body.mark_item_read(n)
+        self.reset()
+
+
+    def mark_feed_read(self):
+        with db_session:
+            self.channels.listbox.focus.channel.mark_all_items_read()
         self.reset()
 
     def on_unread_change(self, source, listing):
