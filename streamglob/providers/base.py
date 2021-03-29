@@ -871,6 +871,12 @@ class SynchronizedPlayerMixin(object):
 
     async def set_playlist_pos(self, pos):
 
+        def ffmpeg_escape(s):
+            return s.replace(":", "\\:").replace("'", "'\\\\\\''") # yikes
+
+        if not state.task_manager.preview_player:
+            return
+
         if self.video_filters:
             await state.task_manager.preview_player.command(
                 "vf", "del", ",".join([f"@{f}" for f in self.video_filters])
@@ -920,6 +926,7 @@ class SynchronizedPlayerMixin(object):
                 playlist=f"{self.playlist_title} {self.playlist_position_text}",
                 title= self.play_items[pos].title
             ).items():
+            text = ffmpeg_escape(text)
             el_cfg = cfg.get(element)
             color = el_cfg.text.color.default or cfg.text.color.default or "white"
             if self.playlist_position == len(self.play_items)-1:
@@ -927,7 +934,7 @@ class SynchronizedPlayerMixin(object):
             elif self.active_table.selected_source.local_path:
                 color = el_cfg.text.color.downloaded or cfg.text.color.downloaded or color
 
-            font = el_cfg.text.font or cfg.text.font or "sans"
+            font = ffmpeg_escape(el_cfg.text.font or cfg.text.font or "sans")
             size = el_cfg.text.size or cfg.text.size or 50
             shadow_color = el_cfg.text.shadow.color or cfg.text.shadow.color or "black"
             border_color = el_cfg.text.border.color or cfg.text.border.color or "black"
@@ -944,9 +951,9 @@ class SynchronizedPlayerMixin(object):
                 x=f"w-w/{scroll_speed}*mod(if(lt(t, {pause}), 0, if(gt(text_w, w), t-{pause}, 0) ),{scroll_speed}*(w+tw/2)/w)-w"
             x = x.format(x=ox, y=oy, padding=padding)
             y = str(el_cfg.y or cfg.y).format(x=ox, y=oy, padding=padding)
-            vf_text=f"""@{element}:drawtext=text=\"{text}\":fontfile=\"{font}\":\
-x=\"{x}\":y={y}:fontsize=(h/{size}):fontcolor={color}:bordercolor={border_color}:\
-borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow_color}:expansion=none"""
+            vf_text=f"""@{element}:lavfi=[drawtext=text='{text}':fontfile='{font}':\
+x='{x}':y='{y}':fontsize=(h/{size}):fontcolor={color}:bordercolor={border_color}:\
+borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow_color}:expansion=none]"""
             filters.append(vf_text)
 
         await state.task_manager.preview_player.command(
