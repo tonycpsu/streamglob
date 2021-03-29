@@ -414,7 +414,7 @@ class MediaSourceMixin(object):
         with db_session:
             listing = (
                 self.provider.LISTING_CLASS.orm_class[self.listing.media_listing_id]
-                if self.provider
+                if self.provider and self.listing
                 else None
             )
             try:
