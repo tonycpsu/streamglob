@@ -466,6 +466,16 @@ class BaseProvider(abc.ABC, Observable):
             **kwargs
         )
 
+    async def play(self, listing, **kwargs):
+        # sources, kwargs = self.extract_sources(listing, **kwargs)
+        task = self.create_play_task(listing, **kwargs)
+        yield state.task_manager.play(task)
+
+    async def download(self, listing, index=None, no_task_manager=False, **kwargs):
+        for task in self.create_download_tasks(listing, index=index, **kwargs):
+            yield state.task_manager.download(task)
+
+
     def translate_template(self, template):
         return template
 
