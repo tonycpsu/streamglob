@@ -91,6 +91,7 @@ class FeedMediaChannel(model.MediaChannel):
             self.attrs["tail_fetched"] = True
 
         await self.provider.view.channels.find_node(self.locator).refresh()
+        return fetched
 
 
     @db_session
@@ -367,7 +368,7 @@ class CachedFeedProviderDetailDataTable(DetailDataTable):
 @keymapped()
 class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataTable):
 
-    signals = ["focus", "keypress", "unread_change"]
+    signals = ["focus", "keypress", "unread_change", "next_feed"]
 
     HOVER_DELAY = 0.25
 
@@ -561,7 +562,12 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
                     if self.focus_position < len(self) - 1:
                         self.focus_position += 1
                 else:
-                    await self.provider.view.body.update(force=True, resume=True) # FIXME
+                    new = await self.provider.view.body.update(force=True, resume=self.sort_by[1])
+                    if not new:
+                        await self.mark_item_read(self.focus_position, no_signal=True)
+                        self._emit("next_feed")
+                        self._emit("unread_change", listing.channel.detach())
+                        return
 
             else:
                 self.focus_position = len(self)-1
@@ -895,9 +901,11 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
         self.pile.focus_position = 0
         urwid.connect_signal(self.body, "keypress", lambda *args: self._emit(*args))
         urwid.connect_signal(self.body, "unread_change", self.on_unread_change)
+        urwid.connect_signal(self.body, "next_feed", self.on_next_feed)
         urwid.connect_signal(self.body, "focus", self.on_focus)
         urwid.connect_signal(self.channels, "select",
                              lambda s, *args: self._emit("feed_select", *args))
+        urwid.connect_signal(self.channels, "advance", self.on_channels_advance)
         urwid.connect_signal(self.channels, "change",
                              lambda s, *args: self._emit("feed_change", *args))
 
@@ -929,9 +937,19 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
         asyncio.create_task(refresh_channels())
         # self.channels._invalidate()
 
+    def on_next_feed(self, source):
+        self.channels.cycle(step=1)
+
+    def on_channels_advance(self, source):
+        async def advance():
+            await self.body.next_unread()
+        self.columns.focus_position = 1
+        asyncio.create_task(advance())
+
+
     @keymap_command
     async def update(self, force=False, resume=False, replace=False):
-        await self.provider.update(force=force, resume=resume, replace=replace)
+        return await self.provider.update(force=force, resume=resume, replace=replace)
 
     @db_session
     def kill_all(self):
@@ -1248,7 +1266,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         state.loop.draw_screen()
         # self.open_popup("Updating feeds...")
         # asyncio.create_task(
-        await self.update_feeds(force=force, resume=resume, replace=replace)
+        return await self.update_feeds(force=force, resume=resume, replace=replace)
         # )
         # self.close_popup()
         self.reset()
@@ -1263,6 +1281,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
             # else:
             #     feeds = [self.feed_entity]
 
+            new = 0
             for feed in self.selected_channels:
                 if (force
                     or
@@ -1272,9 +1291,9 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                 ):
                     logger.info(f"updating {feed.locator}")
                     with limit(self.limiter):
-                        await feed.update(resume=resume, replace=replace)
-                        # f.updated = datetime.now()
-                    # commit()
+                        new += await feed.update(resume=resume, replace=replace)
+
+        return new
 
     def refresh(self):
         logger.info("+feed provider refresh")

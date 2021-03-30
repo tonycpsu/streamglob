@@ -541,11 +541,12 @@ class MyTreeListBox(urwid.TreeListBox):
 @keymapped()
 class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
 
-    signals = ["change", "select"]
+    signals = ["change", "select", "advance"]
 
     KEYMAP = {
         "/": "complete substring",
         "?": "complete prefix",
+        "n": "advance",
         "enter": "confirm",
         "esc": "cancel",
         "ctrl p": "complete_prev",
@@ -688,4 +689,12 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
         self.listbox.set_focus(focus)
         self.selection.get_widget().mark()
         self.update_selection()
+        return focus
 
+    def advance(self):
+        while True:
+            if self.selection.get_widget().unread_count > 0:
+                break
+            if not self.cycle():
+                break
+        self._emit("advance")
