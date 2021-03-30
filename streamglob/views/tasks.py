@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import urwid
 from panwid.datatable import *
 from panwid.progressbar import *
@@ -182,7 +184,7 @@ class TaskTable(BaseDataTable):
         for task_list, status in self.STATUS_MAP.items():
             for task in sorted(
                     getattr(state.task_manager, task_list),
-                    key=lambda t:t.started if t.started else 0
+                    key=lambda t:t.started if t.started else datetime.min
                 ):
                 yield AttrDict(
                     task,
