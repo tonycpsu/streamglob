@@ -1027,7 +1027,7 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             self.play_items[position].preview_mode = cfg.mode
             duration = await self.preview_duration(cfg, listing)
             if duration:
-                logger.info(f"sleeping: {duration}")
+                # logger.info(f"sleeping: {duration}")
                 await asyncio.sleep(duration)
 
     async def preview_duration(self, cfg, listing):

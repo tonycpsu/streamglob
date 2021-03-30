@@ -52,7 +52,8 @@ class ProviderToolbar(urwid.WidgetWrap):
         )
 
         def set_max_concurrent_tasks(v):
-            config.settings.tasks.max = int(v)
+            if v:
+                config.settings.tasks.max = int(v)
 
         self.max_concurrent_tasks_widget.connect("changed", set_max_concurrent_tasks)
 
