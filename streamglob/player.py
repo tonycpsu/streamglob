@@ -7,6 +7,7 @@ from itertools import chain
 import functools
 import shlex
 import subprocess
+import pipes
 import asyncio
 from datetime import timedelta
 import distutils.spawn
@@ -120,6 +121,8 @@ class Program(object):
     ARG_MAP = {}
 
     with_progress = False
+
+    progress_sample = 1
 
     default_args = []
 
@@ -385,14 +388,6 @@ class Program(object):
             for k, v in program_args.items()
         ]
 
-    async def get_output(self):
-
-        r, w, e = select.select([ self.progress_stream ], [], [], 0)
-        print(f"get_output: {r, w, e}, {self.progress_stream}")
-        if self.progress_stream in r:
-            print("reading")
-            for line in os.read(self.progress_stream, 8192).decode("utf-8").split("\n"):
-                yield line
 
     @property
     def source_args(self):
@@ -426,7 +421,10 @@ class Program(object):
             + self.extra_args_post
         )
         if self.ssh_host:
-            cmd = ["/usr/bin/ssh", self.ssh_host] + cmd
+            cmd = ["/usr/bin/ssh", self.ssh_host] + [
+                pipes.quote(x)
+                for x in cmd
+            ]
 
         return cmd
 
@@ -500,6 +498,7 @@ class Program(object):
 
                 if pty_stream is not None:
                     async def read_progress():
+                        i = 0
                         reader = asyncio.StreamReader()
                         protocol = asyncio.StreamReaderProtocol(reader)
                         await state.event_loop.connect_read_pipe(
@@ -508,6 +507,9 @@ class Program(object):
                         )
                         while not self.proc.returncode:
                             line = await reader.readline()
+                            i += 1
+                            if i % self.progress_sample:
+                                continue
                             if not line:
                                 break
                             line = line.strip()
@@ -832,6 +834,8 @@ class YouTubeDLDownloader(Downloader):
 
     with_progress = True
 
+    progress_sample = 5
+
     def __init__(self, path, *args, **kwargs):
         super().__init__(path, *args, **kwargs)
         if self.with_progress:
@@ -1112,7 +1116,6 @@ async def get():
 
 async def check_progress(program):
     while True:
-        print("foo")
         # r = await program.proc.stdout.read()
         # await program.update_progress()
         await asyncio.sleep(1)
@@ -1145,17 +1148,18 @@ async def download_test():
 
     downloader_spec=None
     task = model.DownloadMediaTask.attr_class(
-        provider="youtube",
+        provider_id="youtube",
         title="foo",
         sources=[
             model.MediaSource.attr_class(
-                provider="youtube",
-                url="https://youtu.be/44Wyn1aqoOM",
+                provider_id="youtube",
+                url="https://www.youtube.com/watch?v=5aVU_0a8-A4",
                 media_type="video")
         ],
         # listing=listing,
         dest="foo.mp4",
-        args=(downloader_spec,)
+        args=(downloader_spec,),
+        kwargs=dict(format="299+140/298+140/137+140/136+140/22+140/best")
     )
 
     async def run_and_check(task):
