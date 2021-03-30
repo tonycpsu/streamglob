@@ -58,8 +58,8 @@ class TaskWidget(urwid.WidgetWrap):
     def progress_bar(self):
         return ProgressBar(
                 width=20,
-                maximum=self.progress.size_total or 1,
-                value=self.progress.size_downloaded or 0,
+                maximum=self.size_total,
+                value=self.size_downloaded,
                 progress_color="light blue",
                 remaining_color="dark blue"
             )
@@ -108,27 +108,36 @@ class TaskWidget(urwid.WidgetWrap):
 
     @property
     def program(self):
-        return self.task.program.result()
+        return self.task.program.result() if self.task.program.done() else None
 
     @property
     def progress(self):
-        return self.program.progress
+        return self.program.progress if self.program else None
+
 
     @property
     def size(self):
-        return self.progress.size_total or "?"
+        return self.progress.size_total or "?" if self.progress else None
+
+    @property
+    def size_downloaded(self):
+        return self.progress.size_downloaded or 0 if self.progress else 0
 
     @property
     def size_total(self):
-        return f"""{self.progress.size_downloaded or "?"}/{self.progress.size_total or "?"}"""
+        return self.progress.size_total or 0 if self.progress else 0
+
+    # @property
+    # def size_total(self):
+    #     return f"""{self.progress.size_downloaded or "?"}/{self.progress.size_total or "?"}"""
 
     @property
     def pct(self):
-        return self.progress.percent_downloaded or "?"
+        return self.progress.percent_downloaded or "?" if self.progress else None
 
     @property
     def rate(self):
-        return self.progress.transfer_rate or "?"
+        return self.progress.transfer_rate or "?" if self.progress else None
 
 
 def format_task(task):
@@ -173,7 +182,7 @@ class TaskTable(BaseDataTable):
         for task_list, status in self.STATUS_MAP.items():
             for task in sorted(
                     getattr(state.task_manager, task_list),
-                    key=lambda t:t.started
+                    key=lambda t:t.started if t.started else 0
                 ):
                 yield AttrDict(
                     task,
@@ -199,4 +208,4 @@ class TasksView(StreamglobView):
         super().__init__(self.pile)
 
     def refresh(self):
-        self.table.reset()
+        self.table.refresh()
