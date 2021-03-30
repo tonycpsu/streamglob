@@ -834,8 +834,6 @@ class YouTubeDLDownloader(Downloader):
 
     with_progress = True
 
-    progress_sample = 5
-
     def __init__(self, path, *args, **kwargs):
         super().__init__(path, *args, **kwargs)
         if self.with_progress:
