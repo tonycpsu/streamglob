@@ -402,7 +402,7 @@ class YouTubeFeed(FeedMediaChannel):
     def is_channel(self):
         return len(self.locator) == 24 and self.locator.startswith("UC")
 
-    async def fetch(self, limit=None, resume=False, *args, **kwargs):
+    async def fetch(self, limit=None, resume=False, reverse=False, *args, **kwargs):
 
         url = (
             self.CHANNEL_URL_TEMPLATE.format(locator=self.locator)

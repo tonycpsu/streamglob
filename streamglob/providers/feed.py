@@ -499,8 +499,10 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
         await self.toggle_item_read(self.focus_position)
 
     def mark_feed_read(self):
+        listing = self.selection.data_source
         with db_session:
-            self.selection.data_source.feed.attach().mark_all_items_read()
+            listing.feed.attach().mark_all_items_read()
+        self._emit("unread_change", listing.channel.detach())
         self.reset()
 
     async def prev_item(self):
@@ -562,8 +564,12 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
                     if self.focus_position < len(self) - 1:
                         self.focus_position += 1
                 else:
-                    new = await self.provider.view.body.update(force=True, resume=self.sort_by[1])
-                    if not new:
+                    new = await self.provider.view.body.update(
+                        force=True, resume=True
+                    )
+                    if new:
+                        self.reset()
+                    else:
                         await self.mark_item_read(self.focus_position, no_signal=True)
                         self._emit("next_feed")
                         self._emit("unread_change", listing.channel.detach())
@@ -1266,10 +1272,11 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         state.loop.draw_screen()
         # self.open_popup("Updating feeds...")
         # asyncio.create_task(
-        return await self.update_feeds(force=force, resume=resume, replace=replace)
+        count = await self.update_feeds(force=force, resume=resume, replace=replace)
         # )
         # self.close_popup()
         self.reset()
+        return count
         # update_task = state.event_loop.run_in_executor(None, update_feeds)
 
     async def update_feeds(self, force=False, resume=False, replace=False):
