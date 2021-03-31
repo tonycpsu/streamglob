@@ -178,6 +178,9 @@ class InvalidConfigView(BaseProviderView):
             ]), valign="top")
         )
 
+    def reset(self):
+        pass
+
 MEDIA_SPEC_RE=re.compile(r"(?:/([^:]+))?(?::(.*))?")
 
 class BaseProvider(abc.ABC, Observable):
@@ -341,9 +344,13 @@ class BaseProvider(abc.ABC, Observable):
         self._active = False
 
     def on_activate(self):
+        if isinstance(self.view, InvalidConfigView):
+            return
         self.reset()
 
     def on_deactivate(self):
+        if isinstance(self.view, InvalidConfigView):
+            return
         self.view.on_deactivate()
 
     @property

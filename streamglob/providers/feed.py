@@ -1123,8 +1123,9 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         self.search_filter = None
         self.items_query = None
         self.custom_filters = AttrDict()
-        urwid.connect_signal(self.view, "feed_change", self.on_feed_change)
-        urwid.connect_signal(self.view, "feed_select", self.on_feed_select)
+        if not isinstance(self.view, InvalidConfigView):
+            urwid.connect_signal(self.view, "feed_change", self.on_feed_change)
+            urwid.connect_signal(self.view, "feed_select", self.on_feed_select)
         self.filters["status"].connect("changed", self.on_status_change)
         self.filters["filters"].connect("changed", self.on_custom_change)
         self.pagination_cursor = None
@@ -1316,6 +1317,8 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         super().reset()
 
     def on_activate(self):
+        if isinstance(self.view, InvalidConfigView):
+            return
         super().on_activate()
         self.create_feeds()
         # self.reset()
@@ -1338,6 +1341,8 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
     @db_session
     def update_query(self, sort=None, cursor=None):
 
+        if isinstance(self.view, InvalidConfigView):
+            return
         logger.info(f"update_query: {cursor}")
         status_filters =  {
             "all": lambda: True,
