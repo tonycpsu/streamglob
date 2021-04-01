@@ -1872,6 +1872,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
 
     def on_date_change(self, date):
         self.update_games()
+        self.reset()
 
     def on_hide_spoilers_change(self, value):
         self.reset()

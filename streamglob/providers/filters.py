@@ -259,11 +259,10 @@ class DateFilterWidget(Observable, urwid.WidgetWrap):
         self.value = self.initial_date
 
     def cycle_day(self, n=1):
-        import traceback; logger.error("".join(traceback.format_stack()))
         d = self.value + timedelta(days=n)
         self.value = d
         # self.date_picker.date = d
-        # self.date_changed()
+        self.date_changed()
 
     def cycle_week(self, n=1):
         d = self.value + timedelta(weeks=n)
