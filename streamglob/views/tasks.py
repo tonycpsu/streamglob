@@ -39,6 +39,8 @@ class TaskWidget(urwid.WidgetWrap):
             (18, urwid.Padding(
                 urwid.Text(self.status, align="right"),
                 right=1)),
+            ("pack", urwid.Text(str(self.size_downloaded))),
+            ("pack", urwid.Text(str(self.transfer_rate))),
             ("pack", self.progress_bar),
             # ("pack", self.elapsed)
         ], dividechars=1)
@@ -138,7 +140,7 @@ class TaskWidget(urwid.WidgetWrap):
         return self.progress.percent_downloaded or "?" if self.progress else None
 
     @property
-    def rate(self):
+    def transfer_rate(self):
         return self.progress.transfer_rate or "?" if self.progress else None
 
 

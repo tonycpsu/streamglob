@@ -1181,14 +1181,15 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
                 row_num=row_num,
                 count=len(row.data_source.sources) if hasattr(row.data_source, "sources") else 1,
                 media_type=source.media_type,
-                preview_mode=state.listings_view.preview_mode,
+                # preview_mode=state.listings_view.preview_mode,
                 # locator=(
                 #     (source.locator or getattr(source, "locator_thumbnail", None))
                 #     if self.provider.auto_preview_default == "full"
                 #     else (getattr(source, "locator_thumbnail", None) or source.locator)
                 # )
                 # locator=source.locator or getattr(source, "locator_thumbnail", None)
-                locator=source.locator_for_preview(state.listings_view.preview_mode)
+                # locator=source.locator_for_preview(state.listings_view.preview_mode),
+                locator=source.locator
             )
             for (row_num, row, index, source) in [
                     (row_num, row, index, source) for row_num, row in enumerate(self)

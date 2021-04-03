@@ -98,19 +98,11 @@ class NHLBAMTeamData(BAMTeamData):
 
     TEAM_URL_TEMPLATE = "http://statsapi.web.nhl.com/api/v1/teams/{team_id}"
 
-class NHLMediaListing(BAMMediaListing):
+class NHLMediaListingMixin(object):
 
-    LINE_SCORE_DATA_TABLE_CLASS = NHLLineScoreDataTable
-
-    # @property
-    # def line(self):
-    #     style = self.provider.config.listings.line.style
-    #     table = NHLLineScoreDataTable.for_game(
-    #         self.provider, self.game_data, self.hide_spoilers,
-    #         # style = style
-    #     )
-    #     return BAMLineScoreBox(table, style)
-
+    @property
+    def LINE_SCORE_DATA_TABLE_CLASS(self):
+        return NHLLineScoreDataTable
 
     @property
     def HIGHLIGHT_ATTR(self):
@@ -177,6 +169,8 @@ class NHLMediaListing(BAMMediaListing):
 
 
 
+class NHLMediaListing(NHLMediaListingMixin, BAMMediaListing):
+    pass
 # class NHLBAMProviderSettings(BAMProviderSettings):
 #     pass
 

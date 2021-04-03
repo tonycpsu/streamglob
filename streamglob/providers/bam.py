@@ -665,6 +665,22 @@ class BAMTeamData(model.db.Entity):
 
 class BAMMediaListingMixin(object):
 
+    # LINE_SCORE_DATA_TABLE_CLASS : typing.Type
+
+    @property
+    def FEED_TYPE_ORDER(self):
+        return [
+            "away",
+            "in_market_away",
+            "home",
+            "in_market_home",
+            "national",
+            "multi-cam",
+            "condensed",
+            "recap",
+            "..."
+        ]
+
     @property
     def line(self):
         style = self.provider.config.listings.line.style
@@ -1202,18 +1218,6 @@ class BAMMediaListingMixin(object):
 @model.attrclass()
 class BAMMediaListing(BAMMediaListingMixin, model.MediaListing):
 
-    FEED_TYPE_ORDER : typing.List[str] = [
-        "away",
-        "in_market_away",
-        "home",
-        "in_market_home",
-        "national",
-        "multi-cam",
-        "condensed",
-        "recap",
-        "..."
-    ]
-
     game_id = Required(int)
     game_type = Required(str)
     away_team_id = Required(int)
@@ -1224,7 +1228,6 @@ class BAMMediaListing(BAMMediaListingMixin, model.MediaListing):
     venue = Optional(str)
     # attrs: str = None
     #
-    LINE_SCORE_DATA_TABLE_CLASS : typing.Type
 
 
 class BAMMediaSourceMixin(object):
@@ -1235,6 +1238,11 @@ class BAMMediaSourceMixin(object):
         "done": "^",
         "off": "X",
     }
+
+    @property
+    def uri(self):
+        # FIXME: add teams, stream info, etc.?
+        return f"{self.provider.IDENTIFIER}/{self.game_id}"
 
     @property
     def state_indicator(self):
@@ -1521,8 +1529,7 @@ class WatchDialog(BasePopUp):
                       else None)
 
             state.event_loop.create_task(
-                self.provider.view.body.preview_listing( # FIXME
-                    selection,
+                self.provider.view.body.play_selection( # FIXME
                     media_id = media.media_id,
                     offset=offset,
                     resolution=self.resolution_dropdown.selected_label,
@@ -1665,6 +1672,10 @@ class BAMProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataTable):
     KEYMAP = {
         "enter": "watch_selected"
     }
+
+    @property
+    def selected_source(self):
+        return self.selected_listing.select_media()
 
     @property
     def play_items(self):
@@ -2242,7 +2253,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
         kwargs["source_id"] = source.media_id
         feed_team = (
             selection.away_team.abbreviation
-            if kwargs["feed_type"] == "away"
+            if kwargs.get("feed_type") == "away"
             else selection.home_team.abbreviation
         ).lower()
         start_date = selection.start.strftime("%Y-%m-%d")

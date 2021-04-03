@@ -98,24 +98,15 @@ class MLBBAMTeamData(BAMTeamData):
     TEAM_URL_TEMPLATE = "http://statsapi.mlb.com/api/v1/teams/{team_id}"
 
 
-@model.attrclass()
-class MLBMediaListing(BAMMediaListing):
+class MLBMediaListingMixin(object):
 
-    LINE_SCORE_DATA_TABLE_CLASS = MLBLineScoreDataTable
-
-    # @property
-    # def line(self):
-    #     style = self.provider.config.listings.line.style
-    #     table = MLBLineScoreDataTable.for_game(
-    #         self.provider, self.game_data, self.hide_spoilers,
-    #         # style = style
-    #     )
-    #     return BAMLineScoreBox(table, style)
+    @property
+    def LINE_SCORE_DATA_TABLE_CLASS(self):
+        return MLBLineScoreDataTable
 
     @property
     def HIGHLIGHT_ATTR(self):
         return "highlights"
-
 
     def get_highlight_attrs(self, highlight):
 
@@ -210,6 +201,11 @@ class MLBMediaListing(BAMMediaListing):
         except KeyError:
             return 0.0
 
+
+
+@model.attrclass()
+class MLBMediaListing(MLBMediaListingMixin, BAMMediaListing):
+    pass
 
 class MLBMediaSourceMixin(object):
 

@@ -95,11 +95,11 @@ class PlayListingMixin(object):
     def selected_source(self):
         return self.selected_listing.sources[0]
 
-    async def play_selection(self):
+    async def play_selection(self, *args, **kwargs):
         listing = self.selected_listing
         if not listing:
             return
-        async for task in self.play(listing):
+        async for task in self.play(listing, *args, **kwargs):
             pass
 
     async def play(self, listing, **kwargs):

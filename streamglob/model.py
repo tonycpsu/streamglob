@@ -358,6 +358,7 @@ class MediaSourceMixin(object):
         if not self.provider:
             return None
 
+        import ipdb; ipdb.set_trace()
         if isinstance(index, int):
             index += 1
 
@@ -411,12 +412,16 @@ class MediaSourceMixin(object):
 
     @property
     def local_path(self):
-        with db_session:
-            listing = (
-                self.provider.LISTING_CLASS.orm_class[self.listing.media_listing_id]
-                if self.provider and self.listing
-                else None
-            )
+
+        listing = self.listing
+        if not listing:
+            with db_session:
+
+                listing = (
+                    self.provider.LISTING_CLASS.orm_class[self.listing.media_listing_id]
+                    if self.provider and self.listing
+                    else None
+                )
             try:
                 # FIXME
                 filename = self.download_filename(

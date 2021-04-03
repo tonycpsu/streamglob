@@ -121,8 +121,8 @@ class Program(object):
     ARG_MAP = {}
 
     with_progress = False
-
     progress_sample = 1
+    progress_newline = False
 
     default_args = []
 
@@ -393,7 +393,7 @@ class Program(object):
     def source_args(self):
 
         if self.source_is_program:
-            return [repr(self.source)]
+            return [] # source is either piped or integrated
         elif isinstance(self.source[0], (model.MediaSource, model.MediaSource.attr_class)):
             return [
                 (s.local_path or s.locator
@@ -455,8 +455,8 @@ class Program(object):
                 self.stdout = subprocess.PIPE
                 self.stderr = subprocess.PIPE
 
-        else:
-            logger.info(f"full cmd: {' '.join(self.full_command)}")
+        # else:
+        logger.info(f"full cmd: {' '.join(self.full_command)}")
 
         if not self.source_integrated:
 
@@ -485,6 +485,7 @@ class Program(object):
             else:
                 raise NotImplementedError
             try:
+
                 self.proc = await spawn_func(
                     *self.full_command,
                     stdin = self.stdin,
@@ -506,13 +507,17 @@ class Program(object):
                              os.fdopen(self.progress_stream)
                         )
                         while not self.proc.returncode:
-                            line = await reader.readline()
+                            if self.progress_newline:
+                                line = await reader.readline()
+                            else:
+                                line = await reader.read(1024)
+                            if not line:
+                                break
                             i += 1
                             if i % self.progress_sample:
                                 continue
-                            if not line:
-                                break
-                            line = line.strip()
+                            if self.progress_newline:
+                                line = line.strip()
                             if not line:
                                 continue
                             await self.update_progress_line(line.decode("utf-8"))
@@ -735,12 +740,15 @@ class ElinksPlayer(Player, cmd="elinks", MEDIA_TYPES={"text"}, FOREGROUND=True):
 
 class Downloader(Program):
 
+    use_fifo = False
+
     def __init__(self, path,
                  player_integrated=False,
-                 use_fifo=False, *args, **kwargs):
+                 use_fifo=None, *args, **kwargs):
         super().__init__(path, *args, **kwargs)
         self.player_integrated = player_integrated
-        self.use_fifo = use_fifo
+        if use_fifo is not None:
+            self.use_fifo = use_fifo
 
     @property
     def fifo(self):
@@ -833,6 +841,8 @@ class YouTubeDLDownloader(Downloader):
     })
 
     with_progress = True
+    progress_newline = True
+
 
     def __init__(self, path, *args, **kwargs):
         super().__init__(path, *args, **kwargs)
@@ -889,11 +899,8 @@ class YouTubeDLDownloader(Downloader):
             self.progress.status = "muxing"
             try:
                 if isinstance(line, bytes):
-                    logger.debug("mux bytes")
-                    import ipdb; ipdb.set_trace()
                     self.progress.dest = self.MUXING_RE.search(line.decode("utf-8")).groups()[0]
                 else:
-                    logger.debug("mux str")
                     self.progress.dest = self.MUXING_RE.search(line).groups()[0]
             except AttributeError:
                 return
@@ -913,13 +920,18 @@ class YouTubeDLDownloader(Downloader):
 
 class StreamlinkDownloader(Downloader):
 
-    PLAYER_INTEGRATED=True
+    PLAYER_INTEGRATED = True
 
     PROGRESS_RE = re.compile(
         r"Written (\d+.\d+ \S+) \((\d+\S+) @ (\d+.\d+ \S+)\)"
     )
 
+    default_args = [
+        "--force-progress"
+    ]
+
     with_progress = True
+    use_fifo = True
 
     @property
     def is_simple(self):
