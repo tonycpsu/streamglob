@@ -896,14 +896,15 @@ class SynchronizedPlayerMixin(object):
         try:
             media_listing_id = self[row].data.media_listing_id
         except IndexError:
-            return 0
+            return row
         try:
             return next(
                 n for n, i in enumerate(self.play_items)
                 if i.media_listing_id == media_listing_id
             )
-        except StopIteration:
-            return 0
+        except (AttributeError, StopIteration):
+            # FIXME
+            return row
 
     async def set_playlist_pos(self, pos):
 

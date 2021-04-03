@@ -1682,7 +1682,8 @@ class BAMProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataTable):
         self._play_items = [
             AttrDict(
                 title="foo",
-                locator=listing.cover
+                locator=listing.cover,
+                listing=listing
             )
             for listing in [
                 row.data_source
