@@ -1110,7 +1110,7 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
                     i for i, item in enumerate(self.play_items)
                     if item.locator == url
                 )
-                await self.playlist_replace(model.BLANK_IMAGE_URI, idx=failed_index, pos=old_pos)
+                await self.playlist_replace(utils.BLANK_IMAGE_URI, idx=failed_index, pos=old_pos)
                 play_item = self.play_items[failed_index]
                 source_rank = play_item.index
                 failed_listing_id = play_item.media_listing_id

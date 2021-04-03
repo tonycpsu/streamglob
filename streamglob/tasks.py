@@ -29,12 +29,6 @@ class TaskList(list):
             if t.task_id == task_id:
                 del self[i]
 
-BLANK_IMAGE_URI = """\
-data://image/png;base64,\
-iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAA\
-AAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=\
-"""
-
 FAILED_TO_OPEN_RE=re.compile("Failed to open (.*)\\.")
 
 class TaskManager(Observable):
@@ -105,7 +99,7 @@ class TaskManager(Observable):
             [
                 AttrDict(
                     title=title,
-                    locator=BLANK_IMAGE_URI,
+                    locator=utils.BLANK_IMAGE_URI,
                     media_type="image"
                 )
             ]

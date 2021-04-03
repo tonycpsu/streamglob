@@ -6,6 +6,12 @@ import html2text
 import html.parser
 import pathvalidate
 
+# FIXME
+BLANK_IMAGE_URI = """\
+data://image/png;base64,\
+iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAA\
+AAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=\
+"""
 
 def optional_arg_decorator(fn):
     def wrapped_decorator(*args, **kwargs):
