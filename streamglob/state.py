@@ -3,6 +3,7 @@ logger = logging.getLogger(__name__)
 from memoize import *
 from orderedattrdict import AttrDict, Tree
 import asyncio
+import tempfile
 
 from pony.orm import *
 
@@ -41,6 +42,11 @@ class State(AttrDict):
         self._memo.regions['long'] = {'max_age': 60*60}
         # self.task_manager = TaskManager()
 
+    @property
+    def tmp_dir(self):
+        if not getattr(self, "_tmp_dir", False):
+            self._tmp_dir = tempfile.mkdtemp()
+        return self._tmp_dir
 
     @property
     def app_data(self):

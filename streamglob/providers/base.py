@@ -112,6 +112,10 @@ class SimpleProviderView(BaseProviderView):
         self.pile.focus_position = 1
         super().__init__(self.pile)
 
+    @property
+    def tmp_dir(self):
+        return self.provider.tmp_dir
+
     @keymap_command
     def cycle_filter(self, n, step):
         self.toolbar.cycle_filter(n, step)
@@ -232,6 +236,14 @@ class BaseProvider(abc.ABC, Observable):
         )
         # print(self.filters)
         self.filters["search"].connect("changed", self.on_search_change)
+
+    @property
+    def tmp_dir(self):
+        if not hasattr(self, "_tmp_dir"):
+            tmp_dir = os.path.join(state.tmp_dir, self.IDENTIFIER)
+            os.makedirs(tmp_dir)
+            self._tmp_dir = tmp_dir
+        return self._tmp_dir
 
     def init_config(self):
         with db_session:

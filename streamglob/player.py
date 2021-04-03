@@ -429,12 +429,6 @@ class Program(object):
         return cmd
 
 
-    @property
-    def tmp_dir(self):
-        if not getattr(self, "_tmp_dir", False):
-            self._tmp_dir = tempfile.mkdtemp()
-        return self._tmp_dir
-
     async def run(self, source=None, **kwargs):
 
         if source:
@@ -636,7 +630,7 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
         return self.ready.result()
 
     def create_socket(self):
-        self.ipc_socket_name = os.path.join(self.tmp_dir, "mpv_socket")
+        self.ipc_socket_name = os.path.join(state.tmp_dir, "mpv_socket")
         self.extra_args_pre += [f"--input-ipc-server={self.ipc_socket_name}"]
 
     async def run(self, *args, **kwargs):
@@ -753,7 +747,7 @@ class Downloader(Program):
     @property
     def fifo(self):
         if not getattr(self, "_fifo", False):
-            fifo_name = os.path.join(self.tmp_dir, "fifo")
+            fifo_name = os.path.join(state.tmp_dir, "fifo")
             logger.debug(fifo_name)
             os.mkfifo(fifo_name)
             self._fifo = fifo_name

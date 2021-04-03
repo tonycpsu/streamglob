@@ -9,7 +9,6 @@ import json
 import math
 import shutil
 import pathlib
-import tempfile
 import itertools
 import traceback
 
@@ -600,13 +599,6 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
             return storyboard.duration
         else:
             return await super().preview_duration(cfg, listing)
-
-    # FIXME: share temp dir with player and other modules
-    @property
-    def tmp_dir(self):
-        if not getattr(self, "_tmp_dir", False):
-            self._tmp_dir = tempfile.mkdtemp()
-        return self._tmp_dir
 
     # FIXME: shared utility module if reused?
     async def download_file(self, url, path):

@@ -199,6 +199,9 @@ class ProviderDataTable(PlayListingMixin, DownloadListingMixin, BaseDataTable):
         self._translator = None
         super(ProviderDataTable,  self).__init__(*args, **kwargs)
 
+    @property
+    def tmp_dir(self):
+        return self.provider.tmp_dir
 
     @property
     def NAME(self):
