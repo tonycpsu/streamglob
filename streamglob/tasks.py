@@ -110,7 +110,7 @@ class TaskManager(Observable):
 
         if listing:
             logger.info(listing)
-            task = caller.create_play_task(listing, **kwargs)
+            task = caller.create_preview_task(listing, **kwargs)
         else:
             listing = self.empty_listing(caller.playlist_title)
             task = model.PlayMediaTask.attr_class(

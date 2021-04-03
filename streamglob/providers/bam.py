@@ -1677,9 +1677,18 @@ class BAMProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataTable):
     def selected_source(self):
         return self.selected_listing.select_media()
 
-    @property
-    def play_items(self):
-        return []
+    def load_play_items(self):
+
+        self._play_items = [
+            AttrDict(
+                title="foo",
+                locator=listing.cover
+            )
+            for listing in [
+                row.data_source
+                for row in self
+            ]
+        ]
 
     @property
     def empty_message(self):

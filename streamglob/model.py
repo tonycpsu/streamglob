@@ -486,7 +486,7 @@ class MediaListingMixin(object):
 
     @property
     def cover(self):
-        return utils.BLANK_IMAGE_URI
+        return self.cover_locator or utils.BLANK_IMAGE_URI
 
 
 @attrclass()
@@ -498,6 +498,7 @@ class MediaListing(MediaListingMixin, db.Entity):
     task = Optional(lambda: MediaTask, reverse="listing")
     downloaded = Optional(datetime)
     viewed = Optional(datetime)
+    cover_locator = Optional(str)
 
 
 class ContentMediaListingMixin(object):

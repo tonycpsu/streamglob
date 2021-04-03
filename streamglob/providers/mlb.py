@@ -1,17 +1,19 @@
 import logging
 logger = logging.getLogger(__name__)
 
-import urwid
+import random
+import string
+import pkgutil
+import json
 
+import urwid
+from wand.image import Image
+from wand.color import Color
 from orderedattrdict import AttrDict
 from panwid.datatable import *
 from pony.orm import *
 import requests
 import dateutil.parser
-import random
-import string
-import pkgutil
-import json
 
 from .. import session
 
@@ -99,6 +101,41 @@ class MLBBAMTeamData(BAMTeamData):
 
 
 class MLBMediaListingMixin(object):
+
+    @property
+    def cover(self):
+        if not getattr(self, "_cover", False):
+            outfile = os.path.join(self.provider.tmp_dir, f"preview.{self.game_id}.png")
+            if os.path.exists(outfile):
+                self.cover_locator = outfile
+            else:
+                teams = [self.away_team_id, self.home_team_id]
+                venue_id = self.game_data["venue"]["id"]
+                park_url = f"https://prod-gameday.mlbstatic.com/responsive-gameday-assets/1.3.0/images/stadiums/night/{venue_id}.jpg"
+                field_url = "https://prod-gameday.mlbstatic.com/responsive-gameday-assets/1.3.0/images/stadiums/infield/default.jpg"
+
+                with Image(width=1158, height=736) as img:
+                    res = requests.get(park_url)
+                    with Image(blob=res.content) as park:
+                        img.composite(park)
+                        top=park.height
+                    res = requests.get(field_url)
+                    with Image(blob=res.content) as field:
+                        img.composite(field, top=top)
+                        for i, team in enumerate(teams):
+                            # FIXME: SVG icons break with " non-conforming drawing
+                            # primitive definition `v122.1a17.38'" error on the
+                            # Pirates logo... guess it's those jagged edges?
+                            #url = f"https://www.mlbstatic.com/team-logos/{team}.svg"
+                            url = f"https://www.mlbstatic.com/team-logos/apple-touch-icons-180x180/{team}.png"
+                            res = requests.get(url)
+                            with Image(blob=res.content, background=Color('transparent')) as logo:
+                                logo.transform(resize=f"x{img.height/4}")
+                                img.composite(logo, left=img.width*(i+1)//3-logo.width//2, top=img.height//6)
+                        img.save(filename=outfile)
+                self.cover_locator = outfile
+        return self.cover_locator
+
 
     @property
     def LINE_SCORE_DATA_TABLE_CLASS(self):

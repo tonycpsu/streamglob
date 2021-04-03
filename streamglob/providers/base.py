@@ -610,6 +610,13 @@ class BaseProvider(abc.ABC, Observable):
 
         return sources, kwargs
 
+    def create_preview_task(self, listing, **kwargs):
+        return ListingsPlayMediaTask.attr_class(
+            provider=self.NAME,
+            title=listing.title,
+            sources=listing.sources
+        )
+
     def create_play_task(self, listing, **kwargs):
 
         sources, kwargs = self.extract_sources(listing, **kwargs)
@@ -631,9 +638,9 @@ class BaseProvider(abc.ABC, Observable):
             provider=self.NAME,
             title=listing.title,
             listing=listing,
-            sources = sources,
-            args = (player_spec, downloader_spec),
-            kwargs = kwargs
+            sources=sources,
+            args=(player_spec, downloader_spec),
+            kwargs=kwargs
         )
 
 
@@ -1193,15 +1200,15 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
                 row_num=row_num,
                 count=len(row.data_source.sources) if hasattr(row.data_source, "sources") else 1,
                 media_type=source.media_type,
-                # preview_mode=state.listings_view.preview_mode,
+                preview_mode=state.listings_view.preview_mode,
                 # locator=(
                 #     (source.locator or getattr(source, "locator_thumbnail", None))
                 #     if self.provider.auto_preview_default == "full"
                 #     else (getattr(source, "locator_thumbnail", None) or source.locator)
                 # )
-                # locator=source.locator or getattr(source, "locator_thumbnail", None)
-                # locator=source.locator_for_preview(state.listings_view.preview_mode),
-                locator=source.locator
+                # locator=source.locator or getattr(source, "locator_thumbnail", None),
+                locator=source.locator_for_preview(state.listings_view.preview_mode),
+                # locator=source.locator
             )
             for (row_num, row, index, source) in [
                     (row_num, row, index, source) for row_num, row in enumerate(self)
@@ -1225,6 +1232,9 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
         self.load_play_items()
         super().on_requery(source, count)
 
+
+    def create_preview_task(self, listing, *args, **kwargs):
+        return self.provider.create_preview_task(listing, *args, **kwargs)
 
     def create_play_task(self, listing, *args, **kwargs):
         return self.provider.create_play_task(listing, *args, **kwargs)
