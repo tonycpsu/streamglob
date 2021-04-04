@@ -351,6 +351,7 @@ class MediaSourceMixin(object):
         if not self.provider:
             return None
 
+
         if isinstance(index, int):
             index += 1
 
@@ -396,6 +397,7 @@ class MediaSourceMixin(object):
             outfile = template.format(self=self)
         if glob:
             outfile = re.sub("({[^}]+})", "*", outfile)
+        outfile = utils.sanitize_filename(outfile)
         # logger.info(f"template: {template}, outfile: {outfile}")
         return os.path.join(outpath, outfile)
 
@@ -406,9 +408,9 @@ class MediaSourceMixin(object):
     def local_path(self):
 
         listing = self.listing
-        if not listing:
-            with db_session:
-
+        with db_session:
+            # FIXME: so hacky
+            if hasattr(listing, "media_listing_id"):
                 listing = (
                     self.provider.LISTING_CLASS.orm_class[self.listing.media_listing_id]
                     if self.provider and self.listing
