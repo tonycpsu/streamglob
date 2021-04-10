@@ -187,7 +187,7 @@ class InvalidConfigView(BaseProviderView):
 
 MEDIA_SPEC_RE=re.compile(r"(?:/([^:]+))?(?::(.*))?")
 
-class BaseProvider(abc.ABC, Observable):
+class BaseProvider(PlayListingProviderMixin, abc.ABC, Observable):
     """
     Abstract base class from which providers should inherit from
     """
@@ -610,39 +610,12 @@ class BaseProvider(abc.ABC, Observable):
 
         return sources, kwargs
 
-    def create_preview_task(self, listing, **kwargs):
-        return ListingsPlayMediaTask.attr_class(
-            provider=self.NAME,
-            title=listing.title,
-            sources=listing.sources
-        )
-
-    def create_play_task(self, listing, **kwargs):
-
-        sources, kwargs = self.extract_sources(listing, **kwargs)
-
-        media_types = set([s.media_type for s in sources if s.media_type])
-
-        player_spec = {"media_types": media_types}
-
-        if media_types == {"image"}:
-            downloader_spec = {None: None}
-        else:
-            downloader_spec = (
-                getattr(self.config, "helpers", None)
-                or getattr(sources[0], "helper", None)
-                or self.helper
-            )
-
-        return ListingsPlayMediaTask.attr_class(
-            provider=self.NAME,
-            title=listing.title,
-            listing=listing,
-            sources=sources,
-            args=(player_spec, downloader_spec),
-            kwargs=kwargs
-        )
-
+    # def create_preview_task(self, listing, **kwargs):
+    #     return ListingsPlayMediaTask.attr_class(
+    #         provider=self.NAME,
+    #         title=listing.title,
+    #         sources=listing.sources
+    #     )
 
     @property
     def limit(self):
@@ -810,7 +783,8 @@ class SynchronizedPlayerMixin(object):
     def on_requery(self, source, count):
 
         self.disable_focus_handler()
-        state.event_loop.create_task(self.preview_all())
+        if state.get("tui_enabled"):
+            state.event_loop.create_task(self.preview_all())
         self.enable_focus_handler()
 
     def load_more(self, position):
@@ -1169,9 +1143,6 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
         except BrokenPipeError:
             pass
 
-@model.attrclass()
-class ListingsPlayMediaTask(model.PlayMediaTask):
-    pass
 
 @keymapped()
 class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
@@ -1230,21 +1201,31 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
 
 
     def on_requery(self, source, count):
-        self.load_play_items()
+        if state.get("tui_enabled"):
+            self.load_play_items()
         super().on_requery(source, count)
 
 
-    def create_preview_task(self, listing, *args, **kwargs):
-        return self.provider.create_preview_task(listing, *args, **kwargs)
+    # def create_preview_task(self, listing, *args, **kwargs):
+    #     return self.provider.create_preview_task(listing, *args, **kwargs)
 
-    def create_play_task(self, listing, *args, **kwargs):
-        return self.provider.create_play_task(listing, *args, **kwargs)
+    def create_preview_task(self, listing, **kwargs):
+        return model.PlayMediaTask.attr_class(
+            provider=self.NAME,
+            title=listing.title,
+            sources=listing.sources
+        )
 
+    # def create_play_task(self, listing, *args, **kwargs):
+    #     return self.provider.create_play_task(listing, *args, **kwargs)
 
-    def extract_sources(self, listing, **kwargs):
-        if not listing:
-            return ([], kwargs)
-        return self.provider.extract_sources(listing, **kwargs)
+    # def create_download_task(self, listing, *args, **kwargs):
+    #     return self.provider.create_download_task(listing, *args, **kwargs)
+
+    # def extract_sources(self, listing, **kwargs):
+    #     if not listing:
+    #         return ([], kwargs)
+    #     return self.provider.extract_sources(listing, **kwargs)
 
 
 class DetailBox(urwid.WidgetWrap):
@@ -1274,7 +1255,7 @@ class DetailBox(urwid.WidgetWrap):
 
 
 @keymapped()
-class DetailDataTable(PlayListingMixin, BaseDataTable):
+class DetailDataTable(PlayListingViewMixin, BaseDataTable):
 
     # KEYMAP = {
     #     "home": "key_home",

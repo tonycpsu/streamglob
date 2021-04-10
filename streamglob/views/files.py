@@ -17,7 +17,7 @@ from ..widgets import *
 from ..providers.widgets import *
 from .. import providers
 # from ..widgets.browser import FileBrowser, DirectoryNode, FileNode
-from ..providers.base import SynchronizedPlayerMixin
+from ..providers.base import SynchronizedPlayerProviderMixin
 
 @model.attrclass()
 class FilesPlayMediaTask(model.PlayMediaTask):
@@ -35,7 +35,11 @@ class FilesViewEventHandler(FileSystemEventHandler):
 
 
 @keymapped()
-class FilesView(SynchronizedPlayerMixin, PlayListingMixin, StreamglobView):
+class FilesView(
+        SynchronizedPlayerProviderMixin,
+        PlayListingProviderMixin,
+        PlayListingViewMixin,
+        StreamglobView):
 
     signals = ["requery"]
 
@@ -57,6 +61,18 @@ class FilesView(SynchronizedPlayerMixin, PlayListingMixin, StreamglobView):
         state.event_loop.create_task(self.check_updated())
         # self._emit("requery", self)
 
+    @property
+    def provider(self):
+        return self
+
+    @property
+    def NAME(self):
+        return "files"
+
+    @property
+    def config(self):
+        return config.settings.profile.files
+
     def selectable(self):
         return True
 
@@ -64,8 +80,8 @@ class FilesView(SynchronizedPlayerMixin, PlayListingMixin, StreamglobView):
 
         self.browser = FileBrowser(
             root,
-            dir_sort = config.settings.profile.get_path("files.dir_sort"),
-            file_sort = config.settings.profile.get_path("files.file_sort"),
+            dir_sort = self.config.dir_sort,
+            file_sort = self.config.file_sort,
             ignore_files=False
         )
         urwid.connect_signal(self.browser, "focus", self.on_focus)

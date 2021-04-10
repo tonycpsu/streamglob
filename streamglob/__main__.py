@@ -553,8 +553,10 @@ def main():
     action, provider, selection, opts = providers.parse_uri(options.uri)
 
     if selection:
+        state.tui_enabled = False
         rc = run_cli(action, provider, selection, **opts)
     else:
+        state.tui_enabled = True
         rc = run_gui(action, provider, **opts)
     return rc
 

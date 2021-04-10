@@ -71,7 +71,7 @@ class FilterToolbar(urwid.WidgetWrap):
 
 
 @keymapped()
-class PlayListingMixin(object):
+class PlayListingViewMixin(object):
 
     KEYMAP = {
         "p": "play_selection",
@@ -104,16 +104,47 @@ class PlayListingMixin(object):
 
     async def play(self, listing, **kwargs):
         # sources, kwargs = self.extract_sources(listing, **kwargs)
-        task = self.create_play_task(listing, **kwargs)
+        task = self.provider.create_play_task(listing, **kwargs)
         yield state.task_manager.play(task)
 
-    def create_play_task(self, listing, *args, **kwargs):
+
+class PlayListingProviderMixin(object):
+
+    def create_play_task(self, listing, **kwargs):
+
+        sources, kwargs = self.extract_sources(listing, **kwargs)
+
+        media_types = set([s.media_type for s in sources if s.media_type])
+
+        player_spec = {"media_types": media_types}
+
+        if media_types == {"image"}:
+            downloader_spec = {None: None}
+        else:
+            downloader_spec = (
+                getattr(self.config, "helpers", None)
+                or getattr(sources[0], "helper", None)
+                or getattr(self, "helper", None)
+            )
+
         return model.PlayMediaTask.attr_class(
+            provider=self.NAME,
             title=listing.title,
-            sources=listing.sources,
-            args=args,
+            listing=listing,
+            sources=sources,
+            args=(player_spec, downloader_spec),
             kwargs=kwargs
         )
+
+
+    # def create_play_task(self, listing, *args, **kwargs):
+    #     return model.PlayMediaTask.attr_class(
+    #         title=listing.title,
+    #         sources=listing.sources,
+    #         args=args,
+    #         kwargs=kwargs
+    #     )
+
 
 @keymapped()
 class DownloadListingMixin(object):
@@ -176,7 +207,7 @@ class DownloadListingMixin(object):
 
 
 @keymapped()
-class ProviderDataTable(PlayListingMixin, DownloadListingMixin, BaseDataTable):
+class ProviderDataTable(PlayListingViewMixin, DownloadListingMixin, BaseDataTable):
 
     ui_sort = True
     query_sort = True
