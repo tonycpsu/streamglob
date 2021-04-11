@@ -42,7 +42,7 @@ class YouTubeMediaListingMixin(object):
     @property
     def duration(self):
         return (
-            str(timedelta(seconds=self.duration_seconds))
+            str(timedelta(seconds=self.duration_seconds)).lstrip("0:")
             if self.duration_seconds is not None
             else None
         )
@@ -735,6 +735,22 @@ class YouTubeProvider(PaginatedProviderMixin,
         return FeedProviderView(self, CachedFeedProviderBodyView(self, YouTubeDataTable(self)))
 
     @property
+    def ATTRIBUTES(self):
+        attrs = list(super().ATTRIBUTES.items())
+        idx, attr = next(  (i, a ) for i, a in enumerate(attrs) if a[0] == "title")
+        return AttrDict(
+            attrs[:idx]
+            + [
+                ("duration", {
+                    "label": "duration",
+                    "width": 8,
+                    "align": "right",
+                    "sort_icon": False,
+                })
+            ]
+            + attrs[idx:]
+        )
+    @property
     def PREVIEW_TYPES(self):
         return ["default", "storyboard", "full"]
 
@@ -751,22 +767,6 @@ class YouTubeProvider(PaginatedProviderMixin,
         for s, d in TAG_MAP.items():
             template = template.replace(s, d)
         return SRC_TAG_RE.sub(r"%(\1)s", template)
-
-    def init_config(self):
-        super().init_config()
-        attrs = list(self.ATTRIBUTES.items())
-        idx, attr = next(  (i, a ) for i, a in enumerate(attrs) if a[0] == "title")
-        self.ATTRIBUTES = AttrDict(
-            attrs[:idx]
-            + [
-                ("duration", {
-                    "width": 8,
-                    "align": "right",
-                })
-            ]
-            + attrs[idx:]
-        )
-
 
     @property
     def selected_feed(self):

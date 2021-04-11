@@ -466,7 +466,11 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
 
     @property
     def ATTRIBUTES(self):
-        attrs = list(super().ATTRIBUTES.items())
+        # attrs = list(super().ATTRIBUTES.items())
+        attrs = [
+            (k, v.copy())
+            for k, v in super().ATTRIBUTES.items()
+        ]
         idx, attr = next(  (i, a ) for i, a in enumerate(attrs) if a[0] == "title")
         attr[1]["label"] = "caption"
         # attr[1]["truncate"] = True
