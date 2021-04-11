@@ -187,7 +187,7 @@ class InvalidConfigView(BaseProviderView):
 
 MEDIA_SPEC_RE=re.compile(r"(?:/([^:]+))?(?::(.*))?")
 
-class BaseProvider(PlayListingProviderMixin, abc.ABC, Observable):
+class BaseProvider(PlayListingProviderMixin, DownloadListingProviderMixin, abc.ABC, Observable):
     """
     Abstract base class from which providers should inherit from
     """
@@ -1255,7 +1255,7 @@ class DetailBox(urwid.WidgetWrap):
 
 
 @keymapped()
-class DetailDataTable(PlayListingViewMixin, BaseDataTable):
+class DetailDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseDataTable):
 
     # KEYMAP = {
     #     "home": "key_home",

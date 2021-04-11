@@ -431,7 +431,7 @@ class MediaSourceMixin(object):
                 if not getattr(self, "uri", None):
                     return None
                 dirname = os.path.dirname(filename)
-                filename=os.path.join(dirname, f"*{self.uri}*")
+                filename = os.path.join(dirname, f"*{self.uri}*")
                 try:
                     return glob.glob(filename)[0]
                 except IndexError:

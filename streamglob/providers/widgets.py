@@ -137,17 +137,10 @@ class PlayListingProviderMixin(object):
         )
 
 
-    # def create_play_task(self, listing, *args, **kwargs):
-    #     return model.PlayMediaTask.attr_class(
-    #         title=listing.title,
-    #         sources=listing.sources,
-    #         args=args,
-    #         kwargs=kwargs
-    #     )
 
 
 @keymapped()
-class DownloadListingMixin(object):
+class DownloadListingViewMixin(object):
 
     KEYMAP = {
         "l": "download_selection"
@@ -158,7 +151,7 @@ class DownloadListingMixin(object):
         return "downloader"
 
     async def download(self, listing, index=None, no_task_manager=False, **kwargs):
-        for task in self.create_download_tasks(listing, index=index, **kwargs):
+        for task in self.provider.create_download_tasks(listing, index=index, **kwargs):
             yield state.task_manager.download(task)
 
     async def download_selection(self):
@@ -171,6 +164,9 @@ class DownloadListingMixin(object):
             return
         async for task in self.download(listing, index=source.rank or 0):
             pass
+
+
+class DownloadListingProviderMixin(object):
 
 
     def create_download_tasks(self, listing, index=None, downloader_spec=None, **kwargs):
@@ -207,7 +203,7 @@ class DownloadListingMixin(object):
 
 
 @keymapped()
-class ProviderDataTable(PlayListingViewMixin, DownloadListingMixin, BaseDataTable):
+class ProviderDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseDataTable):
 
     ui_sort = True
     query_sort = True
