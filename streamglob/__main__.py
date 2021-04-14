@@ -239,7 +239,7 @@ class MainView(urwid.WidgetWrap):
                 continue
             break
         self._w.set_focus_path(self.focus_paths[i])
-        # self.focused_widget.on_view_activate()
+        self.focused_widget.on_view_activate()
         self.last_focused_index = self.focused_index
 
     @property

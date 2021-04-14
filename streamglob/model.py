@@ -641,9 +641,11 @@ class PlayMediaTaskMixin(object):
         with db_session:
             now = datetime.now()
             for s in self.sources:
-                s.attach().viewed = now
+                if isinstance(s, db.Entity):
+                    s.attach().viewed = now
             if self.listing:
-                self.listing.attach().viewed = now
+                if isinstance(s, db.Entity):
+                    self.listing.attach().viewed = now
 
 
 @attrclass()

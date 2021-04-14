@@ -768,7 +768,8 @@ class SynchronizedPlayerMixin(object):
     def __init__(self, *args, **kwargs):
 
         super().__init__(*args, **kwargs)
-        urwid.connect_signal(self, "requery", self.on_requery)
+        if "requery" in self.signals:
+            urwid.connect_signal(self, "requery", self.on_requery)
 
         state.task_manager.connect("player-load-failed", self.on_player_load_failed)
         # self.player = None
@@ -1085,6 +1086,7 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
         super().on_deactivate()
 
     def on_player_load_failed(self, url):
+
         async def async_handler():
             try:
                 old_pos = self.playlist_position

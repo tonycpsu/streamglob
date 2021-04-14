@@ -118,8 +118,6 @@ class FilesView(
     def playlist_title(self):
         return f"[{self.browser.root}/{self.browser.selection.full_path}]"
 
-        return
-
     @property
     def root(self):
         return self.browser.root
@@ -143,12 +141,6 @@ class FilesView(
         )
         self.observer.start()
 
-    def create_task(self, listing, sources):
-        return FilesPlayMediaTask.attr_class(
-            title=listing.title,
-            sources=sources
-        )
-
     @property
     def play_items(self):
         return [
@@ -162,10 +154,11 @@ class FilesView(
     def selected_listing(self):
         path = self.browser.selection.full_path
         return model.TitledMediaListing.attr_class(
+            provider_id="files", # FIXME
             title=os.path.basename(path),
             sources = [
                 model.MediaSource.attr_class(
-                    provider_id="browser", # FIXME
+                    provider_id="files", # FIXME
                     url=path
                 )
             ]
@@ -206,9 +199,9 @@ class FilesView(
 
     def on_view_activate(self):
         pass
-        # state.event_loop.create_task(self.play_empty())
 
     def __len__(self):
         return 1
+
     def __iter__(self):
         return iter(self.browser.selection.full_path)
