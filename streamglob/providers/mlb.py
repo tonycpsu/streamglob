@@ -854,3 +854,35 @@ class MLBProvider(BAMProviderMixin,
             return end.date()
         else:
             return now
+
+    def create_download_tasks(self, listing, index=None, downloader_spec=None, **kwargs):
+
+        sources, kwargs = self.extract_sources(listing, **kwargs)
+
+        if not isinstance(sources, list):
+            sources = [sources]
+
+        if "num" not in kwargs:
+            kwargs["num"] = len(sources)
+
+        for i, source in enumerate(sources):
+
+            if index is not None and index != i:
+                continue
+            try:
+                filename = source.download_filename(**kwargs, listing=listing)
+            except SGInvalidFilenameTemplate as e:
+                logger.warning(f"filename template is invalid: {e}")
+                raise
+            downloader_spec = downloader_spec or source.download_helper
+            task = model.DownloadMediaTask.attr_class(
+                provider=self.NAME,
+                title=utils.sanitize_filename(listing.title),
+                sources=[source],
+                listing=listing,
+                dest=filename,
+                args=(downloader_spec,),
+                kwargs=dict(index=index, **kwargs),
+                postprocessors=(self.config.get("postprocessors", None) or []).copy()
+            )
+            yield task
