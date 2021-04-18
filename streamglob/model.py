@@ -374,6 +374,7 @@ class MediaSourceMixin(object):
 
         if template:
             # template = self.TEMPLATE_RE.sub(r"{self.\1}", template)
+
             template = template.replace("{listing.title", "{listing.safe_title")
             try:
                 outfile = template.format_map(
@@ -389,7 +390,6 @@ class MediaSourceMixin(object):
                 if config.settings.profile.unicode_normalization:
                     outfile = unicodedata.normalize(config.settings.profile.unicode_normalization, outfile)
             except Exception as e:
-                # import ipdb; ipdb.set_trace()
                 logger.exception("".join(traceback.format_exc()))
                 raise SGInvalidFilenameTemplate(str(e))
         else:
@@ -397,6 +397,8 @@ class MediaSourceMixin(object):
             outfile = template.format(self=self)
         if glob:
             outfile = re.sub("({[^}]+})", "*", outfile)
+
+        # import ipdb; ipdb.set_trace()
         outfile = utils.sanitize_filename(outfile)
         # logger.info(f"template: {template}, outfile: {outfile}")
         return os.path.join(outpath, outfile)
@@ -498,6 +500,7 @@ class MediaListing(MediaListingMixin, db.Entity):
     provider_id = Required(str, index=True)
     attrs = Required(Json, default={})
     task = Optional(lambda: MediaTask, reverse="listing")
+    downloads = Set(lambda: MediaDownload, reverse="media_listing")
     downloaded = Optional(datetime)
     viewed = Optional(datetime)
     cover_locator = Optional(str)
@@ -583,6 +586,15 @@ class InflatableMediaListingMixin(object):
 class InflatableMediaListing(InflatableMediaListingMixin, MediaListing):
 
     is_inflated = Required(bool, default=False)
+
+
+@attrclass()
+class MediaDownload(MediaListingMixin, db.Entity):
+
+    media_download_id = PrimaryKey(int, auto=True)
+    media_listing = Required(lambda: MediaListing, reverse="downloads")
+    retries = Required(int, default=0)
+    done = Required(bool, default=False)
 
 
 @attrclass()

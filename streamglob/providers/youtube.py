@@ -579,6 +579,8 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
 
         async def preview(listing):
             storyboard = await self.storyboard_for(listing, cfg)
+            if not storyboard:
+                return
             logger.info(storyboard)
             await self.playlist_replace(storyboard.img_file, idx=position)
             state.loop.draw_screen()
@@ -596,6 +598,8 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
     async def preview_duration(self, cfg, listing):
         if cfg.mode == "storyboard":
             storyboard = await self.storyboard_for(listing, cfg)
+            if not storyboard:
+                return None
             return storyboard.duration
         else:
             return await super().preview_duration(cfg, listing)
@@ -640,7 +644,10 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         for i, board in enumerate(boards):
             board_file = os.path.join(self.tmp_dir, f"board.{listing.guid}.{i:02d}.jpg")
             try:
-                await self.download_file(board, board_file)
+                try:
+                    await self.download_file(board, board_file)
+                except asyncio.CancelledError:
+                    return
                 board_files.append(board_file)
             except:
                 # sometimes the last one doesn't exist

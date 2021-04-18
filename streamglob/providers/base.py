@@ -784,6 +784,9 @@ class SynchronizedPlayerMixin(object):
     def on_requery(self, source, count):
 
         self.disable_focus_handler()
+        while len(self.pending_event_tasks):
+            t = self.pending_event_tasks.pop()
+            t.cancel()
         if state.get("tui_enabled"):
             state.event_loop.create_task(self.preview_all())
         self.enable_focus_handler()
@@ -1025,7 +1028,10 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             preview_fn = getattr(
                 self, f"preview_content_{cfg.mode}"
             )
-            await preview_fn(cfg, position, listing, source=source)
+            try:
+                await preview_fn(cfg, position, listing, source=source)
+            except asyncio.exceptions.CancelledError:
+                return
             self.play_items[position].preview_mode = cfg.mode
             duration = await self.preview_duration(cfg, listing)
             if duration:

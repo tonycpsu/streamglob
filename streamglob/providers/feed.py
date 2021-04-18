@@ -430,7 +430,7 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
 
     @keymap_command()
     async def inflate_selection(self):
-        async with self.listing_lock:
+        async with self.provider.listing_lock:
             with db_session:
                 listing = self.selection.data_source.attach()
                 if await listing.inflate(force=True):
@@ -456,7 +456,10 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
     async def mark_item_read(self, position, no_signal=False):
         logger.debug(f"mark_item_read: {position}")
 
-        row = self[position]
+        try:
+            row = self[position]
+        except IndexError:
+            return
         with db_session:
             listing = row.data_source
             item = self.item_at_position(position)

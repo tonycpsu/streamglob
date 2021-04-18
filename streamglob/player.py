@@ -434,6 +434,7 @@ class Program(object):
         if source:
             self.source = source
 
+        # import ipdb; ipdb.set_trace()
         self.process_kwargs(kwargs)
 
         if self.source_is_program:
@@ -622,6 +623,14 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
         self.ipc_socket_name = None
         self._ipc_socket = None
         self.create_socket()
+
+    @property
+    def default_args(self):
+        from datetime import datetime
+        return [
+            f"--log-file=/Users/tonyc/tmp/mpv{datetime.now().isoformat()}.log"
+        ]
+
 
     @property
     def controller(self):
