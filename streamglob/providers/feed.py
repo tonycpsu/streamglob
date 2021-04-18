@@ -204,10 +204,9 @@ class FeedMediaListingMixin(object):
     def created_timestamp(self):
         return self.created.isoformat().split(".")[0]
 
-    # FIXME
     @property
     def created_date(self):
-        return self.timestamp.split("_")[0]
+        return self.created_timestamp.split("T")[0]
 
     def on_focus(self):
         pass

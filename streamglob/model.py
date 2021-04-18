@@ -351,6 +351,13 @@ class MediaSourceMixin(object):
         if not self.provider:
             return None
 
+        try:
+            tokens = [
+                t for t in self.provider.highlight_re.search(listing.title).groups() if t
+            ]
+            subject_dir = tokens[0]
+        except (AttributeError, IndexError):
+            subject_dir = "."
 
         if isinstance(index, int):
             index += 1
@@ -372,16 +379,18 @@ class MediaSourceMixin(object):
             config.settings.profile.get_path("output.template")
         )
 
-        if template:
-            # template = self.TEMPLATE_RE.sub(r"{self.\1}", template)
+        def expand_template(s, safe=False):
 
-            template = template.replace("{listing.title", "{listing.safe_title")
+            if safe:
+                s = s.replace("{listing.title", "{listing.safe_title")
             try:
-                outfile = template.format_map(
+                outfile = s.format_map(
                     SafeDict(
                         self=self, listing=listing or self.listing, # FIXME
                         uri="uri=" + self.uri.replace("/", "+") +"=" if not glob else "*",
-                        index=self.rank+1, num=num or len(listing.sources) if listing else 0
+                        index=self.rank+1,
+                        num=num or len(listing.sources) if listing else 0,
+                        subject_dir=subject_dir
                     )
                 )
                 if not glob:
@@ -392,6 +401,23 @@ class MediaSourceMixin(object):
             except Exception as e:
                 logger.exception("".join(traceback.format_exc()))
                 raise SGInvalidFilenameTemplate(str(e))
+
+            return outfile
+
+        if template:
+
+            (template_dir, template_file) = os.path.split(template)
+
+            if template_dir:
+                template_dir = expand_template(template_dir)
+            else:
+                template_dir = "."
+
+            template_file = expand_template(template_file, safe=True)
+
+            outfile = os.path.join(template_dir, template_file)
+
+
         else:
             template = "{listing.provider}.{self.default_name}.{self.timestamp}.{self.ext}"
             outfile = template.format(self=self)
@@ -399,7 +425,7 @@ class MediaSourceMixin(object):
             outfile = re.sub("({[^}]+})", "*", outfile)
 
         # import ipdb; ipdb.set_trace()
-        outfile = utils.sanitize_filename(outfile)
+        # outfile = utils.sanitize_filename(outfile)
         # logger.info(f"template: {template}, outfile: {outfile}")
         return os.path.join(outpath, outfile)
 
