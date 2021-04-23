@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 import typing
 import types
 import re
-import dateutil.parser
+import dateparser.search
 import abc
 import asyncio
 import shutil
@@ -382,7 +382,7 @@ class MediaSourceMixin(object):
         def expand_template(s, safe=False):
 
             if safe:
-                s = s.replace("{listing.title", "{listing.safe_title")
+                s = re.sub(r"{listing.title\b", "{listing.safe_title", s)
             try:
                 outfile = s.format_map(
                     SafeDict(
@@ -417,16 +417,12 @@ class MediaSourceMixin(object):
 
             outfile = os.path.join(template_dir, template_file)
 
-
         else:
             template = "{listing.provider}.{self.default_name}.{self.timestamp}.{self.ext}"
             outfile = template.format(self=self)
         if glob:
             outfile = re.sub("({[^}]+})", "*", outfile)
 
-        # import ipdb; ipdb.set_trace()
-        # outfile = utils.sanitize_filename(outfile)
-        # logger.info(f"template: {template}, outfile: {outfile}")
         return os.path.join(outpath, outfile)
 
     def __str__(self):
@@ -595,6 +591,30 @@ class TitledMediaListingMixin(object):
     def safe_title(self):
         return utils.sanitize_filename(self.title)
 
+
+    @property
+    def title_date(self):
+
+        configs = [
+            {'DATE_ORDER': 'YMD'},
+            {}
+        ]
+
+        s = self.title.replace("_", "-").replace("/", " ")
+        for config in configs:
+            try:
+                d = next(
+                    d for d in
+                    dateparser.search.search_dates(
+                        s, settings=config
+                    )
+                    if any(c.isdigit() for c in d[0])
+                )
+                return d[1].date()
+            except (TypeError, StopIteration):
+                continue
+
+        return None
 
 @attrclass()
 class TitledMediaListing(TitledMediaListingMixin, MultiSourceMediaListing):

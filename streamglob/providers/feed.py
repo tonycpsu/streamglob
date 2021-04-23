@@ -208,6 +208,10 @@ class FeedMediaListingMixin(object):
     def created_date(self):
         return self.created_timestamp.split("T")[0]
 
+    @property
+    def content_date(self):
+        return self.title_date or self.created_date
+
     def on_focus(self):
         pass
 
