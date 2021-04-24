@@ -119,6 +119,7 @@ class TaskManager(Observable):
             )
 
         task.args = (config.settings.profile.preview.player, None)
+        task.kwargs.update(dict(with_controller=True))
 
         async def start_player():
             self.preview_task = task

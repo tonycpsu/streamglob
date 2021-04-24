@@ -548,7 +548,7 @@ class Player(Program):
         source = task.sources
         logger.debug(f"source: {source}, player: {player_spec}, downloader: {downloader_spec}, kwargs: {kwargs}")
 
-        player = next(cls.get(player_spec))
+        player = next(cls.get(player_spec, **kwargs))
         if isinstance(downloader_spec, MutableMapping):
             # if downloader spec is a dict, it maps players to downloader programs
             if player.cmd in downloader_spec:
@@ -616,13 +616,15 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
         "playlist_position": "playlist-start"
     }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, with_controller=False, **kwargs):
+        self.with_controller = with_controller
         self._initialized = False
         self.ready = asyncio.Future()
         super().__init__(*args, **kwargs)
         self.ipc_socket_name = None
         self._ipc_socket = None
-        self.create_socket()
+        if self.with_controller:
+            self.create_socket()
 
     @property
     def default_args(self):
@@ -643,20 +645,18 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
         self.extra_args_pre += [f"--input-ipc-server={self.ipc_socket_name}"]
 
     async def run(self, *args, **kwargs):
-        logger.info("starting controller")
         rc = await super().run(*args, **kwargs)
-        await self.wait_for_socket()
-        # self.controller = MPV(start_mpv=False, ipc_socket=self.ipc_socket_name)
-        controller = MPV(
-            socket=self.ipc_socket_name,
-            log_callback=self.log,
-            log_level="error"
-        )
-        await controller.start()
-        self.ready.set_result(controller)
-        # self._initialized = True
+        if self.with_controller:
+            logger.info("starting controller")
+            await self.wait_for_socket()
+            controller = MPV(
+                socket=self.ipc_socket_name,
+                log_callback=self.log,
+                log_level="error"
+            )
+            await controller.start()
+            self.ready.set_result(controller)
         return rc
-        # state.event_loop.call_later(5, self.test)
 
     async def log(self, level, prefix, text):
         if not len(text):
@@ -758,7 +758,8 @@ class Downloader(Program):
         if not getattr(self, "_fifo", False):
             fifo_name = os.path.join(state.tmp_dir, "fifo")
             logger.debug(fifo_name)
-            os.mkfifo(fifo_name)
+            if not os.path.exists(fifo_name):
+                os.mkfifo(fifo_name)
             self._fifo = fifo_name
         return self._fifo
 
