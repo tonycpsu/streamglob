@@ -563,10 +563,15 @@ class BaseProvider(PlayListingProviderMixin, DownloadListingProviderMixin, abc.A
         )
 
     def get_source(self, selection, **kwargs):
-        sources = sorted(
-            selection.sources,
-            key = lambda  s: getattr(s, "rank", 0)
-        )
+        sources = selection.sources
+        if isinstance(selection, model.MediaListing):
+            with db_session:
+                listing = model.MediaListing[selection.media_listing_id]
+                sources = sorted(
+                    listing.sources,
+                    key = lambda  s: getattr(s, "rank", 0)
+                )
+
         if not isinstance(sources, list):
             sources = [sources]
 

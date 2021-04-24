@@ -188,11 +188,15 @@ class FeedMediaListingMixin(object):
 
     @property
     def feed_name(self):
-        return self.feed.name
+        with db_session:
+            feed = model.MediaChannel[self.channel.channel_id]
+            return feed.name
 
     @property
     def feed_locator(self):
-        return self.feed.locator
+        with db_session:
+            feed = model.MediaChannel[self.channel.channel_id]
+            return feed.locator
 
     # FIXME
     @property

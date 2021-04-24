@@ -1051,7 +1051,8 @@ class WgetDownloader(Downloader):
             (pct, dled, rate, eta) = self.PROGRESS_LINE_RE.search(line).groups()
             rate = rate.replace("K", "k")
             self.progress.pct = float(pct)/100
-            self.progress.dled = (self.progress.pct * self.progress.total)
+            if self.progress.total:
+                self.progress.dled = (self.progress.pct * self.progress.total)
             if not "-" in rate:
                 self.progress.rate = bitmath.parse_string(rate.split("/")[0]) if rate else None
             if eta:
