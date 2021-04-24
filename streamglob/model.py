@@ -671,7 +671,6 @@ class ProgramMediaTaskMixin(object):
         logger.debug(f"finalize program: {self.result} {self.proc} {self.proc.result().returncode}")
         self.result.set_result(self.proc.result().returncode)
         logger.debug("-finalize program")
-        super().finalize()
 
 
 @attrclass()
@@ -695,7 +694,6 @@ class PlayMediaTaskMixin(object):
 
     def finalize(self):
         logger.info("finalize")
-        self.result.set_result(self.proc.result().returncode)
         with db_session:
             now = datetime.now()
             for s in self.sources:
@@ -704,7 +702,7 @@ class PlayMediaTaskMixin(object):
             if self.listing:
                 if isinstance(s, db.Entity):
                     self.listing.attach().viewed = now
-
+        super().finalize()
 
 @attrclass()
 class PlayMediaTask(PlayMediaTaskMixin, ProgramMediaTask):
@@ -756,6 +754,7 @@ class DownloadMediaTaskMixin(object):
                 s.attach().downloaded = now
             if self.listing:
                 self.listing.attach().downloaded = now
+        super().finalize()
 
 
 @attrclass(DownloadMediaTaskMixin)

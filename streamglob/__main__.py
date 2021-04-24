@@ -449,10 +449,6 @@ async def run_tasks(tasks):
         result = task.result.result()
         if isinstance(result, Exception):
             logger.exception("".join(traceback.format_exception(type(result), result, result.__traceback__)))
-        if task.proc.done():
-            proc = task.proc.result()
-        else:
-            proc = None
 
 
 def run_cli(action, provider, selection, **kwargs):
@@ -540,7 +536,8 @@ def main():
 
     logger.debug(f"{PACKAGE_NAME} starting")
 
-    state.task_manager_task = state.event_loop.create_task(state.task_manager.start())
+    state.start_task_manager()
+    # state.task_manager_task = state.event_loop.create_task(state.task_manager.start())
 
     log_file = os.path.join(config.settings.CONFIG_DIR, f"{PACKAGE_NAME}.log")
     fh = logging.FileHandler(log_file)
@@ -558,6 +555,8 @@ def main():
     else:
         state.tui_enabled = True
         rc = run_gui(action, provider, **opts)
+
+    state.stop_task_manager()
     return rc
 
 if __name__ == "__main__":
