@@ -1011,8 +1011,7 @@ class WgetDownloader(Downloader):
     with_progress = "stderr"
 
     default_args = [
-        "--show-progress", "--progress=bar:force",
-        "--limit-rate=1000"
+        "--show-progress", "--progress=bar:force"
     ]
 
     SIZE_LINE_RE=re.compile(
