@@ -515,7 +515,10 @@ class Program(object):
                                 line = line.strip()
                             if not line:
                                 continue
-                            await self.update_progress_line(line.decode("utf-8"))
+                            try:
+                                await self.update_progress_line(line.decode("utf-8"))
+                            except UnicodeDecodeError:
+                                continue
 
                     self.progress_task = state.event_loop.create_task(
                         read_progress()
