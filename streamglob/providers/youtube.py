@@ -638,11 +638,16 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
             thumbnail.transform(resize=f"{PREVIEW_WIDTH}x{PREVIEW_HEIGHT}")
         i = 0
         n = 0
+        tile_width = 0
+        tile_height = 0
         for board_file in board_files:
             # logger.debug(board_file)
             with wand.image.Image(filename=board_file) as img:
-                tile_height = img.height // TILES_Y
-                tile_width = img.width // TILES_X
+                if i == 0:
+                    # calculate tile width / height on first iteration since
+                    # last board might not be full height
+                    tile_width = img.width // TILES_X
+                    tile_height = img.height // TILES_Y
                 for h in range(0, img.height, tile_height):
                     for w in range(0, img.width, tile_width):
                         i += 1
