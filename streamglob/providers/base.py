@@ -1036,6 +1036,7 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             try:
                 await preview_fn(cfg, position, listing, source=source)
             except asyncio.exceptions.CancelledError:
+                logger.warning("CancelledError from preview function")
                 return
             self.play_items[position].preview_mode = cfg.mode
             duration = await self.preview_duration(cfg, listing)
@@ -1071,6 +1072,7 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             await self.playlist_position_changed(position)
 
     def on_focus(self, source, position):
+
         if self.provider.auto_preview_enabled:
             state.event_loop.create_task(self.sync_playlist_position())
         if len(self):

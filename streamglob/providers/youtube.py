@@ -35,6 +35,7 @@ from .. import session
 from .filters import *
 
 import youtube_dl
+from pytube.innertube import InnerTube
 
 class YouTubeMediaListingMixin(object):
 
@@ -160,14 +161,9 @@ class YouTubeSession(session.AsyncStreamSession):
 
 
     async def get_video_info(self, vid):
-        res = await self.provider.session.get(
-            "https://www.youtube.com/get_video_info"
-            f"?video_id={vid}&asv=3&el=detailpage&hl=en_US"
-        )
-        return json.loads(parse_qs(
-            await res.text()
-        )["player_response"][0])
-
+        # FIXME: innertube isn't async
+        vi = InnerTube().player(vid)
+        return vi
 
     async def extract_video_info(self, entry):
 
@@ -243,7 +239,6 @@ class YouTubeSession(session.AsyncStreamSession):
     def parse_duration(cls, s):
         if not s:
             return None
-        import ipdb; ipdb.set_trace()
         return (dateparser.parse(str(s)) - datetime.now().replace(
                 hour=0,minute=0,second=0)
              ).seconds
