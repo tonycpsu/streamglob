@@ -1354,6 +1354,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         if isinstance(self.view, InvalidConfigView):
             return
         logger.info(f"update_query: {cursor}")
+        # import ipdb; ipdb.set_trace()
         status_filters =  {
             "all": lambda: True,
             "unread": lambda i: i.read is None,

@@ -7,7 +7,7 @@ profiles:
                     password: CHANGEME
                 output:
                     path: .
-                    template: "{provider_id}.{start_date_time}.{away_team.abbreviation}@{home_team.abbreviation}.{ext}"
+                    template: "{provider_id}.{listing.start_date_time}.{listing.away_team.abbreviation}@{listing.home_team.abbreviation}.{ext}"
                 # if you'd like to hide scores, etc. for certain teams
                 teams:
                     favorite:

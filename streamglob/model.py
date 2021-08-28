@@ -11,6 +11,7 @@ import abc
 import asyncio
 import shutil
 import unicodedata
+from unidecode import unidecode
 import tempfile
 import traceback
 import glob
@@ -355,9 +356,14 @@ class MediaSourceMixin(object):
             tokens = [
                 t for t in self.provider.highlight_re.search(listing.title).groups() if t
             ]
-            subject_dir = tokens[0]
+            subject = tokens[0]
         except (AttributeError, IndexError):
-            subject_dir = "."
+            channel = getattr(listing or self.listing, "channel", None)
+            if channel:
+                subject = channel.name
+            else:
+                subject = None
+
 
         if isinstance(index, int):
             index += 1
@@ -379,7 +385,13 @@ class MediaSourceMixin(object):
             config.settings.profile.get_path("output.template")
         )
 
-        def expand_template(s, safe=False):
+        group_by = (
+            self.provider.config.get_path("output.group_by")
+            or
+            config.settings.profile.get_path("output.group_by")
+        )
+
+        def expand_template(s, safe=False, **tokens):
 
             if safe:
                 s = re.sub(r"{listing.title\b", "{listing.safe_title", s)
@@ -390,9 +402,12 @@ class MediaSourceMixin(object):
                         uri="uri=" + self.uri.replace("/", "+") +"=" if not glob else "*",
                         index=self.rank+1,
                         num=num or len(listing.sources) if listing else 0,
-                        subject_dir=subject_dir
+                        subject=subject,
+                        **tokens
+                        # subject_dir=subject_dir
                     )
                 )
+
                 if not glob:
                     outfile = outfile.format_map(SafeDict(ext=self.ext))
                     outfile = self.provider.translate_template(outfile)
@@ -408,14 +423,34 @@ class MediaSourceMixin(object):
 
             (template_dir, template_file) = os.path.split(template)
 
+            path_list = []
+
             if template_dir:
-                template_dir = expand_template(template_dir)
+                path_list.append(expand_template(template_dir))
             else:
                 template_dir = "."
 
-            template_file = expand_template(template_file, safe=True)
+            if group_by == "subject" and subject:
+                try:
+                    # import ipdb; ipdb.set_trace()
+                    group_dir = next(
+                        e.name for e in os.scandir(
+                            os.path.join(
+                                outpath,
+                                template_dir
+                                )
+                            )
+                        if e.is_dir()
+                        and unidecode(e.name) == unidecode(subject)
+                    )
+                    path_list.append(group_dir)
+                except StopIteration:
+                    pass
 
-            outfile = os.path.join(template_dir, template_file)
+            path_list.append(expand_template(template_file, safe=True))
+
+            # import ipdb; ipdb.set_trace()
+            outfile = os.path.join(*path_list)
 
         else:
             template = "{listing.provider}.{self.default_name}.{self.timestamp}.{self.ext}"
@@ -449,16 +484,16 @@ class MediaSourceMixin(object):
                 if not filename:
                     return None
                 try:
-                    return glob.glob(filename)[0]
-                except IndexError:
+                    return next(glob.iglob(filename))
+                except StopIteration:
                     pass
                 if not getattr(self, "uri", None):
                     return None
                 dirname = os.path.dirname(filename)
                 filename = os.path.join(dirname, f"*{self.uri}*")
                 try:
-                    return glob.glob(filename)[0]
-                except IndexError:
+                    return next(glob.iglob(filename))
+                except StopIteration:
                     return None
             except SGInvalidFilenameTemplate as e:
                 logger.error(e)

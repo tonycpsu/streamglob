@@ -225,8 +225,8 @@ class ListingsView(StreamglobView):
     def set_view(self, name):
         view = self.provider.config.views[name]
         self.provider.toolbar.apply_filter_state(view.filters)
-        if view.sort:
-            self.provider.sort(*view.sort)
+        # if view.sort:
+        #     self.provider.sort(*view.sort)
         self.provider.provider_data["selected_view"] = name
         self.provider.save_provider_data()
 
