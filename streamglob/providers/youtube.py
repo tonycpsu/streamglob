@@ -36,6 +36,7 @@ from .filters import *
 
 import youtube_dl
 from pytube.innertube import InnerTube
+from thumbframes_dl import YouTubeFrames
 
 class YouTubeMediaListingMixin(object):
 
@@ -62,35 +63,12 @@ class YouTubeMediaListingMixin(object):
         except KeyError:
             return None
 
-        duration = self.duration_seconds or int(vi["videoDetails"]["lengthSeconds"])
-
-        spec_parts = spec.split('|')
-        base_url = spec_parts[0].split('$')[0] + "2/"
-
-        sgp_part = spec_parts[0].split('$N')[1]
-
-        if(len(spec_parts) == 3):
-            sigh = spec_parts[2].split('M#')[1]
-        elif (len(spec_parts) == 2):
-            sigh = spec_parts[1].split('t#')[1]
-        else:
-            sigh = spec_parts[3].split('M#')[1]
-
-        num_boards = 0
-        num_tiles = 25
-
-        if duration < 250:
-            num_boards = math.ceil((duration / 2) / num_tiles)
-        elif duration > 250 and duration < 1000:
-            num_boards = math.ceil((duration / 4) / num_tiles)
-        elif duration > 1000:
-            num_boards = math.ceil((duration / 10) / num_tiles)
-
-        return [
-            f"{base_url}M{i}{sgp_part}&sigh={sigh}"
-            for i in range(num_boards)
-        ]
-
+        thumbs = YouTubeFrames._get_storyboards_from_spec(
+            None,
+            self.guid,
+            vi["storyboards"]["playerStoryboardSpecRenderer"]["spec"]
+        )
+        return [ t.url for t in thumbs[list(thumbs.keys())[-1]] ]
 
 
 @model.attrclass()
@@ -746,6 +724,12 @@ class YouTubeProvider(PaginatedProviderMixin,
                 ("duration", {
                     "label": "duration",
                     "width": 8,
+                    "align": "right",
+                    "sort_icon": False,
+                }),
+                ("guid", {
+                    "label": "id",
+                    "width": 11,
                     "align": "right",
                     "sort_icon": False,
                 })
