@@ -26,7 +26,6 @@ from pony.orm.core import EntityMeta
 import pydantic
 from pydantic import BaseModel, Field, validator
 
-
 # monkey-patch
 from marshmallow import fields as mm_fields
 
@@ -281,6 +280,8 @@ class SafeDict(dict):
     def __missing__(self, key):
         return '{' + key + '}'
 
+SUBJECT_MAP = dict()
+
 class MediaSourceMixin(object):
 
     TEMPLATE_RE=re.compile("\{((?!(index|num|listing|feed|uri))[^}]+)\}")
@@ -432,8 +433,8 @@ class MediaSourceMixin(object):
 
             if group_by == "subject" and subject:
                 try:
-                    # import ipdb; ipdb.set_trace()
-                    group_dir = next(
+                    if not subject in SUBJECT_MAP:
+                        SUBJECT_MAP[subject] = next(
                         e.name for e in os.scandir(
                             os.path.join(
                                 outpath,
@@ -443,9 +444,10 @@ class MediaSourceMixin(object):
                         if e.is_dir()
                         and unidecode(e.name) == unidecode(subject)
                     )
-                    path_list.append(group_dir)
+                    if SUBJECT_MAP.get(subject):
+                        path_list.append(SUBJECT_MAP[subject])
                 except StopIteration:
-                    pass
+                    SUBJECT_MAP[subject] = None
 
             path_list.append(expand_template(template_file, safe=True))
 
@@ -466,6 +468,7 @@ class MediaSourceMixin(object):
     @property
     def local_path(self):
 
+        logger.info(f"local_path: {self.locator}")
         listing = self.listing
         with db_session:
             # FIXME: so hacky
@@ -484,7 +487,9 @@ class MediaSourceMixin(object):
                 if not filename:
                     return None
                 try:
-                    return next(glob.iglob(filename))
+                    ret = next(glob.iglob(filename))
+                    return ret
+
                 except StopIteration:
                     pass
                 if not getattr(self, "uri", None):

@@ -1423,4 +1423,8 @@ class MultiSourceListingMixin(object):
         return 0
 
     def row_attr_fn(self, position, data, row):
-        return "downloaded" if all([s.local_path for s in data.sources]) else super().row_attr_fn(position, data, row)
+        return (
+            "downloaded"
+            if all([s.local_path for s in data.sources])
+            else super().row_attr_fn(position, data, row)
+        )
