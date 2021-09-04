@@ -418,7 +418,7 @@ def run_gui(action, provider, **kwargs):
         async def start_server_async():
             runner = AppRunner(app)
             await runner.setup()
-            site = TCPSite(runner, 'localhost', 8080)
+            site = TCPSite(runner, 'localhost', 7474)
             try:
                 await site.start()
             except OSError as e:
@@ -426,7 +426,18 @@ def run_gui(action, provider, **kwargs):
 
         rpc = JsonRpc()
 
-        methods = []
+        async def preview_foreground():
+            logger.info("foreground")
+            await state.task_manager.preview_player.command("set_property", "ontop", "yes")
+
+        async def preview_background():
+            logger.info("background")
+            await state.task_manager.preview_player.command("set_property", "ontop", "no")
+
+        methods = [
+            ("", preview_foreground),
+            ("", preview_background),
+        ]
         for pname, p in providers.PROVIDERS.items():
             methods += [
                 (pname, func)
