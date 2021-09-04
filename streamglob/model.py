@@ -15,6 +15,7 @@ from unidecode import unidecode
 import tempfile
 import traceback
 import glob
+from functools import lru_cache
 
 import pony.options
 pony.options.CUT_TRACEBACK = False
@@ -465,7 +466,13 @@ class MediaSourceMixin(object):
     def __str__(self):
         return self.locator
 
+    def __hash__(self):
+        if isinstance(self, db.Entity):
+            return super().__hash__()
+        return hash(self.locator)
+
     @property
+    @lru_cache(256)
     def local_path(self):
 
         logger.info(f"local_path: {self.locator}")
