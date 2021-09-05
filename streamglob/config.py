@@ -42,10 +42,21 @@ def from_yaml_for_type(dict_type, loader, node):
                 'found unacceptable key (%s)' % exc, key_node.start_mark)
         d[key] = loader.construct_object(value_node, deep=False)
 
-class Folder(str):
+class StringTag(str):
+
+  def __init__(self, content):
+    self.content = content
+
+  def __repr__(self):
+    return self.content
+
+  def __str__(self):
+    return self.content
+
+class Folder(StringTag):
     pass
 
-class Union(str):
+class Union(StringTag):
     pass
 
 def yaml_loader(node_type, base_dir=None):
@@ -82,6 +93,25 @@ def yaml_loader(node_type, base_dir=None):
     d = {"__init__": __init__}
 
     cls = type(cls_name, (yaml.FullLoader,), d)
+    return cls
+
+def yaml_dumper():
+
+    def __init__(self, *args, **kwargs):
+        super(cls, self).__init__(*args, **kwargs)
+
+        def folder_representer(dumper, data):
+            return dumper.represent_scalar('!folder', data.content)
+
+        def union_representer(dumper, data):
+            return dumper.represent_scalar('!union', data.content)
+
+        self.add_representer(Folder, folder_representer)
+        self.add_representer(Union, union_representer)
+
+    d = {"__init__": __init__}
+
+    cls = type("ConfigDumper", (yaml.Dumper,), d)
     return cls
 
 class ConfigTree(Tree):
@@ -193,7 +223,7 @@ class Config(ConfigTree):
                  merge_default = False, *args, **kwargs):
         super(Config, self).__init__(*args, **kwargs)
         self.__exclude_keys__ |= {
-            "_config_file", "_config_dir", "include_profile", "_profile_tree"
+            "_config_file", "_config_dir", "include_profile", "_profile_tree",
         }
         self._config_file = config_file or self.DEFAULT_CONFIG_PATH
         self._config_dir = os.path.dirname(self._config_file) or "."
@@ -240,15 +270,25 @@ class Config(ConfigTree):
         if not os.path.exists(self.config_file):
             raise Exception(f"config file {self.config_file} not found")
         loader = yaml_loader(ConfigTree, self._config_dir)
-        config = yaml.load(open(self.config_file), Loader=loader)
+
+        config = yaml.load(
+            open(self.config_file),
+            Loader=loader
+        )
         self.update(config.items())
 
     def save(self):
 
-        d = Tree([ (k, v) for k, v in self.items()])
-        d.update({"profiles": self._profile_tree})
+        d = Tree([ (k, v) for k, v in self.items() if k != "profiles"] )
+        if len(self._profile_tree):
+            d.update({"profiles": self._profile_tree})
+        dumper = yaml_dumper()
         with open(self._config_file, 'w') as outfile:
-            yaml.dump(d, outfile, default_flow_style=False, indent=4)
+            yaml.dump(
+                d, outfile,
+                Dumper=dumper,
+                default_flow_style=False, indent=4
+            )
 
 
 def load(config_file=None, merge_default=False):
