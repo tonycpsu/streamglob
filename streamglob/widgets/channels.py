@@ -554,16 +554,23 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
     }
 
     def __init__(self, data, provider, label="channels"):
+        self.label = label
         self.provider = provider
-        self.tree = ChannelGroupNode(self, data, key=label)
-        self.listbox = MyTreeListBox(MyTreeWalker(self.tree))
-        self.scrollbar = StreamglobScrollBar(self.listbox)
-        self.listbox.offset_rows = 1
+        self.placeholder = urwid.WidgetPlaceholder(urwid.Filler(urwid.Text("")))
         self.pile = urwid.Pile([
-            ("weight", 1, self.scrollbar)
+            ("weight", 1, self.placeholder)
             # ("weight", 1, self.listbox)
         ])
         super().__init__(self.pile)
+        self.pile.selectable = lambda: True
+        self.load(data)
+
+    def load(self, data):
+        self.tree = ChannelGroupNode(self, data, key=self.label)
+        self.listbox = MyTreeListBox(MyTreeWalker(self.tree))
+        self.listbox.offset_rows = 1
+        self.scrollbar = StreamglobScrollBar(self.listbox)
+        self.placeholder.original_widget = self.scrollbar
 
     # def selectable(self):
     #     return True
@@ -648,6 +655,31 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
     def update_selection(self):
         self._emit("change", self.selected_items)
         self._emit("select", self.selected_items)
+
+    def delete_selection(self):
+
+        channel = self.listbox.focus.channel
+        conf = config.Config(
+            os.path.join(
+                config.settings._config_dir,
+                self.provider.IDENTIFIER,
+                "feeds.yaml"
+            )
+        )
+
+        def remove_key(d, key):
+            if isinstance(d, dict):
+                for k in list(d.keys()):
+                    if k == key:
+                        del d[k]
+                    else:
+                        remove_key(d[k], key)
+
+
+        logger.info(channel.locator)
+        remove_key(conf, channel.locator)
+        conf.save()
+        self.load(conf)
 
     def keypress(self, size, key):
 

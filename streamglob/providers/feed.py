@@ -880,6 +880,7 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
         "a": "mark_feed_read",
         "A": "mark_all_read",
         "ctrl a": "mark_visible_read",
+        "delete": "delete_feed",
         "meta a": ("mark_visible_read", [-1]),
         "meta A": ("mark_visible_read", [1]),
         "meta ctrl k": "kill_all",
@@ -956,6 +957,11 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
     def mark_feed_read(self):
         with db_session:
             self.channels.listbox.focus.channel.mark_all_items_read()
+        self.reset()
+
+    def delete_feed(self):
+        with db_session:
+            self.channels.delete_selection()
         self.reset()
 
     def on_unread_change(self, source, listing):
