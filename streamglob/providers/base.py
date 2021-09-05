@@ -1422,9 +1422,9 @@ class MultiSourceListingMixin(object):
             return self.inner_table.focus_position
         return 0
 
-    def row_attr_fn(self, position, data, row):
-        return (
-            "downloaded"
-            if all([s.local_path for s in data.sources])
-            else super().row_attr_fn(position, data, row)
-        )
+    # def row_attr_fn(self, position, data, row):
+    #     return (
+    #         "downloaded"
+    #         if all([s.local_path for s in data.sources])
+    #         else super().row_attr_fn(position, data, row)
+    #     )

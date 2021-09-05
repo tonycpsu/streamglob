@@ -310,19 +310,19 @@ class CachedFeedProviderDetailDataTable(DetailDataTable):
     def keypress(self, size, key):
         return super().keypress(size, key)
 
-    def row_attr_fn(self, position, data, row):
-        # if not getattr(row, "seen", False):
-        with db_session:
-            try:
-                source = self.parent_table.provider.MEDIA_SOURCE_CLASS.orm_class[data.media_source_id]
-            except pony.orm.core.ObjectNotFound:
-                return
-        if source.local_path:
-            return "downloaded"
-        elif not source.seen:
-            # logger.info("detail unread")
-            return "unread"
-        return super().row_attr_fn(position, data, row)
+    # def row_attr_fn(self, position, data, row):
+    #     # if not getattr(row, "seen", False):
+    #     with db_session:
+    #         try:
+    #             source = self.parent_table.provider.MEDIA_SOURCE_CLASS.orm_class[data.media_source_id]
+    #         except pony.orm.core.ObjectNotFound:
+    #             return
+    #     if source.local_path:
+    #         return "downloaded"
+    #     elif not source.seen:
+    #         # logger.info("detail unread")
+    #         return "unread"
+    #     return super().row_attr_fn(position, data, row)
 
     async def mark_selection_seen(self):
         with db_session:
@@ -432,8 +432,16 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
             # logger.info(len([s for s in listing.sources if not s.seen]))
             return len([s for s in listing.sources if not s.seen])
 
-    def row_attr_fn(self, position, data, row):
-        return "unread" if not data.read else super().row_attr_fn(position, data, row)
+    async def row_attr(self, row):
+        logger.info(f"feed row_attr: {row.data.read}")
+        return (
+            "unread"
+            if not row.data.read
+            else await super().row_attr(row)
+        )
+
+    # def row_attr_fn(self, position, data, row):
+    #     return "unread" if not data.read else super().row_attr_fn(position, data, row)
 
     @keymap_command()
     async def inflate_selection(self):
@@ -475,11 +483,13 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
             item.mark_read()
             row.clear_attr("unread")
             self.set_value(position, "read", item.read)
-            self.invalidate_rows([self[position].data.media_listing_id])
+            await self.update_row_attribute(row)
+            # self.invalidate_rows([self[position].data.media_listing_id])
             if not no_signal:
                 self._emit("unread_change", listing.channel.detach())
 
     async def mark_item_unread(self, position, no_signal=False):
+        logger.debug(f"mark_item_unreadread: {position}")
         row = self[position]
         with db_session:
             listing = row.data_source
@@ -489,7 +499,8 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
             item.mark_unread()
             row.set_attr("unread")
             self.set_value(position, "read", item.read)
-            self.invalidate_rows([self[position].data.media_listing_id])
+            await self.update_row_attribute(row)
+            # self.invalidate_rows([self[position].data.media_listing_id])
             if not no_signal:
                 self._emit("unread_change", listing.channel.detach())
 

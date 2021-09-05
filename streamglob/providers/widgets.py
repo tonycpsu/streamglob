@@ -224,6 +224,7 @@ class ProviderDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseData
         self.translate = self.provider.translate
         self.strip_emoji = self.provider.strip_emoji
         self._translator = None
+        self.update_task = None
         super(ProviderDataTable,  self).__init__(*args, **kwargs)
 
     @property
@@ -351,6 +352,25 @@ class ProviderDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseData
         super().reset(*args, **kwargs)
         self.translate = self.provider.translate
         self.apply_translation()
+        if self.update_task:
+            self.update_task.cancel()
+        self.update_task = state.event_loop.create_task(self.update_row_attributes())
+
+    async def row_attr(self, row):
+        logger.info("base widget row_attr")
+        return (
+            "downloaded"
+            if all([s.local_path for s in row.data.sources])
+            else "normal"
+        )
+
+    async def update_row_attribute(self, row):
+        row.set_attr(await self.row_attr(row))
+
+    async def update_row_attributes(self):
+        for row in self:
+            await asyncio.sleep(config.settings.profile.get_path("display.attribute_delay", 1))
+            await self.update_row_attribute(row)
 
     @property
     def playlist_title(self):

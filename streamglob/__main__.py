@@ -61,18 +61,6 @@ PACKAGE_NAME=__name__.split('.')[0]
 def load_palette():
 
     state.palette_entries = {}
-    # FIXME: move to provider config
-    for (n, f, b) in  [
-            ("unread", "white", "black"),
-    ]:
-        state.palette_entries[n] = PaletteEntry(
-            name=n,
-            mono="white",
-            foreground=f,
-            background=b,
-            foreground_high=f,
-            background_high=b
-        )
 
     for k, v in config.settings.profile.attributes.items():
         state.palette_entries[k] = PaletteEntry.from_config(v)
