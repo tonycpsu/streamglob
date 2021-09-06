@@ -12,6 +12,7 @@ from pony.orm import *
 from panwid.autocomplete import AutoCompleteMixin
 from panwid.highlightable import HighlightableTextMixin
 from panwid.keymap import *
+from panwid.dialog import BaseDialog
 from unidecode import unidecode
 
 from .. import config
@@ -563,14 +564,32 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
         ])
         super().__init__(self.pile)
         self.pile.selectable = lambda: True
-        self.load(data)
+        self.load()
 
-    def load(self, data):
-        self.tree = ChannelGroupNode(self, data, key=self.label)
+    @property
+    def conf(self):
+        if not getattr(self, "_conf", None):
+            self._conf = config.Config(
+            os.path.join(
+                config.settings._config_dir,
+                self.provider.IDENTIFIER,
+                "feeds.yaml"
+            )
+        )
+        return self._conf
+
+    @conf.setter
+    def conf(self, conf):
+        self._conf = conf
+
+    def load(self):
+        logger.info(self.provider.IDENTIFIER)
+        self.tree = ChannelGroupNode(self, self.conf, key=self.label)
         self.listbox = MyTreeListBox(MyTreeWalker(self.tree))
         self.listbox.offset_rows = 1
         self.scrollbar = StreamglobScrollBar(self.listbox)
         self.placeholder.original_widget = self.scrollbar
+        self.pile._invalidate()
 
     # def selectable(self):
     #     return True
@@ -656,30 +675,79 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
         self._emit("change", self.selected_items)
         self._emit("select", self.selected_items)
 
-    def delete_selection(self):
+    def open_confirm_dialog(self, prompt, action):
 
-        channel = self.listbox.focus.channel
-        conf = config.Config(
-            os.path.join(
-                config.settings._config_dir,
-                self.provider.IDENTIFIER,
-                "feeds.yaml"
-            )
-        )
+        class ConfirmDialog(BaseDialog):
+
+            signals = ["message"]
+
+            def __init__(self, parent, action, *args, **kwargs):
+
+                self.action = action
+                super(ConfirmDialog, self).__init__(parent, *args, **kwargs)
+
+            @property
+            def prompt(self):
+                return prompt
+
+            def confirm(self):
+                self.action()
+                self.close()
+
+            def cancel(self):
+                self.close()
+
+            def close(self):
+                self.parent.close_popup()
+
+            @property
+            def choices(self):
+                return {
+                    "y": self.confirm,
+                    "n": self.cancel
+                }
+
+        dialog = ConfirmDialog(self.provider.view, action)
+        self.provider.view.open_popup(dialog, width=60, height=5)
+
+    def close_confirm_dialog(self):
+        self.provider.view.close_popup()
+
+    def delete_channel(self, locator):
 
         def remove_key(d, key):
             if isinstance(d, dict):
                 for k in list(d.keys()):
                     if k == key:
+                        logger.info(f"removing {k}")
                         del d[k]
                     else:
                         remove_key(d[k], key)
 
+        remove_key(self.conf, locator)
+        self.conf.save()
 
-        logger.info(channel.locator)
-        remove_key(conf, channel.locator)
-        conf.save()
-        self.load(conf)
+    def delete_selection(self):
+
+        channel = self.listbox.focus.channel
+
+        def action():
+
+            target = self.listbox.focus_position
+            try:
+                new_selection = self.listbox.body.get_next(target)[1].identifier
+            except IndexError:
+                new_selection = self.listbox.body.get_prev(target)[1].identifier
+
+            self.delete_channel(channel.locator)
+
+            self.load()
+            self.listbox.set_focus(self.find_node(new_selection))
+
+        self.open_confirm_dialog(
+            f"""Delete "{channel.name}"?""",
+            action
+        )
 
     def keypress(self, size, key):
 

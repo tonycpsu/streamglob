@@ -228,10 +228,11 @@ class Config(ConfigTree):
         self._config_file = config_file or self.DEFAULT_CONFIG_PATH
         self._config_dir = os.path.dirname(self._config_file) or "."
         self.load()
-        self._profile_tree = ProfileTree(
-            **self.profiles,
-            merge_default=merge_default
-        )
+        if "profiles" in self:
+            self._profile_tree = ProfileTree(
+                **self.profiles,
+                merge_default=merge_default
+            )
 
     @property
     def config_file(self):
@@ -280,13 +281,14 @@ class Config(ConfigTree):
     def save(self):
 
         d = Tree([ (k, v) for k, v in self.items() if k != "profiles"] )
-        if len(self._profile_tree):
+        if "profiles" in self:
             d.update({"profiles": self._profile_tree})
         dumper = yaml_dumper()
         with open(self._config_file, 'w') as outfile:
             yaml.dump(
                 d, outfile,
                 Dumper=dumper,
+                allow_unicode=True,
                 default_flow_style=False, indent=4
             )
 
