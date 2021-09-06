@@ -1020,6 +1020,7 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
 
     @property
     def all_channels(self):
+        # import ipdb; ipdb.set_trace()
         return self.channels.all_channels
 
     @property

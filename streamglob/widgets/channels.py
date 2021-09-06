@@ -381,6 +381,8 @@ class ChannelUnionNode(ChannelPropertiesMixin, urwid.ParentNode):
         for key in self.get_child_keys():
             child = self.get_child_node(key)
             if not child.is_leaf:
+                if pred is None or pred(child):
+                    yield child
                 yield from child.get_nodes(pred)
             if pred is None or pred(child):
                 yield child
@@ -714,8 +716,8 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
 
     def move_selection(self, direction):
 
-        channel = self.listbox.focus.channel
         this = self.listbox.focus_position
+        self.listbox.set_focus(this.get_root())
 
         that = this
         while True:
@@ -725,19 +727,31 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
                 if direction < 0
                 else self.listbox.body.get_next(that)[1]
             )
-            if not that or isinstance(that, ChannelNode):
+            if isinstance(this, ChannelGroupNode):
+                if that.get_key() not in this._children:
+                    break
+            elif that != this.get_parent():
                 break
-            # import time
-            # time.sleep(1)
+
+        if isinstance(that, ChannelGroupNode):
+            if this.get_parent() == that.get_parent():
+                that = (
+                    that.get_first_child()
+                    if direction > 0
+                    else that.get_last_child()
+                )
+
         self.move_channel(
-            self.conf, this.locator, that.locator,
+            self.conf, this.get_key(), that.get_key(),
             direction
             if this.get_parent() == that.get_parent()
             else -direction
         )
         self.conf.save()
         self.load()
-        self.listbox.set_focus(self.find_node(this.locator))
+        # import ipdb; ipdb.set_trace()
+        key = self.find_key(this.get_key())
+        self.listbox.set_focus(key)
 
 
     def move_channel(self, obj, src, dst, direction):
@@ -777,7 +791,6 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
             if isinstance(d, dict):
                 for k in list(d.keys()):
                     if k == key:
-                        logger.info(f"removing {k}")
                         del d[k]
                     else:
                         remove_key(d[k], key)
