@@ -742,19 +742,16 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
                 )
 
         self.move_channel(
-            self.conf, this.get_key(), that.get_key(),
+            this.get_key(), that.get_key(),
             direction
             if this.get_parent() == that.get_parent()
             else -direction
         )
-        self.conf.save()
-        self.load()
-        # import ipdb; ipdb.set_trace()
-        key = self.find_key(this.get_key())
-        self.listbox.set_focus(key)
 
+    def move_channel(self, src, dst, direction):
 
-    def move_channel(self, obj, src, dst, direction):
+        if not isinstance(src, list):
+            src = [src]
 
         def pop_key(obj, key):
             if key in obj:
@@ -781,8 +778,16 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
                         move_key(d[k], key, value, target)
 
 
-        val = pop_key(obj, src)
-        move_key(obj, src, val, dst)
+        for c in src:
+            if c == dst:
+                continue
+            val = pop_key(self.conf, c)
+            move_key(self.conf, c, val, dst)
+
+        self.conf.save()
+        self.load()
+        key = self.find_key(src[0])
+        self.listbox.set_focus(key)
 
 
     def delete_channel(self, locator):
@@ -830,6 +835,9 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
             self.update_selection()
         elif key == " ":
             self._emit("change", self.selected_items)
+        elif key == "V":
+            self.move_channel([c.get_key() for c in self.tree.get_marked_nodes()], self.selection.get_key(), -1)
+            self.unmark_all()
         elif key == ";":
             marked = list(self.tree.get_marked_nodes())
             if marked:
