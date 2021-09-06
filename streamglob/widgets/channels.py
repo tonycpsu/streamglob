@@ -220,7 +220,10 @@ class ChannelWidget(ListingCountMixin,
     @property
     def attr(self):
         tail = self.channel.attrs.get("tail_fetched") if self.channel else None
-        if self.unread_count and tail:
+        error = self.channel and self.channel.attrs.get("error")
+        if error:
+            return "browser error"
+        elif self.unread_count and tail:
             return "browser head_tail"
         elif self.unread_count:
             return "browser head"

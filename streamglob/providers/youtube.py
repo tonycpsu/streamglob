@@ -38,6 +38,9 @@ import youtube_dl
 from pytube.innertube import InnerTube
 from thumbframes_dl import YouTubeFrames
 
+class ChannelNotFoundError(Exception):
+    pass
+
 class YouTubeMediaListingMixin(object):
 
 
@@ -109,7 +112,7 @@ class YouTubeSession(session.AsyncStreamSession):
 
         logger.debug(f"youtube_dl_query: {query} {offset}, {limit}")
         ytdl_opts = {
-            "ignoreerrors": True,
+            # "ignoreerrors": False,
             'quiet': True,
             'no_color': True,
             'extract_flat': "in_playlist",
@@ -126,7 +129,6 @@ class YouTubeSession(session.AsyncStreamSession):
 
         with youtube_dl.YoutubeDL(ytdl_opts) as ydl:
             playlist_dict = ydl.extract_info(query, download=False)
-
             if not playlist_dict:
                 logger.warn("youtube_dl returned no data")
                 return
@@ -326,7 +328,9 @@ class YouTubeFeed(FeedMediaChannel):
     async def rss_data(self):
         url = f"https://www.youtube.com/feeds/videos.xml?channel_id={self.locator}"
         res = await self.session.get(url)
-        content = await res.content
+        if res.status != 200:
+            raise ChannelNotFoundError
+        content = await res.text()
         tree = ET.fromstring(content)
         entries = tree.findall(
             ".//{http://www.w3.org/2005/Atom}entry"
@@ -375,6 +379,14 @@ class YouTubeFeed(FeedMediaChannel):
         return len(self.locator) == 24 and self.locator.startswith("UC")
 
     async def fetch(self, limit=None, resume=False, reverse=False, *args, **kwargs):
+
+        try:
+            data = await self.rss_data
+            self.attrs["error"] = False
+        except ChannelNotFoundError:
+            with db_session:
+                self.attrs["error"] = True
+                return
 
         url = (
             self.CHANNEL_URL_TEMPLATE.format(locator=self.locator)
