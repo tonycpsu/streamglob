@@ -583,7 +583,6 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
         self._conf = conf
 
     def load(self):
-        logger.info(self.provider.IDENTIFIER)
         self.tree = ChannelGroupNode(self, self.conf, key=self.label)
         self.listbox = MyTreeListBox(MyTreeWalker(self.tree))
         self.listbox.offset_rows = 1
@@ -713,6 +712,65 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
     def close_confirm_dialog(self):
         self.provider.view.close_popup()
 
+    def move_selection(self, direction):
+
+        channel = self.listbox.focus.channel
+        this = self.listbox.focus_position
+
+        that = this
+        while True:
+            logger.info(that.get_key())
+            that = (
+                self.listbox.body.get_prev(that)[1]
+                if direction < 0
+                else self.listbox.body.get_next(that)[1]
+            )
+            if not that or isinstance(that, ChannelNode):
+                break
+            # import time
+            # time.sleep(1)
+        self.move_channel(
+            self.conf, this.locator, that.locator,
+            direction
+            if this.get_parent() == that.get_parent()
+            else -direction
+        )
+        self.conf.save()
+        self.load()
+        self.listbox.set_focus(self.find_node(this.locator))
+
+
+    def move_channel(self, obj, src, dst, direction):
+
+        def pop_key(obj, key):
+            if key in obj:
+                return obj.pop(key)
+            for k, v in obj.items():
+                if isinstance(v,dict):
+                    item = pop_key(v, key)
+                    if item is not None:
+                        return item
+
+        def move_key(d, key, value, target):
+            if isinstance(d, dict):
+                keys = list(d.keys())
+                for i, k in enumerate(keys):
+                    if k == target:
+                        idx = (
+                            i
+                            if direction < 0
+                            else i+1
+                        )
+                        for kk in keys[:idx] + [key] + keys[idx:]:
+                            d[kk] = d.pop(kk, value)
+                    else:
+                        move_key(d[k], key, value, target)
+
+
+        val = pop_key(obj, src)
+        move_key(obj, src, val, dst)
+
+
     def delete_channel(self, locator):
 
         def remove_key(d, key):
@@ -725,7 +783,6 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
                         remove_key(d[k], key)
 
         remove_key(self.conf, locator)
-        self.conf.save()
 
     def delete_selection(self):
 
@@ -740,7 +797,7 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
                 new_selection = self.listbox.body.get_prev(target)[1].identifier
 
             self.delete_channel(channel.locator)
-
+            self.conf.save()
             self.load()
             self.listbox.set_focus(self.find_node(new_selection))
 
