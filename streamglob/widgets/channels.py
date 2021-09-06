@@ -12,13 +12,13 @@ from pony.orm import *
 from panwid.autocomplete import AutoCompleteMixin
 from panwid.highlightable import HighlightableTextMixin
 from panwid.keymap import *
-from panwid.dialog import BaseDialog
+from panwid.dialog import BaseDialog, BasePopUp
 from unidecode import unidecode
 
 from .. import config
 from .. import model
 from .. import utils
-from ..widgets import StreamglobScrollBar
+from ..widgets import StreamglobScrollBar, SquareButton
 
 from ..state import *
 
@@ -477,7 +477,7 @@ class ChannelGroupNode(ChannelUnionNode):
 
     @property
     def identifier(self):
-        return ("group", self.get_key())
+        return ("folder", self.get_key())
 
 
 
@@ -792,6 +792,127 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
         key = self.find_key(src[0])
         self.listbox.set_focus(key)
 
+    def rename_channel(self, identifier, name):
+
+        if isinstance(identifier, tuple):
+            node_type, key = identifier
+            new_identifier = (node_type, name)
+            new_key = getattr(config, node_type.title())(name)
+        else:
+            key = identifier
+            node_type = None
+
+        def rename_key(d, key):
+            if isinstance(d, dict):
+                for k in list(d.keys()):
+                    if k == key:
+                        if node_type:
+                            for kk, vv in list(d.items()):
+                                d[kk if kk != key else new_key] = d.pop(kk)
+                        else:
+                            d[k] = name
+                    else:
+                        rename_key(d[k], key)
+
+        rename_key(self.conf, key)
+        self.conf.save()
+        self.load()
+        focus = self.find_node(
+            new_identifier
+            if node_type
+            else key
+        )
+        self.listbox.set_focus(focus)
+
+
+    def rename_selection(self):
+
+        channel = self.listbox.focus_position
+
+        class RenameDialog(BasePopUp):
+
+            signals = ["rename"]
+
+            def __init__(self, channel):
+                self.channel = channel
+
+                self.orig_name = (
+                    self.channel.identifier[1]
+                    if isinstance(self.channel.identifier, tuple)
+                    else self.channel.name
+                )
+                self.edit = urwid.Edit(
+                    caption=("bold", "Name: "),
+                    edit_text=self.orig_name
+                )
+                self.ok_button = SquareButton(("bold", "OK"))
+
+                urwid.connect_signal(
+                    self.ok_button, "click",
+                    lambda s: self.confirm()
+                )
+
+                self.cancel_button = SquareButton(("bold", "Cancel"))
+
+                urwid.connect_signal(
+                    self.cancel_button, "click",
+                    lambda s: self.cancel()
+                )
+
+                self.pile = urwid.Pile(
+                    [
+                        (2, urwid.Filler(urwid.Padding(self.edit), valign="top")),
+                        ("weight", 1, urwid.Padding(
+                            urwid.Columns([
+                                ("weight", 1,
+                                 urwid.Padding(
+                                     self.ok_button, align="center", width=12)
+                                 ),
+                                ("weight", 1,
+                                 urwid.Padding(
+                                     self.cancel_button, align="center", width=12)
+                                 )
+                            ]),
+                            align="center"
+                        )),
+                    ]
+                )
+                self.pile.selectable = lambda: True
+                self.pile.focus_position = 0
+                super(RenameDialog, self).__init__(urwid.Filler(self.pile))
+
+            def confirm(self):
+                new_name = self.edit.get_edit_text()
+                if new_name != self.orig_name:
+                    self._emit("rename", new_name)
+                self.close()
+
+            def cancel(self):
+                self.close()
+
+            def close(self):
+                # self.provider.view.close_popup()
+                self._emit("close_popup")
+
+            def selectable(self):
+                return True
+
+            def keypress(self, size, key):
+                key = super().keypress(size, key)
+                if key == "enter":
+                    self.confirm()
+                else:
+                    return key
+
+        dialog = RenameDialog(channel)
+        urwid.connect_signal(
+            dialog, "rename",
+            lambda source, name: self.rename_channel(
+                channel.identifier, name
+            )
+        )
+        self.provider.view.open_popup(dialog, width=60, height=5)
+
 
     def delete_channel(self, locator):
 
@@ -838,15 +959,17 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
             self.update_selection()
         elif key == " ":
             self._emit("change", self.selected_items)
-        elif key == "V":
-            self.move_channel([c.get_key() for c in self.tree.get_marked_nodes()], self.selection.get_key(), -1)
-            self.unmark_all()
         elif key == ";":
             marked = list(self.tree.get_marked_nodes())
             if marked:
                 self.unmark_all()
             else:
                 self.mark_all()
+        elif key == "e":
+            self.rename_selection()
+        elif key == "V":
+            self.move_channel([c.get_key() for c in self.tree.get_marked_nodes()], self.selection.get_key(), -1)
+            self.unmark_all()
         else:
             return key
 
