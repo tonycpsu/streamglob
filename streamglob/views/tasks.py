@@ -269,11 +269,13 @@ class TasksView(SynchronizedPlayerProviderMixin,
         if task.status != "done":
             return None
         path = task.sources[0].local_path
-        if not path:
+        if path:
+            title = os.path.basename(path) if path else "..."
+        else:
             title = "..."
         return model.TitledMediaListing.attr_class(
             provider_id="tasks", # FIXME
-            title=os.path.basename(path),
+            title=title,
             sources=[
                 model.MediaSource.attr_class(
                     provider_id="tasks", # FIXME
