@@ -34,7 +34,11 @@ from .. import session
 
 from .filters import *
 
-import youtube_dl
+try:
+    import yt_dlp as youtube_dl
+except ImportError:
+    import youtube_dl
+
 from pytube.innertube import InnerTube
 from thumbframes_dl import YouTubeFrames
 
