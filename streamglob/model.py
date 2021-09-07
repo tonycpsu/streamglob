@@ -473,7 +473,7 @@ class MediaSourceMixin(object):
         return hash(self.locator)
 
     @property
-    @lru_cache(256)
+    # @lru_cache(256)
     def local_path(self):
 
         logger.info(f"local_path: {self.locator}")

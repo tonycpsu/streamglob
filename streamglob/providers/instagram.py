@@ -194,7 +194,7 @@ class InstagramFeedMediaChannelMixin(object):
             res = self.looter.session.get(url)
             data = res.json()
         except json.decoder.JSONDecodeError:
-            logger.info(f"error: {res.status_code}, {res.content()}")
+            logger.info(f"error: {res.status_code}, {res.content}")
         return data["graphql"]["user"]["edge_owner_to_timeline_media"]["count"]
 
     def extract_content(self, post):
