@@ -433,7 +433,6 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
             return len([s for s in listing.sources if not s.seen])
 
     async def row_attr(self, row):
-        logger.info(f"feed row_attr: {row.data.read}")
         return (
             "unread"
             if not row.data.read

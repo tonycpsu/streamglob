@@ -362,6 +362,7 @@ class MediaSourceMixin(object):
         except (AttributeError, IndexError):
             channel = getattr(listing or self.listing, "channel", None)
             if channel:
+                channel.attach()
                 subject = channel.name
             else:
                 subject = None
