@@ -5,6 +5,7 @@ import itertools
 import re
 import os
 from functools import partial
+from datetime import datetime
 
 import urwid
 import yaml
@@ -14,6 +15,7 @@ from panwid.highlightable import HighlightableTextMixin
 from panwid.keymap import *
 from panwid.dialog import BaseDialog, BasePopUp
 from unidecode import unidecode
+import timeago
 
 from .. import config
 from .. import model
@@ -579,6 +581,27 @@ class MyTreeListBox(urwid.TreeListBox):
             )
         return self._rows_max
 
+class ChannelTreeFooter(urwid.WidgetWrap):
+
+    def __init__(self, parent):
+
+        self.parent = parent
+        # self.details_placeholder = urwid.WidgetPlaceholder(self.details)
+        self.details = urwid.Text("")
+        self.filler = urwid.Filler(
+            urwid.AttrMap(
+                urwid.Columns([
+                    ("weight", 1, urwid.Padding(self.details))
+                ], dividechars=1),
+                "footer"
+            )
+        )
+        super().__init__(self.filler)
+
+    def set_details(self, details):
+        self.details.set_text(details)
+
+
 @keymapped()
 class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
 
@@ -598,9 +621,10 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
         self.label = label
         self.provider = provider
         self.placeholder = urwid.WidgetPlaceholder(urwid.Filler(urwid.Text("")))
+        self.footer = ChannelTreeFooter(self)
         self.pile = urwid.Pile([
-            ("weight", 1, self.placeholder)
-            # ("weight", 1, self.listbox)
+            ("weight", 1, self.placeholder),
+            (1, self.footer)
         ])
         super().__init__(self.pile)
         self.pile.selectable = lambda: True
@@ -654,7 +678,7 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
 
     def on_complete_select(self, pos):
         return
-        self.update_selection()
+        # self.update_selection()
 
     def complete_compare_substring(self, search, candidate):
         try:
@@ -713,6 +737,53 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
     def update_selection(self):
         self._emit("change", self.selected_items)
         self._emit("select", self.selected_items)
+        self.update_footer()
+
+    def update_footer(self):
+
+        details = [
+            ("footer_dim", "["),
+            ("footer", f"{len(self.selected_items)}"),
+            ("footer_dim", "] ")
+        ]
+
+        wids = [
+            n.get_widget()
+            for n in self.selected_items
+        ]
+        if len(wids):
+            try:
+                min_date = min(
+                    wid.first_listing_date
+                    for wid in wids
+                    if wid.first_listing_date
+                ).strftime("%Y-%m-%d")
+            except ValueError:
+                min_date = None
+
+            try:
+                max_date = min(
+                    wid.last_listing_date
+                    for wid in wids
+                    if wid.last_listing_date
+                ).strftime("%Y-%m-%d")
+            except ValueError:
+                max_date = None
+            if min_date and max_date:
+                age = timeago.format(
+                    max_date, datetime.now(), "en_short"
+                ).replace(" ago", "")
+                details += [
+                    ("footer_dim", "("),
+                    ("footer", min_date),
+                    ("footer_dim", "\N{EM DASH}"),
+                    ("footer", max_date),
+                    ("footer_dim", ":"),
+                    ("footer", age),
+                    ("footer_dim", ")")
+                ]
+
+        self.footer.set_details(details)
 
     def open_confirm_dialog(self, prompt, action):
 
