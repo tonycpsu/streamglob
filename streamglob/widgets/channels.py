@@ -169,6 +169,23 @@ class ListingCountMixin(object):
         return "browser count_total"
 
     @property
+    @db_session
+    def first_listing_date(self):
+
+        return select(
+            min(item.created)
+            for item in self.channel.items
+        )[:][0] if self.channel else None
+
+    @property
+    @db_session
+    def last_listing_date(self):
+        return select(
+            max(item.created)
+            for item in self.channel.items
+        )[:][0] if self.channel else None
+
+    @property
     def text(self):
         unread = self.unread_count
         total = self.listing_count
@@ -199,6 +216,24 @@ class AggregateListingCountMixin(ListingCountMixin):
         return sum([
             n.get_widget().unread_count or 0
             for n in self.get_node().get_leaf_nodes()
+        ])
+
+    @property
+    @db_session
+    def first_listing_date(self):
+        return min([
+            n.get_widget().first_listing_date
+            for n in self.get_node().get_leaf_nodes()
+            if n.get_widget().first_listing_date is not None
+        ])
+
+    @property
+    @db_session
+    def last_listing_date(self):
+        return max([
+            n.get_widget().last_listing_date
+            for n in self.get_node().get_leaf_nodes()
+            if n.get_widget().last_listing_date is not None
         ])
 
 class ChannelWidget(ListingCountMixin,
