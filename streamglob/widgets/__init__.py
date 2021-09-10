@@ -185,12 +185,18 @@ class TextFilterWidget(Observable, urwid.WidgetWrap):
 
     EDIT_WIDGET = urwid.Edit
     VALUE_TYPE = str
+    text_attr = "dropdown_text"
+    focused_attr = "dropdown_focused"
 
-    def __init__(self, value="", align="left", padding=1):
+    def __init__(self, value="", align="left", padding=1, text_attr=None, focused_attr=None):
+        if text_attr:
+            self.text_attr = text_attr
+        if focused_attr:
+            self.focused_attr = focused_attr
         self.edit = self.EDIT_WIDGET(align=align, wrap="clip")
         # FIXME: use different attributes
         self.padding = urwid.Padding(self.edit, left=padding, right=padding)
-        self.attr = urwid.AttrMap(self.padding, "dropdown_text", "dropdown_focused")
+        self.attr = urwid.AttrMap(self.padding, self.text_attr, self.focused_attr)
         super().__init__(self.attr)
         urwid.connect_signal(self.edit, "postchange", lambda s, w: self.changed())
         self.value = value
@@ -228,7 +234,7 @@ class IntegerTextFilterWidget(TextFilterWidget):
     EDIT_WIDGET = IntEdit
     VALUE_TYPE = int
 
-    def __init__(self, default=0, minimum=0, maximum=None, big_step=10):
+    def __init__(self, default=0, minimum=0, maximum=None, big_step=10, *args, **kwargs):
         self.minimum = minimum
         self.maximum = maximum
         self.big_step = big_step
@@ -238,7 +244,7 @@ class IntegerTextFilterWidget(TextFilterWidget):
             self.default = max(self.minimum, self.default)
         if self.maximum is not None:
             self.default = min(self.maximum, self.default)
-        super().__init__(str(self.default))
+        super().__init__(str(self.default), **kwargs)
 
     # @property
     # def value(self):

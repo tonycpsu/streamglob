@@ -11,6 +11,12 @@ from .. import providers
 from ..widgets import *
 from ..providers.base import SynchronizedPlayerMixin
 
+class ToolbarDropdown(BaseDropdown):
+
+    label_attr = "header"
+    text_attr = "header_bright"
+    focused_attr = "header_focused"
+
 class ProviderToolbar(urwid.WidgetWrap):
 
     signals = ["provider_change", "profile_change", "view_change"] # "preview_change"
@@ -29,7 +35,7 @@ class ProviderToolbar(urwid.WidgetWrap):
             else:
                 return (1, str(v.NAME))
 
-        self.provider_dropdown = BaseDropdown(AttrDict(
+        self.provider_dropdown = ToolbarDropdown(AttrDict(
             [(format_provider(n, p), n)
               for n, p in sorted(
                       providers.PROVIDERS.items(),
@@ -47,8 +53,10 @@ class ProviderToolbar(urwid.WidgetWrap):
         self.view_dropdown_placeholder = urwid.WidgetPlaceholder(urwid.Text(""))
 
         self.max_concurrent_tasks_widget = providers.filters.IntegerTextFilterWidget(
+            text_attr="header_bright",
+            focused_attr="header_focused",
             default=config.settings.tasks.max,
-                minimum=1
+            minimum=1
         )
 
         def set_max_concurrent_tasks(v):
@@ -57,7 +65,7 @@ class ProviderToolbar(urwid.WidgetWrap):
 
         self.max_concurrent_tasks_widget.connect("changed", set_max_concurrent_tasks)
 
-        self.profile_dropdown = BaseDropdown(
+        self.profile_dropdown = ToolbarDropdown(
             AttrDict(
                 [ (k, k) for k in config.settings.profiles.keys()]
             ),
@@ -83,7 +91,16 @@ class ProviderToolbar(urwid.WidgetWrap):
             (self.profile_dropdown.width, self.profile_dropdown),
         ], dividechars=3)
         # self.filler = urwid.Filler(self.columns)
-        super(ProviderToolbar, self).__init__(urwid.Filler(self.columns))
+        super(ProviderToolbar, self).__init__(
+            urwid.Filler(
+                urwid.AttrMap(
+                    self.columns,
+                    {
+                        None: "header"
+                    }
+                )
+            )
+        )
 
     def cycle_provider(self, step=1):
 
@@ -99,7 +116,7 @@ class ProviderToolbar(urwid.WidgetWrap):
 
     def update_provider_config(self, preview_types, provider_config):
 
-        self.view_dropdown = BaseDropdown(
+        self.view_dropdown = ToolbarDropdown(
             AttrDict(
                 [ (k, k) for k in provider_config.views.keys()]
             ),
@@ -113,7 +130,7 @@ class ProviderToolbar(urwid.WidgetWrap):
 
         self.view_dropdown_placeholder.original_widget = self.view_dropdown
 
-        self.preview_dropdown = BaseDropdown(
+        self.preview_dropdown = ToolbarDropdown(
             AttrDict([
                 (pt.title(), pt)
                 for pt in preview_types
@@ -159,7 +176,7 @@ class ListingsView(StreamglobView):
 
         self.pile  = urwid.Pile([
             (1, self.toolbar_placeholder),
-            (1, urwid.Filler(urwid.Divider("-"))),
+            # (1, urwid.Filler(urwid.Divider("-"))),
             ('weight', 1, self.provider_view_placeholder),
         ])
         self.pile.selectable = lambda: True
@@ -207,7 +224,7 @@ class ListingsView(StreamglobView):
             self.provider.config
         )
         if self.provider.config_is_valid:
-            self.pile.focus_position = 2
+            self.pile.focus_position = 1
         else:
             self.pile.focus_position = 0
         for name, value in self.provider.default_filter_values.items():

@@ -476,7 +476,7 @@ class MediaSourceMixin(object):
     # @lru_cache(256)
     def local_path(self):
 
-        logger.info(f"local_path: {self.locator}")
+        # logger.debug(f"local_path: {self.locator}")
         listing = self.listing
         with db_session:
             # FIXME: so hacky

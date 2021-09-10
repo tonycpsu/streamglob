@@ -29,12 +29,19 @@ class Filter(Observable):
 
 class MaybeLabeledWidget(urwid.WidgetWrap):
 
-    def __init__(self, widget, label=None, sizing=("weight", 1)):
+    label_attr = "normal"
+
+    def __init__(
+            self, widget,
+            label=None, label_attr=None, sizing=("weight", 1)
+    ):
         self.widget = widget
+        if label_attr:
+            self.label_attr = label_attr
 
         self.innerwidget = self.widget
         if label:
-            self._text = urwid.Text(f"{label}: ")
+            self._text = urwid.Text((self.label_attr, f"{label}: "))
             self._columns = urwid.Columns([
                 ("pack", self._text),
             ], dividechars=1)
