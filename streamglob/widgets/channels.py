@@ -16,6 +16,7 @@ from panwid.keymap import *
 from panwid.dialog import BaseDialog, BasePopUp
 from unidecode import unidecode
 import timeago
+import pytz
 
 from .. import config
 from .. import model
@@ -191,6 +192,18 @@ class ListingCountMixin(object):
     def text(self):
         unread = self.unread_count
         total = self.listing_count
+        if self.last_listing_date:
+            age = timeago.format(
+                self.last_listing_date.replace(
+                    tzinfo=pytz.UTC
+                ),
+                datetime.utcnow().replace(
+                    tzinfo=pytz.timezone(config.settings.profile.time_zone)
+                ),
+                "en_short"
+            ).replace(" ago", "")
+        else:
+            age = None
         return [
             (self.attr, self.name), " ",
             (self.count_attr, "("),
@@ -200,7 +213,11 @@ class ListingCountMixin(object):
             (self.count_attr, "/"),
             (self.count_total_attr if total else self.count_attr,
              str(total)
-             ),
+             )
+        ] + ([
+            (self.count_attr, "/"),
+            (self.count_attr, age)
+        ] if age else []) + [
             (self.count_attr, ")")
         ]
 
