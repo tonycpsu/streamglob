@@ -429,6 +429,9 @@ class FileBrowser(urwid.WidgetWrap):
             directory = os.path.join(self.cwd, directory)
         directory = os.path.normpath(directory)
 
+        if not os.path.isdir(directory):
+            return
+
         if self.root and not directory.startswith(self.root):
             return
 
