@@ -394,7 +394,7 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
         "b": "prev_unread",
         "m": "toggle_selection_read",
         "i": "inflate_selection",
-        "a": "mark_feed_read"
+        # "a": "mark_feed_read"
     }
 
     def __init__(self, *args, **kwargs):
@@ -518,12 +518,12 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
         logger.info("toggle_selection_read")
         await self.toggle_item_read(self.focus_position)
 
-    def mark_feed_read(self):
-        listing = self.selection.data_source
-        with db_session:
-            listing.feed.attach().mark_all_items_read()
-        self._emit("unread_change", listing.channel.detach())
-        self.reset()
+    # def mark_feed_read(self):
+    #     listing = self.selection.data_source
+    #     with db_session:
+    #         listing.feed.attach().mark_all_items_read()
+    #     self._emit("unread_change", listing.channel.detach())
+    #     self.reset()
 
     async def prev_item(self):
         if self.focus_position > 0:
@@ -607,8 +607,6 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
             self.mark_read_on_focus = True
             self._modified()
         self._emit("unread_change", listing.channel.detach())
-
-
 
 
     @keymap_command
