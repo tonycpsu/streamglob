@@ -10,6 +10,7 @@ from .. import config
 from .. import providers
 from ..widgets import *
 from ..providers.base import SynchronizedPlayerMixin
+from .. import utils
 
 class ToolbarDropdown(BaseDropdown):
 
@@ -79,7 +80,6 @@ class ProviderToolbar(urwid.WidgetWrap):
         )
 
         self.columns = urwid.Columns([
-            # ('weight', 1, urwid.Padding(urwid.Edit("foo"))),
             (self.provider_dropdown.width, self.provider_dropdown),
             ("weight", 1, urwid.Padding(urwid.Text(""))),
             (20, self.view_dropdown_placeholder),
@@ -146,8 +146,6 @@ class ProviderToolbar(urwid.WidgetWrap):
         )
 
         self.preview_dropdown_placeholder.original_widget = self.preview_dropdown
-
-MEDIA_URI_RE=re.compile("uri=(.*)=\.")
 
 @keymapped()
 class ListingsView(StreamglobView):
@@ -299,7 +297,7 @@ class ListingsView(StreamglobView):
 
         filename = os.path.basename(listing.full_path)
         try:
-            uri = MEDIA_URI_RE.search(filename).groups()[0].replace("+", "/")
+            uri = utils.uri_from_filename(filename)
             (_, provider, _, _) = providers.parse_uri(uri)
             if provider.IDENTIFIER != self.provider:
                 self.set_provider(provider.IDENTIFIER)

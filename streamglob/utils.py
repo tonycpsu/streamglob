@@ -13,6 +13,14 @@ iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAA\
 AAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=\
 """
 
+MEDIA_URI_RE=re.compile("uri=(.*)=\.")
+
+def uri_from_filename(filename):
+    try:
+        return MEDIA_URI_RE.search(filename).groups()[0].replace("+", "/")
+    except (IndexError, AttributeError):
+        return None
+
 def optional_arg_decorator(fn):
     def wrapped_decorator(*args, **kwargs):
         if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
