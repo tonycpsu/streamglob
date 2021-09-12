@@ -12,6 +12,7 @@ import panwid
 from panwid.keymap import *
 from panwid.tabview import *
 from panwid.scroll import ScrollBar
+from panwid.dialog import *
 from orderedattrdict import AttrDict, DefaultAttrDict
 
 from ..state import *
@@ -575,3 +576,107 @@ class LogViewer(urwid.Widget):
             return None
 
         return key
+
+
+class ConfirmDialog(BaseDialog):
+
+    signals = ["message"]
+
+    def __init__(self, parent, *args, **kwargs):
+        super(ConfirmDialog, self).__init__(parent, *args, **kwargs)
+
+    def action(self, value):
+        raise RuntimeError("must override action method")
+
+    @property
+    def prompt(self):
+        return "Are you sure?"
+
+    def confirm(self):
+        self.action()
+        self.close()
+
+    def cancel(self):
+        self.close()
+
+    def close(self):
+        self.parent.close_popup()
+
+    @property
+    def choices(self):
+        return {
+            "y": self.confirm,
+            "n": self.cancel
+        }
+
+class TextEditDialog(BasePopUp):
+
+    def __init__(self, parent, orig_value=None):
+
+        self.parent = parent
+        self.orig_value = orig_value or ""
+
+        self.edit = urwid.Edit(
+            caption=("bold", "Name: "),
+            edit_text=self.orig_value
+        )
+        self.ok_button = SquareButton(("bold", "OK"))
+
+        urwid.connect_signal(
+            self.ok_button, "click",
+            lambda s: self.confirm()
+        )
+
+        self.cancel_button = SquareButton(("bold", "Cancel"))
+
+        urwid.connect_signal(
+            self.cancel_button, "click",
+            lambda s: self.cancel()
+        )
+
+        self.pile = urwid.Pile(
+            [
+                (2, urwid.Filler(urwid.Padding(self.edit), valign="top")),
+                ("weight", 1, urwid.Padding(
+                    urwid.Columns([
+                        ("weight", 1,
+                         urwid.Padding(
+                             self.ok_button, align="center", width=12)
+                         ),
+                        ("weight", 1,
+                         urwid.Padding(
+                             self.cancel_button, align="center", width=12)
+                         )
+                    ]),
+                    align="center"
+                )),
+            ]
+        )
+        self.pile.selectable = lambda: True
+        self.pile.focus_position = 0
+        super(TextEditDialog, self).__init__(urwid.Filler(self.pile))
+
+    def action(self, value):
+        raise RuntimeError("must override action method")
+
+    def confirm(self):
+        value = self.edit.get_edit_text()
+        if value != self.orig_value:
+            self.action(value)
+        self.close()
+
+    def cancel(self):
+        self.close()
+
+    def close(self):
+        self._emit("close_popup")
+
+    def selectable(self):
+        return True
+
+    def keypress(self, size, key):
+        key = super().keypress(size, key)
+        if key == "enter":
+            self.confirm()
+        else:
+            return key

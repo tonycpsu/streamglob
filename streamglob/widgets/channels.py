@@ -21,7 +21,12 @@ import pytz
 from .. import config
 from .. import model
 from .. import utils
-from ..widgets import StreamglobScrollBar, SquareButton
+from ..widgets import (
+    StreamglobScrollBar,
+    SquareButton,
+    TextEditDialog,
+    ConfirmDialog
+)
 
 from ..state import *
 
@@ -34,6 +39,7 @@ class ChannelTreeWidget(HighlightableTextMixin, urwid.TreeWidget):
 
     @property
     def display_text(self):
+        # logger.info(f"{self.attr}, {self.text}")
         return (self.attr, self.text)
 
     @property
@@ -97,7 +103,7 @@ class MarkableMixin(object):
     def __init__(self, node):
         super().__init__(node)
         # insert an extra AttrWrap for our own use
-        self._w = urwid.AttrMap(self._w, "browser_normal")
+        self._w = urwid.AttrMap(self._w, "browser normal")
         self.marked = False
         self.update_w()
 
@@ -204,6 +210,8 @@ class ListingCountMixin(object):
             ).replace(" ago", "")
         else:
             age = None
+
+        # logger.info(f"{self.name}: {self.attr}")
         return [
             (self.attr, self.name), " ",
             (self.count_attr, "("),
@@ -273,13 +281,16 @@ class ChannelWidget(ListingCountMixin,
 
     @property
     def attr(self):
-        tail = self.channel.attrs.get("tail_fetched") if self.channel else None
+        head = self.unread_count > 0
+        tail = not self.channel.attrs.get("tail_fetched") if self.channel else None
         error = self.channel and self.channel.attrs.get("error")
+        if self.channel and "Neron" in self.channel.name:
+            logger.info(f"{self.channel.name}, {head}, {tail}, {error}")
         if error:
             return "browser error"
-        elif self.unread_count and tail:
+        elif head and tail:
             return "browser head_tail"
-        elif self.unread_count:
+        elif head:
             return "browser head"
         elif tail:
             return "browser tail"
@@ -802,39 +813,29 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
 
         self.footer.set_details(details)
 
-    def open_confirm_dialog(self, prompt, action):
+    def open_delete_confirm_dialog(self, channel):
 
-        class ConfirmDialog(BaseDialog):
-
-            signals = ["message"]
-
-            def __init__(self, parent, action, *args, **kwargs):
-
-                self.action = action
-                super(ConfirmDialog, self).__init__(parent, *args, **kwargs)
+        class DeleteConfirmDialog(ConfirmDialog):
 
             @property
             def prompt(self):
-                return prompt
+                return f"""Delete "{channel.name}"?"""
 
-            def confirm(self):
-                self.action()
-                self.close()
+            def action(self):
+                target = self.parent.listbox.focus_position
+                try:
+                    new_selection = self.parent.listbox.body.get_next(target)[1].identifier
+                except IndexError:
+                    new_selection = self.parent.listbox.body.get_prev(target)[1].identifier
 
-            def cancel(self):
-                self.close()
+                self.delete_channel(channel.locator)
+                self.conf.save()
+                self.load()
+                self.listbox.set_focus(self.find_node(new_selection))
 
-            def close(self):
-                self.parent.close_popup()
 
-            @property
-            def choices(self):
-                return {
-                    "y": self.confirm,
-                    "n": self.cancel
-                }
 
-        dialog = ConfirmDialog(self.provider.view, action)
+        dialog = DeleteConfirmDialog(self.provider.view)
         self.provider.view.open_popup(dialog, width=60, height=5)
 
     def close_confirm_dialog(self):
@@ -950,90 +951,23 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
 
     def rename_selection(self):
 
+
         channel = self.listbox.focus_position
 
-        class RenameDialog(BasePopUp):
+        class RenameDialog(TextEditDialog):
 
             signals = ["rename"]
 
-            def __init__(self, channel):
-                self.channel = channel
+            def action(self, value):
+                self.parent.rename_channel(channel.identifier, value)
 
-                self.orig_name = (
-                    self.channel.identifier[1]
-                    if isinstance(self.channel.identifier, tuple)
-                    else self.channel.name
-                )
-                self.edit = urwid.Edit(
-                    caption=("bold", "Name: "),
-                    edit_text=self.orig_name
-                )
-                self.ok_button = SquareButton(("bold", "OK"))
-
-                urwid.connect_signal(
-                    self.ok_button, "click",
-                    lambda s: self.confirm()
-                )
-
-                self.cancel_button = SquareButton(("bold", "Cancel"))
-
-                urwid.connect_signal(
-                    self.cancel_button, "click",
-                    lambda s: self.cancel()
-                )
-
-                self.pile = urwid.Pile(
-                    [
-                        (2, urwid.Filler(urwid.Padding(self.edit), valign="top")),
-                        ("weight", 1, urwid.Padding(
-                            urwid.Columns([
-                                ("weight", 1,
-                                 urwid.Padding(
-                                     self.ok_button, align="center", width=12)
-                                 ),
-                                ("weight", 1,
-                                 urwid.Padding(
-                                     self.cancel_button, align="center", width=12)
-                                 )
-                            ]),
-                            align="center"
-                        )),
-                    ]
-                )
-                self.pile.selectable = lambda: True
-                self.pile.focus_position = 0
-                super(RenameDialog, self).__init__(urwid.Filler(self.pile))
-
-            def confirm(self):
-                new_name = self.edit.get_edit_text()
-                if new_name != self.orig_name:
-                    self._emit("rename", new_name)
-                self.close()
-
-            def cancel(self):
-                self.close()
-
-            def close(self):
-                # self.provider.view.close_popup()
-                self._emit("close_popup")
-
-            def selectable(self):
-                return True
-
-            def keypress(self, size, key):
-                key = super().keypress(size, key)
-                if key == "enter":
-                    self.confirm()
-                else:
-                    return key
-
-        dialog = RenameDialog(channel)
-        urwid.connect_signal(
-            dialog, "rename",
-            lambda source, name: self.rename_channel(
-                channel.identifier, name
-            )
+        orig_name = (
+            channel.identifier[1]
+            if isinstance(channel.identifier, tuple)
+            else channel.name
         )
+
+        dialog = RenameDialog(self, orig_name)
         self.provider.view.open_popup(dialog, width=60, height=5)
 
 
@@ -1051,25 +985,7 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
 
     def delete_selection(self):
 
-        channel = self.listbox.focus.channel
-
-        def action():
-
-            target = self.listbox.focus_position
-            try:
-                new_selection = self.listbox.body.get_next(target)[1].identifier
-            except IndexError:
-                new_selection = self.listbox.body.get_prev(target)[1].identifier
-
-            self.delete_channel(channel.locator)
-            self.conf.save()
-            self.load()
-            self.listbox.set_focus(self.find_node(new_selection))
-
-        self.open_confirm_dialog(
-            f"""Delete "{channel.name}"?""",
-            action
-        )
+        self.open_delete_confirm_dialog(self.listbox.focus.channel)
 
     def keypress(self, size, key):
 
