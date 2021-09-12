@@ -46,6 +46,14 @@ class FilesView(
     KEYMAP = {
         "meta p": "preview_all",
         "ctrl r": "refresh",
+        "c": "create_directory",
+        "g": "change_root",
+        "m": ("set_file_sort", ["mtime", False]),
+        "M": ("set_file_sort", ["mtime", True]),
+        "b": ("set_file_sort", ["basename", False]),
+        "B": ("set_file_sort", ["basename", True]),
+        "backspace": "directory_up",
+        # "enter": "open_selection",
         "delete": "delete_selection"
     }
 
@@ -78,8 +86,11 @@ class FilesView(
 
     def load_browser(self, root):
 
+        self.cwd = root
+
         self.browser = FileBrowser(
-            root,
+            self.cwd,
+            root=config.settings.profile.files.root,
             dir_sort = self.config.dir_sort,
             file_sort = self.config.file_sort,
             ignore_files=False
@@ -87,21 +98,11 @@ class FilesView(
         urwid.connect_signal(self.browser, "focus", self.on_focus)
         self.browser_placeholder.original_widget = self.browser
 
+    def set_file_sort(self, order, reverse=False):
+        self.browser.file_sort = (order, reverse)
 
-    def keypress(self, size, key):
-
-        if key == "s":
-            self.browser.toggle_file_sort_order()
-        elif key == "S":
-            self.browser.toggle_file_sort_reverse()
-        elif key == "d":
-            self.browser.toggle_dir_sort_order()
-        elif key == "D":
-            self.browser.toggle_dir_sort_reverse()
-        elif key == ".":
-            state.listings_view.find_source(self.browser.selection)
-        else:
-            return super().keypress(size, key)
+    # def keypress(self, size, key):
+    #     return super().keypress(size, key)
 
     async def check_updated(self):
         while True:
@@ -171,16 +172,60 @@ class FilesView(
     def refresh(self):
         self.browser.refresh()
 
+    def change_root(self):
+
+        class ChangeDirectoryDialog(TextEditDialog):
+
+            def action(self, value):
+                self.parent.browser.change_directory(value)
+
+        dialog = ChangeDirectoryDialog(self, self.cwd)
+        self.open_popup(dialog, width=60, height=5)
+
+    def create_directory(self):
+
+        class CreateDirectoryDialog(TextEditDialog):
+
+            def action(self, value):
+                self.parent.browser.create_directory(value)
+
+            @property
+            def prompt(self):
+                return "Create directory"
+
+        dialog = CreateDirectoryDialog(self)
+        self.open_popup(dialog, width=60, height=5)
+
+
+    def directory_up(self):
+        self.browser.change_directory("..")
+
+    # def open_selection(self):
+    #     selection = self.browser.selection
+    #     if isinstance(selection, DirectoryNode):
+    #         self.browser.change_directory(selection.full_path)
+
+    #         # self.load_browser(selection.full_path)
+
+
     def delete_selection(self):
-        selection = self.browser.selection
-        focus = self.browser.body.get_focus()[1]
-        if isinstance(selection, DirectoryNode):
-            # TODO: recursive delete with confirmation?
-            return
-        os.remove(selection.full_path)
-        next_focused =  selection.prev_sibling() or selection.next_sibling() or selection.get_parent()
-        self.browser.body.set_focus(next_focused)
-        selection.get_parent().get_child_keys(reload=True)
+
+        class DeleteConfirmDialog(ConfirmDialog):
+
+            @property
+            def prompt(self):
+                return f"""Delete "{self.parent.browser.selection.full_path}"?"""
+
+            def action(self):
+                self.parent.browser.delete_node(
+                    self.parent.browser.selection, confirm=True
+                )
+
+        if isinstance(self.browser.selection, DirectoryNode):
+            dialog = DeleteConfirmDialog(self)
+            self.open_popup(dialog, width=60, height=5)
+        else:
+            self.browser.delete_node(self.browser.selection)
 
 
     def browse_file(self, filename):

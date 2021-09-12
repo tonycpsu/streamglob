@@ -1,5 +1,7 @@
 import logging
 logger = logging.getLogger(__name__)
+import shutil
+import time
 
 import itertools
 import re
@@ -118,9 +120,16 @@ class DirectoryWidget(FlagFileWidget):
     def get_display_text(self):
         node = self.get_node()
         if node.get_depth() == 0:
-            return node.tree.root
+            return node.tree.cwd
         else:
             return node.get_key()
+
+    def keypress(self, size, key):
+        key = super().keypress(size, key)
+        if key == "enter":
+            self.get_node().tree.change_directory(self.get_node().get_value())
+        else:
+            return key
 
 
 class FileNode(urwid.TreeNode):
@@ -128,7 +137,7 @@ class FileNode(urwid.TreeNode):
 
     def __init__(self, path, parent=None):
         self.parent = parent
-        depth = path.count(dir_sep()) - parent.tree.root.count(dir_sep())
+        depth = path.count(dir_sep()) - parent.tree.cwd.count(dir_sep())
         key = os.path.basename(path)
         urwid.TreeNode.__init__(self, path, key=key, parent=parent, depth=depth)
 
@@ -148,7 +157,7 @@ class FileNode(urwid.TreeNode):
         while root.get_parent() is not None:
             path.append(root.get_key())
             root = root.get_parent()
-        path.append(self.parent.tree.root)
+        path.append(self.parent.tree.cwd)
         return dir_sep().join(reversed(path))
 
     def refresh(self):
@@ -170,11 +179,11 @@ class DirectoryNode(urwid.ParentNode):
 
     def __init__(self, tree, path, parent=None):
         self.tree = tree
-        if path == self.tree.root:
+        if path == self.tree.cwd:
             depth = 0
             key = None
         else:
-            depth = path.count(dir_sep()) - self.tree.root.count(dir_sep())
+            depth = path.count(dir_sep()) - self.tree.cwd.count(dir_sep())
             key = os.path.basename(path)
         urwid.ParentNode.__init__(self, path, key=key, parent=parent,
                                   depth=depth)
@@ -211,6 +220,9 @@ class DirectoryNode(urwid.ParentNode):
             key=partial(self.tree.file_sort_key, self.full_path),
             reverse=self.tree.file_sort_reverse
         )
+
+        if not self.tree.no_parent_dir:
+            dirs.insert(0, "..")
         # store where the first file starts
         self.dir_count = len(dirs)
         # collect dirs and files together again
@@ -269,7 +281,7 @@ class DirectoryNode(urwid.ParentNode):
         while root.get_parent() is not None:
             path.append(root.get_key())
             root = root.get_parent()
-        path.append(self.tree.root)
+        path.append(self.tree.cwd)
         return dir_sep().join(reversed(path))
 
     def refresh(self):
@@ -283,7 +295,7 @@ class DirectoryNode(urwid.ParentNode):
 
 
 SPLIT_RE = re.compile(r'[a-zA-Z]+|\d+')
-def sort_alpha(root, s):
+def sort_basename(root, s):
     L = []
     for isdigit, group in itertools.groupby(SPLIT_RE.findall(s), key=lambda x: x.isdigit()):
         if isdigit:
@@ -302,10 +314,9 @@ class FileBrowser(urwid.WidgetWrap):
     signals = ["focus"]
 
     SORT_KEY_MAP = {
-        "alpha": sort_alpha,
+        "basename": sort_basename,
         "mtime": sort_mtime,
     }
-
 
     palette = [
         ('body', 'black', 'light gray'),
@@ -337,33 +348,107 @@ class FileBrowser(urwid.WidgetWrap):
         ]
 
 
-    def __init__(self, root=None,
+    def __init__(self,
+                 cwd=None,
+                 root=None,
                  dir_sort=None,
                  file_sort=None,
                  ignore_files=False,
                  ignore_directories=False,
+                 no_parent_dir=False,
                  expand_empty=False):
-        self.root = root or os.getcwd()
+
+        self.cwd = os.path.normpath(cwd or os.getcwd())
+        self.root = root
+
         if not isinstance(dir_sort, (tuple, list)):
             dir_sort = (dir_sort, False)
         if not isinstance(file_sort, (tuple, list)):
             file_sort = (file_sort, False)
 
-        self.dir_sort = dir_sort
-        self.file_sort = file_sort
+        self._dir_sort = dir_sort
+        self._file_sort = file_sort
         self.ignore_files = ignore_files
         self.ignore_directories = ignore_directories
+        self.no_parent_dir = no_parent_dir
         self.expand_empty = expand_empty
         self.last_selection = None
-        cwd = os.getcwd()
-        self.tree_root = DirectoryNode(self, self.root)
+
+        self.placeholder = urwid.WidgetPlaceholder(urwid.Filler(urwid.Text("")))
+        super().__init__(self.placeholder)
+        self.change_directory(self.cwd)
+
+    def keypress(self, size, key):
+        return super().keypress(size, key)
+
+    def create_directory(self, directory):
+        if not os.path.isabs(directory):
+            directory = os.path.join(self.cwd, directory)
+        os.mkdir(directory)
+        self.tree_root.refresh()
+        node = self.tree_root.find_path(
+            os.path.relpath(
+                directory,
+                self.cwd
+            )
+        )
+        if not node:
+            return
+        self.listbox.set_focus(node)
+
+    def delete_node(self, node, confirm=False):
+
+        if node.get_key() == "..":
+            # nope!
+            return
+
+        if node == self.selection:
+            next_focused = node.next_sibling() or node.prev_sibling() or node.get_parent()
+        else:
+            next_focused = None
+
+        if isinstance(node, FileNode):
+            os.remove(node.full_path)
+        elif isinstance(node, DirectoryNode) and confirm:
+            for i in range(3):
+                # sometimes
+                try:
+                    shutil.rmtree(node.full_path)
+                    break
+                except OSError:
+                    time.sleep(0.5)
+
+        node.get_parent().get_child_keys(reload=True)
+        if next_focused:
+            self.body.set_focus(next_focused)
+
+
+    def change_directory(self, directory):
+
+        if not os.path.isabs(directory):
+            directory = os.path.join(self.cwd, directory)
+        directory = os.path.normpath(directory)
+
+        if self.root and not directory.startswith(self.root):
+            return
+
+        self.cwd = directory
+        self.tree_root = DirectoryNode(self, self.cwd)
         self.listbox = urwid.TreeListBox(urwid.TreeWalker(self.tree_root))
+        for i in range(1 if self.no_parent_dir else 2):
+            try:
+                self.listbox.set_focus(
+                    self.listbox.body.get_next(
+                        self.listbox.get_focus()[1]
+                    )[1] or self.listbox.get_focus()[1]
+                )
+            except IndexError:
+                break
         self.listbox.offset_rows = 1
         urwid.connect_signal(
             self.listbox.body, "modified", self.on_modified
         )
-        super().__init__(self.listbox)
-
+        self.placeholder.original_widget = self.listbox
 
     def on_modified(self):
 
@@ -380,60 +465,82 @@ class FileBrowser(urwid.WidgetWrap):
         self.listbox.body._modified()
 
     @property
+    def dir_sort(self):
+        return self._dir_sort
+
+    @dir_sort.setter
+    def dir_sort(self, value):
+        self._dir_sort = value
+        self.refresh()
+
+    @property
     def dir_sort_order(self):
-        return self.dir_sort[0]
+        return self._dir_sort[0]
 
     @dir_sort_order.setter
     def dir_sort_order(self, value):
-        self.dir_sort[0] = value
+        self._dir_sort[0] = value
+        self.refresh()
 
     @property
     def dir_sort_reverse(self):
-        return self.dir_sort[1]
+        return self._dir_sort[1]
 
     @dir_sort_reverse.setter
     def dir_sort_reverse(self, value):
-        self.dir_sort[1] = value
+        self._dir_sort[1] = value
+        self.refresh()
 
     @property
     def dir_sort_key(self):
-        return self.SORT_KEY_MAP[self.dir_sort[0] or "alpha"]
+        return self.SORT_KEY_MAP[self._dir_sort[0] or "basename"]
+
+    @property
+    def file_sort(self):
+        return self._file_sort
+
+    @file_sort.setter
+    def file_sort(self, value):
+        self._file_sort = value
+        self.refresh()
 
     @property
     def file_sort_order(self):
-        return self.file_sort[0]
+        return self._file_sort[0]
 
     @file_sort_order.setter
     def file_sort_order(self, value):
-        self.file_sort[0] = value
+        self._file_sort[0] = value
+        self.refresh()
 
     @property
     def file_sort_reverse(self):
-        return self.file_sort[1]
+        return self._file_sort[1]
 
     @file_sort_reverse.setter
     def file_sort_reverse(self, value):
-        self.file_sort[1] = value
+        self._file_sort[1] = value
+        self.refresh()
 
     @property
     def file_sort_key(self):
-        return self.SORT_KEY_MAP[self.file_sort[0] or "alpha"]
+        return self.SORT_KEY_MAP[self._file_sort[0] or "basename"]
 
-    def toggle_dir_sort_order(self):
-        self.dir_sort_order = "mtime" if self.dir_sort_order == "alpha" else "alpha"
-        self.refresh()
+    # def toggle_dir_sort_order(self):
+    #     self._dir_sort_order = "mtime" if self._dir_sort_order == "basename" else "basename"
+    #     self.refresh()
 
-    def toggle_dir_sort_reverse(self):
-        self.dir_sort_reverse = True if self.dir_sort_reverse == False else False
-        self.refresh()
+    # def toggle_dir_sort_reverse(self):
+    #     self._dir_sort_reverse = True if self._dir_sort_reverse == False else False
+    #     self.refresh()
 
-    def toggle_file_sort_order(self):
-        self.file_sort_order = "mtime" if self.file_sort_order == "alpha" else "alpha"
-        self.refresh()
+    # def toggle_file_sort_order(self):
+    #     self._file_sort_order = "mtime" if self._file_sort_order == "basename" else "basename"
+    #     self.refresh()
 
-    def toggle_file_sort_reverse(self):
-        self.file_sort_reverse = True if self.file_sort_reverse == False else False
-        self.refresh()
+    # def toggle_file_sort_reverse(self):
+    #     self._file_sort_reverse = True if self._file_sort_reverse == False else False
+    #     self.refresh()
 
     def starts_expanded(self, node):
         return node.get_depth() < 1
