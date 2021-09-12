@@ -660,6 +660,22 @@ class TextEditDialog(BasePopUp):
     def action(self, value):
         raise RuntimeError("must override action method")
 
+    @property
+    def focus_paths(self):
+        return [
+            [0], # edit
+            [1,0], # OK
+            [1,1] # Cancel
+        ]
+
+    def cycle_focus(self, step):
+        path = self.pile.get_focus_path()
+        self.pile.set_focus_path(
+            self.focus_paths[
+                (self.focus_paths.index(path) + step) % len(self.focus_paths)
+            ]
+        )
+
     def confirm(self):
         value = self.edit.get_edit_text()
         if value != self.orig_value:
@@ -676,8 +692,12 @@ class TextEditDialog(BasePopUp):
         return True
 
     def keypress(self, size, key):
-        key = super().keypress(size, key)
-        if key == "enter":
-            self.confirm()
+        if key in ["tab", "shift tab"]:
+            self.cycle_focus(1 if key == "tab" else -1)
+            return
         else:
-            return key
+            key = super().keypress(size, key)
+            if key == "enter":
+                self.confirm()
+            else:
+                return key
