@@ -8,6 +8,7 @@ from typing import (
 import heapq
 
 import urwid
+import urwid_readline
 import panwid
 from panwid.keymap import *
 from panwid.tabview import *
@@ -174,7 +175,7 @@ class Observable(object):
         self.notify("selected")
 
 
-class IntEdit(urwid.Edit):
+class IntEdit(urwid_readline.ReadlineEdit):
 
     def valid_char(self, ch):
         return len(ch)==1 and ch in "0123456789"
@@ -184,7 +185,7 @@ class TextFilterWidget(Observable, urwid.WidgetWrap):
 
     # signals = ["change", "select"]
 
-    EDIT_WIDGET = urwid.Edit
+    EDIT_WIDGET = urwid_readline.ReadlineEdit
     VALUE_TYPE = str
     text_attr = "dropdown_text"
     focused_attr = "dropdown_focused"
@@ -616,7 +617,7 @@ class TextEditDialog(BasePopUp):
         self.parent = parent
         self.orig_value = orig_value or ""
 
-        self.edit = urwid.Edit(
+        self.edit = urwid_readline.ReadlineEdit(
             caption=("bold", "Name: "),
             edit_text=self.orig_value
         )
