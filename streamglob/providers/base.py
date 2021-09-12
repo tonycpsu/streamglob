@@ -1038,9 +1038,10 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             except asyncio.exceptions.CancelledError:
                 logger.warning("CancelledError from preview function")
                 return
-            if position > len(self.play_items):
+            try:
+                self.play_items[position].preview_mode = cfg.mode
+            except IndexError:
                 return
-            self.play_items[position].preview_mode = cfg.mode
             duration = await self.preview_duration(cfg, listing)
             if duration:
                 # logger.info(f"sleeping: {duration}")
