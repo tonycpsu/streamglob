@@ -159,11 +159,11 @@ class ListingCountMixin(object):
 
     @property
     def listing_count(self):
-        return self.channel.listing_count if self.channel else None
+        return self.channel.listing_count if self.channel else 0
 
     @property
     def unread_count(self):
-        return self.channel.unread_count if self.channel else None
+        return self.channel.unread_count if self.channel else 0
 
     @property
     def count_attr(self):
@@ -248,20 +248,26 @@ class AggregateListingCountMixin(ListingCountMixin):
     @property
     @db_session
     def first_listing_date(self):
-        return min([
-            n.get_widget().first_listing_date
-            for n in self.get_node().get_leaf_nodes()
-            if n.get_widget().first_listing_date is not None
-        ])
+        try:
+            return min([
+                n.get_widget().first_listing_date
+                for n in self.get_node().get_leaf_nodes()
+                if n.get_widget().first_listing_date is not None
+            ])
+        except ValueError:
+            return None
 
     @property
     @db_session
     def last_listing_date(self):
-        return max([
-            n.get_widget().last_listing_date
-            for n in self.get_node().get_leaf_nodes()
-            if n.get_widget().last_listing_date is not None
-        ])
+        try:
+            return max([
+                n.get_widget().last_listing_date
+                for n in self.get_node().get_leaf_nodes()
+                if n.get_widget().last_listing_date is not None
+            ])
+        except ValueError:
+            return None
 
 class ChannelWidget(ListingCountMixin,
                     MarkableMixin,
