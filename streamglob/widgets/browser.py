@@ -25,6 +25,8 @@ class FileBrowserTreeWidget(urwid.TreeWidget):
         if self.is_leaf:
             return key
         if key == "right":
+            if self.get_node().get_key() == "..":
+                return
             self.get_node().tree.collapse_all()
             self.get_node().expand()
         if key == "left":
@@ -53,7 +55,8 @@ class FlagFileWidget(FileBrowserTreeWidget):
     )
     expanded_icon = urwid.AttrMap(
         urwid.TreeWidget.expanded_icon,
-        "dirmark", "dirmark_focus")
+        "dirmark", "dirmark_focus"
+    )
 
     def __init__(self, node):
         self.__super.__init__(node)
@@ -116,6 +119,16 @@ class DirectoryWidget(FlagFileWidget):
         add_widget(path, self)
         self.expanded = node.tree.starts_expanded(node)
         self.update_expanded_icon()
+
+    def update_expanded_icon(self):
+        if self.get_node().get_key() == "..":
+            self._w.base_widget.widget_list[0] = urwid.AttrMap(
+                urwid.SelectableIcon(" ", 0),
+                "dirmark", "dirmark_focus"
+            )
+        else:
+            super().update_expanded_icon()
+
 
     def get_display_text(self):
         node = self.get_node()
