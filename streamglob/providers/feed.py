@@ -893,19 +893,12 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
         self.body = body
         self.detail = urwid.WidgetPlaceholder(urwid.Filler(urwid.Text("")))
         self.footer = CachedFeedProviderFooter(self)
-        self.channels_header = urwid.Filler(
-            urwid.AttrMap(
-                urwid.Text(self.provider.CHANNELS_LABEL),
-                "header"
-            )
-        )
         self.channels = ChannelTreeBrowser(
             self.provider.config.feeds,
             self.provider,
             label="All " + self.provider.CHANNELS_LABEL
         )
         self.channels_pile = urwid.Pile([
-            (1, self.channels_header),
             ("weight", 1, self.channels)
         ])
         self.columns = urwid.Columns([
@@ -935,6 +928,7 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
         urwid.connect_signal(self.channels, "advance", self.on_channels_advance)
         urwid.connect_signal(self.channels, "change",
                              lambda s, *args: self._emit("feed_change", *args))
+
 
     def mark_all_read(self):
         with db_session:

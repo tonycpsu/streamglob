@@ -284,8 +284,6 @@ class ChannelWidget(ListingCountMixin,
         head = self.unread_count > 0
         tail = not self.channel.attrs.get("tail_fetched") if self.channel else None
         error = self.channel and self.channel.attrs.get("error")
-        if self.channel and "Neron" in self.channel.name:
-            logger.info(f"{self.channel.name}, {head}, {tail}, {error}")
         if error:
             return "browser error"
         elif head and tail:
@@ -649,8 +647,19 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
         self.label = label
         self.provider = provider
         self.placeholder = urwid.WidgetPlaceholder(urwid.Filler(urwid.Text("")))
+        self.channel_count_placeholder = urwid.WidgetPlaceholder(urwid.Text(""))
+        self.header = urwid.Filler(
+            urwid.AttrMap(
+                urwid.Columns([
+                    ("pack", urwid.Text(self.provider.CHANNELS_LABEL)),
+                    ("weight", 1, self.channel_count_placeholder)
+                ], dividechars=1),
+                "header"
+            )
+        )
         self.footer = ChannelTreeFooter(self)
         self.pile = urwid.Pile([
+            (1, self.header),
             ("weight", 1, self.placeholder),
             (1, self.footer)
         ])
@@ -681,6 +690,8 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
         self.scrollbar = StreamglobScrollBar(self.listbox)
         self.placeholder.original_widget = self.scrollbar
         self.pile._invalidate()
+        self.update_header()
+
 
     # def selectable(self):
     #     return True
@@ -696,6 +707,10 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
     @property
     def complete_container(self):
         return self.pile
+
+    @property
+    def complete_container_pos(self):
+        return 2
 
     @property
     def complete_body(self):
@@ -766,6 +781,12 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
         self._emit("change", self.selected_items)
         self._emit("select", self.selected_items)
         self.update_footer()
+
+    def update_header(self):
+
+        self.channel_count_placeholder.original_widget = urwid.Text(
+            f"({len(list(self.all_channels))})"
+        )
 
     def update_footer(self):
 
