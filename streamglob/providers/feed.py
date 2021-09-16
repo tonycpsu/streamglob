@@ -551,6 +551,7 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
 
         row = self.selection
         if not row:
+            self.provider.view.channels.cycle_unread()
             return
 
         listing = row.data_source
@@ -579,21 +580,29 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
             )
         except (StopIteration, AttributeError):
             if self.focus_position == len(self)-1:
-                updated = self.load_more(self.focus_position)
-                if updated:
-                    if self.focus_position < len(self) - 1:
-                        self.focus_position += 1
-                else:
-                    new = await self.provider.view.body.update(
-                        force=True, resume=True
-                    )
-                    if new:
-                        self.reset()
-                    else:
-                        await self.mark_item_read(self.focus_position, no_signal=True)
-                        self._emit("next_feed")
-                        self._emit("unread_change", listing.channel.detach())
-                        return
+                if self.selection.data["read"]:
+                    if self.sort_by == ("created", False):
+                        self.provider.view.columns.focus_position = 0
+                        self.provider.view.channels.cycle_unread(1)
+                        # self.provider.view.channels.advance(skip=True)
+                        # self._emit("next_feed")
+                    elif self.sort_by == ("created", True):
+                        updated = self.load_more(self.focus_position)
+                        if updated:
+                            if self.focus_position < len(self) - 1:
+                                self.focus_position += 1
+                        else:
+                            new = await self.provider.view.body.update(
+                                force=True, resume=True
+                            )
+                            if new:
+                                self.reset()
+                            else:
+                                # await self.mark_item_read(self.focus_position, no_signal=True)
+                                self.provider.view.channels.cycle_unread()
+                                # break
+                                # self._emit("unread_change", listing.channel.detach())
+                                # return
 
             else:
                 self.focus_position = len(self)-1
@@ -972,8 +981,10 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
     def on_channels_advance(self, source):
         async def advance():
             await self.body.next_unread()
-        self.columns.focus_position = 1
-        asyncio.create_task(advance())
+        if self.columns.focus_position == 0:
+            self.columns.focus_position = 1
+        else:
+            asyncio.create_task(advance())
 
 
     @keymap_command

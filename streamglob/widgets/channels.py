@@ -642,7 +642,7 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
     KEYMAP = {
         "/": "complete substring",
         "?": "complete prefix",
-        "n": "advance",
+        "n": "cycle_unread",
         "enter": "confirm",
         "esc": "cancel",
         "ctrl p": "complete_prev",
@@ -1046,25 +1046,42 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
     def find_key(self, key):
         return self.tree.find_key(key)
 
-    def cycle(self, step=1):
-        focus = self.listbox.body.get_focus()[1]
+    def cycle_unread(self, step=1):
+        self.cycle(
+            step,
+            lambda n: n.get_widget().unread_count > 0 and not isinstance(n, ChannelGroupNode)
+        )
+        self._emit("advance")
+
+    def cycle(self, step=1, pred=None):
+        cur = self.listbox.body.get_focus()[1]
         for i in range(abs(step)):
-            nxt = self.listbox.body.get_next(focus) if step > 0 else self.listbox.body.get_prev(focus)
-            if not nxt:
-                return
-            focus = nxt[1]
-            if not focus:
-                return
+            # import ipdb; ipdb.set_trace()
+            while True:
+                cur = self.listbox.body.get_next(cur) if step > 0 else self.listbox.body.get_prev(cur)
+                if not cur:
+                    return
+                cur = cur[1]
+                if not cur:
+                    return
+                if pred and pred(cur):
+                    break
         self.unmark_all()
-        self.listbox.set_focus(focus)
+        self.listbox.set_focus(cur)
         self.selection.get_widget().mark()
         self.update_selection()
-        return focus
+        return cur
 
-    def advance(self):
-        while True:
-            if self.selection.get_widget().unread_count > 0:
-                break
-            if not self.cycle():
-                break
+    def advance(self, skip=False):
         self._emit("advance")
+
+    #     while True:
+    #         logger.info("advance")
+    #         if self.selection.get_widget().unread_count > 0:
+    #             if skip:
+    #                 skip = False
+    #             else:
+    #                 break
+    #         if not self.cycle():
+    #             break
+    #     self._emit("advance")
