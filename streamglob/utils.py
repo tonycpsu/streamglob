@@ -290,6 +290,25 @@ def sanitize_filename(t):
 
 
 
+_camel_snake_re_1 = re.compile(r'(.)([A-Z][a-z]+)')
+_camel_snake_re_2 = re.compile('([a-z0-9])([A-Z])')
+
+def camel_to_snake(s):
+    s = _camel_snake_re_1.sub(r'\1_\2', s)
+    return _camel_snake_re_2.sub(r'\1_\2', s).lower()
+
+def snake_to_camel(s):
+    words = s.split('_')
+    return words[0] + ''.join(x.title() for x in words[1:])
+
+# def snake_to_class_name(s):
+#     words = s.split('_')
+#     return words[0].title() + ''.join(x.title() for x in words[1:])
+
+# def snake_to_friendly_name(s):
+#     return s.replace("_", " ").title()
+
+
 __all__ = [
     "classproperty",
     "valid_date",
@@ -298,5 +317,7 @@ __all__ = [
     "strip_emoji",
     "strip_html",
     "html_to_urwid_text_markup",
-    "sanitize_filename"
+    "sanitize_filename",
+    "camel_to_snake",
+    "snake_to_camel"
 ]

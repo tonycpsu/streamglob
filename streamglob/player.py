@@ -120,14 +120,14 @@ class Program(object):
 
     ARG_MAP = {}
 
-    with_progress = False
-    progress_sample = 1
-    progress_newline = False
+    watch_output = False
+    output_sample = 1
+    output_newline = False
 
     default_args = []
 
     def __init__(self, path, args=None, output_args=None,
-                 exclude_types=None, with_progress=None,
+                 exclude_types=None, watch_output=None,
                  stdin=None, stdout=None, stderr=None,
                  ssh_host=None,
                  **kwargs):
@@ -150,11 +150,11 @@ class Program(object):
         self.exclude_types = set(exclude_types) if exclude_types else set()
         # FIXME: Windows doesn't have necessary modules (pty, termios, fnctl,
         # etc. to get output from the child process for progress display.  Until
-        # we have a cross-platform solution, force with_progress to False if
+        # we have a cross-platform solution, force watch_output to False if
         # running on Windows
 
-        if self.with_progress is None:
-            self.with_progress = False if platform.system() == "Windows" else with_progress
+        if self.watch_output is None:
+            self.watch_output = False if platform.system() == "Windows" else watch_output
 
         self.extra_args_pre = []
         self.extra_args_post = []
@@ -162,7 +162,7 @@ class Program(object):
         self._source = None
         self.listing = None
         self.stdin = stdin
-        if self.with_progress:
+        if self.watch_output:
             self.stdout = subprocess.PIPE
         else:
             self.stdout = stdout
@@ -170,10 +170,8 @@ class Program(object):
         self.ssh_host = ssh_host
         self.proc = None
 
-        self.progress = ProgressStats()
-        self.progress_stream = None
-        self.progress_task = None
-        self.progress_queue = asyncio.Queue()
+        self.output_stream = None
+        self.output_read_task = None
 
 
     @classproperty
@@ -190,7 +188,7 @@ class Program(object):
     @classmethod
     def __init_subclass__(cls, **kwargs):
         if cls.__base__ != Program:
-            cls.SUBCLASSES[cls.__base__.__name__.lower()][cls.cmd] = cls
+            cls.SUBCLASSES[camel_to_snake(cls.__base__.__name__)][cls.cmd] = cls
             for k, v in kwargs.items():
                 setattr(cls, k, v)
         super().__init_subclass__()
@@ -200,7 +198,7 @@ class Program(object):
     def get(cls, spec, *args, **kwargs):
 
         logger.info(f"get: {spec}")
-        ptype = cls.__name__.lower()
+        ptype = camel_to_snake(cls.__name__)
         if spec is None:
             return None
         elif spec is True:
@@ -268,9 +266,9 @@ class Program(object):
 
         # Add configured players
 
-        for pcls in [Player, Downloader, Postprocessor]:
+        for pcls in [Player, Downloader, Postprocessor, ShellCommand]:
 
-            ptype = pcls.__name__.lower()
+            ptype = camel_to_snake(pcls.__name__)
             cfgkey = ptype + "s"
             for name, cfg in config.settings.profile[cfgkey].items():
                 if not cfg:
@@ -392,7 +390,7 @@ class Program(object):
     @property
     def source_args(self):
 
-        if self.source_is_program:
+        if not self.source or self.source_is_program:
             return [] # source is either piped or integrated
         elif isinstance(self.source[0], (model.MediaSource, model.MediaSource.attr_class)):
             return [
@@ -411,8 +409,8 @@ class Program(object):
     @property
     def full_command(self):
 
-        if not self.source:
-            raise RuntimeError("source not available")
+        # if not self.source:
+        #     raise RuntimeError("source not available")
 
         cmd = (
             self.executable_path
@@ -429,7 +427,7 @@ class Program(object):
         return cmd
 
 
-    async def run(self, source=None, **kwargs):
+    async def run(self, source=None, *args, **kwargs):
 
         if source:
             self.source = source
@@ -439,12 +437,12 @@ class Program(object):
 
         if self.source_is_program:
             if self.source.use_fifo:
-                self.proc = await self.source.run(**kwargs)
+                self.proc = await self.source.run(*args, **kwargs)
                 self.source = self._source.fifo
             else:
                 read, write = os.pipe()
                 self.source.stdout = write
-                self.proc = await self.source.run(**kwargs)
+                self.proc = await self.source.run(*args, **kwargs)
                 os.close(write)
                 self.stdin = read
                 self.stdout = subprocess.PIPE
@@ -460,13 +458,13 @@ class Program(object):
 
             if not self.FOREGROUND:
 
-                if self.with_progress:
-                    logger.info(f"opening progress stream: {self.__class__.__name__}")
-                    self.progress_stream, pty_stream = pty.openpty()
+                if self.watch_output:
+                    logger.info(f"opening output stream: {self.__class__.__name__}")
+                    self.output_stream, pty_stream = pty.openpty()
                     fcntl.ioctl(pty_stream, termios.TIOCSWINSZ,
                                 struct.pack('HHHH', 50, 100, 0, 0)
                     )
-                    if self.with_progress == "stderr":
+                    if self.watch_output == "stderr":
                         self.stderr = pty_stream
                     else:
                         self.stdout = pty_stream
@@ -479,10 +477,47 @@ class Program(object):
                     self.stderr = subprocess.DEVNULL # open(os.devnull, 'w')
             else:
                 raise NotImplementedError
-            try:
 
+            if pty_stream is not None:
+                async def read_output():
+
+                    reader = asyncio.StreamReader()
+                    protocol = asyncio.StreamReaderProtocol(reader)
+                    await state.event_loop.connect_read_pipe(
+                        lambda: protocol,
+                         os.fdopen(self.output_stream)
+                    )
+
+                    while True:
+                        i = 0
+                        if self.output_newline:
+                            line = await reader.readline()
+                        else:
+                            line = await reader.read(1024)
+                        if line == b"":
+                            return
+                        i += 1
+                        if i % self.output_sample:
+                            continue
+                        if self.output_newline:
+                            line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            await self.process_output_line(line.decode("utf-8"))
+                        except UnicodeDecodeError:
+                            continue
+
+                    os.close(pty_stream)
+
+                self.output_read_task = state.event_loop.create_task(
+                    read_output()
+                )
+
+            try:
+                logger.info(self.full_command + list(args))
                 self.proc = await spawn_func(
-                    *self.full_command,
+                    *self.full_command + list(args),
                     stdin = self.stdin,
                     stdout = self.stdout,
                     stderr = self.stderr,
@@ -490,40 +525,6 @@ class Program(object):
 
             except SGException as e:
                 logger.warning(e)
-            finally:
-
-                if pty_stream is not None:
-                    async def read_progress():
-                        i = 0
-                        reader = asyncio.StreamReader()
-                        protocol = asyncio.StreamReaderProtocol(reader)
-                        await state.event_loop.connect_read_pipe(
-                            lambda: protocol,
-                             os.fdopen(self.progress_stream)
-                        )
-                        while not self.proc.returncode:
-                            if self.progress_newline:
-                                line = await reader.readline()
-                            else:
-                                line = await reader.read(1024)
-                            if not line:
-                                break
-                            i += 1
-                            if i % self.progress_sample:
-                                continue
-                            if self.progress_newline:
-                                line = line.strip()
-                            if not line:
-                                continue
-                            try:
-                                await self.update_progress_line(line.decode("utf-8"))
-                            except UnicodeDecodeError:
-                                continue
-
-                    self.progress_task = state.event_loop.create_task(
-                        read_progress()
-                    )
-                    os.close(pty_stream)
 
         return self.proc
 
@@ -752,6 +753,7 @@ class Downloader(Program):
                  player_integrated=False,
                  use_fifo=None, *args, **kwargs):
         super().__init__(path, *args, **kwargs)
+        self.progress = ProgressStats()
         self.player_integrated = player_integrated
         if use_fifo is not None:
             self.use_fifo = use_fifo
@@ -791,7 +793,7 @@ class Downloader(Program):
         proc = await downloader.run(**kwargs)
         return proc
 
-    async def update_progress_line(self, line):
+    async def process_output_line(self, line):
         pass
 
     @classmethod
@@ -847,13 +849,13 @@ class YouTubeDLDownloader(Downloader):
         for k, v in youtube_dl.extractor.youtube.YoutubeIE._formats.items()
     })
 
-    with_progress = True
-    progress_newline = True
+    watch_output = True
+    output_newline = True
 
 
     def __init__(self, path, *args, **kwargs):
         super().__init__(path, *args, **kwargs)
-        if self.with_progress:
+        if self.watch_output:
             self.extra_args_pre += ["--newline", "--verbose"]
 
     @property
@@ -881,7 +883,7 @@ class YouTubeDLDownloader(Downloader):
                 return True
         return False
 
-    async def update_progress_line(self, line):
+    async def process_output_line(self, line):
         if not line:
             return
 
@@ -937,7 +939,7 @@ class StreamlinkDownloader(Downloader):
         "--force-progress"
     ]
 
-    with_progress = True
+    watch_output = True
     use_fifo = True
 
     @property
@@ -997,7 +999,7 @@ class StreamlinkDownloader(Downloader):
         except streamlink.exceptions.NoPluginError:
             return False
 
-    async def update_progress_line(self, line):
+    async def process_output_line(self, line):
         logger.debug(line)
         if not line:
             return
@@ -1011,7 +1013,7 @@ class StreamlinkDownloader(Downloader):
 
 class WgetDownloader(Downloader):
 
-    with_progress = "stderr"
+    watch_output = "stderr"
 
     default_args = [
         "--show-progress", "--progress=bar:force"
@@ -1034,7 +1036,7 @@ class WgetDownloader(Downloader):
         self.stderr = asyncio.subprocess.STDOUT
 
 
-    async def update_progress_line(self, line):
+    async def process_output_line(self, line):
         if not line:
             return
         line = line.strip()
@@ -1124,6 +1126,15 @@ class Postprocessor(Program):
     #     return outfile
 
 
+class ShellCommand(Program):
+
+    watch_output = True
+    output_newline = True
+
+    async def process_output_line(self, line):
+        logger.info(line)
+
+
 async def get():
     return await(Downloader.download(
         model.MediaSource("https://www.youtube.com/watch?v=5aVU_0a8-A4"),
@@ -1152,7 +1163,7 @@ def play_test():
     result = asyncio.run(
         state.task_manager.play(
             task,
-            with_progress=False,
+            watch_output=False,
             stdout=sys.stdout, stderr=sys.stderr,
             player_spec="mpv",
             downloader_spec=None
@@ -1160,6 +1171,15 @@ def play_test():
     )
     return result
 
+
+
+async def run_and_check(task):
+    download = state.task_manager.download(task)
+    program = await download.program
+
+    asyncio.create_task(check_progress(program))
+    await task.result
+    # await asyncio.sleep(10)
 
 async def download_test():
 
@@ -1189,6 +1209,13 @@ async def download_test():
 
     # state.event_loop.run_until_complete(state.task_manager.download(task).result)
     state.event_loop.create_task(run_and_check(task))
+
+async def cat_test():
+    prog = next(ShellCommand.get("cat"))
+    print(prog)
+    asyncio.create_task(check_progress(prog))
+    asyncio.create_task(prog.run())
+
 
 
 def postprocessor_test():
@@ -1247,7 +1274,8 @@ def main():
     # fh = logging.FileHandler(log_file)
     # add_log_handler(fh)
 
-    state.event_loop.create_task(download_test())
+    # state.event_loop.create_task(download_test())
+    state.event_loop.create_task(cat_test())
     print("running forever")
     state.event_loop.run_forever()
 
