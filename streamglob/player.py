@@ -23,6 +23,7 @@ import tempfile
 import shutil
 import json
 import time
+import enum
 from aio_mpv_jsonipc import MPV
 from aio_mpv_jsonipc.MPV import MPVError
 if platform.system() != "Windows":
@@ -44,6 +45,14 @@ PACKAGE_NAME=__name__.split('.')[0]
 
 bitmath.format_string = "{value:.1f}{unit}"
 bitmath.bestprefix = True
+
+from enum import Enum
+
+class OutputHandling(Enum):
+
+    IGNORE = enum.auto()
+    WATCH = enum.auto()
+    COLLECT = enum.auto()
 
 @dataclass
 class ProgramDef:
@@ -106,7 +115,7 @@ class Program(object):
 
     SUBCLASSES = Tree()
 
-    PLAYER_INTEGRATED=False
+    PLAYER_INTEGRATED = False
 
     INTEGRATED_DOWNLOADERS = []
 
@@ -120,14 +129,15 @@ class Program(object):
 
     ARG_MAP = {}
 
-    watch_output = False
+    output_handling = OutputHandling.IGNORE
+    output_fd_name = "stdout"
     output_sample = 1
     output_newline = False
 
     default_args = []
 
     def __init__(self, path, args=None, output_args=None,
-                 exclude_types=None, watch_output=None,
+                 exclude_types=None, output_handling=None,
                  stdin=None, stdout=None, stderr=None,
                  ssh_host=None,
                  **kwargs):
@@ -150,11 +160,11 @@ class Program(object):
         self.exclude_types = set(exclude_types) if exclude_types else set()
         # FIXME: Windows doesn't have necessary modules (pty, termios, fnctl,
         # etc. to get output from the child process for progress display.  Until
-        # we have a cross-platform solution, force watch_output to False if
+        # we have a cross-platform solution, force output_handling to False if
         # running on Windows
 
-        if self.watch_output is None:
-            self.watch_output = False if platform.system() == "Windows" else watch_output
+        if self.output_handling is None:
+            self.output_handling = OutputHandling.IGNORE if platform.system() == "Windows" else output_handling
 
         self.extra_args_pre = []
         self.extra_args_post = []
@@ -162,7 +172,7 @@ class Program(object):
         self._source = None
         self.listing = None
         self.stdin = stdin
-        if self.watch_output:
+        if self.output_handling is not OutputHandling.IGNORE:
             self.stdout = subprocess.PIPE
         else:
             self.stdout = stdout
@@ -173,6 +183,9 @@ class Program(object):
         self.output_stream = None
         self.output_read_task = None
 
+        # for OutputHandling.COLLECT
+        self.output = []
+        self.output_ready = asyncio.Future()
 
     @classproperty
     def cmd(cls):
@@ -458,61 +471,22 @@ class Program(object):
 
             if not self.FOREGROUND:
 
-                if self.watch_output:
+                if self.output_handling is not OutputHandling.IGNORE:
                     logger.info(f"opening output stream: {self.__class__.__name__}")
                     self.output_stream, pty_stream = pty.openpty()
-                    fcntl.ioctl(pty_stream, termios.TIOCSWINSZ,
-                                struct.pack('HHHH', 50, 100, 0, 0)
-                    )
-                    if self.watch_output == "stderr":
+                    if self.output_fd_name == "stderr":
                         self.stderr = pty_stream
                     else:
                         self.stdout = pty_stream
 
                 if self.stdin is None:
-                    self.stdin = subprocess.DEVNULL #open(os.devnull, 'w')
+                    self.stdin = subprocess.DEVNULL
                 if self.stdout is None:
-                    self.stdout = subprocess.DEVNULL # open(os.devnull, 'w')
+                    self.stdout = subprocess.DEVNULL
                 if self.stderr is None:
-                    self.stderr = subprocess.DEVNULL # open(os.devnull, 'w')
+                    self.stderr = subprocess.DEVNULL
             else:
                 raise NotImplementedError
-
-            if pty_stream is not None:
-                async def read_output():
-
-                    reader = asyncio.StreamReader()
-                    protocol = asyncio.StreamReaderProtocol(reader)
-                    await state.event_loop.connect_read_pipe(
-                        lambda: protocol,
-                         os.fdopen(self.output_stream)
-                    )
-
-                    while True:
-                        i = 0
-                        if self.output_newline:
-                            line = await reader.readline()
-                        else:
-                            line = await reader.read(1024)
-                        if line == b"":
-                            return
-                        i += 1
-                        if i % self.output_sample:
-                            continue
-                        if self.output_newline:
-                            line = line.strip()
-                        if not line:
-                            continue
-                        try:
-                            await self.process_output_line(line.decode("utf-8"))
-                        except UnicodeDecodeError:
-                            continue
-
-                    os.close(pty_stream)
-
-                self.output_read_task = state.event_loop.create_task(
-                    read_output()
-                )
 
             try:
                 logger.info(self.full_command + list(args))
@@ -525,6 +499,53 @@ class Program(object):
 
             except SGException as e:
                 logger.warning(e)
+
+            if pty_stream is not None:
+                async def read_output():
+
+                    reader = asyncio.StreamReader()
+                    protocol = asyncio.StreamReaderProtocol(reader)
+                    await state.event_loop.connect_read_pipe(
+                        lambda: protocol,
+                         os.fdopen(self.output_stream)
+                    )
+
+                    while not self.proc.returncode:
+                        i = 0
+                        if reader.at_eof():
+                            break
+                        if self.output_newline:
+                            line = await reader.readline()
+                        else:
+                            line = await reader.read(1024)
+                        logger.info(line)
+                        if line == b"":
+                            break
+                        if not line:
+                            break
+                        i += 1
+                        if i % self.output_sample:
+                            continue
+                        try:
+                            line = line.decode("utf-8")
+                        except UnicodeDecodeError as e:
+                            logger.warning(e)
+                            continue
+                        # if self.output_newline:
+                        #     line = line.strip()
+                        #     if line:
+                        #         continue
+                        if self.output_handling == OutputHandling.WATCH:
+                            await self.process_output_line(line)
+                        elif self.output_handling == OutputHandling.COLLECT:
+                            self.output.append(line)
+
+                    self.output_ready.set_result(self.output)
+
+                self.output_read_task = state.event_loop.create_task(
+                    read_output()
+                )
+                os.close(pty_stream)
 
         return self.proc
 
@@ -849,13 +870,12 @@ class YouTubeDLDownloader(Downloader):
         for k, v in youtube_dl.extractor.youtube.YoutubeIE._formats.items()
     })
 
-    watch_output = True
+    output_handling = OutputHandling.WATCH
     output_newline = True
-
 
     def __init__(self, path, *args, **kwargs):
         super().__init__(path, *args, **kwargs)
-        if self.watch_output:
+        if self.output_handling is not OutputHandling.IGNORE:
             self.extra_args_pre += ["--newline", "--verbose"]
 
     @property
@@ -939,7 +959,7 @@ class StreamlinkDownloader(Downloader):
         "--force-progress"
     ]
 
-    watch_output = True
+    output_handling = OutputHandling.WATCH
     use_fifo = True
 
     @property
@@ -1013,7 +1033,8 @@ class StreamlinkDownloader(Downloader):
 
 class WgetDownloader(Downloader):
 
-    watch_output = "stderr"
+    output_handling = OutputHandling.WATCH
+    output_fd_name = "stderr"
 
     default_args = [
         "--show-progress", "--progress=bar:force"
@@ -1128,12 +1149,8 @@ class Postprocessor(Program):
 
 class ShellCommand(Program):
 
-    watch_output = True
-    output_newline = True
-
-    async def process_output_line(self, line):
-        logger.info(line)
-
+    output_handling = OutputHandling.COLLECT
+    # output_newline = True
 
 async def get():
     return await(Downloader.download(
@@ -1163,7 +1180,7 @@ def play_test():
     result = asyncio.run(
         state.task_manager.play(
             task,
-            watch_output=False,
+            output_handling=False,
             stdout=sys.stdout, stderr=sys.stderr,
             player_spec="mpv",
             downloader_spec=None
