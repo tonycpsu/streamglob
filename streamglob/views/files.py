@@ -12,6 +12,7 @@ from watchdog.observers.polling import PollingObserver
 from watchdog.events import FileSystemEventHandler
 
 from .. import model
+from .. import player
 from ..utils import strip_emoji
 from .. import config
 from ..widgets import *
@@ -39,20 +40,54 @@ class RunCommandDropdown(BaseDropdown):
 
     @property
     def items(self):
-        return {
-            c.name: c.command
-            for c in config.settings.profile.files.commands
-        }
+        return config.settings.profile.files.commands
 
+    @property
+    def expanded(self):
+        return True
 
-class RunCommandPopUp(BasePopUp):
+class RunCommandPopUp(OKCancelDialog):
 
-    def __init__(self, parent):
-        self.parent = parent
-        self.dropdown = RunCommandDropdown()
-        super(RunCommandPopUp, self).__init__(
-            urwid.Filler(urwid.Padding(self.dropdown))
+    @property
+    def widgets(self):
+        return dict(
+            dropdown=RunCommandDropdown()
         )
+
+    async def action(self):
+        cfg = self.dropdown.selected_value
+        cmd = cfg.command
+        try:
+            prog = next(player.ShellCommand.get(cmd))
+        except StopIteration:
+            logger.error(f"program {prog} not found")
+        args = [
+            a.format(
+                path=self.parent.browser.selection.full_path,
+                socket=state.task_manager.preview_player.ipc_socket_name
+            )
+            for a in cfg.args
+        ]
+        logger.info(prog)
+        async def show_output():
+            logger.info("show_output")
+            output = await prog.output_ready
+            logger.info(f"output: {output}")
+        state.event_loop.create_task(show_output())
+        logger.info("running")
+        await prog.run(args)
+
+
+
+
+# class RunCommandPopUp(BasePopUp):
+
+#     def __init__(self, parent):
+#         self.parent = parent
+
+#         super(RunCommandPopUp, self).__init__(
+#             urwid.Filler(urwid.Padding(self.dropdown))
+#         )
 
 
 @keymapped()
