@@ -13,7 +13,7 @@ from pony.orm import *
 from panwid.autocomplete import AutoCompleteMixin
 from panwid.highlightable import HighlightableTextMixin
 from panwid.keymap import *
-from panwid.dialog import BaseDialog, BasePopUp
+from panwid.dialog import ChoiceDialog, ConfirmDialog, BasePopUp
 from unidecode import unidecode
 import timeago
 import pytz
@@ -21,12 +21,7 @@ import pytz
 from .. import config
 from .. import model
 from .. import utils
-from ..widgets import (
-    StreamglobScrollBar,
-    SquareButton,
-    TextEditDialog,
-    ConfirmDialog
-)
+from ..widgets import StreamglobScrollBar, TextEditDialog
 
 from ..state import *
 
@@ -985,6 +980,10 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
 
             signals = ["rename"]
 
+            @property
+            def title(self):
+                return "Rename feed"
+
             def action(self, value):
                 self.parent.rename_channel(channel.identifier, value)
 
@@ -995,7 +994,7 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
         )
 
         dialog = RenameDialog(self, orig_name)
-        self.provider.view.open_popup(dialog, width=60, height=5)
+        self.provider.view.open_popup(dialog, width=60, height=8)
 
 
     def delete_channel(self, locator):

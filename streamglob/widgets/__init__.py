@@ -13,7 +13,7 @@ import panwid
 from panwid.keymap import *
 from panwid.tabview import *
 from panwid.scroll import ScrollBar
-from panwid.dialog import *
+from panwid.dialog import BasePopUp, OKCancelDialog
 from orderedattrdict import AttrDict, DefaultAttrDict
 
 from ..state import *
@@ -73,22 +73,6 @@ class StreamglobView(panwid.BaseView):
 
     def on_view_activate(self):
         pass
-
-class SquareButton(urwid.Button):
-
-    button_left = urwid.Text("[")
-    button_right = urwid.Text("]")
-
-    def pack(self, size, focus=False):
-        cols = sum(
-            [ w.pack()[0] for w in [
-                self.button_left,
-                self._label,
-                self.button_right
-            ]]) + self._w.dividechars*2
-
-        return ( cols, )
-
 
 class StreamglobScrollBar(ScrollBar):
     pass
@@ -578,102 +562,19 @@ class LogViewer(urwid.Widget):
 
         return key
 
-
-class ConfirmDialog(BaseDialog):
-
-    signals = ["message"]
-
-    def __init__(self, parent, *args, **kwargs):
-        super(ConfirmDialog, self).__init__(parent, *args, **kwargs)
-
-    def action(self, value):
-        raise RuntimeError("must override action method")
-
-    @property
-    def prompt(self):
-        return "Are you sure?"
-
-    def confirm(self):
-        self.action()
-        self.close()
-
-    def cancel(self):
-        self.close()
-
-    def close(self):
-        self.parent.close_popup()
-
-    @property
-    def choices(self):
-        return {
-            "y": self.confirm,
-            "n": self.cancel
-        }
-
-class TextEditDialog(BasePopUp):
+class TextEditDialog(OKCancelDialog):
 
     def __init__(self, parent, orig_value=None):
-
-        self.parent = parent
-        self.orig_value = orig_value or ""
-
-        self.edit = urwid_readline.ReadlineEdit(
-            caption=("bold", "Name: "),
-            edit_text=self.orig_value
-        )
-        self.ok_button = SquareButton(("bold", "OK"))
-
-        urwid.connect_signal(
-            self.ok_button, "click",
-            lambda s: self.confirm()
-        )
-
-        self.cancel_button = SquareButton(("bold", "Cancel"))
-
-        urwid.connect_signal(
-            self.cancel_button, "click",
-            lambda s: self.cancel()
-        )
-
-        self.pile = urwid.Pile(
-            [
-                (2, urwid.Filler(urwid.Padding(self.edit), valign="top")),
-                ("weight", 1, urwid.Padding(
-                    urwid.Columns([
-                        ("weight", 1,
-                         urwid.Padding(
-                             self.ok_button, align="center", width=12)
-                         ),
-                        ("weight", 1,
-                         urwid.Padding(
-                             self.cancel_button, align="center", width=12)
-                         )
-                    ]),
-                    align="center"
-                )),
-            ]
-        )
-        self.pile.selectable = lambda: True
-        self.pile.focus_position = 0
-        super(TextEditDialog, self).__init__(urwid.Filler(self.pile))
-
-    def action(self, value):
-        raise RuntimeError("must override action method")
+        self.orig_value = orig_value
+        super().__init__(parent)
 
     @property
-    def focus_paths(self):
-        return [
-            [0], # edit
-            [1,0], # OK
-            [1,1] # Cancel
-        ]
-
-    def cycle_focus(self, step):
-        path = self.pile.get_focus_path()
-        self.pile.set_focus_path(
-            self.focus_paths[
-                (self.focus_paths.index(path) + step) % len(self.focus_paths)
-            ]
+    def widgets(self):
+        return dict(
+            edit = urwid_readline.ReadlineEdit(
+                caption=("bold", "Name: "),
+                edit_text=self.orig_value or ""
+            )
         )
 
     def confirm(self):
@@ -681,23 +582,3 @@ class TextEditDialog(BasePopUp):
         if value != self.orig_value:
             self.action(value)
         self.close()
-
-    def cancel(self):
-        self.close()
-
-    def close(self):
-        self._emit("close_popup")
-
-    def selectable(self):
-        return True
-
-    def keypress(self, size, key):
-        if key in ["tab", "shift tab"]:
-            self.cycle_focus(1 if key == "tab" else -1)
-            return
-        else:
-            key = super().keypress(size, key)
-            if key == "enter":
-                self.confirm()
-            else:
-                return key

@@ -6,6 +6,7 @@ import re
 
 import urwid
 from panwid.keymap import *
+from panwid.dialog import ConfirmDialog
 
 from watchdog.observers.polling import PollingObserver
 from watchdog.events import FileSystemEventHandler
@@ -34,6 +35,26 @@ class FilesViewEventHandler(FileSystemEventHandler):
         self.view.updated = True
 
 
+class RunCommandDropdown(BaseDropdown):
+
+    @property
+    def items(self):
+        return {
+            c.name: c.command
+            for c in config.settings.profile.files.commands
+        }
+
+
+class RunCommandPopUp(BasePopUp):
+
+    def __init__(self, parent):
+        self.parent = parent
+        self.dropdown = RunCommandDropdown()
+        super(RunCommandPopUp, self).__init__(
+            urwid.Filler(urwid.Padding(self.dropdown))
+        )
+
+
 @keymapped()
 class FilesView(
         SynchronizedPlayerProviderMixin,
@@ -54,7 +75,8 @@ class FilesView(
         "B": ("set_file_sort", ["basename", True]),
         "backspace": "directory_up",
         # "enter": "open_selection",
-        "delete": "delete_selection"
+        "delete": "delete_selection",
+        "!": "run_command_on_file"
     }
 
     def __init__(self):
@@ -176,25 +198,30 @@ class FilesView(
 
         class ChangeDirectoryDialog(TextEditDialog):
 
+            @property
+            def title(self):
+                return "Go to directory"
+
             def action(self, value):
                 self.parent.browser.change_directory(value)
 
         dialog = ChangeDirectoryDialog(self, self.cwd)
-        self.open_popup(dialog, width=60, height=5)
+        self.open_popup(dialog, width=60, height=8)
 
     def create_directory(self):
 
         class CreateDirectoryDialog(TextEditDialog):
 
+            @property
+            def title(self):
+                return "Create directory"
+
+
             def action(self, value):
                 self.parent.browser.create_directory(value)
 
-            @property
-            def prompt(self):
-                return "Create directory"
-
         dialog = CreateDirectoryDialog(self)
-        self.open_popup(dialog, width=60, height=5)
+        self.open_popup(dialog, width=60, height=8)
 
 
     def directory_up(self):
@@ -240,6 +267,12 @@ class FilesView(
             return
         self.browser.body.set_focus(node)
         state.main_view.focus_widget(self)
+
+    def run_command_on_file(self):
+
+        path = self.browser.selection.full_path
+        popup = RunCommandPopUp(self)
+        self.open_popup(popup, width=60, height=10)
 
 
     def on_view_activate(self):
