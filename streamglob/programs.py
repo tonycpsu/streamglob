@@ -468,10 +468,8 @@ class Program(object):
                         except UnicodeDecodeError as e:
                             logger.warning(e)
                             continue
-                        # if self.output_newline:
-                        #     line = line.strip()
-                        #     if line:
-                        #         continue
+                        if self.output_newline:
+                            line = line.strip()
                         if self.output_handling == OutputHandling.WATCH:
                             await self.process_output_line(line)
                         elif self.output_handling == OutputHandling.COLLECT:
