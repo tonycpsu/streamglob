@@ -19,14 +19,14 @@ import requests
 import html2text
 import webbrowser
 
-from .. import player
+from .. import programs
 from .. import config
 from .. import model
 from .. import utils
 
 from .base import *
 from .filters import *
-from ..player import *
+from ..programs import *
 from .widgets import *
 
 

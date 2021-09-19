@@ -11,14 +11,14 @@ import tempfile
 import traceback
 import re
 
-from . import player
+from . import programs
 from .state import *
 from .exceptions import *
 from .widgets import Observable
 from . import utils
 from . import config
 from . import model
-from . import player
+from . import programs
 
 task_manager_task = None
 
@@ -248,12 +248,12 @@ class TaskManager(Observable):
     async def start_task(self, task):
         logger.debug(f"task: {task}")
         if isinstance(task, (model.PlayMediaTask, model.PlayMediaTask.attr_class)):
-            run_task = player.Player.play(task, *task.args, **task.kwargs)
+            run_task = programs.Player.play(task, *task.args, **task.kwargs)
 
         elif isinstance(task, (model.DownloadMediaTask, model.DownloadMediaTask.attr_class)):
             try:
                 outfile = task.stage_outfile
-                run_task = player.Downloader.download(task, outfile, *task.args, **task.kwargs)
+                run_task = programs.Downloader.download(task, outfile, *task.args, **task.kwargs)
                 task.stage_results.append(outfile)
             except SGFileExists as e:
                 logger.warn(e)

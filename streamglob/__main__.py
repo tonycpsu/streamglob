@@ -50,7 +50,7 @@ from . import model
 from . import utils
 from . import session
 from . import providers
-from . import player
+from . import programs
 from . import tasks
 from .exceptions import *
 
@@ -506,7 +506,7 @@ def main():
     if options.profile:
         for p in options.profile.split(","):
             config.settings.include_profile(p)
-    player.Player.load()
+    programs.Player.load()
 
     parser = argparse.ArgumentParser()
     group = parser.add_mutually_exclusive_group()

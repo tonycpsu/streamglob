@@ -12,7 +12,7 @@ from watchdog.observers.polling import PollingObserver
 from watchdog.events import FileSystemEventHandler
 
 from .. import model
-from .. import player
+from .. import programs
 from ..utils import strip_emoji
 from .. import config
 from ..widgets import *
@@ -58,7 +58,7 @@ class RunCommandPopUp(OKCancelDialog):
         cfg = self.dropdown.selected_value
         cmd = cfg.command
         try:
-            prog = next(player.ShellCommand.get(cmd))
+            prog = next(programs.ShellCommand.get(cmd))
         except StopIteration:
             logger.error(f"program {prog} not found")
         args = [

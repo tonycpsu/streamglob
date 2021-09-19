@@ -518,7 +518,7 @@ class Program(object):
                             line = await reader.readline()
                         else:
                             line = await reader.read(1024)
-                        logger.info(line)
+                        logger.trace(line)
                         if line == b"":
                             break
                         if not line:
@@ -591,7 +591,7 @@ class Player(Program):
                 return
 
             if downloader:
-                if downloader.cmd in player.INTEGRATED_DOWNLOADERS:
+                if downloader.cmd in programs.INTEGRATED_DOWNLOADERS:
                     downloader = None
                 else:
                     downloader.source = source

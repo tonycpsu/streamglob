@@ -20,7 +20,7 @@ from .widgets import *
 from .filters import *
 from ..session import *
 from ..state import *
-from ..player import Player, Downloader
+from ..programs import Player, Downloader
 from .. import model
 from .. import config
 from  ..utils import *

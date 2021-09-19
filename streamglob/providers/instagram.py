@@ -14,7 +14,7 @@ from ..exceptions import *
 from ..state import *
 from .. import config
 from .. import model
-from .. import player
+from .. import programs
 from .. import session
 
 

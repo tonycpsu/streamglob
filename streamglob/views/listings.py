@@ -201,7 +201,7 @@ class ListingsView(StreamglobView):
 
             def profile_change(p):
                 config.settings.toggle_profile(p)
-                player.Player.load()
+                programs.Player.load()
 
             urwid.connect_signal(
                 self.toolbar, "profile_change",
