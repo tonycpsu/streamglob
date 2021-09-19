@@ -272,69 +272,6 @@ class Program(object):
         klass = cls.SUBCLASSES.get(cfg.name, cls)
         return klass(**cfg)
 
-    @classmethod
-    def load(cls):
-
-        state.PROGRAMS = Tree()
-
-        # Add configured players
-
-        for pcls in [Player, Downloader, Postprocessor, ShellCommand]:
-
-            ptype = camel_to_snake(pcls.__name__)
-            cfgkey = ptype + "s"
-            for name, cfg in config.settings.profile[cfgkey].items():
-                if not cfg:
-                    cfg = AttrDict()
-                path = cfg.pop("path", None) or cfg.get(
-                    "command",
-                    distutils.spawn.find_executable(name)
-                )
-                if not path:
-                    logger.warning(f"couldn't find command for {name}")
-                    continue
-                # First, try to find by "type" config value, if present
-                try:
-                    klass = next(
-                        c for c in cls.SUBCLASSES[ptype].values()
-                        if c.__name__.lower().replace(ptype, "")
-                        == cfg.get("type", "").replace("-", "").lower()
-                    )
-                except StopIteration:
-                    # Next, try to find by config name matching class name
-                    try:
-                        klass = next(
-                            c for c in cls.SUBCLASSES[ptype].values()
-                            if c.cmd == name
-                        )
-                    except StopIteration:
-                        # Give up and make it a generic program
-                        klass = pcls
-                if cfg.get("disabled") == True:
-                    logger.info(f"player {name} is disabled")
-                    continue
-                state.PROGRAMS[ptype][name] = ProgramDef(
-                    cls=klass,
-                    name=name,
-                    path=path,
-                    cfg = AttrDict(cfg)
-                )
-        # Try to find any players not configured
-        for ptype in cls.SUBCLASSES.keys():
-            cfgkey = ptype + "s"
-            for name, klass in cls.SUBCLASSES[ptype].items():
-                cfg = config.settings.profile[cfgkey][name]
-                if name in state.PROGRAMS[ptype] or (cfg and cfg.disabled == True):
-                    continue
-                path = distutils.spawn.find_executable(name)
-                if path:
-                    state.PROGRAMS[ptype][name] = ProgramDef(
-                        cls=klass,
-                        name=name,
-                        path=path,
-                        cfg = AttrDict()
-                    )
-
     @property
     def source(self):
         return self._source
@@ -1152,12 +1089,70 @@ class ShellCommand(Program):
     output_handling = OutputHandling.COLLECT
     # output_newline = True
 
-async def get():
-    return await(Downloader.download(
-        model.MediaSource("https://www.youtube.com/watch?v=5aVU_0a8-A4"),
-        "foo.mp4",
-        "youtube-dl"
-    ))
+# @classmethod
+def load():
+
+    state.PROGRAMS = Tree()
+
+    # Add configured players
+
+    for pcls in [Player, Downloader, Postprocessor, ShellCommand]:
+
+        ptype = camel_to_snake(pcls.__name__)
+        cfgkey = ptype + "s"
+        for name, cfg in config.settings.profile[cfgkey].items():
+            if not cfg:
+                cfg = AttrDict()
+            path = cfg.pop("path", None) or cfg.get(
+                "command",
+                distutils.spawn.find_executable(name)
+            )
+            if not path:
+                logger.warning(f"couldn't find command for {name}")
+                continue
+            # First, try to find by "type" config value, if present
+            try:
+                klass = next(
+                    c for c in Program.SUBCLASSES[ptype].values()
+                    if c.__name__.lower().replace(ptype, "")
+                    == cfg.get("type", "").replace("-", "").lower()
+                )
+            except StopIteration:
+                # Next, try to find by config name matching class name
+                try:
+                    klass = next(
+                        c for c in Program.SUBCLASSES[ptype].values()
+                        if c.cmd == name
+                    )
+                except StopIteration:
+                    # Give up and make it a generic program
+                    klass = pcls
+            if cfg.get("disabled") == True:
+                logger.info(f"player {name} is disabled")
+                continue
+            state.PROGRAMS[ptype][name] = ProgramDef(
+                cls=klass,
+                name=name,
+                path=path,
+                cfg = AttrDict(cfg)
+            )
+    # Try to find any players not configured
+    for ptype in Program.SUBCLASSES.keys():
+        cfgkey = ptype + "s"
+        for name, klass in Program.SUBCLASSES[ptype].items():
+            cfg = config.settings.profile[cfgkey][name]
+            if name in state.PROGRAMS[ptype] or (cfg and cfg.disabled == True):
+                continue
+            path = distutils.spawn.find_executable(name)
+            if path:
+                state.PROGRAMS[ptype][name] = ProgramDef(
+                    cls=klass,
+                    name=name,
+                    path=path,
+                    cfg = AttrDict()
+                )
+
+
 
 async def check_progress(program):
     while True:

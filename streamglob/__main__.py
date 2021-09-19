@@ -506,7 +506,7 @@ def main():
     if options.profile:
         for p in options.profile.split(","):
             config.settings.include_profile(p)
-    programs.Player.load()
+    programs.load()
 
     parser = argparse.ArgumentParser()
     group = parser.add_mutually_exclusive_group()
