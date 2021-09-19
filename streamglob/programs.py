@@ -230,11 +230,27 @@ class Program(object):
 
         elif isinstance(spec, str):
             # get a program by name
-            try:
+            if spec in state.PROGRAMS[ptype]:
                 p = state.PROGRAMS[ptype][spec]
                 return iter([p.cls(p.path, **dict(p.cfg, **kwargs))])
-            except KeyError:
-                raise SGException(f"Program {spec} not found")
+            else:
+                # if not configured, try to find in PATH
+
+                path = distutils.spawn.find_executable(
+                    os.path.expanduser(spec)
+                )
+                if not path:
+                    raise SGException(f"Program {spec} not found")
+
+                prog = ProgramDef(
+                    cls=cls,
+                    name=spec,
+                    path=path,
+                    cfg = AttrDict()
+                )
+                prog = cls(path)
+                return iter([prog])
+
 
         elif isinstance(spec, list):
             # get the listed programs by name
