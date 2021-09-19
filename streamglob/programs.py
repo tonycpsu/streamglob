@@ -66,6 +66,9 @@ class ProgramDef:
     def media_types(self):
         return self.cls.MEDIA_TYPES - set(getattr(self.cfg, "exclude_types", []))
 
+    def __call__(self, **kwargs):
+        return self.cls(self.path, **dict(self.cfg, **kwargs))
+
 @dataclass
 class ProgressStats:
 
@@ -163,7 +166,7 @@ class Program(object):
         # we have a cross-platform solution, force output_handling to False if
         # running on Windows
 
-        if self.output_handling is None:
+        if output_handling is not None:
             self.output_handling = OutputHandling.IGNORE if platform.system() == "Windows" else output_handling
 
         self.extra_args_pre = []
@@ -217,13 +220,15 @@ class Program(object):
         elif spec is True:
             # get all known programs
             return (
-                p.cls(p.path, **dict(p.cfg, **kwargs))
+                # p.cls(p.path, **dict(p.cfg, **kwargs))
+                p(**kwargs)
                 for n, p in state.PROGRAMS[ptype].items()
             )
 
         elif callable(spec):
             return (
-                p.cls(p.path, **dict(p.cfg, **kwargs))
+                # p.cls(p.path, **dict(p.cfg, **kwargs))
+                p(**kwargs)
                 for n, p in state.PROGRAMS[ptype].items()
                 if spec(p.cls)
             )
@@ -232,23 +237,23 @@ class Program(object):
             # get a program by name
             if spec in state.PROGRAMS[ptype]:
                 p = state.PROGRAMS[ptype][spec]
-                return iter([p.cls(p.path, **dict(p.cfg, **kwargs))])
+                return iter([p(**kwargs)])
+                # return iter([p.cls(p.path, **dict(p.cfg, **kwargs))])
             else:
                 # if not configured, try to find in PATH
-
                 path = distutils.spawn.find_executable(
                     os.path.expanduser(spec)
                 )
                 if not path:
                     raise SGException(f"Program {spec} not found")
 
-                prog = ProgramDef(
+                prog_def = ProgramDef(
                     cls=cls,
                     name=spec,
                     path=path,
-                    cfg = AttrDict()
+                    cfg=AttrDict()
                 )
-                prog = cls(path)
+                prog = prog_def(**kwargs)
                 return iter([prog])
 
 
@@ -271,7 +276,8 @@ class Program(object):
                 else:
                     return cfg == v
             return (
-                p.cls(p.path, **dict(p.cfg, **kwargs))
+                p(**kwargs)
+                # p.cls(p.path, **dict(p.cfg, **kwargs))
                 for p in state.PROGRAMS[ptype].values()
                 if not spec or all([
                     check_cfg_key(getattr(p, k, None), v)
@@ -463,10 +469,8 @@ class Program(object):
                          os.fdopen(self.output_stream)
                     )
 
-                    while not self.proc.returncode:
+                    while True:
                         i = 0
-                        if reader.at_eof():
-                            break
                         if self.output_newline:
                             line = await reader.readline()
                         else:
@@ -496,6 +500,7 @@ class Program(object):
                 self.output_read_task = state.event_loop.create_task(
                     read_output()
                 )
+
                 os.close(pty_stream)
 
         return self.proc
@@ -1100,7 +1105,7 @@ class Postprocessor(Program):
 
 class ShellCommand(Program):
 
-    output_handling = OutputHandling.COLLECT
+    output_handling = OutputHandling.IGNORE
     # output_newline = True
 
 # @classmethod
@@ -1172,6 +1177,7 @@ async def check_progress(program):
     while True:
         # r = await program.proc.stdout.read()
         # await program.update_progress()
+        #
         await asyncio.sleep(1)
         print(program.progress)
         # print(program.progress.size)
@@ -1237,10 +1243,12 @@ async def download_test():
     state.event_loop.create_task(run_and_check(task))
 
 async def cat_test():
-    prog = next(ShellCommand.get("cat"))
+    prog = next(ShellCommand.get("cat", output_handling=OutputHandling.COLLECT))
     print(prog)
-    asyncio.create_task(check_progress(prog))
-    asyncio.create_task(prog.run())
+    # asyncio.create_task(check_progress(prog))
+    asyncio.create_task(prog.run("README.md"))
+    output = await prog.output_ready
+    logger.info(f"output: {output}")
 
 
 
@@ -1282,7 +1290,7 @@ def main():
 
     config.load(options.config_dir, merge_default=True)
 
-    Player.load()
+    load()
 
     # providers.load()
 
