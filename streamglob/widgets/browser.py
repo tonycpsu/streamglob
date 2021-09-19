@@ -399,7 +399,7 @@ class FileBrowser(urwid.WidgetWrap):
             directory = os.path.join(self.cwd, directory)
         os.mkdir(directory)
         self.tree_root.refresh()
-        node = self.tree_root.find_path(
+        node = self.find_path(
             os.path.relpath(
                 directory,
                 self.cwd
@@ -408,6 +408,20 @@ class FileBrowser(urwid.WidgetWrap):
         if not node:
             return
         self.listbox.set_focus(node)
+
+    def delete_path(self, path):
+
+        path = os.path.relpath(path, self.cwd)
+        logger.info(f"delete_path: {path}")
+        # if path.startswith(self.cwd):
+        #     path = path[len(self.cwd)+1:]
+        # logger.info(f"delete_path2: {path}")
+        node = self.find_path(path)
+        if not node:
+            logger.warn(f"couldn't find {path}")
+            return
+        logger.info(f"deleting {node}")
+        self.delete_node(node)
 
     def delete_node(self, node, confirm=False):
 
@@ -421,10 +435,16 @@ class FileBrowser(urwid.WidgetWrap):
             next_focused = None
 
         if isinstance(node, FileNode):
-            os.remove(node.full_path)
+            del node.get_parent()._children[node.get_key()]
+            try:
+                os.remove(node.full_path)
+            except OSError:
+                pass
+
         elif isinstance(node, DirectoryNode) and confirm:
+            del node.get_parent()._children[node.get_key()]
             for i in range(3):
-                # sometimes
+                # FIXME: sometimes rmtree fails?
                 try:
                     shutil.rmtree(node.full_path)
                     break
@@ -477,7 +497,23 @@ class FileBrowser(urwid.WidgetWrap):
         self._emit("focus", self.focus_position)
 
     def refresh(self):
+        self.tree_root.refresh()
+        self.listbox.body._modified()
+
+    def refresh_selection(self):
         self.selection.refresh()
+        self.listbox.body._modified()
+
+    def refresh_path(self, path):
+        logger.debug(f"refresh_path: {path}")
+        if path == self.cwd:
+            node = self.tree_root
+        else:
+            node = self.find_path(os.path.relpath(path, self.cwd))
+            if not node:
+                logger.warning(f"{path} not found")
+                return
+        node.refresh()
         self.listbox.body._modified()
 
     @property
