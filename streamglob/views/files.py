@@ -3,6 +3,7 @@ import logging
 logger = logging.getLogger(__name__)
 import asyncio
 import re
+import pipes
 
 import urwid
 from panwid.keymap import *
@@ -27,12 +28,14 @@ class FilesPlayMediaTask(model.PlayMediaTask):
 
 class FilesViewEventHandler(FileSystemEventHandler):
 
-    def __init__(self, view):
+    def __init__(self, view, root):
         self.view = view
+        self.root = root
         self.refresh_task = None
         super().__init__()
 
-    def on_any_event(self, event):
+    def on_modified(self, event):
+        self.view.browser.refresh_path(event.src_path)
         self.view.updated = True
 
 
@@ -61,6 +64,7 @@ class RunCommandPopUp(OKCancelDialog):
             prog = next(programs.ShellCommand.get(cmd))
         except StopIteration:
             logger.error(f"program {prog} not found")
+
         args = [
             a.format(
                 path=self.parent.browser.selection.full_path,
@@ -68,13 +72,10 @@ class RunCommandPopUp(OKCancelDialog):
             )
             for a in cfg.args
         ]
-        logger.info(prog)
         async def show_output():
-            logger.info("show_output")
             output = await prog.output_ready
             logger.info(f"output: {output}")
         state.event_loop.create_task(show_output())
-        logger.info("running")
         await prog.run(args)
 
 
@@ -104,6 +105,7 @@ class FilesView(
         "ctrl r": "refresh",
         "c": "create_directory",
         "g": "change_root",
+        ";": "debug",
         "m": ("set_file_sort", ["mtime", False]),
         "M": ("set_file_sort", ["mtime", True]),
         "b": ("set_file_sort", ["basename", False]),
@@ -125,6 +127,10 @@ class FilesView(
         self.updated = False
         state.event_loop.create_task(self.check_updated())
         # self._emit("requery", self)
+
+
+    def debug(self):
+        import ipdb; ipdb.set_trace()
 
     @property
     def provider(self):
@@ -152,6 +158,7 @@ class FilesView(
             file_sort = self.config.file_sort,
             ignore_files=False
         )
+        self.monitor_path(self.cwd)
         urwid.connect_signal(self.browser, "focus", self.on_focus)
         self.browser_placeholder.original_widget = self.browser
 
@@ -185,17 +192,15 @@ class FilesView(
         if isinstance(selection, FileNode):
             state.event_loop.create_task(self.preview_all())
 
-    def monitor_path(self, path):
-        # FIXME: broken -- spurious updates when files haven't changed
-        return
-        if path == self.root:
-            return
+    def monitor_path(self, path, recursive=False):
+
+        # import ipdb; ipdb.set_trace()
         logger.info(f"monitor_path: {path}")
         if getattr(self, "observer", None):
             self.observer.stop()
         self.observer = PollingObserver(5)
         self.observer.schedule(
-            FilesViewEventHandler(self), path, recursive=True
+            FilesViewEventHandler(self, self.browser.cwd), path, recursive=recursive
         )
         self.observer.start()
 
@@ -229,6 +234,12 @@ class FilesView(
     def refresh(self):
         self.browser.refresh()
 
+
+    def set_root(self, root):
+
+        self.browser.change_directory(root)
+        self.monitor_path(root)
+
     def change_root(self):
 
         class ChangeDirectoryDialog(TextEditDialog):
@@ -238,7 +249,7 @@ class FilesView(
                 return "Go to directory"
 
             def action(self, value):
-                self.parent.browser.change_directory(value)
+                self.parentparent.set_root(value)
 
         dialog = ChangeDirectoryDialog(self, self.cwd)
         self.open_popup(dialog, width=60, height=8)
@@ -260,7 +271,7 @@ class FilesView(
 
 
     def directory_up(self):
-        self.browser.change_directory("..")
+        self.set_root("..")
 
     # def open_selection(self):
     #     selection = self.browser.selection
