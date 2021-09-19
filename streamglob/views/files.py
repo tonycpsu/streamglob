@@ -4,6 +4,7 @@ logger = logging.getLogger(__name__)
 import asyncio
 import re
 import pipes
+from functools import partial
 
 import urwid
 from panwid.keymap import *
@@ -51,44 +52,26 @@ class RunCommandDropdown(BaseDropdown):
 
 class RunCommandPopUp(OKCancelDialog):
 
+    def __init__(self, parent):
+
+        super().__init__(parent)
+        urwid.connect_signal(self.dropdown, "change", self.on_dropdown_change)
+
+    def on_dropdown_change(self, source,label,  value):
+        self.pile.set_focus_path(self.ok_focus_path)
+
     @property
     def widgets(self):
+
         return dict(
             dropdown=RunCommandDropdown()
         )
 
     async def action(self):
-        cfg = self.dropdown.selected_value
-        cmd = cfg.command
-        try:
-            prog = next(programs.ShellCommand.get(cmd))
-        except StopIteration:
-            logger.error(f"program {prog} not found")
 
-        args = [
-            a.format(
-                path=self.parent.browser.selection.full_path,
-                socket=state.task_manager.preview_player.ipc_socket_name
-            )
-            for a in cfg.args
-        ]
-        async def show_output():
-            output = await prog.output_ready
-            logger.info(f"output: {output}")
-        state.event_loop.create_task(show_output())
-        await prog.run(args)
-
-
-
-
-# class RunCommandPopUp(BasePopUp):
-
-#     def __init__(self, parent):
-#         self.parent = parent
-
-#         super(RunCommandPopUp, self).__init__(
-#             urwid.Filler(urwid.Padding(self.dropdown))
-#         )
+        await self.parent.run_command_on_seleciton(
+            self.dropdown.selected_value
+        )
 
 
 @keymapped()
@@ -113,7 +96,7 @@ class FilesView(
         "backspace": "directory_up",
         # "enter": "open_selection",
         "delete": "delete_selection",
-        "!": "run_command_on_file"
+        "!": "open_run_command_dialog"
     }
 
     def __init__(self):
@@ -126,7 +109,13 @@ class FilesView(
         self.pile.focus_position = 0
         self.updated = False
         state.event_loop.create_task(self.check_updated())
-        # self._emit("requery", self)
+        for cmd, cfg in config.settings.profile.files.commands.items():
+            if "key" in cfg:
+                func = partial(
+                    self.run_command_on_selection,
+                    cfg
+                    )
+                self.keymap_register(cfg.key, func)
 
 
     def debug(self):
@@ -194,7 +183,7 @@ class FilesView(
 
     def monitor_path(self, path, recursive=False):
 
-        # import ipdb; ipdb.set_trace()
+        # return # FIXME
         logger.info(f"monitor_path: {path}")
         if getattr(self, "observer", None):
             self.observer.stop()
@@ -314,7 +303,29 @@ class FilesView(
         self.browser.body.set_focus(node)
         state.main_view.focus_widget(self)
 
-    def run_command_on_file(self):
+    async def run_command_on_selection(self, cmd_cfg):
+
+        cmd = cmd_cfg.command
+        try:
+            prog = next(programs.ShellCommand.get(cmd))
+        except StopIteration:
+            logger.error(f"program {prog} not found")
+
+        args = [
+            a.format(
+                path=self.browser.selection.full_path,
+                socket=state.task_manager.preview_player.ipc_socket_name
+            )
+            for a in cmd_cfg.args
+        ]
+        # async def show_output():
+        #     output = await prog.output_ready
+        #     logger.info(f"output: {output}")
+        # state.event_loop.create_task(show_output())
+        await prog.run(args)
+
+
+    def open_run_command_dialog(self):
 
         path = self.browser.selection.full_path
         popup = RunCommandPopUp(self)
