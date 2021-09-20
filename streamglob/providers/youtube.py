@@ -330,7 +330,12 @@ class YouTubeFeed(FeedMediaChannel):
 
     @async_cached_property
     async def rss_data(self):
-        url = f"https://www.youtube.com/feeds/videos.xml?channel_id={self.locator}"
+        if self.locator.startswith("UC"):
+            url = f"https://www.youtube.com/feeds/videos.xml?channel_id={self.locator}"
+        elif self.locator.startswith("PL"):
+            url = f"https://www.youtube.com/feeds/videos.xml?playlist_id={self.locator}"
+        else:
+            raise NotImplementedError
         res = await self.session.get(url)
         if res.status != 200:
             raise ChannelNotFoundError
