@@ -138,7 +138,8 @@ class MainView(urwid.WidgetWrap):
         ".": ("player_command", ["seek", "+10"]),
         "meta ,": ("player_command", ["seek", "-10"]),
         "meta .": ("player_command", ["seek", "+10"]),
-        "f": ["cycle", "fullscreen"]
+        "f": ["cycle", "fullscreen"],
+        "meta P": "toggle_auto_preview"
     }
 
     def __init__(self, widgets, weight=1, dividers=False):
@@ -242,6 +243,7 @@ class MainView(urwid.WidgetWrap):
         return self[self.focused_index]
         # return self[self.focused_pane]
 
+
     def focus_widget(self, widget):
         for i in range(len(self)):
             if self[i] == widget:
@@ -290,6 +292,9 @@ class MainView(urwid.WidgetWrap):
 
     async def player_command(self, *args):
         await state.task_manager.preview_player.command(*args)
+
+    def toggle_auto_preview(self):
+        state.listings_view.toolbar.auto_preview_check_box.toggle_state()
 
 
 

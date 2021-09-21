@@ -644,7 +644,8 @@ class BaseProvider(PlayListingProviderMixin, DownloadListingProviderMixin, abc.A
 
     @property
     def auto_preview_enabled(self):
-        return not self.config.auto_preview.disabled
+        return state.listings_view.auto_preview_mode
+        # return not self.config.auto_preview.disabled
 
     @property
     def auto_preview_default(self):

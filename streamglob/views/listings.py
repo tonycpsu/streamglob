@@ -8,6 +8,7 @@ from panwid.keymap import *
 from ..state import *
 from .. import config
 from .. import providers
+from .. import programs
 from ..widgets import *
 from ..providers.base import SynchronizedPlayerMixin
 from .. import utils
@@ -21,16 +22,15 @@ class ToolbarDropdown(BaseDropdown):
 class ProviderToolbar(urwid.WidgetWrap):
 
     signals = ["provider_change", "profile_change", "view_change"] # "preview_change"
-    def __init__(self, default_provider):
+    def __init__(self, parent):
+
+        self.parent = parent
 
         def format_provider(n, p):
             return p.NAME if p.config_is_valid else f"* {p.NAME}"
 
         def providers_sort_key(p):
             k, v = p
-            # providers = list(config.settings.profile.providers.keys())
-            # if k in providers:
-            # raise Exception(v)
             if v.config_is_valid:
                 return (0, str(v.NAME))
             else:
@@ -42,7 +42,7 @@ class ProviderToolbar(urwid.WidgetWrap):
                       providers.PROVIDERS.items(),
                       key = providers_sort_key
               )]
-        ) , label="Provider", default=default_provider, margin=1)
+        ), label="Provider", default=self.parent.provider.IDENTIFIER, margin=1)
 
         urwid.connect_signal(
             self.provider_dropdown, "change",
@@ -52,6 +52,13 @@ class ProviderToolbar(urwid.WidgetWrap):
         self.preview_dropdown_placeholder = urwid.WidgetPlaceholder(urwid.Text(""))
 
         self.view_dropdown_placeholder = urwid.WidgetPlaceholder(urwid.Text(""))
+
+        self.auto_preview_check_box = urwid.CheckBox("Auto Preview")
+        urwid.connect_signal(
+            self.auto_preview_check_box, "change",
+            self.on_auto_preview_change
+        )
+
 
         self.max_concurrent_tasks_widget = providers.filters.IntegerTextFilterWidget(
             text_attr="header_bright",
@@ -83,6 +90,8 @@ class ProviderToolbar(urwid.WidgetWrap):
             (self.provider_dropdown.width, self.provider_dropdown),
             ("weight", 1, urwid.Padding(urwid.Text(""))),
             (20, self.view_dropdown_placeholder),
+            ("weight", 1, urwid.Padding(urwid.Text(""))),
+            (12, self.auto_preview_check_box),
             # (20, self.preview_dropdown_placeholder),
             # (1, urwid.Divider(u"\N{BOX DRAWINGS LIGHT VERTICAL}")),
             ("pack", urwid.Text(("Downloads"))),
@@ -101,6 +110,24 @@ class ProviderToolbar(urwid.WidgetWrap):
                 )
             )
         )
+
+    def on_auto_preview_change(self, source, value):
+        if state.main_view.focused_index == 1:
+            view = self.parent.provider.view
+        elif state.main_view.focused_index == 2:
+            view = state.files_view
+        else:
+            logger.info(state.main_view.focused_index)
+            return
+
+        if value:
+            state.event_loop.create_task(
+                 view.preview_all()
+            )
+        else:
+            state.event_loop.create_task(
+                view.preview_listing(None)
+            )
 
     def cycle_provider(self, step=1):
 
@@ -155,7 +182,7 @@ class ListingsView(StreamglobView):
         "meta [": ("cycle_provider", [-1]),
         "meta ]": ("cycle_provider", [1]),
         "meta {": ("cycle_preview_type", [-1]),
-        "meta }": ("cycle_preview_type", [1]),
+        "meta }": ("cycle_preview_type", [1])
     }
 
     SETTINGS = ["provider", "profile", "preview"]
@@ -185,7 +212,7 @@ class ListingsView(StreamglobView):
         if  getattr(self, "toolbar", None):
             self.toolbar.provider_dropdown.value = self.provider.IDENTIFIER
         else:
-            self.toolbar = ProviderToolbar(self.provider.IDENTIFIER)
+            self.toolbar = ProviderToolbar(self)
             self.toolbar_placeholder.original_widget = self.toolbar
             urwid.connect_signal(
                 self.toolbar, "provider_change",
@@ -201,7 +228,7 @@ class ListingsView(StreamglobView):
 
             def profile_change(p):
                 config.settings.toggle_profile(p)
-                programs.Player.load()
+                programs.load()
 
             urwid.connect_signal(
                 self.toolbar, "profile_change",
@@ -220,6 +247,9 @@ class ListingsView(StreamglobView):
         self.toolbar.update_provider_config(
             self.provider.PREVIEW_TYPES,
             self.provider.config
+        )
+        self.toolbar.auto_preview_check_box.set_state(
+            not self.provider.config.auto_preview.disabled
         )
         if self.provider.config_is_valid:
             self.pile.focus_position = 1
@@ -273,6 +303,10 @@ class ListingsView(StreamglobView):
     @property
     def preview_mode(self):
         return self.toolbar.preview_dropdown.value
+
+    @property
+    def auto_preview_mode(self):
+        return self.toolbar.auto_preview_check_box.get_state()
 
     def on_view_activate(self):
 
