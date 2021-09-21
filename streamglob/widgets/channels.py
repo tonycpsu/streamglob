@@ -18,6 +18,8 @@ from unidecode import unidecode
 import timeago
 import pytz
 
+
+from .tree import TreeParentNode
 from .. import config
 from .. import model
 from .. import utils
@@ -423,7 +425,7 @@ class ChannelNode(ChannelPropertiesMixin, urwid.TreeNode):
 
 
 
-class ChannelUnionNode(ChannelPropertiesMixin, urwid.ParentNode):
+class ChannelUnionNode(ChannelPropertiesMixin, TreeParentNode):
 
     def __init__(self, tree, value, parent=None, key=None, depth=None):
         self.tree = tree
@@ -440,32 +442,6 @@ class ChannelUnionNode(ChannelPropertiesMixin, urwid.ParentNode):
     def identifier(self):
         return self.get_key()
 
-    @property
-    def marked(self):
-        return self.get_widget().marked
-
-    def get_nodes(self, pred=None):
-        for key in self.get_child_keys():
-            child = self.get_child_node(key)
-            if not child.is_leaf:
-                if pred is None or pred(child):
-                    yield child
-                yield from child.get_nodes(pred)
-            if pred is None or pred(child):
-                yield child
-
-    def get_leaf_nodes(self):
-        yield from self.get_nodes(
-            lambda n: n.is_leaf
-        )
-
-    def get_leaf_keys(self):
-        yield from (n.get_key() for n in self.get_leaf_nodes())
-
-    def get_marked_nodes(self):
-        yield from self.get_nodes(
-            lambda n: n.marked
-        )
 
     def load_child_keys(self):
         data = self.get_value()

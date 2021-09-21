@@ -136,18 +136,16 @@ class FilesView(
     def selectable(self):
         return True
 
-    def load_browser(self, root):
-
-        self.cwd = root
+    def load_browser(self, top_dir):
 
         self.browser = FileBrowser(
-            self.cwd,
+            top_dir,
             root=config.settings.profile.files.root,
             dir_sort = self.config.dir_sort,
             file_sort = self.config.file_sort,
             ignore_files=False
         )
-        self.monitor_path(self.cwd)
+        self.monitor_path(top_dir)
         urwid.connect_signal(self.browser, "focus", self.on_focus)
         self.browser_placeholder.original_widget = self.browser
 
@@ -166,7 +164,7 @@ class FilesView(
 
     @property
     def playlist_position(self):
-        return 0
+        return self.selection_index
 
     @property
     def playlist_title(self):
@@ -179,7 +177,10 @@ class FilesView(
     def on_focus(self, source, selection):
 
         if isinstance(selection, FileNode):
-            state.event_loop.create_task(self.preview_all())
+            logger.info("sync")
+            state.event_loop.create_task(self.sync_playlist_position())
+
+# state.event_loop.create_task(self.preview_all())
 
     def monitor_path(self, path, recursive=False):
 
@@ -195,16 +196,25 @@ class FilesView(
 
     @property
     def play_items(self):
+        # import ipdb; ipdb.set_trace()
         return [
+            # AttrDict(
+            #     title=self.selected_listing.title,
+            #     locator=self.selected_listing.sources[0].locator
+            # )
+            # for i in range(len(self))
+
             AttrDict(
-                title=self.selected_listing.title,
-                locator = self.selected_listing.sources[0].locator
+                title=n.get_key(),
+                locator=n.full_path
             )
+            for n in self.browser.cwd_node.child_files
         ]
 
     @property
     def selected_listing(self):
-        path = self.browser.selection.full_path
+        idx = self.selection_index
+        path = self.play_items[idx].locator
         return model.TitledMediaListing.attr_class(
             provider_id="files", # FIXME
             title=os.path.basename(path),
@@ -217,8 +227,18 @@ class FilesView(
         )
 
     @property
+    def selection_index(self):
+        try:
+            return self.browser.cwd_node.child_files.index(
+                self.browser.selection
+            )
+        except ValueError:
+            return 0
+
+    @property
     def selected_source(self):
-        return self.selected_listing.sources[0]
+        idx = self.selection_index
+        return self.play_items[idx]
 
     def refresh(self):
         self.browser.refresh()
@@ -240,7 +260,7 @@ class FilesView(
             def action(self, value):
                 self.parentparent.set_root(value)
 
-        dialog = ChangeDirectoryDialog(self, self.cwd)
+        dialog = ChangeDirectoryDialog(self, self.browser.cwd)
         self.open_popup(dialog, width=60, height=8)
 
     def create_directory(self):
@@ -333,10 +353,17 @@ class FilesView(
 
 
     def on_view_activate(self):
-        pass
+
+        async def activate_preview_player():
+            if state.listings_view.auto_preview_mode:
+                await self.preview_all()
+
+        state.event_loop.create_task(activate_preview_player())
 
     def __len__(self):
-        return 1
+        # return 1
+        logger.info(len(self.browser.cwd_node.child_files))
+        return len(self.browser.cwd_node.child_files)
 
-    def __iter__(self):
-        return iter(self.browser.selection.full_path)
+    # def __iter__(self):
+    #     return iter(self.browser.selection.full_path)

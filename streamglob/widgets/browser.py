@@ -10,6 +10,8 @@ from functools import partial
 
 import urwid
 
+from .tree import TreeParentNode
+
 class FileBrowserTreeWidget(urwid.TreeWidget):
     indent_cols = 2
 
@@ -133,7 +135,7 @@ class DirectoryWidget(FlagFileWidget):
     def get_display_text(self):
         node = self.get_node()
         if node.get_depth() == 0:
-            return node.tree.cwd
+            return node.tree.top_dir
         else:
             return node.get_key()
 
@@ -150,7 +152,7 @@ class FileNode(urwid.TreeNode):
 
     def __init__(self, path, parent=None):
         self.parent = parent
-        depth = path.count(dir_sep()) - parent.tree.cwd.count(dir_sep())
+        depth = path.count(dir_sep()) - parent.tree.top_dir.count(dir_sep())
         key = os.path.basename(path)
         urwid.TreeNode.__init__(self, path, key=key, parent=parent, depth=depth)
 
@@ -170,7 +172,7 @@ class FileNode(urwid.TreeNode):
         while root.get_parent() is not None:
             path.append(root.get_key())
             root = root.get_parent()
-        path.append(self.parent.tree.cwd)
+        path.append(self.parent.tree.top_dir)
         return dir_sep().join(reversed(path))
 
     def refresh(self):
@@ -187,16 +189,16 @@ class ErrorNode(urwid.TreeNode):
         return ErrorWidget(self)
 
 
-class DirectoryNode(urwid.ParentNode):
+class DirectoryNode(TreeParentNode):
     """Metadata storage for directories"""
 
     def __init__(self, tree, path, parent=None):
         self.tree = tree
-        if path == self.tree.cwd:
+        if path == self.tree.top_dir:
             depth = 0
             key = None
         else:
-            depth = path.count(dir_sep()) - self.tree.cwd.count(dir_sep())
+            depth = path.count(dir_sep()) - self.tree.top_dir.count(dir_sep())
             key = os.path.basename(path)
         urwid.ParentNode.__init__(self, path, key=key, parent=parent,
                                   depth=depth)
@@ -286,6 +288,19 @@ class DirectoryNode(urwid.ParentNode):
             if not node:
                 break
 
+    @property
+    def child_dirs(self):
+        return [
+            self._children[k] for k in self.get_child_keys()
+            if isinstance(self._children[k], DirectoryNode)
+        ]
+
+    @property
+    def child_files(self):
+        return [
+            self.get_child_node(k) for k in self.get_child_keys()
+            if isinstance(self.get_child_node(k), FileNode)
+        ]
 
     @property
     def full_path(self):
@@ -294,7 +309,7 @@ class DirectoryNode(urwid.ParentNode):
         while root.get_parent() is not None:
             path.append(root.get_key())
             root = root.get_parent()
-        path.append(self.tree.cwd)
+        path.append(self.tree.top_dir)
         return dir_sep().join(reversed(path))
 
     def refresh(self):
@@ -362,6 +377,7 @@ class FileBrowser(urwid.WidgetWrap):
 
 
     def __init__(self,
+                 top_dir=None,
                  cwd=None,
                  root=None,
                  dir_sort=None,
@@ -371,7 +387,8 @@ class FileBrowser(urwid.WidgetWrap):
                  no_parent_dir=False,
                  expand_empty=False):
 
-        self.cwd = os.path.normpath(cwd or os.getcwd())
+        self.top_dir = os.path.normpath(top_dir or os.getcwd())
+        cwd = cwd or self.top_dir
         self.root = root
 
         if not isinstance(dir_sort, (tuple, list)):
@@ -389,20 +406,38 @@ class FileBrowser(urwid.WidgetWrap):
 
         self.placeholder = urwid.WidgetPlaceholder(urwid.Filler(urwid.Text("")))
         super().__init__(self.placeholder)
-        self.change_directory(self.cwd)
+        self.change_directory(self.top_dir)
+        if cwd:
+            node = self.find_path(
+                os.path.relpath(
+                    cwd,
+                    self.top_dir
+                )
+            )
+            if node:
+                self.listbox.set_focus(node)
+
+    @property
+    def cwd_node(self):
+        node = self.selection
+        return node if isinstance(node, DirectoryNode) else node.get_parent()
+
+    @property
+    def cwd(self):
+        return self.cwd_node.full_path
 
     def keypress(self, size, key):
         return super().keypress(size, key)
 
     def create_directory(self, directory):
         if not os.path.isabs(directory):
-            directory = os.path.join(self.cwd, directory)
+            directory = os.path.join(self.top_dir, directory)
         os.mkdir(directory)
         self.tree_root.refresh()
         node = self.find_path(
             os.path.relpath(
                 directory,
-                self.cwd
+                self.top_dir
             )
         )
         if not node:
@@ -411,7 +446,7 @@ class FileBrowser(urwid.WidgetWrap):
 
     def delete_path(self, path):
 
-        path = os.path.relpath(path, self.cwd)
+        path = os.path.relpath(path, self.top_dir)
         logger.info(f"delete_path: {path}")
         # if path.startswith(self.cwd):
         #     path = path[len(self.cwd)+1:]
@@ -459,7 +494,7 @@ class FileBrowser(urwid.WidgetWrap):
     def change_directory(self, directory):
 
         if not os.path.isabs(directory):
-            directory = os.path.join(self.cwd, directory)
+            directory = os.path.join(self.top_dir, directory)
         directory = os.path.normpath(directory)
 
         if not os.path.isdir(directory):
@@ -468,8 +503,8 @@ class FileBrowser(urwid.WidgetWrap):
         if self.root and not directory.startswith(self.root):
             return
 
-        self.cwd = directory
-        self.tree_root = DirectoryNode(self, self.cwd)
+        self.top_dir = directory
+        self.tree_root = DirectoryNode(self, self.top_dir)
         self.listbox = urwid.TreeListBox(urwid.TreeWalker(self.tree_root))
         for i in range(1 if self.no_parent_dir else 2):
             try:
@@ -488,12 +523,6 @@ class FileBrowser(urwid.WidgetWrap):
 
     def on_modified(self):
 
-        # if isinstance(self.selection, DirectoryNode):
-        #     if self.last_selection and self.last_selection.get_node().get_parent():
-        #         self.last_selection.expanded = False
-        #         self.last_selection.update_expanded_icon()
-        #     self.last_selection = self.selection_widget
-
         self._emit("focus", self.focus_position)
 
     def refresh(self):
@@ -506,10 +535,10 @@ class FileBrowser(urwid.WidgetWrap):
 
     def refresh_path(self, path):
         logger.debug(f"refresh_path: {path}")
-        if path == self.cwd:
+        if path == self.top_dir:
             node = self.tree_root
         else:
-            node = self.find_path(os.path.relpath(path, self.cwd))
+            node = self.find_path(os.path.relpath(path, self.top_dir))
             if not node:
                 logger.warning(f"{path} not found")
                 return

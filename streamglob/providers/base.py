@@ -809,14 +809,14 @@ class SynchronizedPlayerMixin(object):
 
     async def preview_selection(self):
 
-        if not len(self.body):
+        if not len(self):
             return
 
         while len(self.pending_event_tasks):
             t = self.pending_event_tasks.pop()
             t.cancel()
 
-        path = self.selected_source.local_path
+        path = getattr(self.selected_source, "local_path", self.selected_source.locator)
 
         location = path or self.selected_source.locator
         await self.playlist_replace(location)
@@ -1010,6 +1010,7 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
 
     async def preview_content(self):
 
+        # import ipdb; ipdb.set_trace()
         listing = self.selected_listing
         source = self.selected_source
         position = self.playlist_position
