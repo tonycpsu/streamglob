@@ -604,7 +604,8 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
                                 # return
 
             else:
-                self.focus_position = len(self)-1
+                # self.focus_position = len(self)-1
+                self.provider.view.channels.cycle_unread()
 
         await self.mark_item_read(self.focus_position, no_signal=True)
 
@@ -982,8 +983,7 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
             await self.body.next_unread()
         if self.columns.focus_position == 0:
             self.columns.focus_position = 1
-        else:
-            asyncio.create_task(advance())
+        asyncio.create_task(advance())
 
 
     @keymap_command

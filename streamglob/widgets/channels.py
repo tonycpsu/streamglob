@@ -637,7 +637,7 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
     KEYMAP = {
         "/": "complete substring",
         "?": "complete prefix",
-        "n": "cycle_unread",
+        "n": "advance",
         "enter": "confirm",
         "esc": "cancel",
         "ctrl p": "complete_prev",
@@ -1046,11 +1046,11 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
         return self.tree.find_key(key)
 
     def cycle_unread(self, step=1):
+        # self._emit("advance")
         self.cycle(
             step,
             lambda n: n.get_widget().unread_count > 0 and not isinstance(n, ChannelGroupNode)
         )
-        self._emit("advance")
 
     def cycle(self, step=1, pred=None):
         cur = self.listbox.body.get_focus()[1]
