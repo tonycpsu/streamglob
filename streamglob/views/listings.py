@@ -112,6 +112,8 @@ class ProviderToolbar(urwid.WidgetWrap):
         )
 
     def on_auto_preview_change(self, source, value):
+        if not getattr(state, "main_view", None):
+            return
         if state.main_view.focused_index == 1:
             view = self.parent.provider.view
         elif state.main_view.focused_index == 2:

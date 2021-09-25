@@ -681,6 +681,16 @@ class BaseProvider(PlayListingProviderMixin, DownloadListingProviderMixin, abc.A
             config.settings.profile.get_path("output.path")
         )
 
+    @property
+    def check_downloaded(self):
+        return (
+            self.config.get_path("output.check_downloaded")
+            or
+            config.settings.profile.get_path("output.check_downloaded")
+        )
+
+
+
 class PaginatedProviderMixin(object):
 
     DEFAULT_PAGE_SIZE = 50
@@ -767,7 +777,7 @@ class SynchronizedPlayerMixin(object):
     signals = ["keypress"]
 
     KEYMAP = {
-        " ": "preview_selection",
+        " ": "preview_content",
         "meta p": "preview_all"
     }
 

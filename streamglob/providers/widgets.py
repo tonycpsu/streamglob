@@ -357,6 +357,8 @@ class ProviderDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseData
         self.update_task = state.event_loop.create_task(self.update_row_attributes())
 
     async def row_attr(self, row):
+        if not self.provider.check_downloaded:
+            return
         return (
             "downloaded"
             if all([s.local_path for s in row.data.sources])
