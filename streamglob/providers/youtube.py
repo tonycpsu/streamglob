@@ -592,7 +592,6 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
     async def preview_duration(self, cfg, listing):
 
         duration = await super().preview_duration(cfg, listing)
-        logger.info(f"yt duration: {duration}")
         if cfg.mode != "storyboard" or duration is None:
             return duration
 
@@ -697,7 +696,7 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
 
         if cfg.frame_rate:
             frame_rate = cfg.frame_rate
-            duration = i/frame_rate
+            duration = n/frame_rate
         elif "duration" in cfg:
             duration = cfg.duration
             frame_rate = n/duration

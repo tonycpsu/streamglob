@@ -1037,7 +1037,7 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
         for cfg in self.config.auto_preview.stages[self.preview_stage:]:
             # if self.playlist_position != position:
             #     return
-            logger.info(f"stage: {cfg.mode}")
+            logger.debug(f"stage: {cfg.mode}")
             # import ipdb; ipdb.set_trace()
             # if self.play_items[position].preview_mode == cfg.mode:
             #     continue
@@ -1057,20 +1057,27 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
                 break
 
             duration = await self.preview_duration(cfg, listing)
-            logger.info(f"base duration: {duration}")
             if duration is not None: # advance automatically
                 # logger.info(f"sleeping: {duration}")
                 await asyncio.sleep(duration)
             else: # wait for next manual advance
                 break
         self.preview_stage = (self.preview_stage+1) % len(self.config.auto_preview.stages)
-        logger.info(f"new stage: {self.preview_stage}")
+        logger.debug(f"new stage: {self.preview_stage}")
 
         await self.set_playlist_pos(position)
 
 
     async def preview_duration(self, cfg, listing):
-        return cfg.duration if "duration" in cfg else None
+
+        return (
+            cfg.duration
+            if "duration" in cfg
+            else self.config.auto_preview.duration
+            if "duration" in self.config.auto_preview
+            else
+            None
+        )
 
     # FIXME: inner_focus comes from MultiSourceListingMixin
     async def sync_playlist_position(self):
