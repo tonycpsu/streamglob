@@ -647,9 +647,9 @@ class BaseProvider(PlayListingProviderMixin, DownloadListingProviderMixin, abc.A
         return state.listings_view.auto_preview_mode
         # return not self.config.auto_preview.disabled
 
-    @property
-    def auto_preview_default(self):
-        return self.config.auto_preview.default if self.auto_preview_enabled else "default"
+    # @property
+    # def auto_preview_default(self):
+    #     return self.config.auto_preview.default if self.auto_preview_enabled else "default"
 
     @property
     def strip_emoji(self):
@@ -796,6 +796,7 @@ class SynchronizedPlayerMixin(object):
         self.sync_player_playlist = False
         self.video_filters = []
         self.playlist_lock = asyncio.Lock()
+        self.preview_stage = 0
 
     def on_requery(self, source, count):
 
@@ -1029,17 +1030,17 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             logger.debug(f"sleeping: {self.config.auto_preview.delay}")
             await asyncio.sleep(self.config.auto_preview.delay)
 
-        await self.set_playlist_pos(position)
+        # if self.config.auto_preview.duration:
+        #     await asyncio.sleep(self.config.auto_preview.duration)
 
-        if self.config.auto_preview.duration:
-            await asyncio.sleep(self.config.auto_preview.duration)
-
-        for i, cfg in enumerate(self.config.auto_preview.stages):
+        # cfg = self.config.auto_preview.stages[self.preview_stage]
+        for cfg in self.config.auto_preview.stages[self.preview_stage:]:
             # if self.playlist_position != position:
             #     return
-            logger.debug(f"stage: {cfg}")
-            if self.play_items[position].preview_mode == cfg.mode:
-                continue
+            logger.info(f"stage: {cfg.mode}")
+            # import ipdb; ipdb.set_trace()
+            # if self.play_items[position].preview_mode == cfg.mode:
+            #     continue
             if cfg.media_types and source.media_type not in cfg.media_types:
                 continue
             preview_fn = getattr(
@@ -1049,18 +1050,27 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
                 await preview_fn(cfg, position, listing, source=source)
             except asyncio.exceptions.CancelledError:
                 logger.warning("CancelledError from preview function")
-                return
+                break
             try:
                 self.play_items[position].preview_mode = cfg.mode
             except IndexError:
-                return
+                break
+
             duration = await self.preview_duration(cfg, listing)
-            if duration:
+            logger.info(f"base duration: {duration}")
+            if duration is not None: # advance automatically
                 # logger.info(f"sleeping: {duration}")
                 await asyncio.sleep(duration)
+            else: # wait for next manual advance
+                break
+        self.preview_stage = (self.preview_stage+1) % len(self.config.auto_preview.stages)
+        logger.info(f"new stage: {self.preview_stage}")
+
+        await self.set_playlist_pos(position)
+
 
     async def preview_duration(self, cfg, listing):
-        return cfg.duration or 0
+        return cfg.duration if "duration" in cfg else None
 
     # FIXME: inner_focus comes from MultiSourceListingMixin
     async def sync_playlist_position(self):
@@ -1088,6 +1098,7 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
 
     def on_focus(self, source, position):
 
+        self.preview_stage = 0
         if self.provider.auto_preview_enabled:
             state.event_loop.create_task(self.sync_playlist_position())
         if len(self):
@@ -1149,13 +1160,14 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
 
         asyncio.create_task(async_handler())
 
+
     async def playlist_replace(self, url, idx=None, pos=None):
 
         async with self.playlist_lock:
             if idx is None:
                 idx = self.playlist_position
 
-            logger.info(f"playist_replace: {idx}, {url}")
+            # logger.info(f"playist_replace: {idx}, {url}")
             self.play_items[idx].locator = url
             await self.preview_all(playlist_position=pos)
 

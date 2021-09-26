@@ -590,13 +590,18 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         # await self.preview_task
 
     async def preview_duration(self, cfg, listing):
-        if cfg.mode == "storyboard":
-            storyboard = await self.storyboard_for(listing, cfg)
-            if not storyboard:
-                return None
-            return storyboard.duration
-        else:
-            return await super().preview_duration(cfg, listing)
+
+        duration = await super().preview_duration(cfg, listing)
+        logger.info(f"yt duration: {duration}")
+        if cfg.mode != "storyboard" or duration is None:
+            return duration
+
+        storyboard = await self.storyboard_for(listing, cfg)
+        if not storyboard:
+            return 0
+
+        return int(storyboard.duration)
+
 
     # FIXME: shared utility module if reused?
     async def download_file(self, url, path):
@@ -693,7 +698,7 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         if cfg.frame_rate:
             frame_rate = cfg.frame_rate
             duration = i/frame_rate
-        elif cfg.duration:
+        elif "duration" in cfg:
             duration = cfg.duration
             frame_rate = n/duration
         else:

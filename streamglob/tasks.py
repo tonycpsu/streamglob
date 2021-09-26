@@ -73,7 +73,7 @@ class TaskManager(Observable):
                     title=(item.title or "(no title)").strip(),
                     locator=item.locator
                 ).encode("utf-8"))
-            logger.info(m3u.name)
+            logger.debug(m3u.name)
 
             # listing = self.new_listing(
             listing = AttrDict(
@@ -109,7 +109,7 @@ class TaskManager(Observable):
     async def preview(self, listing, caller, **kwargs):
 
         if listing:
-            logger.info(listing)
+            # logger.info(listing)
             task = caller.create_preview_task(listing, **kwargs)
         else:
             listing = self.empty_listing(caller.playlist_title)

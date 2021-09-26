@@ -420,11 +420,9 @@ def run_gui(action, provider, **kwargs):
         rpc = JsonRpc()
 
         async def preview_foreground():
-            logger.info("foreground")
             await state.task_manager.preview_player.command("set_property", "ontop", "yes")
 
         async def preview_background():
-            logger.info("background")
             await state.task_manager.preview_player.command("set_property", "ontop", "no")
 
         methods = [
