@@ -210,6 +210,18 @@ class Program(object):
         super().__init_subclass__()
 
 
+
+    @classmethod
+    def program_type(cls):
+        try:
+            return next(
+                c.__name__.lower() for c in cls.mro()
+                if c.mro()[0].__name__.lower() in Program.SUBCLASSES.keys()
+            )
+        except StopIteration:
+            return "program"
+
+
     @classmethod
     def get(cls, spec, *args, **kwargs):
 

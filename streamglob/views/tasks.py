@@ -18,6 +18,13 @@ from ..providers.widgets import PlayListingProviderMixin, PlayListingViewMixin
 
 class TaskWidget(urwid.WidgetWrap):
 
+    PROGRAM_TYPES = {
+        "player": "play",
+        "downloader": "dl",
+        "postprocessor": "post",
+        "shellcommand": "shell"
+    }
+
     def __init__(self, task):
 
         self.task = task
@@ -33,29 +40,48 @@ class TaskWidget(urwid.WidgetWrap):
         ])
         super().__init__(self.pile)
 
+
+    @property
+    def program_type(self):
+        return self.program.__class__.program_type()
+
+    @property
+    def program_type_label(self):
+        return urwid.Text(
+            self.PROGRAM_TYPES.get(self.program_type, "program")
+        )
+
     @property
     def display_lines(self):
-        return getattr(self, f"display_lines_{self.task.status}",
+
+        return getattr(self, f"display_lines_{self.program_type}",
                        self.display_lines_default)
 
     @property
     def display_lines_default(self):
         return [
-            self.display_line_default
+            urwid.Columns([
+                ("pack", self.program_type_label),
+                ("pack", self.provider),
+                ("weight", 1, urwid.Padding(self.title)),
+            ], dividechars=1)
         ]
 
     @property
-    def display_line_default(self):
-        return urwid.Columns([
-            ("pack", self.provider),
-            ("weight", 1, urwid.Padding(self.title)),
-            (18, urwid.Padding(
-                urwid.Text(self.status, align="right"),
-                right=1)),
-            ("pack", urwid.Text(str(f"{self.transfer_rate}/s"))),
-            ("pack", self.progress_bar),
-            # ("pack", self.elapsed)
-        ], dividechars=1)
+    def display_line_sdownload(self):
+        return [
+            urwid.Columns([
+                ("pack", self.program_type_label),
+                ("pack", self.provider),
+                ("weight", 1, urwid.Padding(self.title)),
+                (18, urwid.Padding(
+                    urwid.Text(self.status, align="right"),
+                    right=1)),
+                ("pack", urwid.Text(str(f"{self.transfer_rate}/s"))),
+                ("pack", self.progress_bar),
+                # ("pack", self.elapsed)
+            ], dividechars=1)
+        ]
 
 
     @property
