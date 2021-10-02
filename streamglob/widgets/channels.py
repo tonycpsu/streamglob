@@ -686,8 +686,12 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
         return self.pile
 
     @property
+    def complete_body_position(self):
+        return 1
+
+    @property
     def complete_container_pos(self):
-        return 2
+        return 3
 
     @property
     def complete_body(self):
