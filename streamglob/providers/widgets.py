@@ -358,7 +358,7 @@ class ProviderDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseData
 
     async def row_attr(self, row):
         if not self.provider.check_downloaded:
-            return
+            return "normal"
         return (
             "downloaded"
             if all([s.local_path for s in row.data.sources])

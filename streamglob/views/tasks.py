@@ -43,7 +43,12 @@ class TaskWidget(urwid.WidgetWrap):
 
     @property
     def program_type(self):
-        return self.program.__class__.program_type()
+        return (
+            self.program.__class__.program_type()
+            if self.program
+            else ""
+        )
+
 
     @property
     def program_type_label(self):
@@ -68,7 +73,7 @@ class TaskWidget(urwid.WidgetWrap):
         ]
 
     @property
-    def display_line_sdownload(self):
+    def display_lines_downloader(self):
         return [
             urwid.Columns([
                 ("pack", self.program_type_label),

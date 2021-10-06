@@ -435,7 +435,7 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
     async def row_attr(self, row):
         unread = "unread" if not row.data.read else ""
         downloaded = await super().row_attr(row)
-        attr = " ".join([unread, downloaded]).strip()
+        attr = " ".join([ a for a in [unread, downloaded] if a]).strip()
         return attr
 
     # def row_attr_fn(self, position, data, row):

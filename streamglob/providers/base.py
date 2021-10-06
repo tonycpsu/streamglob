@@ -687,6 +687,7 @@ class BaseProvider(PlayListingProviderMixin, DownloadListingProviderMixin, abc.A
             self.config.get_path("output.check_downloaded")
             or
             config.settings.profile.get_path("output.check_downloaded")
+            or False
         )
 
 
