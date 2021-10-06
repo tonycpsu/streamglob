@@ -225,8 +225,9 @@ class BaseProvider(PlayListingProviderMixin, DownloadListingProviderMixin, abc.A
         ])
 
         self.highlight_map = AttrDict([
-            (re.compile(k, re.IGNORECASE), labels[v])
-            for k, v in rules.items()
+            (re.compile(text, re.IGNORECASE), labels[label])
+            for label, texts in rules.items()
+            for text in texts
         ])
 
         self.highlight_re = re.compile(
