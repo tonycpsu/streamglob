@@ -268,14 +268,16 @@ class Config(ConfigTree):
         self._profile_tree.toggle_profile(profile)
 
     def load(self):
-        if not os.path.exists(self.config_file):
-            raise Exception(f"config file {self.config_file} not found")
-        loader = yaml_loader(ConfigTree, self._config_dir)
+        if os.path.exists(self.config_file):
+            loader = yaml_loader(ConfigTree, self._config_dir)
+            config = yaml.load(
+                open(self.config_file),
+                Loader=loader
+            )
+        else:
+            config = {}
+            # raise Exception(f"config file {self.config_file} not found")
 
-        config = yaml.load(
-            open(self.config_file),
-            Loader=loader
-        )
         self.update(config.items())
 
     def save(self):

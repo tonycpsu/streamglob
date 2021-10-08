@@ -3,6 +3,7 @@ logger = logging.getLogger(__name__)
 
 import functools
 import re
+import bisect
 
 import urwid
 from panwid.datatable import *
@@ -212,6 +213,8 @@ class ProviderDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseData
 
     KEYMAP = {
         ".": "browse_selection",
+        "h": "add_highlight_rule",
+        "H": "remove_highlight_rule",
         "ctrl o": "strip_emoji_selection",
         "ctrl t": "translate_selection",
         "meta O": "toggle_strip_emoji_all",
@@ -399,6 +402,7 @@ class ProviderDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseData
                     else x for x in self.provider.highlight_re.split(value) if x
                 ]
                 if len(markup):
+                    row.tokens = [x[1] for x in markup if isinstance(x, tuple)]
                     value = urwid.Text(markup)
 
         return super().decorate(row, column, value)
@@ -425,6 +429,69 @@ class ProviderDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseData
             **kwargs
         )
 
+
+    def add_highlight_rule(self):
+
+        class AddHighlightRuleDialog(OKCancelDialog):
+
+            @property
+            def widgets(self):
+
+                return dict(
+                    text=urwid_readline.ReadlineEdit(
+                        caption=("bold", "Text: "),
+                        edit_text=self.parent.selection.data.title
+                    ),
+                    tag=BaseDropdown(list(self.parent.provider.rules.keys()))
+                )
+
+            def action(self):
+                if (
+                        self.text.get_edit_text().lower()
+                        in [x.lower() for x in self.parent.provider.conf_rules.label[self.tag.selected_label]]
+                    ):
+                    return
+
+                bisect.insort(
+                    self.parent.provider.conf_rules.label[self.tag.selected_label],
+                    self.text.get_edit_text()
+                )
+                self.parent.provider.conf_rules.save()
+                self.parent.provider.load_rules()
+                self.parent.reset()
+
+        dialog = AddHighlightRuleDialog(self)
+        self.provider.view.open_popup(dialog, width=60, height=8)
+
+    def remove_highlight_rule(self):
+
+        class RemoveHighlightRuleDialog(OKCancelDialog):
+
+            @property
+            def widgets(self):
+                row = self.parent.selection
+                return dict(
+                    text=urwid_readline.ReadlineEdit(
+                        caption=("bold", "Text: "),
+                        edit_text="" if not getattr(row, "tokens", None) else row.tokens[0]
+                    )
+                )
+
+            def action(self):
+                rules = self.parent.provider.conf_rules.label
+                for label in rules.keys():
+                    try:
+                        rules[label].remove(self.text.get_edit_text())
+                        self.parent.provider.conf_rules.save()
+                        self.parent.provider.load_rules()
+                        self.parent.reset()
+                        break
+                    except ValueError:
+                        continue
+
+        dialog = RemoveHighlightRuleDialog(self)
+        self.provider.view.open_popup(dialog, width=60, height=8)
+    
     async def browse_selection(self):
         listing = self.selected_listing
         filename = self.selected_source.local_path

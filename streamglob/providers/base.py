@@ -207,35 +207,8 @@ class BaseProvider(PlayListingProviderMixin, DownloadListingProviderMixin, abc.A
         self._filters = AttrDict({n: f(provider=self, name=n)
                                   for n, f in self.FILTERS.items() })
 
-        rules = AttrDict(
-            self.config.rules.label or {},
-            **config.settings.profile.rules.label or {}
-        )
+        self.load_rules()
 
-        labels = AttrDict(
-            self.config.labels,
-            **config.settings.profile.labels
-        )
-
-        self.rule_map = AttrDict([
-            (re.compile(k, re.IGNORECASE), v)
-            for k, v in
-            [(r, rules[r])
-             for r in rules.keys()]
-        ])
-
-        self.highlight_map = AttrDict([
-            (re.compile(text, re.IGNORECASE), labels[label])
-            for label, texts in rules.items()
-            for text in texts
-        ])
-
-        self.highlight_re = re.compile(
-            "("
-            + "|".join([k.pattern for k in self.highlight_map.keys()])
-            + ")", re.IGNORECASE
-        )
-        # print(self.filters)
         self.filters["search"].connect("changed", self.on_search_change)
 
     @property
@@ -261,6 +234,51 @@ class BaseProvider(PlayListingProviderMixin, DownloadListingProviderMixin, abc.A
                 except (ValueError,):
                     # import ipdb; ipdb.set_trace()
                     pass
+
+    @property
+    def conf_rules(self):
+        if not getattr(self, "_conf_rules", None):
+            self._conf_rules = config.Config(
+            os.path.join(
+                config.settings._config_dir,
+                self.IDENTIFIER,
+                "rules.yaml"
+            )
+        )
+        return self._conf_rules
+
+    def load_rules(self):
+
+        self._conf_rules = None
+
+        self.rules = AttrDict(
+            self.conf_rules.label or {},
+            **config.settings.profile.rules.label or {}
+        )
+
+        self.labels = AttrDict(
+            self.config.labels,
+            **config.settings.profile.labels
+        )
+
+        self.rule_map = AttrDict([
+            (re.compile(k, re.IGNORECASE), v)
+            for k, v in
+            [(r, self.rules[r])
+             for r in self.rules.keys()]
+        ])
+
+        self.highlight_map = AttrDict([
+            (re.compile(text, re.IGNORECASE), self.labels[label])
+            for label, texts in self.rules.items()
+            for text in texts
+        ])
+
+        self.highlight_re = re.compile(
+            "("
+            + "|".join([k.pattern for k in self.highlight_map.keys()])
+            + ")", re.IGNORECASE
+        )
 
     @property
     def default_filter_values(self):
