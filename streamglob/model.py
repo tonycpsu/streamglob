@@ -669,6 +669,14 @@ class TitledMediaListing(TitledMediaListingMixin, MultiSourceMediaListing):
 
     title = Required(str)
 
+    @property
+    def labels(self):
+        return {
+            label
+            for label, regexp in self.provider.rule_map.items()
+            if regexp.search(self.title)
+        }
+
 
 class InflatableMediaListingMixin(object):
 
@@ -846,6 +854,15 @@ class ProviderData(db.Entity):
     name = Required(str, unique=True)
     settings = Required(Json, default={})
 
+
+@db.on_connect(provider="sqlite")
+def sqlite_regexp_search(db, conn):
+
+    def regexp(expr, item):
+        reg = re.compile(expr)
+        return reg.search(item) is not None
+
+    conn.create_function("REGEXP", 2, regexp)
 
 def init(filename=None, *args, **kwargs):
 

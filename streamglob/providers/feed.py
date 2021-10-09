@@ -34,7 +34,7 @@ from .filters import *
 class FeedMediaChannel(model.MediaChannel):
     """
     A subclass of MediaChannel for providers that can distinguish between
-    individual broadcasts / episodes / events, perhaps with the abilit to watch
+    individual broadcasts / episodes / events, perhaps with the ability to watch
     on demand.
     """
 
@@ -676,7 +676,7 @@ class FeedProvider(BaseProvider):
     def FILTERS_OPTIONS(self):
         return AttrDict([
             ("status", ItemStatusFilter),
-            ("filters", CustomFilter),
+            ("custom", CustomFilter),
             ("search", TextFilter)
         ], **super().FILTERS_OPTIONS)
 
@@ -686,7 +686,8 @@ class FeedProvider(BaseProvider):
 
         return AttrDict(
             feed=self.provider_data.get("selected_feed", None),
-            status=self.provider_data.get("selected_status", None)
+            status=self.provider_data.get("selected_status", None),
+            filters=self.provider_data.get("selected_filter", None),
         )
 
     @property
@@ -1161,7 +1162,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
             urwid.connect_signal(self.view, "feed_change", self.on_feed_change)
             urwid.connect_signal(self.view, "feed_select", self.on_feed_select)
         self.filters["status"].connect("changed", self.on_status_change)
-        self.filters["filters"].connect("changed", self.on_custom_change)
+        self.filters["custom"].connect("changed", self.on_custom_change)
         self.pagination_cursor = None
         self.limiter = get_limiter(rate=self.RATE_LIMIT, capacity=self.BURST_LIMIT)
         self.listing_lock = asyncio.Lock()
@@ -1274,16 +1275,21 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         self.reset()
 
     def on_status_change(self, status, *args):
+        if not self.is_active:
+            return
         with db_session:
             self.provider_data["selected_status"] = status
             self.save_provider_data()
-        if not self.is_active:
-            return
         self.reset()
 
     def on_custom_change(self, custom, *args):
         logger.info(f"{custom}, {args}")
         self.custom_filters = custom
+        with db_session:
+            self.provider_data["selected_filter"] = custom
+            self.save_provider_data()
+        if not self.is_active:
+            return
         self.reset()
 
     def open_popup(self, text):
@@ -1417,7 +1423,16 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
 
         if self.custom_filters:
             for k, v in self.custom_filters.items():
-                self.items_query = self.items_query.filter(lambda i: v in getattr(i, k))
+                if k == "labels":
+                    op = "regexp"
+                    if v.startswith("!"):
+                        op = "not regexp"
+                        v = v[1:]
+                    self.items_query = self.items_query.filter(
+                        lambda i: raw_sql(f"""lower(title) {op} lower('{self.rule_map[v].pattern}')""")
+                    )
+                else:
+                    self.items_query = self.items_query.filter(lambda i: v in getattr(i, k))
 
         (sort_field, sort_desc) = sort if sort else self.view.sort_by
         if cursor:
@@ -1467,7 +1482,6 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         with db_session(optimistic=False):
 
             self.update_query(sort=sort, cursor=cursor)
-
 
             for listing in self.items_query[:limit]:
                 sources = [

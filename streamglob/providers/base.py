@@ -261,12 +261,22 @@ class BaseProvider(PlayListingProviderMixin, DownloadListingProviderMixin, abc.A
             **config.settings.profile.labels
         )
 
-        self.rule_map = AttrDict([
-            (re.compile(k, re.IGNORECASE), v)
-            for k, v in
-            [(r, self.rules[r])
-             for r in self.rules.keys()]
-        ])
+        # self.rule_map = AttrDict([
+        #     (re.compile(k, re.IGNORECASE), v)
+        #     for k, v in
+        #     [(r, self.rules[r])
+        #      for r in self.rules.keys()]
+        # ])
+
+        # self.rule_map = AttrDict([
+        #     (re.compile(text, re.IGNORECASE), label)
+        #     for label, texts in self.rules.items()
+        #     for text in texts
+        # ])
+        self.rule_map = {
+            label: re.compile(f"({'|'.join(texts)})")
+            for label, texts in self.rules.items()
+        }
 
         self.highlight_map = AttrDict([
             (re.compile(text, re.IGNORECASE), self.labels[label])
@@ -539,9 +549,9 @@ class BaseProvider(PlayListingProviderMixin, DownloadListingProviderMixin, abc.A
     def on_new_listing(self, listing):
         try:
             label = next(
-                l
-                for r, l in self.rule_map.items()
-                if r.search(listing.title)
+                label
+                for label, pattern in self.rule_map.items()
+                if pattern.search(listing.title)
             )
             listing.label = label
             if self.should_download(listing):
