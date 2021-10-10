@@ -389,7 +389,7 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
     KEYMAP = {
         "cursor up": "prev_item",
         "cursor down": "next_item",
-        "n": "next_unread",
+        # "n": "next_unread",
         "N": ("next_unread", [True]),
         "b": "prev_unread",
         "m": "toggle_selection_read",
@@ -884,6 +884,7 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
     signals = ["select", "cycle_filter", "keypress", "feed_change", "feed_select"]
 
     KEYMAP = {
+        "n": "advance",
         "a": "mark_feed_read",
         "A": "mark_all_read",
         "ctrl a": "mark_visible_read",
@@ -939,6 +940,8 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
         urwid.connect_signal(self.channels, "change",
                              lambda s, *args: self._emit("feed_change", *args))
 
+    def advance(self):
+        self.channels.advance()
 
     def mark_all_read(self):
         with db_session:
@@ -981,8 +984,8 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
 
     def on_channels_advance(self, source):
         async def advance():
+            # if self.columns.focus_position == 0:
             await self.body.next_unread()
-        if self.columns.focus_position == 0:
             self.columns.focus_position = 1
         asyncio.create_task(advance())
 

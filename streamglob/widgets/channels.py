@@ -1026,7 +1026,6 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
         return self.tree.find_key(key)
 
     def cycle_unread(self, step=1):
-        # self._emit("advance")
         self.cycle(
             step,
             lambda n: n.get_widget().unread_count > 0 and not isinstance(n, ChannelGroupNode)
