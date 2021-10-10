@@ -279,7 +279,7 @@ class BaseProvider(PlayListingProviderMixin, DownloadListingProviderMixin, abc.A
         }
 
         self.highlight_map = AttrDict([
-            (re.compile(text, re.IGNORECASE), self.labels[label])
+            (re.compile(text, re.IGNORECASE), self.config.rules.highlight[label])
             for label, texts in self.rules.items()
             for text in texts
         ])
@@ -540,11 +540,17 @@ class BaseProvider(PlayListingProviderMixin, DownloadListingProviderMixin, abc.A
     def listings(self, filters=None):
         pass
 
-    def should_download(self, listing):
-        return listing.label in (
-            list(self.config.rules)
-            + list(config.settings.profile.rules.download)
-        )
+    # def should_download(self, listing):
+    #     return listing.label in (
+    #         list(self.config.rules)
+    #         + list(config.settings.profile.rules.download)
+    #     )
+
+    def action_download(self, listing):
+        self.download(listing)
+
+    def action_mark_read(self, listing):
+        listing.mark_read()
 
     def on_new_listing(self, listing):
         try:
@@ -554,8 +560,12 @@ class BaseProvider(PlayListingProviderMixin, DownloadListingProviderMixin, abc.A
                 if pattern.search(listing.title)
             )
             listing.label = label
-            if self.should_download(listing):
-                self.download(listing)
+            for action in self.config.rules.actions.get(label, []):
+                func = getattr(self, f"action_{action}", None)
+                if func:
+                    func(listing)
+            # if self.should_download(listing):
+            #     self.download(listing)
 
         except StopIteration:
             pass
