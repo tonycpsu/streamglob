@@ -68,8 +68,8 @@ class ChannelTreeWidget(HighlightableTextMixin, urwid.TreeWidget):
     def keypress(self, size, key):
         if key == " ":
             self.toggle_mark()
-        elif self._w.selectable():
-            return self.__super.keypress(size, key)
+        # elif self._w.selectable():
+        #     return self.__super.keypress(size, key)
         else:
             return key
 
@@ -824,18 +824,18 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
                 return f"""Delete "{channel.name}"?"""
 
             def action(self):
-                target = self.parent.listbox.focus_position
+                channels = self.parent.channels
+                # import ipdb; ipdb.set_trace()
+                target = channels.focus_position
                 try:
-                    new_selection = self.parent.listbox.body.get_next(target)[1].identifier
+                    new_selection = channels.body.get_next(target)[1].identifier
                 except IndexError:
-                    new_selection = self.parent.listbox.body.get_prev(target)[1].identifier
+                    new_selection = channels.body.get_prev(target)[1].identifier
 
-                self.delete_channel(channel.locator)
-                self.conf.save()
-                self.load()
-                self.listbox.set_focus(self.find_node(new_selection))
-
-
+                channels.delete_channel(channel.locator)
+                channels.conf.save()
+                channels.load()
+                channels.listbox.set_focus(channels.find_node(new_selection))
 
         dialog = DeleteConfirmDialog(self.provider.view)
         self.provider.view.open_popup(dialog, width=60, height=5)
