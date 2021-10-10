@@ -1425,17 +1425,50 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                 )
 
         if self.custom_filters:
+
+            def parse_label_rules(rules):
+
+                BOOL_RE = re.compile(r"\s*([&|])\s*")
+                TERM_MAP = {
+                    "&": "AND",
+                    "|": "OR"
+                }
+
+                def parse_term(term):
+                    if BOOL_RE.search(term):
+                        return TERM_MAP.get(term)
+                    op = "regexp"
+                    if term.startswith("!"):
+                        op = "not regexp"
+                        term=term[1:].strip()
+                    pattern = self.rule_map[term].pattern
+                    return f"lower(title) {op} lower('{pattern}')"
+
+                def parse_rule(rule):
+                    return " ".join([
+                        parse_term(term)
+                        for term in BOOL_RE.split(rule)
+                    ])
+
+                return " AND ".join(
+                    [
+                        f"({parse_rule(rule)})"
+                        for rule in rules
+                    ]
+                )
+
             for k, v in self.custom_filters.items():
                 if k == "labels":
-                    op = "regexp"
-                    if v.startswith("!"):
-                        op = "not regexp"
-                        v = v[1:]
+                    sql = parse_label_rules(
+                        [v] if isinstance(v, str) else v
+                    )
                     self.items_query = self.items_query.filter(
-                        lambda i: raw_sql(f"""lower(title) {op} lower('{self.rule_map[v].pattern}')""")
+                        lambda i: raw_sql(sql)
                     )
                 else:
-                    self.items_query = self.items_query.filter(lambda i: v in getattr(i, k))
+                    self.items_query = self.items_query.filter(
+                        lambda i: v in getattr(i, k)
+                    )
 
         (sort_field, sort_desc) = sort if sort else self.view.sort_by
         if cursor:
