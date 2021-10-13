@@ -436,11 +436,20 @@ class ProviderDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseData
 
             @property
             def widgets(self):
+                edit_pos = 0
+                if self.parent.provider.conf_rules.highlight_words:
+                    try:
+                        edit_pos = [
+                            m.start() for m in re.finditer(r"\S+",self.parent.selection.data.title)
+                        ][self.parent.provider.conf_rules.highlight_words]-1
+                    except IndexError:
+                        pass
 
                 return dict(
                     text=urwid_readline.ReadlineEdit(
                         caption=("bold", "Text: "),
-                        edit_text=self.parent.selection.data.title
+                        edit_text=self.parent.selection.data.title,
+                        edit_pos=edit_pos
                     ),
                     tag=BaseDropdown(list(self.parent.provider.rules.keys()))
                 )
