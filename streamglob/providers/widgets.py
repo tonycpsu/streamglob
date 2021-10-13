@@ -361,15 +361,16 @@ class ProviderDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseData
 
     async def row_attr(self, row):
         if not self.provider.check_downloaded:
-            return "normal"
-        return (
-            "downloaded"
-            if all([s.local_path for s in row.data.sources])
-            else "normal"
-        )
+            return None
+        if all([s.local_path for s in row.data.sources]):
+            return "downloaded"
+        return None
 
     async def update_row_attribute(self, row):
-        row.set_attr(await self.row_attr(row))
+        attr = await self.row_attr(row)
+        if attr:
+            cur = row.get_attr()
+            row.set_attr(" ".join([ a for a in [attr, cur] if a ]))
 
     async def update_row_attributes(self):
         for row in self:

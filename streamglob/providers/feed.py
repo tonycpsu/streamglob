@@ -310,20 +310,6 @@ class CachedFeedProviderDetailDataTable(DetailDataTable):
     def keypress(self, size, key):
         return super().keypress(size, key)
 
-    # def row_attr_fn(self, position, data, row):
-    #     # if not getattr(row, "seen", False):
-    #     with db_session:
-    #         try:
-    #             source = self.parent_table.provider.MEDIA_SOURCE_CLASS.orm_class[data.media_source_id]
-    #         except pony.orm.core.ObjectNotFound:
-    #             return
-    #     if source.local_path:
-    #         return "downloaded"
-    #     elif not source.seen:
-    #         # logger.info("detail unread")
-    #         return "unread"
-    #     return super().row_attr_fn(position, data, row)
-
     async def mark_selection_seen(self):
         with db_session:
             try:
@@ -402,11 +388,16 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
         # self.mark_read_on_focus = False
         # self.mark_read_task = None
         self.update_count = True
+        self.updat_task = None
         # urwid.connect_signal(self, "requery", self.on_requery)
 
     def on_requery(self, source, count):
         super().on_requery(source, count)
         self.update_count = True
+
+    def reset(self):
+        super().reset()
+        logger.info('reset')
 
     # def detail_box(self):
     #    return CachedFeedProviderDetailBox(self)
@@ -432,14 +423,8 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
             # logger.info(len([s for s in listing.sources if not s.seen]))
             return len([s for s in listing.sources if not s.seen])
 
-    async def row_attr(self, row):
-        unread = "unread" if not row.data.read else ""
-        downloaded = await super().row_attr(row)
-        attr = " ".join([ a for a in [unread, downloaded] if a]).strip()
-        return attr
-
-    # def row_attr_fn(self, position, data, row):
-    #     return "unread" if not data.read else super().row_attr_fn(position, data, row)
+    def row_attr_fn(self, position, data, row):
+        return "unread" if not data.read else "normal"
 
     @keymap_command()
     async def inflate_selection(self):
