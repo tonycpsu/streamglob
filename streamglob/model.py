@@ -570,7 +570,7 @@ class MediaListing(MediaListingMixin, db.Entity):
     provider_id = Required(str, index=True)
     attrs = Required(Json, default={})
     task = Optional(lambda: MediaTask, reverse="listing")
-    downloads = Set(lambda: MediaDownload, reverse="media_listing")
+    download = Optional(lambda: MediaDownload, reverse="media_listing")
     downloaded = Optional(datetime)
     viewed = Optional(datetime)
     cover_locator = Optional(str)
@@ -694,9 +694,16 @@ class InflatableMediaListing(InflatableMediaListingMixin, MediaListing):
 class MediaDownload(MediaListingMixin, db.Entity):
 
     media_download_id = PrimaryKey(int, auto=True)
-    media_listing = Required(lambda: MediaListing, reverse="downloads")
+    media_listing = Required(lambda: MediaListing, reverse="download")
     retries = Required(int, default=0)
     done = Required(bool, default=False)
+
+    @classmethod
+    @db_session
+    def purge(cls, age=CACHE_DURATION_LONG):
+        cls.select(
+            lambda e: e.media_listing.downloaded < datetime.now() - timedelta(seconds=age)
+        ).delete()
 
 
 @attrclass()
@@ -813,6 +820,8 @@ class DownloadMediaTaskMixin(object):
                 listing = MediaListing[self.listing.media_listing_id]
                 listing.downloaded = now
                 # self.listing.attach().downloaded = now
+                if listing.download:
+                    listing.download.delete()
         super().finalize()
 
 

@@ -169,7 +169,6 @@ class DownloadListingViewMixin(object):
 
 class DownloadListingProviderMixin(object):
 
-
     def create_download_tasks(self, listing, index=None, downloader_spec=None, **kwargs):
 
         sources, kwargs = self.extract_sources(listing, **kwargs)
@@ -190,6 +189,11 @@ class DownloadListingProviderMixin(object):
                 logger.warning(f"filename template is invalid: {e}")
                 raise
             downloader_spec = downloader_spec or source.download_helper
+            with db_session:
+                download = model.MediaDownload.upsert(
+                    dict(media_listing=listing.attach())
+                )
+
             task = model.DownloadMediaTask.attr_class(
                 provider=self.NAME,
                 title=utils.sanitize_filename(listing.title),

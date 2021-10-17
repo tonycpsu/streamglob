@@ -439,8 +439,21 @@ def run_gui(action, provider, **kwargs):
         app.router.add_route("*", "/", rpc.handle_request)
         asyncio.create_task(start_server_async())
 
+    def queue_downloads(loop, user_data):
+        logger.info("queue_downloads")
+        with db_session:
+            for download in model.MediaDownload.select():
+                listing = download.media_listing
+                logger.info(f"queuing {listing}")
+                provider = listing.provider
+                for task in provider.create_download_tasks(listing):
+                    state.task_manager.download(task)
+
+
+
     state.loop.set_alarm_in(0, start_server)
     state.loop.set_alarm_in(0, activate_view)
+    state.loop.set_alarm_in(0, queue_downloads)
     state.loop.run()
 
 
@@ -537,6 +550,12 @@ def main():
     spec = None
 
     logger.debug(f"{PACKAGE_NAME} starting")
+
+    if config.settings.profile.downloads.max_age > 0:
+        with db_session(optimistic=False):
+            model.MediaDownload.purge(
+                age=config.settings.profile.downloads.max_age
+            )
 
     state.start_task_manager()
     # state.task_manager_task = state.event_loop.create_task(state.task_manager.start())
