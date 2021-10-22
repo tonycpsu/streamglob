@@ -808,7 +808,7 @@ class MLBProvider(BAMProviderMixin,
             with self.session.cache_responses_long():
                 for team in sorted(
                         j["teams"],
-                        key=lambda t: t["abbreviation"]
+                        key=lambda t: t.get("abbreviation", t.get("shortName"))
                 ):
                     t = self.TEAM_DATA_CLASS.from_json(
                         self.IDENTIFIER, team,

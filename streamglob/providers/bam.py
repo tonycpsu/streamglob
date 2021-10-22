@@ -95,8 +95,10 @@ class BAMLineScoreDataTable(DataTable):
         #     raise Exception(f"line style {style} not invalid")
 
         line_score = game.get("linescore", None)
-        away_team = game["teams"]["away"]["team"]["abbreviation"]
-        home_team = game["teams"]["home"]["team"]["abbreviation"]
+        at = game["teams"]["away"]["team"]
+        ht = game["teams"]["home"]["team"]
+        away_team = at.get("abbreviation", at.get("shortName"))
+        home_team = ht.get("abbreviation", ht.get("shortName"))
 
         primary_scoring_attr = cls.SCORING_ATTRS[0]
         # code = game["status"]["statusCode"]
@@ -649,12 +651,11 @@ class BAMTeamData(model.db.Entity):
                 bam_team_id = parent_id
             )
 
-
         return cls(
             provider_id = provider_id,
             bam_team_id = team["id"],
             bam_sport_id = sport_id or team.get("sport").get("id"),
-            abbreviation = team["abbreviation"],
+            abbreviation = team.get("abbreviation", team.get("shortName")),
             location = location,
             name = name,
             parent_team = parent_team
