@@ -315,10 +315,10 @@ class InstagramFeedMediaChannelMixin(object):
 
         user_id = self.client.user_id_from_username(self.locator[1:])
         medias, end_cursor = self.client.user_medias_paginated(
-            user_id, self.config.get("page_size", 50), end_cursor=end_cursor
+            user_id, self.provider.config.get("page_size", 50), end_cursor=end_cursor
         )
+        import ipdb; ipdb.set_trace()
 
-        # for end_cursor, post in await posts:
         for post in medias:
 
             count += 1
@@ -330,9 +330,7 @@ class InstagramFeedMediaChannelMixin(object):
             if new_count >= limit or new_count == 0 and count >= limit:
                 break
 
-            created_timestamp = post.get(
-                "date", post.get("taken_at")
-            )
+            created_timestamp = int(post.taken_at.timestamp())
 
             if end_cursor and (self.end_cursor is None or created_timestamp < self.end_cursor[0]):
                 logger.info(f"saving end_cursor: {created_timestamp}, {self.end_cursor[0] if self.end_cursor else None}")
