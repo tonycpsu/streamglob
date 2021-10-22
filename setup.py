@@ -41,7 +41,7 @@ setup(name=name,
           "ffmpeg-python @ git+https://github.com/hdk5/ffmpeg-python@asyncio_support#egg=ffmpeg-python",
           "googletransx",
           "html2text",
-          "instalooter >= 2.4.4",
+          "instagrapi", # FIXME
           "isodate",
           "lxml",
           "mistune",
