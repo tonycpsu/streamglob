@@ -362,8 +362,9 @@ class MediaSourceMixin(object):
         except (AttributeError, IndexError):
             channel = getattr(listing or self.listing, "channel", None)
             if channel:
-                channel.attach()
-                subject = channel.name
+                with db_session:
+                    channel = MediaChannel[channel.channel_id]
+                    subject = channel.name
             else:
                 subject = None
 

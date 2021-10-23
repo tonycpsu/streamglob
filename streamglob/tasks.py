@@ -368,7 +368,7 @@ class TaskManager(Observable):
                 pp = task.postprocessors[0]
 
                 logger.info(task.listing)
-                proc = await player.Postprocessor.process(
+                proc = await programs.Postprocessor.process(
                     task, pp,
                     task.stage_infile,
                     task.stage_outfile,

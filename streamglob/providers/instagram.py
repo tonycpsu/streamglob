@@ -26,21 +26,44 @@ import json
 
 
 class InstagramSession(session.AsyncStreamSession):
-    pass
-    # DEFAULT_REQUESTS_PER_MINUTE = 60
 
-    # def __init__(
-    #         self,
-    #         provider_id,
-    #         *args, **kwargs
-    # ):
-    #     super().__init__(provider_id, *args, **kwargs)
-    #     self.requests_per_minute = requests_per_minute
-    #     self._limiter = AsyncLimiter(requests_per_minute, 60)
+    client_ : typing.Any = None
+
+    DEFAULT_REQUESTS_PER_MINUTE = 60
+
+    def __init__(
+            self,
+            provider_id,
+            # requests_per_minute = DEFAULT_REQUESTS_PER_MINUTE
+            *args, **kwargs
+    ):
+        self.settings = kwargs.get("settings")
+        super().__init__(provider_id, *args, **kwargs)
+        # self.requests_per_minute = requests_per_minute
+        # self._limiter = AsyncLimiter(
+        #     requests_per_minute, 60
+        # )
 
     # @property
     # def limiter(self):
     #     return self._limiter
+
+    @property
+    def client(self):
+        if not hasattr(self, "client_") or not self.client_:
+            self.client_ = instagrapi.Client()
+            if self.settings:
+                logger.info("loading saved session settings")
+                self.client_.set_settings(self.settings)
+            self.client_.login(**self.provider.session_params)
+            self._state.settings = self.settings
+            self.save()
+        return self.client_
+
+    def __getattr__(self, attr):
+        if attr in ["client"]:
+            return object.__getattribute__(self, attr)
+        return getattr(self.client, attr)
 
 
 class InstagramMediaSourceMixin(object):
@@ -168,8 +191,6 @@ class InstagramFeedMediaChannelMixin(object):
         8: "carousel"
     }
 
-    client_ : typing.Any = None
-
     @property
     @db_session
     def end_cursor(self):
@@ -182,11 +203,7 @@ class InstagramFeedMediaChannelMixin(object):
 
     @property
     def client(self):
-        if not hasattr(self, "client_") or not self.client_:
-            self.client_ = instagrapi.Client()
-            self.client_.login(**self.provider.session_params)
-        return self.client_
-
+        return self.session.client
 
     def get_post_info(self, shortcode):
         pk = self.client.media_pk_from_code(shortcode)
@@ -213,28 +230,28 @@ class InstagramFeedMediaChannelMixin(object):
         if media_type == "image":
             content = [
                 dict(
-                    url = post.thumbnail_url,
-                    media_type = media_type,
-                    shortcode = post.code
+                    url=post.thumbnail_url,
+                    media_type=media_type,
+                    shortcode=post.code
                 )
             ]
         elif media_type == "video":
-            if post.get("video_url"):
+            if post.video_url:
                 content = [
                     dict(
-                        url = post.video_url,
-                        url_thumbnail = post.thumbnail_url,
-                        media_type = media_type,
-                        shortcode = post.code
+                        url=post.video_url,
+                        url_thumbnail=post.thumbnail_url,
+                        media_type=media_type,
+                        shortcode=post.code
                     )
                 ]
             else:
                 content = [
                     dict(
-                        url = None,
-                        url_thumbnail = post.thumbnail_url,
-                        media_type = media_type,
-                        shortcode = post.code
+                        url=None,
+                        url_thumbnail=post.thumbnail_url,
+                        media_type=media_type,
+                        shortcode=post.code
                     )
                 ]
 
@@ -242,19 +259,19 @@ class InstagramFeedMediaChannelMixin(object):
             if post.resources:
                 content = [
                     dict(
-                        url = r.video_url or r.thumbnail_url,
-                        url_thumbnail = r.thumbnail_url,
-                        media_type = "video" if r.video_url else "image",
-                        shortcode = post.code
+                        url=r.video_url or r.thumbnail_url,
+                        url_thumbnail=r.thumbnail_url,
+                        media_type="video" if r.video_url else "image",
+                        shortcode=post.code
                     )
                     for r in post.resources
                 ]
             else:
                 content = [
                     dict(
-                        url = None,
-                        url_thumbnail = post.thumbnail_url,
-                        media_type = media_type
+                        url=None,
+                        url_thumbnail=post.thumbnail_url,
+                        media_type=media_type
                     )
                 ]
 
@@ -278,47 +295,16 @@ class InstagramFeedMediaChannelMixin(object):
             end_cursor = None
 
         logger.info(f"cursor: {end_cursor}")
-        # try:
-        #     self.pages = self.looter.pages(cursor=end_cursor)
-        # except ValueError:
-        #     self.client_.logout()
-        #     self.client_.login(
-        #         username=self.provider.session_params["username"],
-        #         password=self.provider.session_params["password"],
-        #     )
-        #     self.pages = self.looter.pages(cursor=end_cursor)
-
-        # def get_posts(pages):
-        #     posts = list()
-        #     for page in pages:
-        #         cursor = page["edge_owner_to_timeline_media"]["page_info"]["end_cursor"]
-        #         for media in self.looter._medias(iter([page])):
-        #             posts.append((cursor, AttrDict(media)))
-        #     return posts
-        #
-        # def get_posts(pages):
-        #     try:
-        #         for page in pages:
-        #             cursor = page["edge_owner_to_timeline_media"]["page_info"]["end_cursor"]
-        #             for media in self.looter._medias(iter([page])):
-        #                 yield (cursor, AttrDict(media))
-        #     except json.decoder.JSONDecodeError:
-        #         logger.error("".join(traceback.format_exc()))
-        #         raise StopIteration
 
         count = 0
         new_count = 0
 
-        # posts = state.event_loop.run_in_executor(
-        #     None, get_posts, self.pages
-        # )
-
         user_id = self.client.user_id_from_username(self.locator[1:])
         medias, end_cursor = self.client.user_medias_paginated(
-            user_id, self.config.get("page_size", 50), end_cursor=end_cursor
+            user_id, self.provider.config.get("fetch_limit", 50), end_cursor=end_cursor
         )
 
-        # for end_cursor, post in await posts:
+
         for post in medias:
 
             count += 1
@@ -330,9 +316,7 @@ class InstagramFeedMediaChannelMixin(object):
             if new_count >= limit or new_count == 0 and count >= limit:
                 break
 
-            created_timestamp = post.get(
-                "date", post.get("taken_at")
-            )
+            created_timestamp = int(post.taken_at.timestamp())
 
             if end_cursor and (self.end_cursor is None or created_timestamp < self.end_cursor[0]):
                 logger.info(f"saving end_cursor: {created_timestamp}, {self.end_cursor[0] if self.end_cursor else None}")
@@ -346,28 +330,27 @@ class InstagramFeedMediaChannelMixin(object):
                 logger.debug(f"old: {created}")
                 return
             else:
-                logger.debug(f"new: {created}")
-                caption = post.caption
-
                 try:
                     media_type = self.POST_TYPE_MAP[post.media_type]
                 except:
                     logger.warn(f"unknown post type: {post.media_type}")
                     continue
 
+                logger.debug(f"new: {media_type} {created}")
+                caption = post.caption_text
                 content = self.extract_content(post)
 
                 i = dict(
-                    channel = self,
-                    guid = post.code,
-                    title = (caption or "(no caption)").replace("\n", " "),
-                    created = created,
-                    media_type = media_type,
-                    sources =  content,
-                    attrs = dict(
-                        short_code = post.code
+                    channel=self,
+                    guid=post.code,
+                    title=(caption or "(no caption)").replace("\n", " "),
+                    created=created,
+                    media_type=media_type,
+                    sources=content,
+                    attrs=dict(
+                        short_code=post.code
                     ),
-                    is_inflated = media_type == "image"
+                    is_inflated=media_type == "image"
                 )
                 new_count += 1
                 yield i

@@ -190,8 +190,9 @@ class DownloadListingProviderMixin(object):
                 raise
             downloader_spec = downloader_spec or source.download_helper
             with db_session:
+                listing = model.MediaListing[listing.media_listing_id]
                 download = model.MediaDownload.upsert(
-                    dict(media_listing=listing.attach())
+                    dict(media_listing=listing)
                 )
 
             task = model.DownloadMediaTask.attr_class(
