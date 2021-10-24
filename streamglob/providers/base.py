@@ -1160,7 +1160,8 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
                         self.invalidate_rows([listing_id])
                         self.selection.close_details()
                         self.selection.open_details()
-                        self.refresh()
+                        # necessary to reload sources that may hae changed
+                        # self.refresh()
                         await self.preview_all(playlist_position=self.playlist_position)
                     state.event_loop.create_task(reload(listing.media_listing_id))
         # state.loop.draw_screen()
@@ -1361,15 +1362,23 @@ class DetailDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseDataTa
 
     @property
     def selected_listing(self):
-        listing_id = self.selected_source.listing.media_listing_id
-        with db_session:
-            return self.provider.LISTING_CLASS[listing_id]
+        return self.parent_table.selected_listing
 
     @property
     def selected_source(self):
-        source_id = self[self.focus_position].data_source.media_source_id
-        with db_session:
-            return self.provider.MEDIA_SOURCE_CLASS[source_id]
+        return self.parent_table.selected_source
+
+    # @property
+    # def selected_listing(self):
+    #     listing_id = self.selection.data.media_listing_id
+    #     # listing_id = self.selected_source.listing.media_listing_id
+    #     with db_session:
+    #         return self.provider.LISTING_CLASS[listing_id]
+
+    # # @property
+    # def selected_source(self):
+    #     import ipdb; ip
+    #     return self.selected_listing.sources[0]
 
     # def key_home(self):
     #     # raise Exception
@@ -1407,10 +1416,11 @@ class DetailDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseDataTa
             dict(
                 source,
                 **dict(
+                    media_listing_id=source.listing.media_listing_id,
                     title=f"[{i+1}/{len(source.listing.sources)}] {source.listing.title}",
-                    feed = source.listing.feed,
-                    created = source.listing.created,
-                    read = source.listing.attrs.get("parts_read", {}).get(i, False)
+                    feed=source.listing.feed,
+                    created=source.listing.created,
+                    read=source.listing.attrs.get("parts_read", {}).get(i, False)
                 ))
               for i, source in enumerate(self.listing.sources)
         ]

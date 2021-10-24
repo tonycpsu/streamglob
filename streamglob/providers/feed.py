@@ -1493,6 +1493,9 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
 
         count = 0
         # cursor = None
+        #
+        # if cursor:
+        #     import ipdb; ipdb.set_trace()
 
         if not offset:
             offset = 0

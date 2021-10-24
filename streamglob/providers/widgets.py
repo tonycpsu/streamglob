@@ -92,9 +92,18 @@ class PlayListingViewMixin(object):
             return None
         return listing
 
-    @property
-    def selected_source(self):
-        return self.selected_listing.sources[0]
+    # @property
+    # def selected_source(self):
+    #     # import ipdb; ipdb.set_trace()
+    #     if isinstance(self.selected_listing.sources, list):
+    #         return self.selected_listing.sources[0]
+    #     elif isinstance(self.selected_listing, model.db.Entity):
+    #         with db_session:
+    #             return self.selected_listing.sources.select(
+    #                 lambda s: s.rank
+    #             ).first()
+    #     else:
+    #         raise NotImplementedError
 
     async def play_selection(self, *args, **kwargs):
         listing = self.selected_listing
