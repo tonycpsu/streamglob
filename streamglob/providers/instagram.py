@@ -154,6 +154,7 @@ class InstagramMediaListingMixin(object):
             return True
 
     def refresh(self):
+        import ipdb; ipdb.set_trace()
         async def foo():
             async with self.provider.session.limiter:
                 await self.attach().inflate(force=True)

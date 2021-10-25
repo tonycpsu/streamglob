@@ -1275,7 +1275,7 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
             for (row_num, row, index, source) in [
                     (row_num, row, index, source) for row_num, row in enumerate(self)
                     for index, source in enumerate(
-                            row.data_source.sources
+                            row.data_source.sources or []
                             if hasattr(row.data_source, "sources")
                             else [
                                 model.MediaSource.attr_class(
