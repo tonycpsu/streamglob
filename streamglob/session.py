@@ -60,12 +60,12 @@ class StreamSession(object):
     ):
 
         self.provider_id = provider_id
-        self.session = self.SESSION_CLASS()
+        self.session = self.SESSION_CLASS(headers = self.HEADERS)
         self.cookies = LWPCookieJar()
         if not os.path.exists(self.COOKIES_FILE):
             self.cookies.save(self.COOKIES_FILE)
         self.cookies.load(self.COOKIES_FILE, ignore_discard=True)
-        self.session.headers = self.HEADERS
+        # self.session.headers = self.HEADERS
         self._state = AttrDict([
             ("proxies", proxies)
         ])
