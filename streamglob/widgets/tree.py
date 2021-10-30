@@ -22,6 +22,44 @@ class AttributeTreeWidget(urwid.TreeWidget):
     def attr(self):
         return "browser normal"
 
+class ExpandableMixin(object):
+
+    # apply an attribute to the expand/unexpand icons
+    unexpanded_icon = urwid.AttrMap(
+        urwid.TreeWidget.unexpanded_icon,
+        "browser dirmark", "browser dirmark_focus"
+    )
+    expanded_icon = urwid.AttrMap(
+        urwid.TreeWidget.expanded_icon,
+        "browser dirmark", "browser dirmark_focus"
+    )
+
+
+    def __init__(self, node, expanded=None):
+        super().__init__(node)
+        if not expanded:
+            expanded = self.get_node().starts_expanded
+
+        self.expanded = expanded
+        self.update_expanded_icon()
+
+    def expand(self):
+        self.expanded = True
+        self.update_expanded_icon()
+
+    def collapse(self):
+        self.expanded = False
+        self.update_expanded_icon()
+
+    def keypress(self, size, key):
+        key = super().keypress(size, key)
+        if key == "left":
+            self.collapse()
+        elif key == "right":
+            self.expand()
+        else:
+            return key
+
 
 class MarkableMixin(object):
 
@@ -36,14 +74,14 @@ class MarkableMixin(object):
         self.marked = True
         self.update_w()
         if not self.is_leaf:
-            for node in self.get_node().get_nodes(shallow=True):
+            for node in self.get_node().get_unmarked_nodes(shallow=True):
                 node.get_widget().mark()
 
     def unmark(self):
         self.marked = False
         self.update_w()
         if not self.is_leaf:
-            for node in self.get_node().get_nodes(shallow=True):
+            for node in self.get_node().get_marked_nodes(shallow=True):
                 node.get_widget().unmark()
 
     def toggle_mark(self):
@@ -152,6 +190,10 @@ class TreeNode(urwid.TreeNode):
 
 
 class TreeParentNode(TreeNode, urwid.ParentNode):
+
+    @property
+    def starts_expanded(self):
+        return self.get_depth() < 1
 
     @property
     def is_leaf(self):
