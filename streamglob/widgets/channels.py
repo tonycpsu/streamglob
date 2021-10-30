@@ -1002,8 +1002,8 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
                 self.unmark_all()
                 self.selection.get_widget().mark()
             self.update_selection()
-        elif key == " ":
-            self._emit("change", self.selected_items)
+        # elif key == " ":
+        #     self._emit("change", self.selected_items)
         elif key == ";":
             marked = list(self.tree.get_marked_nodes())
             if marked:

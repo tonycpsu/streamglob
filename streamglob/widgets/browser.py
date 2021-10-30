@@ -19,8 +19,6 @@ class FileBrowserTreeWidget(urwid.TreeWidget):
         super().__init__(node)
         # insert an extra AttrWrap for our own use
         self._w = urwid.AttrWrap(self._w, None)
-        self.marked = False
-        self.update_w()
 
     def keypress(self, size, key):
 
@@ -38,33 +36,23 @@ class FileBrowserTreeWidget(urwid.TreeWidget):
         else:
             return key
 
-    def update_w(self):
-        """Update the attributes of self.widget based on self.marked.
-        """
-        if self.marked:
-            self._w.attr = 'marked'
-            self._w.focus_attr = 'marked_focus'
-        else:
-            self._w.attr = "normal"
-            self._w.focus_attr = 'focus'
 
-
-class FlagFileWidget(FileBrowserTreeWidget):
+class MarkedFileWidget(FileBrowserTreeWidget):
     # apply an attribute to the expand/unexpand icons
     unexpanded_icon = urwid.AttrMap(
         urwid.TreeWidget.unexpanded_icon,
-        "dirmark", "dirmark_focus"
+        "browser dirmark", "browser dirmark_focus"
     )
     expanded_icon = urwid.AttrMap(
         urwid.TreeWidget.expanded_icon,
-        "dirmark", "dirmark_focus"
+        "browser dirmark", "browser dirmark_focus"
     )
 
     def __init__(self, node):
         self.__super.__init__(node)
         # insert an extra AttrWrap for our own use
         self._w = urwid.AttrWrap(self._w, None)
-        self.flagged = False
+        self.marked = False
         self.update_w()
 
     def selectable(self):
@@ -80,16 +68,27 @@ class FlagFileWidget(FileBrowserTreeWidget):
     def unhandled_keys(self, size, key):
         """
         Override this method to intercept keystrokes in subclasses.
-        Default behavior: Toggle flagged on space, ignore other keys.
+        Default behavior: Toggle marked on space, ignore other keys.
         """
         if key == " ":
-            self.flagged = not self.flagged
+            self.marked = not self.marked
             self.update_w()
         else:
             return key
 
+    def update_w(self):
+        """Update the attributes of self.widget based on self.marked.
+        """
+        if self.marked:
+            self._w.attr = "browser marked"
+            self._w.focus_attr = "browser marked_focus"
+        else:
+            self._w.attr = "browser normal"
+            self._w.focus_attr = "browser focus"
 
-class FileTreeWidget(FlagFileWidget):
+
+
+class FileTreeWidget(MarkedFileWidget):
     """Widget for individual files."""
     def __init__(self, node):
         self.__super.__init__(node)
@@ -103,7 +102,7 @@ class FileTreeWidget(FlagFileWidget):
 class EmptyWidget(FileBrowserTreeWidget):
     """A marker for expanded directories with no contents."""
     def get_display_text(self):
-        return ('flag', '(empty directory)')
+        return ('marked', '(empty directory)')
 
 
 class ErrorWidget(FileBrowserTreeWidget):
@@ -113,7 +112,7 @@ class ErrorWidget(FileBrowserTreeWidget):
         return ('error', "(error/permission denied)")
 
 
-class DirectoryWidget(FlagFileWidget):
+class DirectoryWidget(MarkedFileWidget):
     """Widget for a directory."""
     def __init__(self, node):
         self.__super.__init__(node)
@@ -126,7 +125,7 @@ class DirectoryWidget(FlagFileWidget):
         if self.get_node().get_key() == "..":
             self._w.base_widget.widget_list[0] = urwid.AttrMap(
                 urwid.SelectableIcon(" ", 0),
-                "dirmark", "dirmark_focus"
+                "browser dirmark", "browser dirmark_focus"
             )
         else:
             super().update_expanded_icon()
@@ -348,16 +347,15 @@ class FileBrowser(urwid.WidgetWrap):
 
     palette = [
         ('body', 'black', 'light gray'),
-        ('flagged', 'black', 'dark green', ('bold','underline')),
+        ('marked', 'black', 'dark green', ('bold','underline')),
         ('focus', 'light gray', 'dark blue', 'standout'),
-        ('flagged focus', 'yellow', 'dark cyan',
+        ('marked focus', 'yellow', 'dark cyan',
                 ('bold','standout','underline')),
         ('head', 'yellow', 'black', 'standout'),
         ('foot', 'light gray', 'black'),
         ('key', 'light cyan', 'black','underline'),
         ('title', 'white', 'black', 'bold'),
         ('dirmark', 'black', 'dark cyan', 'bold'),
-        ('flag', 'dark gray', 'light gray'),
         ('error', 'dark red', 'light gray'),
         ]
 
@@ -675,12 +673,12 @@ def add_widget(path, widget):
 
     _widget_cache[path] = widget
 
-def get_flagged_names():
-    """Return a list of all filenames marked as flagged."""
+def get_marked_names():
+    """Return a list of all filenames marked as marked."""
 
     l = []
     for w in _widget_cache.values():
-        if w.flagged:
+        if w.marked:
             l.append(w.get_node().get_value())
     return l
 
