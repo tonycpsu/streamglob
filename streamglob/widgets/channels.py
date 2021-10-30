@@ -245,7 +245,6 @@ class ChannelWidget(ListingCountMixin,
 
 class ChannelUnionWidget(AggregateListingCountMixin, ChannelWidget):
 
-
     def __init__(self, node):
         super().__init__(node)
         self.is_leaf = True
@@ -261,7 +260,10 @@ class ChannelUnionWidget(AggregateListingCountMixin, ChannelWidget):
             width=('relative', 100), left=indent_cols)
 
 
-class ChannelGroupWidget(AggregateListingCountMixin, MarkableMixin, ChannelTreeWidget):
+class ChannelGroupWidget(
+        AggregateListingCountMixin, ExpandableMarkedTreeWidget,
+        ChannelTreeWidget
+):
 
     indent_cols = 3
 
@@ -639,16 +641,7 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
 
     @property
     def selected_items(self):
-
-        marked = list(self.tree.get_marked_nodes())
-
-        if marked:
-            # selection = [node.identifier for node in marked]
-            selection = marked
-        else:
-            selection = [self.selection]
-
-        return selection
+        return self.tree.selected_items
 
     @selected_items.setter
     def selected_items(self, value):
@@ -908,7 +901,7 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
         if key == "enter":
             marked = list(self.tree.get_marked_nodes())
             if len(marked) <= 1:
-                self.tree.unmark_all()
+                self.tree.unmark()
                 self.selection.get_widget().mark()
             self.update_selection()
         elif key == "e":

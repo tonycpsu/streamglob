@@ -12,16 +12,6 @@ import urwid
 
 from .tree import *
 
-class MarkedTreeWidget(MarkableMixin, AttributeTreeWidget):
-
-    indent_cols = 2
-
-    def selectable(self):
-        return True
-
-class ExpandableMarkedTreeWidget(ExpandableMixin, MarkedTreeWidget):
-    pass
-
 class FileTreeWidget(MarkedTreeWidget):
     """Widget for individual files."""
     def __init__(self, node):
@@ -51,6 +41,7 @@ class ErrorWidget(MarkedTreeWidget):
 
 class DirectoryWidget(ExpandableMarkedTreeWidget):
     """Widget for a directory."""
+
     def __init__(self, node):
         self.__super.__init__(node)
         path = node.get_value()

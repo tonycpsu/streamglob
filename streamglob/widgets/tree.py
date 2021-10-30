@@ -3,25 +3,6 @@ logger = logging.getLogger(__name__)
 
 import urwid
 
-class AttributeTreeWidget(urwid.TreeWidget):
-
-    @property
-    def text(self):
-        return self.get_node().get_key()
-
-    def get_display_text(self):
-        # return self.highlight_content
-        return self.display_text
-
-    @property
-    def display_text(self):
-        # logger.info(f"{self.attr}, {self.text}")
-        return (self.attr, self.text)
-
-    @property
-    def attr(self):
-        return "browser normal"
-
 class ExpandableMixin(object):
 
     # apply an attribute to the expand/unexpand icons
@@ -163,6 +144,51 @@ class MarkableMixin(object):
         else:
             return super().keypress(size, key)
 
+
+class AttributeTreeWidget(urwid.TreeWidget):
+
+    @property
+    def text(self):
+        return self.get_node().get_key()
+
+    def get_display_text(self):
+        # return self.highlight_content
+        return self.display_text
+
+    @property
+    def display_text(self):
+        # logger.info(f"{self.attr}, {self.text}")
+        return (self.attr, self.text)
+
+    @property
+    def attr(self):
+        return "browser normal"
+
+
+class MarkedTreeWidget(MarkableMixin, AttributeTreeWidget):
+
+    indent_cols = 2
+
+    def selectable(self):
+        return True
+
+
+class ExpandableMarkedTreeWidget(ExpandableMixin, MarkedTreeWidget):
+
+    @property
+    def selected_items(self):
+
+        marked = list(self.get_node().get_marked_nodes())
+
+        if marked:
+            # selection = [node.identifier for node in marked]
+            selection = marked
+        else:
+            selection = [self.selection]
+
+        return selection
+
+
 class TreeNode(urwid.TreeNode):
 
     @property
@@ -194,6 +220,10 @@ class TreeParentNode(TreeNode, urwid.ParentNode):
     @property
     def starts_expanded(self):
         return self.get_depth() < 1
+
+    @property
+    def selected_items(self):
+        return self.get_widget().selected_items
 
     @property
     def is_leaf(self):
