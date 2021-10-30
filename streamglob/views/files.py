@@ -366,7 +366,6 @@ class FilesView(
 
             def action(self):
 
-                raise Exception
                 if self.dest.selected_value:
                     dest = self.dest.selected_label
                 else:
@@ -378,6 +377,7 @@ class FilesView(
 
                 self.parent.browser.move_path(self.src, destdir)
 
+        raise Exception(self.browser.selection)
         src = self.browser.selection.full_path
         dirs = [d.get_key() for d in self.browser.tree_root.child_dirs]
 

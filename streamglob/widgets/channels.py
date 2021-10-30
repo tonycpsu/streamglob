@@ -19,7 +19,7 @@ import timeago
 import pytz
 
 
-from .tree import TreeParentNode
+from .tree import *
 from .. import config
 from .. import model
 from .. import utils
@@ -27,21 +27,8 @@ from ..widgets import StreamglobScrollBar, TextEditDialog
 
 from ..state import *
 
-class ChannelTreeWidget(HighlightableTextMixin, urwid.TreeWidget):
+class ChannelTreeWidget(HighlightableTextMixin, AttributeTreeWidget):
     """ Display widget for leaf nodes """
-
-    def get_display_text(self):
-        # return self.highlight_content
-        return self.display_text
-
-    @property
-    def display_text(self):
-        # logger.info(f"{self.attr}, {self.text}")
-        return (self.attr, self.text)
-
-    @property
-    def attr(self):
-        return "browser normal"
 
     @property
     def name(self):
@@ -65,13 +52,13 @@ class ChannelTreeWidget(HighlightableTextMixin, urwid.TreeWidget):
     def selectable(self):
         return True
 
-    def keypress(self, size, key):
-        if key == " ":
-            self.toggle_mark()
-        # elif self._w.selectable():
-        #     return self.__super.keypress(size, key)
-        else:
-            return key
+    # def keypress(self, size, key):
+    #     if key == " ":
+    #         self.toggle_mark()
+    #     # elif self._w.selectable():
+    #     #     return self.__super.keypress(size, key)
+    #     else:
+    #         return key
 
     @property
     def highlight_source(self):
@@ -93,63 +80,6 @@ class ChannelTreeWidget(HighlightableTextMixin, urwid.TreeWidget):
 
     def __str__(self):
         return self._innerwidget.text
-
-
-class MarkableMixin(object):
-
-    def __init__(self, node):
-        super().__init__(node)
-        # insert an extra AttrWrap for our own use
-        self._w = urwid.AttrMap(self._w, "browser normal")
-        self.marked = False
-        self.update_w()
-
-    def mark(self):
-        self.marked = True
-        self.update_w()
-
-    def unmark(self):
-        self.marked = False
-        self.update_w()
-
-    def toggle_mark(self):
-        if self.marked:
-            self.unmark()
-        else:
-            self.mark()
-
-    def update_w(self):
-        """Update the attributes of self.widget based on self.marked.
-        """
-        if self.marked:
-            self._w.attr_map = {
-                None: "browser normal",
-                "browser normal": "browser marked",
-                "browser head": "browser head marked",
-                "browser tail": "browser tail marked",
-                "browser head_tail": "browser head_tail marked",
-            }
-            self._w.focus_map = {
-                "browser normal": "browser marked_focus",
-                "browser head": "browser head marked_focus",
-                "browser tail": "browser tail marked_focus",
-                "browser head_tail": "browser head_tail marked_focus",
-            }
-        else:
-            self._w.attr_map = {
-                None: "browser normal",
-                "browser normal": "browser normal",
-                "browser head": "browser head",
-                "browser tail": "browser tail",
-                "browser head_tail": "browser head_tail",
-            }
-            self._w.focus_map = {
-                # None: "browser normal",
-                "browser normal": "browser focus",
-                "browser head": "browser head focus",
-                "browser tail": "browser tail focus",
-                "browser head_tail": "browser head_tail focus",
-            }
 
 
 class ListingCountMixin(object):
@@ -298,8 +228,8 @@ class ChannelWidget(ListingCountMixin,
         else:
             return "browser normal"
 
-    def keypress(self, size, key):
-        return super().keypress(size, key)
+    # def keypress(self, size, key):
+    #     return super().keypress(size, key)
     #     if key == "enter":
     #         self.mark()
 
@@ -406,11 +336,7 @@ class ChannelPropertiesMixin(object):
             return {}
         return {k: v for k, v in value.items() if k != "name"}
 
-class ChannelNode(ChannelPropertiesMixin, urwid.TreeNode):
-
-    @property
-    def is_leaf(self):
-        return True
+class ChannelNode(ChannelPropertiesMixin, TreeNode):
 
     def load_widget(self):
         return ChannelWidget(self)
@@ -419,21 +345,11 @@ class ChannelNode(ChannelPropertiesMixin, urwid.TreeNode):
     def identifier(self):
         return self.get_key()
 
-    @property
-    def marked(self):
-        return self.get_widget().marked
-
-
-
 class ChannelUnionNode(ChannelPropertiesMixin, TreeParentNode):
 
     def __init__(self, tree, value, parent=None, key=None, depth=None):
         self.tree = tree
         super().__init__(value, parent=parent, key=key, depth=depth)
-
-    @property
-    def is_leaf(self):
-        return False
 
     def load_widget(self):
         return ChannelUnionWidget(self)
@@ -441,7 +357,6 @@ class ChannelUnionNode(ChannelPropertiesMixin, TreeParentNode):
     @property
     def identifier(self):
         return self.get_key()
-
 
     def load_child_keys(self):
         data = self.get_value()
@@ -718,12 +633,6 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
     def selection(self):
         return self.body.get_focus()[1]
 
-    def mark_all(self):
-        self.tree.get_widget().mark()
-
-    def unmark_all(self):
-        self.tree.get_widget().unmark()
-
     @property
     def all_channels(self):
         return self.tree.get_leaf_nodes()
@@ -999,22 +908,14 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
         if key == "enter":
             marked = list(self.tree.get_marked_nodes())
             if len(marked) <= 1:
-                self.unmark_all()
+                self.tree.unmark_all()
                 self.selection.get_widget().mark()
             self.update_selection()
-        # elif key == " ":
-        #     self._emit("change", self.selected_items)
-        elif key == ";":
-            marked = list(self.tree.get_marked_nodes())
-            if marked:
-                self.unmark_all()
-            else:
-                self.mark_all()
         elif key == "e":
             self.rename_selection()
         elif key == "V":
             self.move_channel([c.get_key() for c in self.tree.get_marked_nodes()], self.selection.get_key(), -1)
-            self.unmark_all()
+            self.tree.unmark_all()
         else:
             return key
 
@@ -1044,7 +945,7 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
                     return
                 if pred and pred(cur):
                     break
-        self.unmark_all()
+        self.tree.unmark_all()
         self.listbox.set_focus(cur)
         self.selection.get_widget().mark()
         self.update_selection()

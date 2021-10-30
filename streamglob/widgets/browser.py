@@ -10,34 +10,38 @@ from functools import partial
 
 import urwid
 
-from .tree import TreeParentNode
+from .tree import *
 
-class FileBrowserTreeWidget(urwid.TreeWidget):
+class FileBrowserTreeWidget(AttributeTreeWidget):
     indent_cols = 2
 
-    def __init__(self, node):
-        super().__init__(node)
-        # insert an extra AttrWrap for our own use
-        self._w = urwid.AttrWrap(self._w, None)
+#     def __init__(self, node):
+#         super().__init__(node)
+#         # insert an extra AttrWrap for our own use
+#         self._w = urwid.AttrWrap(self._w, None)
 
-    def keypress(self, size, key):
+    def selectable(self):
+        return True
 
-        if self.is_leaf:
-            return key
-        if key == "right":
-            if self.get_node().get_key() == "..":
-                return
-            self.get_node().tree.collapse_all()
-            self.get_node().expand()
-        if key == "left":
-            self.get_node().collapse()
-        elif self._w.selectable():
-            return self.__super.keypress(size, key)
-        else:
-            return key
+#     def keypress(self, size, key):
+
+#         # if self.is_leaf:
+#         #     return key
+#         if key == "right":
+#             if self.get_node().get_key() == "..":
+#                 return
+#             self.get_node().tree.collapse_all()
+#             self.get_node().expand()
+#         if key == "left":
+#             self.get_node().collapse()
+#         elif self._w.selectable():
+#             return self.__super.keypress(size, key)
+#         else:
+#             return key
 
 
-class MarkedFileWidget(FileBrowserTreeWidget):
+class MarkedFileWidget(MarkableMixin, FileBrowserTreeWidget):
+
     # apply an attribute to the expand/unexpand icons
     unexpanded_icon = urwid.AttrMap(
         urwid.TreeWidget.unexpanded_icon,
@@ -48,55 +52,52 @@ class MarkedFileWidget(FileBrowserTreeWidget):
         "browser dirmark", "browser dirmark_focus"
     )
 
-    def __init__(self, node):
-        self.__super.__init__(node)
-        # insert an extra AttrWrap for our own use
-        self._w = urwid.AttrWrap(self._w, None)
-        self.marked = False
-        self.update_w()
+    # def __init__(self, node):
+    #     super().__init__(node)
+    #     # insert an extra AttrWrap for our own use
+    #     self._w = urwid.AttrWrap(self._w, None)
+    #     self.marked = False
+    #     self.update_w()
 
-    def selectable(self):
-        return True
+    # def keypress(self, size, key):
+    #     """allow subclasses to intercept keystrokes"""
+    #     key = self.__super.keypress(size, key)
+    #     if key:
+    #         key = self.unhandled_keys(size, key)
+    #     return key
 
-    def keypress(self, size, key):
-        """allow subclasses to intercept keystrokes"""
-        key = self.__super.keypress(size, key)
-        if key:
-            key = self.unhandled_keys(size, key)
-        return key
+    # def unhandled_keys(self, size, key):
+    #     """
+    #     Override this method to intercept keystrokes in subclasses.
+    #     Default behavior: Toggle marked on space, ignore other keys.
+    #     """
+    #     if key == " ":
+    #         self.marked = not self.marked
+    #         self.update_w()
+    #     else:
+    #         return key
 
-    def unhandled_keys(self, size, key):
-        """
-        Override this method to intercept keystrokes in subclasses.
-        Default behavior: Toggle marked on space, ignore other keys.
-        """
-        if key == " ":
-            self.marked = not self.marked
-            self.update_w()
-        else:
-            return key
-
-    def update_w(self):
-        """Update the attributes of self.widget based on self.marked.
-        """
-        if self.marked:
-            self._w.attr = "browser marked"
-            self._w.focus_attr = "browser marked_focus"
-        else:
-            self._w.attr = "browser normal"
-            self._w.focus_attr = "browser focus"
+    # def update_w(self):
+    #     """Update the attributes of self.widget based on self.marked.
+    #     """
+    #     if self.marked:
+    #         self._w.attr = "browser marked"
+    #         self._w.focus_attr = "browser marked_focus"
+    #     else:
+    #         self._w.attr = "browser normal"
+    #         self._w.focus_attr = "browser focus"
 
 
 
 class FileTreeWidget(MarkedFileWidget):
     """Widget for individual files."""
     def __init__(self, node):
-        self.__super.__init__(node)
+        super().__init__(node)
         path = node.get_value()
         add_widget(path, self)
 
     def get_display_text(self):
-        return self.get_node().get_key()
+        return ("browser normal", self.get_node().get_key())
 
 
 class EmptyWidget(FileBrowserTreeWidget):
@@ -111,6 +112,9 @@ class ErrorWidget(FileBrowserTreeWidget):
     def get_display_text(self):
         return ('error', "(error/permission denied)")
 
+    @property
+    def marked(self):
+        return False
 
 class DirectoryWidget(MarkedFileWidget):
     """Widget for a directory."""
@@ -134,9 +138,9 @@ class DirectoryWidget(MarkedFileWidget):
     def get_display_text(self):
         node = self.get_node()
         if node.get_depth() == 0:
-            return node.tree.top_dir
+            return ("browser normal", node.tree.top_dir)
         else:
-            return node.get_key()
+            return ("browser normal", node.get_key())
 
     def keypress(self, size, key):
         key = super().keypress(size, key)
@@ -146,7 +150,7 @@ class DirectoryWidget(MarkedFileWidget):
             return key
 
 
-class FileNode(urwid.TreeNode):
+class FileNode(TreeNode):
     """Metadata storage for individual files"""
 
     def __init__(self, path, parent=None):
@@ -162,7 +166,7 @@ class FileNode(urwid.TreeNode):
         return parent
 
     def load_widget(self):
-        return FileTreeWidget(self)
+        return MarkedFileWidget(self)
 
     @property
     def full_path(self):
@@ -178,12 +182,14 @@ class FileNode(urwid.TreeNode):
         self.get_parent().refresh()
 
 
-class EmptyNode(urwid.TreeNode):
+class EmptyNode(TreeNode):
+
     def load_widget(self):
         return EmptyWidget(self)
 
 
-class ErrorNode(urwid.TreeNode):
+class ErrorNode(TreeNode):
+
     def load_widget(self):
         return ErrorWidget(self)
 
@@ -214,11 +220,14 @@ class DirectoryNode(TreeParentNode):
         try:
             path = self.get_value()
             # separate dirs and files
-            for a in os.listdir(path):
-                if not self.tree.ignore_directories and os.path.isdir(os.path.join(path,a)):
-                    dirs.append(a)
+            # import ipdb; ipdb.set_trace()
+            for entry in os.scandir(path):
+                if entry.name.startswith('.'):
+                    continue
+                if not self.tree.ignore_directories and entry.is_dir():
+                    dirs.append(entry.name)
                 elif not self.tree.ignore_files:
-                    files.append(a)
+                    files.append(entry.name)
         except OSError as e:
             depth = self.get_depth() + 1
             self._children[None] = ErrorNode(self, parent=self, key=None,
@@ -235,8 +244,8 @@ class DirectoryNode(TreeParentNode):
             reverse=self.tree.file_sort_reverse
         )
 
-        if not self.tree.no_parent_dir:
-            dirs.insert(0, "..")
+        # if not self.tree.no_parent_dir:
+        #     dirs.insert(0, "..")
         # store where the first file starts
         self.dir_count = len(dirs)
         # collect dirs and files together again
