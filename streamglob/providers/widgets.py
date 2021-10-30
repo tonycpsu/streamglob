@@ -449,6 +449,8 @@ class ProviderDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseData
 
         class AddHighlightRuleDialog(OKCancelDialog):
 
+            focus = "ok"
+
             @property
             def widgets(self):
                 edit_pos = 0

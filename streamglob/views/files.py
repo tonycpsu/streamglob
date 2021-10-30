@@ -9,6 +9,8 @@ from functools import partial
 import urwid
 from panwid.keymap import *
 from panwid.dialog import ConfirmDialog
+import thefuzz.fuzz, thefuzz.process
+from unidecode import unidecode
 
 from watchdog.observers.polling import PollingObserver
 from watchdog.events import FileSystemEventHandler
@@ -22,6 +24,41 @@ from ..providers.widgets import *
 from .. import providers
 # from ..widgets.browser import FileBrowser, DirectoryNode, FileNode
 from ..providers.base import SynchronizedPlayerProviderMixin
+
+DEFAULT_FUZZ_RATIO = 0.9
+
+def find_fuzzy_matches(
+    target, candidates, fuzz_ratio=DEFAULT_FUZZ_RATIO, fuzzy_unicode=False
+):
+
+    if fuzzy_unicode:
+        target = unidecode(target)
+        candidates = dict(zip([unidecode(c) for c in candidates], candidates))
+    else:
+        candidates = dict(zip(candidates, candidates))
+
+    ranked = thefuzz.process.extractBests(
+        target,
+        candidates.keys(),
+        scorer=thefuzz.fuzz.partial_token_set_ratio,
+        score_cutoff=fuzz_ratio*100
+    )
+    return [
+        (candidates[r[0]], r[1])
+        for r in ranked
+        if len(target) >= len(candidates[r[0]])
+    ]
+
+
+class CreateDirectoryDialog(TextEditDialog):
+
+    @property
+    def title(self):
+        return "Create directory"
+
+    def action(self, value):
+        self.parent.browser.create_directory(value)
+
 
 @model.attrclass()
 class FilesPlayMediaTask(model.PlayMediaTask):
@@ -95,6 +132,8 @@ class FilesView(
         "B": ("set_file_sort", ["basename", True]),
         "backspace": "directory_up",
         # "enter": "open_selection",
+        "o": "organize_selection",
+        "O": ("organize_selection", [True]),
         "delete": "delete_selection",
         "!": "open_run_command_dialog"
     }
@@ -177,7 +216,6 @@ class FilesView(
     def on_focus(self, source, selection):
 
         if isinstance(selection, FileNode):
-            logger.info("sync")
             state.event_loop.create_task(self.sync_playlist_position())
 
 # state.event_loop.create_task(self.preview_all())
@@ -265,16 +303,6 @@ class FilesView(
 
     def create_directory(self):
 
-        class CreateDirectoryDialog(TextEditDialog):
-
-            @property
-            def title(self):
-                return "Create directory"
-
-
-            def action(self, value):
-                self.parent.browser.create_directory(value)
-
         dialog = CreateDirectoryDialog(self)
         self.open_popup(dialog, width=60, height=8)
 
@@ -289,6 +317,92 @@ class FilesView(
 
     #         # self.load_browser(selection.full_path)
 
+    def organize_selection(self, accept_unique=False):
+
+        def guess_subject(title, words=2, max_len=40):
+            try:
+                spaces =  [
+                    m.start()+1 for m in re.finditer(r"[^\d-]\S+", title)
+                ][:words+1]
+                indices = [spaces[0], spaces[-1]-1]
+            except IndexError:
+                indices = [0, max_len]
+            return title[slice(*indices)]
+
+        class OrganizeSelectionCreateDirectoryDialog(CreateDirectoryDialog):
+
+            focus = "ok"
+
+            def action(self, value):
+
+                logger.info(value)
+                destdir = os.path.join(self.parent.browser.cwd, value)
+                if not os.path.exists(destdir):
+                    self.parent.browser.create_directory(destdir)
+                self.parent.browser.move_path(src, destdir)
+
+        class OrganizeSelectionChooseDestinationDialog(OKCancelDialog):
+
+            focus = "ok"
+
+            def __init__(self, parent, src, dests, *args, **kwargs):
+
+                self.src = src
+                self.dests = dict(zip(dests + ["Other..."], dests + [None]))
+                super().__init__(parent, *args, **kwargs)
+
+            @property
+            def widgets(self):
+
+                edit_text = guess_subject(os.path.basename(src))
+
+                return dict(
+                    dest=BaseDropdown(self.dests),
+                    text=urwid_readline.ReadlineEdit(
+                        caption=("bold", "Text: "),
+                        edit_text=edit_text
+                    ),
+                )
+
+            def action(self):
+
+                raise Exception
+                if self.dest.selected_value:
+                    dest = self.dest.selected_label
+                else:
+                    dest = self.text.get_edit_text()
+
+                destdir = os.path.join(self.parent.browser.cwd, dest)
+                if not os.path.exists(destdir):
+                    self.parent.browser.create_directory(destdir)
+
+                self.parent.browser.move_path(self.src, destdir)
+
+        src = self.browser.selection.full_path
+        dirs = [d.get_key() for d in self.browser.tree_root.child_dirs]
+
+        matches = [
+            m[0] for m in find_fuzzy_matches(
+                os.path.basename(src),
+                dirs,
+                fuzzy_unicode=True
+            )
+        ]
+
+        if not len(matches):
+            dialog = OrganizeSelectionCreateDirectoryDialog(
+                self, orig_value=guess_subject(os.path.basename(src))
+            )
+            self.open_popup(dialog, width=60, height=8)
+        elif len(matches) > 1 or not accept_unique:
+            dialog = OrganizeSelectionChooseDestinationDialog(
+                self, src, matches
+            )
+            self.open_popup(dialog, width=60, height=8)
+        else:
+            self.browser.move_path(
+                src, os.path.join(self.browser.cwd, matches[0])
+            )
 
     def delete_selection(self):
 
@@ -359,6 +473,11 @@ class FilesView(
                 await self.preview_all()
 
         state.event_loop.create_task(activate_preview_player())
+
+
+    @property
+    def playlist_position_text(self):
+        return f"[{self.selection_index}/{len(self)}]"
 
     def __len__(self):
         # return 1

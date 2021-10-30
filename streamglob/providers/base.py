@@ -817,7 +817,7 @@ class SynchronizedPlayerMixin(object):
     signals = ["keypress"]
 
     KEYMAP = {
-        " ": "preview_content",
+        ".": "preview_content",
         "meta p": "preview_all"
     }
 
@@ -983,7 +983,7 @@ class SynchronizedPlayerMixin(object):
             vf_scale
         ]
 
-        if self.selected_source.media_type == "image":
+        if getattr(self.selected_source, "media_type", None) == "image":
             vf_framerate = f"@framerate:framerate=fps={cfg.fps or 30}"
             filters.append(vf_framerate)
 
@@ -994,16 +994,21 @@ class SynchronizedPlayerMixin(object):
             vf_box = f"@box:drawbox=x={ox}:y={oy}:w=iw:h=(ih/{cfg.text.size or 50}*2)+{padding}:color={box_color}:t=fill"
             filters.append(vf_box)
 
+        try:
+            title = self.play_items[pos].title
+        except IndexError:
+            logger.warning(f"IndexError in play_items: {pos}, {len(self.play_items)}")
+            return
         for element, text in dict(
                 playlist=f"{self.playlist_title} {self.playlist_position_text}",
-                title= self.play_items[pos].title
+                title=title
             ).items():
             text = ffmpeg_escape(text)
             el_cfg = cfg.get(element)
             color = el_cfg.text.color.default or cfg.text.color.default or "white"
             if self.playlist_position == len(self.play_items)-1:
                 color = el_cfg.text.color.end or cfg.text.color.end or color
-            elif self.active_table.selected_source.local_path:
+            elif getattr(self.active_table.selected_source, "local_path", None):
                 color = el_cfg.text.color.downloaded or cfg.text.color.downloaded or color
 
             font = ffmpeg_escape(el_cfg.text.font or cfg.text.font or "sans")
@@ -1288,6 +1293,9 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
         ]
         # raise Exception(self.play_items)
 
+    @property
+    def playlist_position_text(self):
+        return f"[{self.focus_position+1}/{len(self)}]"
 
     def on_requery(self, source, count):
         if state.get("tui_enabled"):

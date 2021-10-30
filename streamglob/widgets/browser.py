@@ -442,6 +442,12 @@ class FileBrowser(urwid.WidgetWrap):
             return
         self.listbox.set_focus(node)
 
+    def move_path(self, src, dst):
+        src_path = os.path.relpath(src, self.top_dir)
+        node = self.find_path(src_path)
+        self.delete_node(node)
+        shutil.move(src, dst)
+
     def delete_path(self, path):
 
         path = os.path.relpath(path, self.top_dir)
@@ -454,9 +460,9 @@ class FileBrowser(urwid.WidgetWrap):
             logger.warn(f"couldn't find {path}")
             return
         logger.info(f"deleting {node}")
-        self.delete_node(node)
+        self.delete_node(node, remove=True)
 
-    def delete_node(self, node, confirm=False):
+    def delete_node(self, node, remove=False, confirm=False):
 
         if node.get_key() == "..":
             # nope!
@@ -469,20 +475,22 @@ class FileBrowser(urwid.WidgetWrap):
 
         if isinstance(node, FileNode):
             del node.get_parent()._children[node.get_key()]
-            try:
-                os.remove(node.full_path)
-            except OSError:
-                pass
+            if remove:
+                try:
+                    os.remove(node.full_path)
+                except OSError:
+                    pass
 
         elif isinstance(node, DirectoryNode) and confirm:
             del node.get_parent()._children[node.get_key()]
-            for i in range(3):
-                # FIXME: sometimes rmtree fails?
-                try:
-                    shutil.rmtree(node.full_path)
-                    break
-                except OSError:
-                    time.sleep(0.5)
+            if remove:
+                for i in range(3):
+                    # FIXME: sometimes rmtree fails?
+                    try:
+                        shutil.rmtree(node.full_path)
+                        break
+                    except OSError:
+                        time.sleep(0.5)
 
         node.get_parent().get_child_keys(reload=True)
         if next_focused:
