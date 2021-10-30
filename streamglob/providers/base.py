@@ -1050,9 +1050,9 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
 
     async def preview_content_full(self, cfg, position, listing, source):
         logger.debug(f"preview_content_full {position}")
-        if source.locator_thumbnail is None:
-            logger.debug("full: no thumbnail")
-            return
+        # if getattr(source, "locator_thumbnail", None) is None:
+        #     logger.debug("full: no thumbnail")
+        #     return
         if source.locator is None:
             logger.debug("no full")
             return
@@ -1061,7 +1061,6 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
 
     async def preview_content(self):
 
-        # import ipdb; ipdb.set_trace()
         listing = self.selected_listing
         source = self.selected_source
         position = self.playlist_position

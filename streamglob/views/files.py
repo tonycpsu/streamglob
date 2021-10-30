@@ -355,14 +355,14 @@ class FilesView(
     def on_view_activate(self):
 
         async def activate_preview_player():
-            if state.listings_view.auto_preview_mode:
+            if self.config.auto_preview.enabled:
                 await self.preview_all()
 
         state.event_loop.create_task(activate_preview_player())
 
     def __len__(self):
         # return 1
-        logger.info(len(self.browser.cwd_node.child_files))
+        # logger.info(len(self.browser.cwd_node.child_files))
         return len(self.browser.cwd_node.child_files)
 
     # def __iter__(self):
