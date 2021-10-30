@@ -25,25 +25,25 @@ class AttributeTreeWidget(urwid.TreeWidget):
 
 class MarkableMixin(object):
 
-    def __init__(self, node):
+    def __init__(self, node, marked=False):
         super().__init__(node)
         # insert an extra AttrWrap for our own use
         self._w = urwid.AttrMap(self._w, "browser normal")
-        self.marked = False
+        self.marked = marked
         self.update_w()
 
     def mark(self):
         self.marked = True
         self.update_w()
         if not self.is_leaf:
-            for node in self.get_node().get_nodes():
+            for node in self.get_node().get_nodes(shallow=True):
                 node.get_widget().mark()
 
     def unmark(self):
         self.marked = False
         self.update_w()
         if not self.is_leaf:
-            for node in self.get_node().get_nodes():
+            for node in self.get_node().get_nodes(shallow=True):
                 node.get_widget().unmark()
 
     def toggle_mark(self):
@@ -52,6 +52,21 @@ class MarkableMixin(object):
         else:
             self.mark()
         self.update_w()
+
+    def mark_more(self):
+        node = self.get_node()
+        if not node.marked:
+            node.mark()
+            return
+        else:
+            node = node.get_parent()
+            while node:
+                try:
+                    unmarked = next(node.get_unmarked_nodes(shallow=True))
+                    node.mark()
+                    break
+                except StopIteration:
+                    node = node.get_parent()
 
     def mark_all(self):
         self.get_node().root.get_widget().mark()
@@ -100,28 +115,13 @@ class MarkableMixin(object):
                 "browser head_tail": "browser head_tail focus",
             }
 
-    def mark_more(self):
-        node = self.get_node()
-        if not node.marked:
-            node.mark()
-            return
-        else:
-            node = node.get_parent()
-            while node:
-                try:
-                    unmarked = next(node.get_unmarked_nodes())
-                    node.mark()
-                    break
-                except StopIteration:
-                    node = node.get_parent()
-
     def keypress(self, size, key):
         if key == " ":
             self.toggle_mark()
-        elif key == "<":
-            self.mark_more()
         elif key == ";":
-            self.toggle_mark_all()
+            self.unmark_all()
+        elif key == ":":
+            self.mark_more()
         else:
             return super().keypress(size, key)
 
@@ -157,7 +157,9 @@ class TreeParentNode(TreeNode, urwid.ParentNode):
     def is_leaf(self):
         return False
 
-    def get_nodes(self, pred=None):
+    def get_nodes(self, pred=None, shallow=False):
+        if shallow and not self._child_keys:
+            return
         for key in self.get_child_keys():
             child = self.get_child_node(key)
             if not child.is_leaf:
@@ -175,12 +177,14 @@ class TreeParentNode(TreeNode, urwid.ParentNode):
     def get_leaf_keys(self):
         yield from (n.get_key() for n in self.get_leaf_nodes())
 
-    def get_marked_nodes(self):
+    def get_marked_nodes(self, shallow=False):
         yield from self.get_nodes(
-            lambda n: n.marked
+            lambda n: n.marked,
+            shallow=shallow
         )
 
-    def get_unmarked_nodes(self):
+    def get_unmarked_nodes(self, shallow=False):
         yield from self.get_nodes(
-            lambda n: not n.marked
+            lambda n: not n.marked,
+            shallow=shallow
         )

@@ -166,7 +166,7 @@ class FileNode(TreeNode):
         return parent
 
     def load_widget(self):
-        return MarkedFileWidget(self)
+        return MarkedFileWidget(self, marked=self.parent.marked)
 
     @property
     def full_path(self):
