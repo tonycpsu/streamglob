@@ -6,6 +6,7 @@ import re
 import pipes
 from functools import partial
 import hashlib
+import pathlib
 
 import urwid
 from panwid.keymap import *
@@ -14,6 +15,8 @@ import thefuzz.fuzz, thefuzz.process
 from unidecode import unidecode
 import ffmpeg
 from pymediainfo import MediaInfo
+import wand.image
+import wand.drawing
 
 from watchdog.observers.polling import PollingObserver
 from watchdog.events import FileSystemEventHandler
@@ -161,6 +164,7 @@ class FilesView(
         super().__init__(self.browser_placeholder)
         self.pile.focus_position = 0
         self.updated = False
+        self.storyboard_lock = asyncio.Lock()
         state.event_loop.create_task(self.check_updated())
         for cmd, cfg in config.settings.profile.files.commands.items():
             if "key" in cfg:
@@ -183,6 +187,59 @@ class FilesView(
             self._thumbnails = AttrDict()
         return self._thumbnails
 
+    @property
+    def storyboards(self):
+        if not hasattr(self, "_storyboards"):
+            self._storyboards = AttrDict()
+        return self._storyboards
+
+    async def make_preview_tile(
+            self,
+            input_file, output_file,
+            position=0, width=1280
+    ):
+
+        (
+            ffmpeg
+            .input(input_file, ss=position)
+            .filter("scale", width, -1)
+            .output(output_file, vframes=1)
+            .overwrite_output()
+            # .run()
+            .run(capture_stdout=True, capture_stderr=True)
+        )
+        return output_file
+
+    async def make_preview_thumbnail(self, input_file, output_file, cfg):
+
+        media_info = MediaInfo.parse(input_file)
+        duration = next(
+            t for t in media_info.tracks
+            if t.track_type == "General"
+        ).duration/1000
+        logger.info(duration)
+
+        thumbnail_file = await self.make_preview_tile(
+            input_file, output_file,
+            position=0.25*duration
+        )
+        # import ipdb; ipdb.set_trace()
+        return AttrDict(
+            thumbnail_file=thumbnail_file,
+            duration=duration
+        )
+
+    async def thumbnail_for(self, listing, cfg):
+
+        path = listing.path
+
+        if listing.key not in self.thumbnails:
+            thumbnail_file = os.path.join(self.tmp_dir, f"thumbnail.{listing.key}.jpg")
+            self.thumbnails[listing.key] = await self.make_preview_thumbnail(
+                listing.path, thumbnail_file, cfg
+            )
+        return self.thumbnails[listing.key]
+
     async def preview_content_thumbnail(self, cfg, position, listing, source):
 
         # import ipdb; ipdb.set_trace()
@@ -190,10 +247,7 @@ class FilesView(
             thumbnail = await self.thumbnail_for(listing, cfg)
             if not thumbnail:
                 return
-            logger.info(position)
-            logger.info(thumbnail)
-            # import ipdb; ipdb.set_trace()
-            await self.playlist_replace(thumbnail, idx=position)
+            await self.playlist_replace(thumbnail.thumbnail_file, idx=position)
             state.loop.draw_screen()
 
         # if getattr(self, "preview_task", False):
@@ -202,41 +256,113 @@ class FilesView(
 
         await preview(listing)
 
-    async def make_thumbnail(self, input_file, output_file):
 
-        NUM_THUMBNAILS = 4
-        THUMBNAIL_WIDTH = 480
+    async def make_preview_storyboard(self, listing, cfg):
 
-        (
-            ffmpeg
-            .input(input_file, ss=5)
-            .filter("scale", THUMBNAIL_WIDTH, -1)
-            .output(output_file, vframes=1)
-            .overwrite_output()
-            .run(capture_stdout=True, capture_stderr=True)
-        )
+        # FIXME: refactor with YouTube version
+        PREVIEW_WIDTH = 1280
+        PREVIEW_HEIGHT = 720
+        PREVIEW_DURATION_RATIO=0.95
 
-        # media_info = MediaInfo.parse(path)
-        # duration = next(
-        #     t for t in media_info.tracks
-        #     if t.track_type == "General"
-        # ).duration
-        # logger.info(duration)
-        # interval = duration / NUM_THUMBNAILS
-        # for i in range(NUM_THUMBNAILS):
+        inset_scale = cfg.scale or 0.25
+        inset_offset = cfg.offset or 0
+        border_color = cfg.border.color or "black"
+        border_width = cfg.border.width or 1
+        tile_skip = cfg.skip or None
 
-        return output_file
+        num_tiles = 10
 
-    async def thumbnail_for(self, listing, cfg):
+        thumbnail = await self.thumbnail_for(listing, cfg)
+        thumbnail_file = thumbnail.thumbnail_file
+        duration = thumbnail.duration
 
-        path = listing.path
         # import ipdb; ipdb.set_trace()
 
-        key = hashlib.md5(path.encode("utf-8")).hexdigest()
-        if key not in self.thumbnails:
-            thumbnail_file = os.path.join(self.tmp_dir, f"thumbnail.{key}.jpg")
-            self.thumbnails[key] = await self.make_thumbnail(path, thumbnail_file)
-        return self.thumbnails[key]
+        board_files = [
+            await self.make_preview_tile(
+                listing.path,
+                os.path.join(self.tmp_dir, f"board.{listing.key}.{n:04d}.jpg"),
+                position=(duration*PREVIEW_DURATION_RATIO)*(n+1)*(1/num_tiles),
+                width=480
+            )
+            for n in range(num_tiles)
+        ]
+
+        # import ipdb; ipdb.set_trace()
+        thumbnail = wand.image.Image(filename=thumbnail_file)
+        thumbnail.trim(fuzz=5)
+        if thumbnail.width != PREVIEW_WIDTH:
+            raise Exception
+            thumbnail.transform(resize=f"{PREVIEW_WIDTH}x{PREVIEW_HEIGHT}")
+        i = 0
+        tile_width = 0
+        tile_height = 0
+        for n, board_file in enumerate(board_files):
+            # logger.debug(board_file)
+            with wand.image.Image(filename=board_file) as tile:
+                clone = thumbnail.clone()
+                tile.resize(int(thumbnail.width * inset_scale),
+                             int(thumbnail.height * inset_scale))
+                tile.border(border_color, border_width, border_width)
+                thumbnail.composite(
+                    tile,
+                    left=thumbnail.width-tile.width-inset_offset,
+                    top=thumbnail.height-tile.height-inset_offset
+                )
+                tile_file=os.path.join(self.tmp_dir, f"tile.{listing.key}.{n:04d}.jpg")
+                # import ipdb; ipdb.set_trace()
+                thumbnail.save(filename=tile_file)
+
+        if cfg.frame_rate:
+            frame_rate = cfg.frame_rate
+            duration = n/frame_rate
+        elif "duration" in cfg:
+            duration = cfg.duration
+            frame_rate = n/duration
+        else:
+            duration = n
+            frame_rate = 1
+
+        inputs = ffmpeg.concat(
+            ffmpeg.input(os.path.join(self.tmp_dir, f"tile.{listing.key}.*.jpg"),
+                                      pattern_type="glob",framerate=frame_rate)
+        )
+        storyboard_file=os.path.join(self.tmp_dir, f"storyboard.{listing.key}.mp4")
+        proc = await inputs.output(storyboard_file).run_asyncio(overwrite_output=True, quiet=True)
+        await proc.wait()
+
+        for p in itertools.chain(
+            pathlib.Path(self.tmp_dir).glob(f"board.{listing.key}.*"),
+            pathlib.Path(self.tmp_dir).glob(f"tile.{listing.key}.*")
+        ):
+            p.unlink()
+
+        # return storyboard_file
+        return AttrDict(
+            img_file=storyboard_file,
+            duration=duration
+        )
+
+
+    async def storyboard_for(self, listing, cfg):
+
+        async with self.storyboard_lock:
+            if listing.key not in self.storyboards:
+                self.storyboards[listing.key] = await self.make_preview_storyboard(listing, cfg)
+        return self.storyboards[listing.key]
+
+
+    async def preview_content_storyboard(self, cfg, position, listing, source):
+
+        async def preview(listing):
+            storyboard = await self.storyboard_for(listing, cfg)
+            if not storyboard:
+                return
+            logger.info(storyboard)
+            await self.playlist_replace(storyboard.img_file, idx=position)
+            state.loop.draw_screen()
+
+        await preview(listing)
 
     @property
     def NAME(self):
@@ -315,6 +441,7 @@ class FilesView(
             AttrDict(
                 title=n.get_key(),
                 path=n.full_path,
+                key=hashlib.md5(n.full_path.encode("utf-8")).hexdigest(),
                 locator=n.full_path,
                 preview_locator=utils.BLANK_IMAGE_URI
             )
@@ -328,6 +455,7 @@ class FilesView(
         return AttrDict(
             provider_id="files", # FIXME
             path=path,
+            key=hashlib.md5(path.encode("utf-8")).hexdigest(),
             title=os.path.basename(path),
             sources=[
                 AttrDict(
