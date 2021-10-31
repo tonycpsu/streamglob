@@ -278,7 +278,7 @@ class FeedMediaSourceMixin(object):
             s.refresh()
 
 
-@model.attrclass(FeedMediaSourceMixin)
+@model.attrclass()
 class FeedMediaSource(FeedMediaSourceMixin, model.MediaSource):
 
     seen = Optional(datetime)

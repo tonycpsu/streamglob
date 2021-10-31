@@ -1070,6 +1070,7 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
         source = self.selected_source
         position = self.playlist_position
 
+        # import ipdb; ipdb.set_trace()
         if self.config.auto_preview.delay:
             logger.debug(f"sleeping: {self.config.auto_preview.delay}")
             await asyncio.sleep(self.config.auto_preview.delay)
@@ -1087,6 +1088,7 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             #     continue
             if cfg.media_types and source.media_type not in cfg.media_types:
                 continue
+
             preview_fn = getattr(
                 self, f"preview_content_{cfg.mode}"
             )
@@ -1220,7 +1222,11 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
                 idx = self.playlist_position
 
             # logger.info(f"playist_replace: {idx}, {url}")
-            self.play_items[idx].locator = url
+            # FIXME: standardize media source preview locator
+            if hasattr(self.play_items[idx], "preview_locator"):
+                self.play_items[idx].preview_locator = url
+            else:
+                self.play_items[idx].locator = url
             await self.preview_all(playlist_position=pos)
 
             try:
@@ -1273,8 +1279,8 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
                 #     else (getattr(source, "locator_thumbnail", None) or source.locator)
                 # )
                 # locator=source.locator or getattr(source, "locator_thumbnail", None),
-                locator=source.locator_for_preview(state.listings_view.preview_mode),
-                # locator=source.locator
+                preview_locator=source.locator_for_preview(state.listings_view.preview_mode),
+                locator=source.locator
             )
             for (row_num, row, index, source) in [
                     (row_num, row, index, source) for row_num, row in enumerate(self)

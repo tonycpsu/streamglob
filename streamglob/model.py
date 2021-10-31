@@ -309,8 +309,12 @@ class MediaSourceMixin(object):
         return self.url
 
     @property
+    def locator_blank(self):
+        return utils.BLANK_IMAGE_URI
+
+    @property
     def locator_default(self):
-        return self.locator or utils.BLANK_IMAGE_URI
+        return self.locator or self.locator_blank
 
     def locator_for_preview(self, preview_mode):
         attr_name = f"locator_{preview_mode}"

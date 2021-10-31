@@ -1,23 +1,27 @@
-import os
 import logging
 logger = logging.getLogger(__name__)
+import os
 import asyncio
 import re
 import pipes
 from functools import partial
+import hashlib
 
 import urwid
 from panwid.keymap import *
 from panwid.dialog import ConfirmDialog
 import thefuzz.fuzz, thefuzz.process
 from unidecode import unidecode
+import ffmpeg
+from pymediainfo import MediaInfo
 
 from watchdog.observers.polling import PollingObserver
 from watchdog.events import FileSystemEventHandler
 
 from .. import model
+from .. import utils
 from .. import programs
-from ..utils import strip_emoji
+from ..utils import strip_emoji, classproperty
 from .. import config
 from ..widgets import *
 from ..providers.widgets import *
@@ -111,6 +115,16 @@ class RunCommandPopUp(OKCancelDialog):
         )
 
 
+@model.attrclass()
+class FilesMediaListing(model.TitledMediaListing):
+    pass
+
+@model.attrclass()
+class FilesMediaSource(model.InflatableMediaSource):
+    pass
+
+
+
 @keymapped()
 class FilesView(
         SynchronizedPlayerProviderMixin,
@@ -125,7 +139,6 @@ class FilesView(
         "ctrl r": "refresh",
         "c": "create_directory",
         "g": "change_root",
-        ";": "debug",
         "m": ("set_file_sort", ["mtime", False]),
         "M": ("set_file_sort", ["mtime", True]),
         "b": ("set_file_sort", ["basename", False]),
@@ -138,8 +151,9 @@ class FilesView(
         "!": "open_run_command_dialog"
     }
 
-    def __init__(self):
+    def __init__(self, provider):
 
+        self.provider = provider
         self.browser_placeholder = urwid.WidgetPlaceholder(urwid.Text(""))
         self.pile  = urwid.Pile([
             ('weight', 1, self.browser_placeholder),
@@ -156,13 +170,73 @@ class FilesView(
                     )
                 self.keymap_register(cfg.key, func)
 
-
-    def debug(self):
-        import ipdb; ipdb.set_trace()
+    def update(self):
+        pass
 
     @property
-    def provider(self):
-        return self
+    def tmp_dir(self):
+        return self.provider.tmp_dir
+
+    @property
+    def thumbnails(self):
+        if not hasattr(self, "_thumbnails"):
+            self._thumbnails = AttrDict()
+        return self._thumbnails
+
+    async def preview_content_thumbnail(self, cfg, position, listing, source):
+
+        # import ipdb; ipdb.set_trace()
+        async def preview(listing):
+            thumbnail = await self.thumbnail_for(listing, cfg)
+            if not thumbnail:
+                return
+            logger.info(position)
+            logger.info(thumbnail)
+            # import ipdb; ipdb.set_trace()
+            await self.playlist_replace(thumbnail, idx=position)
+            state.loop.draw_screen()
+
+        # if getattr(self, "preview_task", False):
+        #     self.preview_task.cancel()
+        # self.preview_task = state.event_loop.create_task(preview(listing))
+
+        await preview(listing)
+
+    async def make_thumbnail(self, input_file, output_file):
+
+        NUM_THUMBNAILS = 4
+        THUMBNAIL_WIDTH = 480
+
+        (
+            ffmpeg
+            .input(input_file, ss=5)
+            .filter("scale", THUMBNAIL_WIDTH, -1)
+            .output(output_file, vframes=1)
+            .overwrite_output()
+            .run(capture_stdout=True, capture_stderr=True)
+        )
+
+        # media_info = MediaInfo.parse(path)
+        # duration = next(
+        #     t for t in media_info.tracks
+        #     if t.track_type == "General"
+        # ).duration
+        # logger.info(duration)
+        # interval = duration / NUM_THUMBNAILS
+        # for i in range(NUM_THUMBNAILS):
+
+        return output_file
+
+    async def thumbnail_for(self, listing, cfg):
+
+        path = listing.path
+        # import ipdb; ipdb.set_trace()
+
+        key = hashlib.md5(path.encode("utf-8")).hexdigest()
+        if key not in self.thumbnails:
+            thumbnail_file = os.path.join(self.tmp_dir, f"thumbnail.{key}.jpg")
+            self.thumbnails[key] = await self.make_thumbnail(path, thumbnail_file)
+        return self.thumbnails[key]
 
     @property
     def NAME(self):
@@ -180,8 +254,8 @@ class FilesView(
         self.browser = FileBrowser(
             top_dir,
             root=config.settings.profile.files.root,
-            dir_sort = self.config.dir_sort,
-            file_sort = self.config.file_sort,
+            dir_sort=self.config.dir_sort,
+            file_sort=self.config.file_sort,
             ignore_files=False
         )
         self.monitor_path(top_dir)
@@ -216,7 +290,10 @@ class FilesView(
     def on_focus(self, source, selection):
 
         if isinstance(selection, FileNode):
-            state.event_loop.create_task(self.sync_playlist_position())
+            super().on_focus(source, selection)
+            # state.event_loop.create_task(self.sync_playlist_position())
+        elif isinstance(selection, DirectoryNode):
+            self.load_play_items()
 
 # state.event_loop.create_task(self.preview_all())
 
@@ -232,19 +309,14 @@ class FilesView(
         )
         self.observer.start()
 
-    @property
-    def play_items(self):
-        # import ipdb; ipdb.set_trace()
-        return [
-            # AttrDict(
-            #     title=self.selected_listing.title,
-            #     locator=self.selected_listing.sources[0].locator
-            # )
-            # for i in range(len(self))
+    def load_play_items(self):
 
+        self._play_items = [
             AttrDict(
                 title=n.get_key(),
-                locator=n.full_path
+                path=n.full_path,
+                locator=n.full_path,
+                preview_locator=utils.BLANK_IMAGE_URI
             )
             for n in self.browser.cwd_node.child_files
         ]
@@ -252,14 +324,16 @@ class FilesView(
     @property
     def selected_listing(self):
         idx = self.selection_index
-        path = self.play_items[idx].locator
-        return model.TitledMediaListing.attr_class(
+        path = self.play_items[idx].path
+        return AttrDict(
             provider_id="files", # FIXME
+            path=path,
             title=os.path.basename(path),
-            sources = [
-                model.MediaSource.attr_class(
+            sources=[
+                AttrDict(
                     provider_id="files", # FIXME
-                    url=path
+                    media_type="video", # FIXME
+                    path=path
                 )
             ]
         )
@@ -501,3 +575,18 @@ class FilesView(
 
     # def __iter__(self):
     #     return iter(self.browser.selection.full_path)
+
+
+class FilesProvider(providers.base.BaseProvider):
+
+    @classproperty
+    def IDENTIFIER(cls):
+        return "files"
+
+    @property
+    def VIEW(self):
+        return FilesView(self)
+
+    @property
+    def listings(self):
+        return []

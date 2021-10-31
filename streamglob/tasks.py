@@ -71,7 +71,7 @@ class TaskManager(Observable):
             for item in items:
                 m3u.write(ITEM_TEMPLATE.format(
                     title=(item.title or "(no title)").strip(),
-                    locator=item.locator
+                    locator=getattr(item, "preview_locator", item.locator)
                 ).encode("utf-8"))
             logger.debug(m3u.name)
 
@@ -82,12 +82,12 @@ class TaskManager(Observable):
                 #     if self.provider.feed
                 #     else " ("
                 # ) + f"{self.provider.status})",
-                title = title,
-                sources = [
+                title=title,
+                sources=[
                     model.MediaSource.attr_class(
-                        provider_id = "tasks",
-                        url = f"file://{m3u.name}",
-                        media_type = "video" # FIXME
+                        provider_id="tasks",
+                        url=f"file://{m3u.name}",
+                        media_type="video" # FIXME
                     )
                 ],
             )
@@ -108,6 +108,7 @@ class TaskManager(Observable):
 
     async def preview(self, listing, caller, **kwargs):
 
+        # import ipdb; ipdb.set_trace()
         if listing:
             # logger.info(listing)
             task = caller.create_preview_task(listing, **kwargs)
