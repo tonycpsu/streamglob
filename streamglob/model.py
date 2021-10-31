@@ -16,6 +16,7 @@ import tempfile
 import traceback
 import glob
 from functools import lru_cache
+import hashlib
 
 import pony.options
 pony.options.CUT_TRACEBACK = False
@@ -286,6 +287,12 @@ SUBJECT_MAP = dict()
 class MediaSourceMixin(object):
 
     TEMPLATE_RE=re.compile("\{((?!(index|num|listing|feed|uri))[^}]+)\}")
+
+    KEY_ATTR = "url"
+
+    @property
+    def key(self):
+        return hashlib.md5(getattr(self, self.KEY_ATTR).encode("utf-8")).hexdigest()
 
     @property
     def provider(self):
@@ -559,6 +566,10 @@ class InflatableMediaSource(InflatableMediaSourceMixin, MediaSource):
 class MediaListingMixin(object):
 
     @property
+    def key(self):
+        return self.media_listing_id
+
+    @property
     def provider(self):
         return providers.get(self.provider_id)
         # return self.provider.NAME.lower()
@@ -582,6 +593,10 @@ class MediaListing(MediaListingMixin, db.Entity):
 
 
 class ContentMediaListingMixin(object):
+
+    @property
+    def key(self):
+        return hashlib.md5(self.content.encode("utf-8")).hexdigest()
 
     @property
     def body(self):

@@ -10,7 +10,7 @@ from itertools import chain
 # import textwrap
 # import tempfile
 
-from orderedattrdict import AttrDict, defaultdict
+from orderedattrdict import AttrDict, DefaultAttrDict
 from pony.orm import *
 from panwid.dialog import BaseView
 from panwid.keymap import *
@@ -754,7 +754,7 @@ class BackgroundTasksMixin(object):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._tasks = defaultdict(lambda: None)
+        self._tasks = DefaultAttrDict(lambda: None)
 
     def run_in_background(self, fn, interval=DEFAULT_INTERVAL,
                           instant=False,
@@ -837,6 +837,13 @@ class SynchronizedPlayerMixin(object):
         self.video_filters = []
         self.playlist_lock = asyncio.Lock()
         self.preview_stage = 0
+
+    @property
+    def previews(self):
+        if not hasattr(self, "_previews"):
+            self._previews = DefaultAttrDict(lambda: DefaultAttrDict(lambda: asyncio.Future()))
+        return self._previews
+
 
     def on_requery(self, source, count):
 
@@ -1045,41 +1052,73 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
         pass
 
 
-    async def preview_content_thumbnail(self, cfg, position, listing, source):
-        logger.debug(f"preview_content_thumbnail {position}")
+    async def preview_content_thumbnail(self, cfg, listing, source):
+        logger.debug(f"preview_content_thumbnail")
         if source.locator_thumbnail is None:
             logger.debug("no thumbnail")
             return
-        logger.debug(f"replacing with thumbnail: {source.locator_thumbnail} at pos {position}")
-        await self.playlist_replace(source.locator_thumbnail, idx=position)
+        return source.locator_thumbnail
+        # await self.playlist_replace(source.locator_thumbnail, idx=position)
 
-    async def preview_content_full(self, cfg, position, listing, source):
-        logger.debug(f"preview_content_full {position}")
+    async def preview_content_full(self, cfg, listing, source):
+        logger.debug(f"preview_content_full")
         # if getattr(source, "locator_thumbnail", None) is None:
         #     logger.debug("full: no thumbnail")
         #     return
         if source.locator is None:
             logger.debug("no full")
             return
-        logger.debug(f"replacing with full: {source.locator} at pos {position}")
-        await self.playlist_replace(source.locator, idx=position)
+        return source.locator
+        # await self.playlist_replace(source.locator, idx=position)
+
+    async def get_preview(self, cfg, listing, source):
+
+        async def generate_preview():
+            try:
+                future.set_result(await preview_fn(cfg, listing, source))
+            except asyncio.exceptions.CancelledError:
+                logger.warning("CancelledError from preview function")
+
+        preview_fn = getattr(
+            self, f"preview_content_{cfg.mode}"
+        )
+
+        future = self.previews[source.key][cfg.mode]
+        if not future.done():
+            self.pending_event_tasks.append(
+                asyncio.create_task(
+                    generate_preview()
+                )
+            )
+        return future
 
     async def preview_content(self):
 
+        # import ipdb; ipdb.set_trace()
         listing = self.selected_listing
         source = self.selected_source
         position = self.playlist_position
 
-        # import ipdb; ipdb.set_trace()
         if self.config.auto_preview.delay:
             logger.debug(f"sleeping: {self.config.auto_preview.delay}")
             await asyncio.sleep(self.config.auto_preview.delay)
 
+        # async def generate_preview(key, cfg):
+
+            # logger.info(f"generate_preview: {cfg}")
+            # if not self.previews[key][cfg.mode].done():
+            #     try:
+            #         self.previews[key][cfg.mode].set_result(await preview_fn(cfg, position, listing, source=source))
+            #     except asyncio.exceptions.CancelledError:
+            #         logger.warning("CancelledError from preview function")
+
+            # return self.previews[key][cfg.mode]
+
         # if self.config.auto_preview.duration:
         #     await asyncio.sleep(self.config.auto_preview.duration)
 
-        # cfg = self.config.auto_preview.stages[self.preview_stage]
-        for cfg in self.config.auto_preview.stages[self.preview_stage:]:
+        stages = self.config.auto_preview.stages[self.preview_stage:]
+        for (cfg, next_cfg) in pairwise(stages + [None]):
             # if self.playlist_position != position:
             #     return
             logger.debug(f"stage: {cfg.mode}")
@@ -1089,18 +1128,26 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             if cfg.media_types and source.media_type not in cfg.media_types:
                 continue
 
-            preview_fn = getattr(
-                self, f"preview_content_{cfg.mode}"
-            )
-            try:
-                await preview_fn(cfg, position, listing, source=source)
-            except asyncio.exceptions.CancelledError:
-                logger.warning("CancelledError from preview function")
-                break
+            preview = await (await self.get_preview(cfg, listing, source))
+            # preview_fn = getattr(
+            #     self, f"preview_content_{cfg.mode}"
+            # )
+
+            # if not self.previews[source.key][cfg.mode]:
+            #     try:
+            #         self.previews[source.key][cfg.mode] = await preview_fn(cfg, position, listing, source=source)
+            #     except asyncio.exceptions.CancelledError:
+            #         logger.warning("CancelledError from preview function")
+            #         break
+
+            await self.playlist_replace(preview, idx=position)
             try:
                 self.play_items[position].preview_mode = cfg.mode
             except IndexError:
                 break
+
+            if next_cfg:
+                await self.get_preview(next_cfg, listing, source)
 
             duration = await self.preview_duration(cfg, listing)
             if duration is not None: # advance automatically

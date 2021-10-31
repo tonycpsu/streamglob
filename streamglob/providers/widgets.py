@@ -226,7 +226,7 @@ class ProviderDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseData
     signals = ["cycle_filter"]
 
     KEYMAP = {
-        ".": "browse_selection",
+        ",": "browse_selection",
         "h": "add_highlight_rule",
         "H": "remove_highlight_rule",
         "ctrl o": "strip_emoji_selection",

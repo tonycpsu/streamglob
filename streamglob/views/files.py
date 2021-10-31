@@ -240,21 +240,22 @@ class FilesView(
             )
         return self.thumbnails[listing.key]
 
-    async def preview_content_thumbnail(self, cfg, position, listing, source):
+    async def preview_content_thumbnail(self, cfg, listing, source):
 
         # import ipdb; ipdb.set_trace()
         async def preview(listing):
             thumbnail = await self.thumbnail_for(listing, cfg)
             if not thumbnail:
                 return
-            await self.playlist_replace(thumbnail.thumbnail_file, idx=position)
+            # await self.playlist_replace(thumbnail.thumbnail_file, idx=position)
             state.loop.draw_screen()
+            return thumbnail
 
         # if getattr(self, "preview_task", False):
         #     self.preview_task.cancel()
         # self.preview_task = state.event_loop.create_task(preview(listing))
 
-        await preview(listing)
+        return await preview(listing)
 
 
     async def make_preview_storyboard(self, listing, cfg):
@@ -352,17 +353,18 @@ class FilesView(
         return self.storyboards[listing.key]
 
 
-    async def preview_content_storyboard(self, cfg, position, listing, source):
+    async def preview_content_storyboard(self, cfg, listing, source):
 
         async def preview(listing):
             storyboard = await self.storyboard_for(listing, cfg)
             if not storyboard:
                 return
             logger.info(storyboard)
-            await self.playlist_replace(storyboard.img_file, idx=position)
+            # await self.playlist_replace(storyboard.img_file, idx=position)
             state.loop.draw_screen()
+            return storyboard.img_file
 
-        await preview(listing)
+        return await preview(listing)
 
     @property
     def NAME(self):
