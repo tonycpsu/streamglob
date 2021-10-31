@@ -333,28 +333,32 @@ class FilesView(
 
             focus = "ok"
 
+            def __init__(self, parent, files, orig_value=None):
+                super().__init__(parent, orig_value=orig_value)
+                self.files = files
+
             def action(self, value):
 
-                logger.info(value)
                 destdir = os.path.join(self.parent.browser.cwd, value)
                 if not os.path.exists(destdir):
                     self.parent.browser.create_directory(destdir)
-                self.parent.browser.move_path(src, destdir)
+                for src in self.files:
+                    self.parent.browser.move_path(src, destdir)
 
         class OrganizeSelectionChooseDestinationDialog(OKCancelDialog):
 
             focus = "ok"
 
-            def __init__(self, parent, src, dests, *args, **kwargs):
+            def __init__(self, parent, files, dests, *args, **kwargs):
 
-                self.src = src
+                self.files = files
                 self.dests = dict(zip(dests + ["Other..."], dests + [None]))
                 super().__init__(parent, *args, **kwargs)
 
             @property
             def widgets(self):
 
-                edit_text = guess_subject(os.path.basename(src))
+                edit_text = guess_subject(os.path.basename(self.files[0]))
 
                 return dict(
                     dest=BaseDropdown(self.dests),
@@ -375,11 +379,22 @@ class FilesView(
                 if not os.path.exists(destdir):
                     self.parent.browser.create_directory(destdir)
 
-                self.parent.browser.move_path(self.src, destdir)
+                for src in self.files:
+                    self.parent.browser.move_path(src, destdir)
 
-        raise Exception(self.browser.selection)
-        src = self.browser.selection.full_path
         dirs = [d.get_key() for d in self.browser.tree_root.child_dirs]
+
+        files = [
+            f.full_path
+            for f in [
+                self.browser.selection
+            ] + [
+                item for item in self.browser.selected_items
+                if item != self.browser.selection
+            ]
+        ]
+
+        src = files[0]
 
         matches = [
             m[0] for m in find_fuzzy_matches(
@@ -391,12 +406,12 @@ class FilesView(
 
         if not len(matches):
             dialog = OrganizeSelectionCreateDirectoryDialog(
-                self, orig_value=guess_subject(os.path.basename(src))
+                self, files, orig_value=guess_subject(os.path.basename(src))
             )
             self.open_popup(dialog, width=60, height=8)
         elif len(matches) > 1 or not accept_unique:
             dialog = OrganizeSelectionChooseDestinationDialog(
-                self, src, matches
+                self, files, matches
             )
             self.open_popup(dialog, width=60, height=8)
         else:

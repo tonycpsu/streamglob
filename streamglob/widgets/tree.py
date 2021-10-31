@@ -25,6 +25,7 @@ class ExpandableMixin(object):
         self.update_expanded_icon()
 
     def expand(self):
+        self.get_node().parent.refresh()
         self.expanded = True
         self.update_expanded_icon()
 
@@ -178,16 +179,16 @@ class ExpandableMarkedTreeWidget(ExpandableMixin, MarkedTreeWidget):
     @property
     def selected_items(self):
 
-        marked = list(self.get_node().get_marked_nodes())
 
+        selection = self.get_node().tree.selection
+        marked = list(self.get_node().get_marked_nodes(shallow=True))
         if marked:
-            # selection = [node.identifier for node in marked]
-            selection = marked
+            # ensure selection is first in the list
+            return ([selection] if selection in marked else []) + [
+                m for m in marked if m != selection
+            ]
         else:
-            selection = [self.selection]
-
-        return selection
-
+            return [selection]
 
 class TreeNode(urwid.TreeNode):
 
@@ -237,7 +238,7 @@ class TreeParentNode(TreeNode, urwid.ParentNode):
             if not child.is_leaf:
                 if pred is None or pred(child):
                     yield child
-                yield from child.get_nodes(pred)
+                yield from child.get_nodes(pred, shallow=shallow)
             if pred is None or pred(child):
                 yield child
 
