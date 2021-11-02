@@ -1040,9 +1040,9 @@ x='{x}':y='{y}':fontsize=(h/{size}):fontcolor={color}:bordercolor={border_color}
 borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow_color}:expansion=none]"""
             filters.append(vf_text)
 
-        await state.task_manager.preview_player.command(
-            "vf", "add", ",".join(filters)
-        )
+        # await state.task_manager.preview_player.command(
+        #     "vf", "add", ",".join(filters)
+        # )
 
     @property
     def playlist_position(self):
@@ -1103,20 +1103,6 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             logger.debug(f"sleeping: {self.config.auto_preview.delay}")
             await asyncio.sleep(self.config.auto_preview.delay)
 
-        # async def generate_preview(key, cfg):
-
-            # logger.info(f"generate_preview: {cfg}")
-            # if not self.previews[key][cfg.mode].done():
-            #     try:
-            #         self.previews[key][cfg.mode].set_result(await preview_fn(cfg, position, listing, source=source))
-            #     except asyncio.exceptions.CancelledError:
-            #         logger.warning("CancelledError from preview function")
-
-            # return self.previews[key][cfg.mode]
-
-        # if self.config.auto_preview.duration:
-        #     await asyncio.sleep(self.config.auto_preview.duration)
-
         stages = self.config.auto_preview.stages[self.preview_stage:]
         for (cfg, next_cfg) in pairwise(stages + [None]):
             # if self.playlist_position != position:
@@ -1129,22 +1115,17 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
                 continue
 
             preview = await (await self.get_preview(cfg, listing, source))
-            # preview_fn = getattr(
-            #     self, f"preview_content_{cfg.mode}"
-            # )
-
-            # if not self.previews[source.key][cfg.mode]:
-            #     try:
-            #         self.previews[source.key][cfg.mode] = await preview_fn(cfg, position, listing, source=source)
-            #     except asyncio.exceptions.CancelledError:
-            #         logger.warning("CancelledError from preview function")
-            #         break
+            await asyncio.sleep(0.5)
 
             await self.playlist_replace(preview, idx=position)
-            try:
-                self.play_items[position].preview_mode = cfg.mode
-            except IndexError:
-                break
+            await self.set_playlist_pos(position)
+            # try:
+            #     self.play_items[position].preview_mode = cfg.mode
+            # except IndexError:
+            #     break
+
+            if next_cfg:
+                await self.get_preview(next_cfg, listing, source)
 
             if next_cfg:
                 await self.get_preview(next_cfg, listing, source)
@@ -1157,8 +1138,6 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
                 break
         self.preview_stage = (self.preview_stage+1) % len(self.config.auto_preview.stages)
         logger.debug(f"new stage: {self.preview_stage}")
-
-        await self.set_playlist_pos(position)
 
 
     async def preview_duration(self, cfg, listing):
@@ -1189,12 +1168,12 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
                 t = self.pending_event_tasks.pop()
                 t.cancel()
 
+            await self.playlist_position_changed(position)
             self.pending_event_tasks.append(
                 asyncio.create_task(
                     self.preview_content()
                 )
             )
-            await self.playlist_position_changed(position)
 
     def on_focus(self, source, position):
 
@@ -1268,12 +1247,12 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             if idx is None:
                 idx = self.playlist_position
 
-            # logger.info(f"playist_replace: {idx}, {url}")
+            logger.info(f"playist_replace: {idx}, {url}")
             # FIXME: standardize media source preview locator
-            if hasattr(self.play_items[idx], "preview_locator"):
-                self.play_items[idx].preview_locator = url
-            else:
-                self.play_items[idx].locator = url
+            # if hasattr(self.play_items[idx], "preview_locator"):
+            self.play_items[idx].preview_locator = url
+            # else:
+            #     self.play_items[idx].locator = url
             await self.preview_all(playlist_position=pos)
 
             try:
