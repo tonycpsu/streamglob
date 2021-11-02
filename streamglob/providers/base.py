@@ -1040,9 +1040,9 @@ x='{x}':y='{y}':fontsize=(h/{size}):fontcolor={color}:bordercolor={border_color}
 borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow_color}:expansion=none]"""
             filters.append(vf_text)
 
-        # await state.task_manager.preview_player.command(
-        #     "vf", "add", ",".join(filters)
-        # )
+        await state.task_manager.preview_player.command(
+            "vf", "add", ",".join(filters)
+        )
 
     @property
     def playlist_position(self):
@@ -1124,10 +1124,7 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             # except IndexError:
             #     break
 
-            if next_cfg:
-                await self.get_preview(next_cfg, listing, source)
-
-            if next_cfg:
+            if next_cfg and next_cfg.preload:
                 await self.get_preview(next_cfg, listing, source)
 
             duration = await self.preview_duration(cfg, listing)

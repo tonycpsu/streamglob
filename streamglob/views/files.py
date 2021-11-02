@@ -199,19 +199,15 @@ class FilesView(
             position=0, width=1280
     ):
 
-        async def run_ffmpeg():
-            await (
-                ffmpeg
-                .input(input_file, ss=position)
-                .filter("scale", width, -1)
-                .output(output_file, vframes=1)
-                .overwrite_output()
-                # .run()
-                .run_asyncio(quiet=True)
-            )
-            return output_file
-
-        return await run_ffmpeg()
+        await (
+            ffmpeg
+            .input(input_file, ss=position)
+            .filter("scale", width, -2)
+            .output(output_file, vframes=1)
+            .overwrite_output()
+            .run_asyncio(quiet=True)
+        )
+        return output_file
 
     async def make_preview_thumbnail(self, input_file, output_file, cfg):
 
@@ -280,7 +276,6 @@ class FilesView(
         ])
 
         board_files = [f.result() for f in done]
-
         thumbnail = wand.image.Image(filename=thumbnail_file)
         thumbnail.trim(fuzz=5)
         if thumbnail.width != PREVIEW_WIDTH:
@@ -319,8 +314,8 @@ class FilesView(
             ffmpeg.input(os.path.join(self.tmp_dir, f"tile.{listing.key}.*.jpg"),
                                       pattern_type="glob",framerate=frame_rate)
         )
-        storyboard_file=os.path.join(self.tmp_dir, f"storyboard.{listing.key}.mp4")
-        proc = await inputs.output(storyboard_file).run_asyncio(overwrite_output=True, quiet=True)
+        storyboard_file = os.path.join(self.tmp_dir, f"storyboard.{listing.key}.mp4")
+        proc = await inputs.output(storyboard_file).run_asyncio(overwrite_output=True)
         await proc.wait()
 
         for p in itertools.chain(
@@ -430,8 +425,7 @@ class FilesView(
                 title=n.get_key(),
                 path=n.full_path,
                 key=hashlib.md5(n.full_path.encode("utf-8")).hexdigest(),
-                # locator=n.full_path,
-                locator=utils.BLANK_IMAGE_URI,
+                locator=n.full_path,
                 preview_locator=utils.BLANK_IMAGE_URI
             )
             for n in self.browser.cwd_node.child_files
