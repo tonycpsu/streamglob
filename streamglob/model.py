@@ -16,6 +16,7 @@ import tempfile
 import traceback
 import glob
 from functools import lru_cache
+import hashlib
 
 import pony.options
 pony.options.CUT_TRACEBACK = False
@@ -287,6 +288,12 @@ class MediaSourceMixin(object):
 
     TEMPLATE_RE=re.compile("\{((?!(index|num|listing|feed|uri))[^}]+)\}")
 
+    KEY_ATTR = "url"
+
+    @property
+    def key(self):
+        return hashlib.md5(getattr(self, self.KEY_ATTR).encode("utf-8")).hexdigest()
+
     @property
     def provider(self):
         return providers.get(self.provider_id)
@@ -309,8 +316,12 @@ class MediaSourceMixin(object):
         return self.url
 
     @property
+    def locator_blank(self):
+        return utils.BLANK_IMAGE_URI
+
+    @property
     def locator_default(self):
-        return self.locator or utils.BLANK_IMAGE_URI
+        return self.locator or self.locator_blank
 
     def locator_for_preview(self, preview_mode):
         attr_name = f"locator_{preview_mode}"
@@ -362,8 +373,9 @@ class MediaSourceMixin(object):
         except (AttributeError, IndexError):
             channel = getattr(listing or self.listing, "channel", None)
             if channel:
-                channel.attach()
-                subject = channel.name
+                with db_session:
+                    channel = MediaChannel[channel.channel_id]
+                    subject = channel.name
             else:
                 subject = None
 
@@ -554,6 +566,10 @@ class InflatableMediaSource(InflatableMediaSourceMixin, MediaSource):
 class MediaListingMixin(object):
 
     @property
+    def key(self):
+        return self.media_listing_id
+
+    @property
     def provider(self):
         return providers.get(self.provider_id)
         # return self.provider.NAME.lower()
@@ -577,6 +593,10 @@ class MediaListing(MediaListingMixin, db.Entity):
 
 
 class ContentMediaListingMixin(object):
+
+    @property
+    def key(self):
+        return hashlib.md5(self.content.encode("utf-8")).hexdigest()
 
     @property
     def body(self):

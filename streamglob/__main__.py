@@ -38,8 +38,9 @@ import dateutil.parser
 import yaml
 import orderedattrdict.yamlutils
 from orderedattrdict.yamlutils import AttrDictYAMLLoader
+import aiohttp
 from aiohttp.web import Application, AppRunner, TCPSite
-from aiohttp_json_rpc import JsonRpc
+import aiohttp_rpc
 
 from .state import *
 from .widgets import *
@@ -329,7 +330,8 @@ def run_gui(action, provider, **kwargs):
     termios.tcsetattr(fileno, termios.TCSADRAIN, tattr)
 
     # state.listings_view = ListingsView(provider.IDENTIFIER)
-    state.files_view = FilesView()
+    state.files_provider = FilesProvider()
+    state.files_view = state.files_provider.view
     state.listings_view = ListingsView()
     state.listings_view.set_provider(provider.IDENTIFIER)
     state.tasks_view = TasksView()
@@ -417,26 +419,26 @@ def run_gui(action, provider, **kwargs):
             except OSError as e:
                 logger.warning(e)
 
-        rpc = JsonRpc()
-
-        async def preview_foreground():
+        async def preview_foreground(rpc_request):
             await state.task_manager.preview_player.command("set_property", "ontop", "yes")
 
-        async def preview_background():
+        async def preview_background(rpc_request):
             await state.task_manager.preview_player.command("set_property", "ontop", "no")
 
         methods = [
-            ("", preview_foreground),
-            ("", preview_background),
+            preview_foreground,
+            preview_background,
         ]
         for pname, p in providers.PROVIDERS.items():
             methods += [
-                (pname, func)
-                for name, func in p.RPC_METHODS
+                func for name, func in p.RPC_METHODS
             ]
 
-        rpc.add_methods(*methods)
-        app.router.add_route("*", "/", rpc.handle_request)
+        aiohttp_rpc.rpc_server.add_methods(methods)
+        app.router.add_routes([
+            aiohttp.web.post('/rpc', aiohttp_rpc.rpc_server.handle_http_request),
+        ])
+        # app.router.add_route("*", "/", aiohttp_rpc.rpc_server.handle_http_request)
         asyncio.create_task(start_server_async())
 
     def queue_downloads(loop, user_data):

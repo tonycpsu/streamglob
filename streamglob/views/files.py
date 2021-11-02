@@ -1,27 +1,71 @@
-import os
 import logging
 logger = logging.getLogger(__name__)
+import os
 import asyncio
 import re
 import pipes
 from functools import partial
+import hashlib
+import pathlib
 
 import urwid
 from panwid.keymap import *
 from panwid.dialog import ConfirmDialog
+import thefuzz.fuzz, thefuzz.process
+from unidecode import unidecode
+import ffmpeg
+from pymediainfo import MediaInfo
+import wand.image
+import wand.drawing
 
 from watchdog.observers.polling import PollingObserver
 from watchdog.events import FileSystemEventHandler
 
 from .. import model
+from .. import utils
 from .. import programs
-from ..utils import strip_emoji
+from ..utils import strip_emoji, classproperty
 from .. import config
 from ..widgets import *
 from ..providers.widgets import *
 from .. import providers
 # from ..widgets.browser import FileBrowser, DirectoryNode, FileNode
 from ..providers.base import SynchronizedPlayerProviderMixin
+
+DEFAULT_FUZZ_RATIO = 0.9
+
+def find_fuzzy_matches(
+    target, candidates, fuzz_ratio=DEFAULT_FUZZ_RATIO, fuzzy_unicode=False
+):
+
+    if fuzzy_unicode:
+        target = unidecode(target)
+        candidates = dict(zip([unidecode(c) for c in candidates], candidates))
+    else:
+        candidates = dict(zip(candidates, candidates))
+
+    ranked = thefuzz.process.extractBests(
+        target,
+        candidates.keys(),
+        scorer=thefuzz.fuzz.partial_token_set_ratio,
+        score_cutoff=fuzz_ratio*100
+    )
+    return [
+        (candidates[r[0]], r[1])
+        for r in ranked
+        if len(target) >= len(candidates[r[0]])
+    ]
+
+
+class CreateDirectoryDialog(TextEditDialog):
+
+    @property
+    def title(self):
+        return "Create directory"
+
+    def action(self, value):
+        self.parent.browser.create_directory(value)
+
 
 @model.attrclass()
 class FilesPlayMediaTask(model.PlayMediaTask):
@@ -74,6 +118,16 @@ class RunCommandPopUp(OKCancelDialog):
         )
 
 
+@model.attrclass()
+class FilesMediaListing(model.TitledMediaListing):
+    pass
+
+@model.attrclass()
+class FilesMediaSource(model.InflatableMediaSource):
+    pass
+
+
+
 @keymapped()
 class FilesView(
         SynchronizedPlayerProviderMixin,
@@ -88,19 +142,21 @@ class FilesView(
         "ctrl r": "refresh",
         "c": "create_directory",
         "g": "change_root",
-        ";": "debug",
         "m": ("set_file_sort", ["mtime", False]),
         "M": ("set_file_sort", ["mtime", True]),
         "b": ("set_file_sort", ["basename", False]),
         "B": ("set_file_sort", ["basename", True]),
         "backspace": "directory_up",
         # "enter": "open_selection",
+        "o": "organize_selection",
+        "O": ("organize_selection", [True]),
         "delete": "delete_selection",
         "!": "open_run_command_dialog"
     }
 
-    def __init__(self):
+    def __init__(self, provider):
 
+        self.provider = provider
         self.browser_placeholder = urwid.WidgetPlaceholder(urwid.Text(""))
         self.pile  = urwid.Pile([
             ('weight', 1, self.browser_placeholder),
@@ -108,6 +164,7 @@ class FilesView(
         super().__init__(self.browser_placeholder)
         self.pile.focus_position = 0
         self.updated = False
+        self.storyboard_lock = asyncio.Lock()
         state.event_loop.create_task(self.check_updated())
         for cmd, cfg in config.settings.profile.files.commands.items():
             if "key" in cfg:
@@ -117,13 +174,183 @@ class FilesView(
                     )
                 self.keymap_register(cfg.key, func)
 
-
-    def debug(self):
-        import ipdb; ipdb.set_trace()
+    def update(self):
+        pass
 
     @property
-    def provider(self):
-        return self
+    def tmp_dir(self):
+        return self.provider.tmp_dir
+
+    @property
+    def thumbnails(self):
+        if not hasattr(self, "_thumbnails"):
+            self._thumbnails = AttrDict()
+        return self._thumbnails
+
+    @property
+    def storyboards(self):
+        if not hasattr(self, "_storyboards"):
+            self._storyboards = AttrDict()
+        return self._storyboards
+
+    async def make_preview_tile(
+            self,
+            input_file, output_file,
+            position=0, width=1280
+    ):
+
+        async def run_ffmpeg():
+            await (
+                ffmpeg
+                .input(input_file, ss=position)
+                .filter("scale", width, -1)
+                .output(output_file, vframes=1)
+                .overwrite_output()
+                # .run()
+                .run_asyncio(quiet=True)
+            )
+            return output_file
+
+        return await run_ffmpeg()
+
+    async def make_preview_thumbnail(self, input_file, output_file, cfg):
+
+        media_info = MediaInfo.parse(input_file)
+        duration = next(
+            t for t in media_info.tracks
+            if t.track_type == "General"
+        ).duration/1000
+        logger.info(duration)
+
+        thumbnail_file = await self.make_preview_tile(
+            input_file, output_file,
+            position=0.25*duration
+        )
+        # import ipdb; ipdb.set_trace()
+        return AttrDict(
+            thumbnail_file=thumbnail_file,
+            duration=duration
+        )
+
+    async def thumbnail_for(self, listing, cfg):
+        # import ipdb; ipdb.set_trace()
+
+        if listing.key not in self.thumbnails:
+            thumbnail_file = os.path.join(self.tmp_dir, f"thumbnail.{listing.key}.jpg")
+            self.thumbnails[listing.key] = await self.make_preview_thumbnail(
+                listing.path, thumbnail_file, cfg
+            )
+        return self.thumbnails[listing.key]
+
+    async def preview_content_thumbnail(self, cfg, listing, source):
+
+        # import ipdb; ipdb.set_trace()
+        return (await self.thumbnail_for(listing, cfg)).thumbnail_file
+
+
+    async def make_preview_storyboard(self, listing, cfg):
+
+        # FIXME: refactor with YouTube version
+        PREVIEW_WIDTH = 1280
+        PREVIEW_HEIGHT = 720
+        PREVIEW_DURATION_RATIO=0.95
+
+        inset_scale = cfg.scale or 0.25
+        inset_offset = cfg.offset or 0
+        border_color = cfg.border.color or "black"
+        border_width = cfg.border.width or 1
+        tile_skip = cfg.skip or None
+
+        num_tiles = 10
+
+        thumbnail = await self.thumbnail_for(listing, cfg)
+        thumbnail_file = thumbnail.thumbnail_file
+        duration = thumbnail.duration
+
+        # import ipdb; ipdb.set_trace()
+
+        (done, pending) = await asyncio.wait([
+            self.make_preview_tile(
+                listing.path,
+                os.path.join(self.tmp_dir, f"board.{listing.key}.{n:04d}.jpg"),
+                position=(duration*PREVIEW_DURATION_RATIO)*(n+1)*(1/num_tiles),
+                width=480
+            )
+            for n in range(num_tiles)
+        ])
+
+        board_files = [f.result() for f in done]
+
+        thumbnail = wand.image.Image(filename=thumbnail_file)
+        thumbnail.trim(fuzz=5)
+        if thumbnail.width != PREVIEW_WIDTH:
+            raise Exception
+            thumbnail.transform(resize=f"{PREVIEW_WIDTH}x{PREVIEW_HEIGHT}")
+        i = 0
+        tile_width = 0
+        tile_height = 0
+        for n, board_file in enumerate(board_files):
+            # logger.debug(board_file)
+            with wand.image.Image(filename=board_file) as tile:
+                clone = thumbnail.clone()
+                tile.resize(int(thumbnail.width * inset_scale),
+                             int(thumbnail.height * inset_scale))
+                tile.border(border_color, border_width, border_width)
+                thumbnail.composite(
+                    tile,
+                    left=thumbnail.width-tile.width-inset_offset,
+                    top=thumbnail.height-tile.height-inset_offset
+                )
+                tile_file=os.path.join(self.tmp_dir, f"tile.{listing.key}.{n:04d}.jpg")
+                # import ipdb; ipdb.set_trace()
+                thumbnail.save(filename=tile_file)
+
+        if cfg.frame_rate:
+            frame_rate = cfg.frame_rate
+            duration = n/frame_rate
+        elif "duration" in cfg:
+            duration = cfg.duration
+            frame_rate = n/duration
+        else:
+            duration = n
+            frame_rate = 1
+
+        inputs = ffmpeg.concat(
+            ffmpeg.input(os.path.join(self.tmp_dir, f"tile.{listing.key}.*.jpg"),
+                                      pattern_type="glob",framerate=frame_rate)
+        )
+        storyboard_file=os.path.join(self.tmp_dir, f"storyboard.{listing.key}.mp4")
+        proc = await inputs.output(storyboard_file).run_asyncio(overwrite_output=True, quiet=True)
+        await proc.wait()
+
+        for p in itertools.chain(
+            pathlib.Path(self.tmp_dir).glob(f"board.{listing.key}.*"),
+            pathlib.Path(self.tmp_dir).glob(f"tile.{listing.key}.*")
+        ):
+            p.unlink()
+
+        # return storyboard_file
+        return AttrDict(
+            img_file=storyboard_file,
+            duration=duration
+        )
+
+
+    async def storyboard_for(self, listing, cfg):
+
+        async with self.storyboard_lock:
+            if listing.key not in self.storyboards:
+                self.storyboards[listing.key] = await self.make_preview_storyboard(listing, cfg)
+        return self.storyboards[listing.key]
+
+
+    async def preview_content_storyboard(self, cfg, listing, source):
+
+        storyboard = await self.storyboard_for(listing, cfg)
+        if not storyboard:
+            return
+        logger.info(storyboard)
+        return storyboard.img_file
 
     @property
     def NAME(self):
@@ -141,8 +368,8 @@ class FilesView(
         self.browser = FileBrowser(
             top_dir,
             root=config.settings.profile.files.root,
-            dir_sort = self.config.dir_sort,
-            file_sort = self.config.file_sort,
+            dir_sort=self.config.dir_sort,
+            file_sort=self.config.file_sort,
             ignore_files=False
         )
         self.monitor_path(top_dir)
@@ -177,8 +404,10 @@ class FilesView(
     def on_focus(self, source, selection):
 
         if isinstance(selection, FileNode):
-            logger.info("sync")
-            state.event_loop.create_task(self.sync_playlist_position())
+            super().on_focus(source, selection)
+            # state.event_loop.create_task(self.sync_playlist_position())
+        elif isinstance(selection, DirectoryNode):
+            self.load_play_items()
 
 # state.event_loop.create_task(self.preview_all())
 
@@ -194,19 +423,16 @@ class FilesView(
         )
         self.observer.start()
 
-    @property
-    def play_items(self):
-        # import ipdb; ipdb.set_trace()
-        return [
-            # AttrDict(
-            #     title=self.selected_listing.title,
-            #     locator=self.selected_listing.sources[0].locator
-            # )
-            # for i in range(len(self))
+    def load_play_items(self):
 
+        self._play_items = [
             AttrDict(
                 title=n.get_key(),
-                locator=n.full_path
+                path=n.full_path,
+                key=hashlib.md5(n.full_path.encode("utf-8")).hexdigest(),
+                # locator=n.full_path,
+                locator=utils.BLANK_IMAGE_URI,
+                preview_locator=utils.BLANK_IMAGE_URI
             )
             for n in self.browser.cwd_node.child_files
         ]
@@ -214,14 +440,17 @@ class FilesView(
     @property
     def selected_listing(self):
         idx = self.selection_index
-        path = self.play_items[idx].locator
-        return model.TitledMediaListing.attr_class(
+        path = self.play_items[idx].path
+        return AttrDict(
             provider_id="files", # FIXME
+            path=path,
+            key=hashlib.md5(path.encode("utf-8")).hexdigest(),
             title=os.path.basename(path),
-            sources = [
-                model.MediaSource.attr_class(
+            sources=[
+                AttrDict(
                     provider_id="files", # FIXME
-                    url=path
+                    media_type="video", # FIXME
+                    path=path
                 )
             ]
         )
@@ -265,16 +494,6 @@ class FilesView(
 
     def create_directory(self):
 
-        class CreateDirectoryDialog(TextEditDialog):
-
-            @property
-            def title(self):
-                return "Create directory"
-
-
-            def action(self, value):
-                self.parent.browser.create_directory(value)
-
         dialog = CreateDirectoryDialog(self)
         self.open_popup(dialog, width=60, height=8)
 
@@ -289,6 +508,107 @@ class FilesView(
 
     #         # self.load_browser(selection.full_path)
 
+    def organize_selection(self, accept_unique=False):
+
+        def guess_subject(title, words=2, max_len=40):
+            try:
+                spaces =  [
+                    m.start()+1 for m in re.finditer(r"[^\d-]\S+", title)
+                ][:words+1]
+                indices = [spaces[0], spaces[-1]-1]
+            except IndexError:
+                indices = [0, max_len]
+            return title[slice(*indices)]
+
+        class OrganizeSelectionCreateDirectoryDialog(CreateDirectoryDialog):
+
+            focus = "ok"
+
+            def __init__(self, parent, files, orig_value=None):
+                super().__init__(parent, orig_value=orig_value)
+                self.files = files
+
+            def action(self, value):
+
+                destdir = os.path.join(self.parent.browser.cwd, value)
+                if not os.path.exists(destdir):
+                    self.parent.browser.create_directory(destdir)
+                for src in self.files:
+                    self.parent.browser.move_path(src, destdir)
+
+        class OrganizeSelectionChooseDestinationDialog(OKCancelDialog):
+
+            focus = "ok"
+
+            def __init__(self, parent, files, dests, *args, **kwargs):
+
+                self.files = files
+                self.dests = dict(zip(dests + ["Other..."], dests + [None]))
+                super().__init__(parent, *args, **kwargs)
+
+            @property
+            def widgets(self):
+
+                edit_text = guess_subject(os.path.basename(self.files[0]))
+
+                return dict(
+                    dest=BaseDropdown(self.dests),
+                    text=urwid_readline.ReadlineEdit(
+                        caption=("bold", "Text: "),
+                        edit_text=edit_text
+                    ),
+                )
+
+            def action(self):
+
+                if self.dest.selected_value:
+                    dest = self.dest.selected_label
+                else:
+                    dest = self.text.get_edit_text()
+
+                destdir = os.path.join(self.parent.browser.cwd, dest)
+                if not os.path.exists(destdir):
+                    self.parent.browser.create_directory(destdir)
+
+                for src in self.files:
+                    self.parent.browser.move_path(src, destdir)
+
+        dirs = [d.get_key() for d in self.browser.tree_root.child_dirs]
+
+        files = [
+            f.full_path
+            for f in [
+                self.browser.selection
+            ] + [
+                item for item in self.browser.selected_items
+                if item != self.browser.selection
+            ]
+        ]
+
+        src = files[0]
+
+        matches = [
+            m[0] for m in find_fuzzy_matches(
+                os.path.basename(src),
+                dirs,
+                fuzzy_unicode=True
+            )
+        ]
+
+        if not len(matches):
+            dialog = OrganizeSelectionCreateDirectoryDialog(
+                self, files, orig_value=guess_subject(os.path.basename(src))
+            )
+            self.open_popup(dialog, width=60, height=8)
+        elif len(matches) > 1 or not accept_unique:
+            dialog = OrganizeSelectionChooseDestinationDialog(
+                self, files, matches
+            )
+            self.open_popup(dialog, width=60, height=8)
+        else:
+            self.browser.move_path(
+                src, os.path.join(self.browser.cwd, matches[0])
+            )
 
     def delete_selection(self):
 
@@ -355,15 +675,35 @@ class FilesView(
     def on_view_activate(self):
 
         async def activate_preview_player():
-            if state.listings_view.auto_preview_mode:
+            if self.config.auto_preview.enabled:
                 await self.preview_all()
 
         state.event_loop.create_task(activate_preview_player())
 
+
+    @property
+    def playlist_position_text(self):
+        return f"[{self.selection_index}/{len(self)}]"
+
     def __len__(self):
         # return 1
-        logger.info(len(self.browser.cwd_node.child_files))
+        # logger.info(len(self.browser.cwd_node.child_files))
         return len(self.browser.cwd_node.child_files)
 
     # def __iter__(self):
     #     return iter(self.browser.selection.full_path)
+
+
+class FilesProvider(providers.base.BaseProvider):
+
+    @classproperty
+    def IDENTIFIER(cls):
+        return "files"
+
+    @property
+    def VIEW(self):
+        return FilesView(self)
+
+    @property
+    def listings(self):
+        return []

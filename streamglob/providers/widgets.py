@@ -92,9 +92,18 @@ class PlayListingViewMixin(object):
             return None
         return listing
 
-    @property
-    def selected_source(self):
-        return self.selected_listing.sources[0]
+    # @property
+    # def selected_source(self):
+    #     # import ipdb; ipdb.set_trace()
+    #     if isinstance(self.selected_listing.sources, list):
+    #         return self.selected_listing.sources[0]
+    #     elif isinstance(self.selected_listing, model.db.Entity):
+    #         with db_session:
+    #             return self.selected_listing.sources.select(
+    #                 lambda s: s.rank
+    #             ).first()
+    #     else:
+    #         raise NotImplementedError
 
     async def play_selection(self, *args, **kwargs):
         listing = self.selected_listing
@@ -190,8 +199,9 @@ class DownloadListingProviderMixin(object):
                 raise
             downloader_spec = downloader_spec or source.download_helper
             with db_session:
+                listing = model.MediaListing[listing.media_listing_id]
                 download = model.MediaDownload.upsert(
-                    dict(media_listing=listing.attach())
+                    dict(media_listing=listing)
                 )
 
             task = model.DownloadMediaTask.attr_class(
@@ -216,7 +226,7 @@ class ProviderDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseData
     signals = ["cycle_filter"]
 
     KEYMAP = {
-        ".": "browse_selection",
+        ",": "browse_selection",
         "h": "add_highlight_rule",
         "H": "remove_highlight_rule",
         "ctrl o": "strip_emoji_selection",
@@ -439,6 +449,8 @@ class ProviderDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseData
 
         class AddHighlightRuleDialog(OKCancelDialog):
 
+            focus = "ok"
+
             @property
             def widgets(self):
                 edit_pos = 0
@@ -495,7 +507,10 @@ class ProviderDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseData
                 rules = self.parent.provider.conf_rules.label
                 for label in rules.keys():
                     try:
-                        rules[label].remove(self.text.get_edit_text())
+                        rules[label] = [
+                            p for p in rules[label]
+                            if not re.search(p, self.text.get_edit_text(), re.IGNORECASE)
+                        ]
                         self.parent.provider.conf_rules.save()
                         self.parent.provider.load_rules()
                         self.parent.reset()

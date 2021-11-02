@@ -254,10 +254,12 @@ class FeedMediaSourceMixin(object):
     def mark_seen(self):
         with db_session:
             self.seen = datetime.now()
+            commit()
 
     def mark_unseen(self):
         with db_session:
             self.seen = None
+            commit()
 
     @property
     def uri(self):
@@ -276,7 +278,7 @@ class FeedMediaSourceMixin(object):
             s.refresh()
 
 
-@model.attrclass(FeedMediaSourceMixin)
+@model.attrclass()
 class FeedMediaSource(FeedMediaSourceMixin, model.MediaSource):
 
     seen = Optional(datetime)
@@ -313,16 +315,20 @@ class CachedFeedProviderDetailDataTable(DetailDataTable):
     async def mark_selection_seen(self):
         with db_session:
             try:
-                source = FeedMediaSource[self.selection.data.media_source_id]
+                # import ipdb; ipdb.set_trace()
+                source = FeedMediaSource[self.selected_source.media_source_id]
             except ObjectNotFound:
                 return
+                # source = self.selected_source
             source.mark_seen()
+            commit()
         self.selection.clear_attr("unread")
         # logger.info("mark seen")
 
     async def mark_selection_unseen(self):
         with db_session:
-            source = FeedMediaSource[self.selection.data.media_source_id]
+            source = self.selected_source
+            # source = FeedMediaSource[self.selection.data.media_source_id]
             source.mark_unseen()
         self.selection.set_attr("unread")
         # logger.info("mark unseen")
@@ -340,12 +346,13 @@ class CachedFeedProviderDetailDataTable(DetailDataTable):
     @keymap_command
     async def next_unseen(self):
         # await self.parent_table.next_unseen()
+        # import ipdb; ipdb.set_trace()
         if self.selection:
             await self.mark_selection_seen()
 
         with db_session:
             # raise Exception(self.listing)
-            listing = self.listing.attach()
+            listing = FeedMediaListing[self.listing.media_listing_id]
             next_unseen =  select(s for s in listing.sources
                        if not s.seen).order_by(lambda s: s.rank).first()
             if next_unseen:
@@ -537,70 +544,70 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
         if not row:
             self.provider.view.channels.cycle_unread()
             return
+        with db_session:
 
-        listing = row.data_source
-        async with self.provider.listing_lock:
-            with db_session:
-                for i, s in enumerate(listing.sources):
-                    source = FeedMediaSource[s.media_source_id]
-                    # logger.info(f"{i}, {source}")
-                    # source.attach().read = now
-                    source.mark_seen()
-                    # commit()
-                    if len(listing.sources) > 1:
-                        logger.info(f"{len(listing.sources)}, {len(row.details.contents.table)}")
-                        row.details.contents.table[i].clear_attr("unread")
-                    # else:
-                    #     listing_source.attach().read = now
-                row.close_details()
-                row.clear_attr("unread")
+            async with self.provider.listing_lock:
+                    listing = model.MediaListing[row.data_source.media_listing_id]
+                    for i, s in enumerate(listing.sources):
+                        source = FeedMediaSource[s.media_source_id]
+                        # logger.info(f"{i}, {source}")
+                        # source.attach().read = now
+                        source.mark_seen()
+                        commit()
+                        if len(listing.sources) > 1:
+                            logger.info(f"{len(listing.sources)}, {len(row.details.contents.table)}")
+                            row.details.contents.table[i].clear_attr("unread")
+                        # else:
+                        #     listing_source.attach().read = now
+                    row.close_details()
+                    row.clear_attr("unread")
 
-        old_pos = self.focus_position
-        try:
-            idx = next(
-                r.data.media_listing_id
-                for r in self[self.focus_position+1:]
-                if predicate(r)
-            )
-        except (StopIteration, AttributeError):
-            if self.focus_position == len(self)-1:
-                if self.selection.data["read"]:
-                    if self.sort_by == ("created", False):
-                        self.provider.view.columns.focus_position = 0
-                        self.provider.view.channels.cycle_unread(1)
-                        # self.provider.view.channels.advance(skip=True)
-                        # self._emit("next_feed")
-                    elif self.sort_by == ("created", True):
-                        updated = self.load_more(self.focus_position)
-                        if updated:
-                            if self.focus_position < len(self) - 1:
-                                self.focus_position += 1
-                        else:
-                            new = await self.provider.view.body.update(
-                                force=True, resume=True
-                            )
-                            if new:
-                                self.reset()
+            old_pos = self.focus_position
+            try:
+                idx = next(
+                    r.data.media_listing_id
+                    for r in self[self.focus_position+1:]
+                    if predicate(r)
+                )
+            except (StopIteration, AttributeError):
+                if self.focus_position == len(self)-1:
+                    if self.selection.data["read"]:
+                        if self.sort_by == ("created", False):
+                            self.provider.view.columns.focus_position = 0
+                            self.provider.view.channels.cycle_unread(1)
+                            # self.provider.view.channels.advance(skip=True)
+                            # self._emit("next_feed")
+                        elif self.sort_by == ("created", True):
+                            updated = self.load_more(self.focus_position)
+                            if updated:
+                                if self.focus_position < len(self) - 1:
+                                    self.focus_position += 1
                             else:
-                                # await self.mark_item_read(self.focus_position, no_signal=True)
-                                self.provider.view.channels.cycle_unread()
-                                # break
-                                # self._emit("unread_change", listing.channel.detach())
-                                # return
+                                new = await self.provider.view.body.update(
+                                    force=True, resume=True
+                                )
+                                if new:
+                                    self.reset()
+                                else:
+                                    # await self.mark_item_read(self.focus_position, no_signal=True)
+                                    self.provider.view.channels.cycle_unread()
+                                    # break
+                                    # self._emit("unread_change", listing.channel.detach())
+                                    # return
 
-            else:
-                # self.focus_position = len(self)-1
-                self.provider.view.channels.cycle_unread()
+                else:
+                    # self.focus_position = len(self)-1
+                    self.provider.view.channels.cycle_unread()
 
-        await self.mark_item_read(self.focus_position, no_signal=True)
+            await self.mark_item_read(self.focus_position, no_signal=True)
 
-        if idx:
-            pos = self.index_to_position(idx)
-            focus_position_orig = self.focus_position
-            self.focus_position = pos
-            self.mark_read_on_focus = True
-            self._modified()
-        self._emit("unread_change", listing.channel.detach())
+            if idx:
+                pos = self.index_to_position(idx)
+                focus_position_orig = self.focus_position
+                self.focus_position = pos
+                self.mark_read_on_focus = True
+                self._modified()
+            self._emit("unread_change", listing.channel.detach())
 
 
     @keymap_command
@@ -1493,6 +1500,9 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
 
         count = 0
         # cursor = None
+        #
+        # if cursor:
+        #     import ipdb; ipdb.set_trace()
 
         if not offset:
             offset = 0

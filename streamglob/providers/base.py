@@ -10,7 +10,7 @@ from itertools import chain
 # import textwrap
 # import tempfile
 
-from orderedattrdict import AttrDict, defaultdict
+from orderedattrdict import AttrDict, DefaultAttrDict
 from pony.orm import *
 from panwid.dialog import BaseView
 from panwid.keymap import *
@@ -754,7 +754,7 @@ class BackgroundTasksMixin(object):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._tasks = defaultdict(lambda: None)
+        self._tasks = DefaultAttrDict(lambda: None)
 
     def run_in_background(self, fn, interval=DEFAULT_INTERVAL,
                           instant=False,
@@ -817,7 +817,7 @@ class SynchronizedPlayerMixin(object):
     signals = ["keypress"]
 
     KEYMAP = {
-        " ": "preview_content",
+        ".": "preview_content",
         "meta p": "preview_all"
     }
 
@@ -837,6 +837,13 @@ class SynchronizedPlayerMixin(object):
         self.video_filters = []
         self.playlist_lock = asyncio.Lock()
         self.preview_stage = 0
+
+    @property
+    def previews(self):
+        if not hasattr(self, "_previews"):
+            self._previews = DefaultAttrDict(lambda: DefaultAttrDict(lambda: asyncio.Future()))
+        return self._previews
+
 
     def on_requery(self, source, count):
 
@@ -983,7 +990,7 @@ class SynchronizedPlayerMixin(object):
             vf_scale
         ]
 
-        if self.selected_source.media_type == "image":
+        if getattr(self.selected_source, "media_type", None) == "image":
             vf_framerate = f"@framerate:framerate=fps={cfg.fps or 30}"
             filters.append(vf_framerate)
 
@@ -994,16 +1001,21 @@ class SynchronizedPlayerMixin(object):
             vf_box = f"@box:drawbox=x={ox}:y={oy}:w=iw:h=(ih/{cfg.text.size or 50}*2)+{padding}:color={box_color}:t=fill"
             filters.append(vf_box)
 
+        try:
+            title = self.play_items[pos].title
+        except IndexError:
+            logger.warning(f"IndexError in play_items: {pos}, {len(self.play_items)}")
+            return
         for element, text in dict(
                 playlist=f"{self.playlist_title} {self.playlist_position_text}",
-                title= self.play_items[pos].title
+                title=title
             ).items():
             text = ffmpeg_escape(text)
             el_cfg = cfg.get(element)
             color = el_cfg.text.color.default or cfg.text.color.default or "white"
             if self.playlist_position == len(self.play_items)-1:
                 color = el_cfg.text.color.end or cfg.text.color.end or color
-            elif self.active_table.selected_source.local_path:
+            elif getattr(self.active_table.selected_source, "local_path", None):
                 color = el_cfg.text.color.downloaded or cfg.text.color.downloaded or color
 
             font = ffmpeg_escape(el_cfg.text.font or cfg.text.font or "sans")
@@ -1028,9 +1040,9 @@ x='{x}':y='{y}':fontsize=(h/{size}):fontcolor={color}:bordercolor={border_color}
 borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow_color}:expansion=none]"""
             filters.append(vf_text)
 
-        await state.task_manager.preview_player.command(
-            "vf", "add", ",".join(filters)
-        )
+        # await state.task_manager.preview_player.command(
+        #     "vf", "add", ",".join(filters)
+        # )
 
     @property
     def playlist_position(self):
@@ -1040,24 +1052,45 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
         pass
 
 
-    async def preview_content_thumbnail(self, cfg, position, listing, source):
-        logger.debug(f"preview_content_thumbnail {position}")
+    async def preview_content_thumbnail(self, cfg, listing, source):
+        logger.debug(f"preview_content_thumbnail")
         if source.locator_thumbnail is None:
             logger.debug("no thumbnail")
             return
-        logger.debug(f"replacing with thumbnail: {source.locator_thumbnail} at pos {position}")
-        await self.playlist_replace(source.locator_thumbnail, idx=position)
+        return source.locator_thumbnail
+        # await self.playlist_replace(source.locator_thumbnail, idx=position)
 
-    async def preview_content_full(self, cfg, position, listing, source):
-        logger.debug(f"preview_content_full {position}")
-        if source.locator_thumbnail is None:
-            logger.debug("full: no thumbnail")
-            return
+    async def preview_content_full(self, cfg, listing, source):
+        logger.debug(f"preview_content_full")
+        # if getattr(source, "locator_thumbnail", None) is None:
+        #     logger.debug("full: no thumbnail")
+        #     return
         if source.locator is None:
             logger.debug("no full")
             return
-        logger.debug(f"replacing with full: {source.locator} at pos {position}")
-        await self.playlist_replace(source.locator, idx=position)
+        return source.locator
+        # await self.playlist_replace(source.locator, idx=position)
+
+    async def get_preview(self, cfg, listing, source):
+
+        async def generate_preview():
+            try:
+                future.set_result(await preview_fn(cfg, listing, source))
+            except asyncio.exceptions.CancelledError:
+                logger.warning("CancelledError from preview function")
+
+        preview_fn = getattr(
+            self, f"preview_content_{cfg.mode}"
+        )
+
+        future = self.previews[source.key][cfg.mode]
+        if not future.done():
+            self.pending_event_tasks.append(
+                asyncio.create_task(
+                    generate_preview()
+                )
+            )
+        return future
 
     async def preview_content(self):
 
@@ -1070,11 +1103,8 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             logger.debug(f"sleeping: {self.config.auto_preview.delay}")
             await asyncio.sleep(self.config.auto_preview.delay)
 
-        # if self.config.auto_preview.duration:
-        #     await asyncio.sleep(self.config.auto_preview.duration)
-
-        # cfg = self.config.auto_preview.stages[self.preview_stage]
-        for cfg in self.config.auto_preview.stages[self.preview_stage:]:
+        stages = self.config.auto_preview.stages[self.preview_stage:]
+        for (cfg, next_cfg) in pairwise(stages + [None]):
             # if self.playlist_position != position:
             #     return
             logger.debug(f"stage: {cfg.mode}")
@@ -1083,18 +1113,22 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             #     continue
             if cfg.media_types and source.media_type not in cfg.media_types:
                 continue
-            preview_fn = getattr(
-                self, f"preview_content_{cfg.mode}"
-            )
-            try:
-                await preview_fn(cfg, position, listing, source=source)
-            except asyncio.exceptions.CancelledError:
-                logger.warning("CancelledError from preview function")
-                break
-            try:
-                self.play_items[position].preview_mode = cfg.mode
-            except IndexError:
-                break
+
+            preview = await (await self.get_preview(cfg, listing, source))
+            await asyncio.sleep(0.5)
+
+            await self.playlist_replace(preview, idx=position)
+            await self.set_playlist_pos(position)
+            # try:
+            #     self.play_items[position].preview_mode = cfg.mode
+            # except IndexError:
+            #     break
+
+            if next_cfg:
+                await self.get_preview(next_cfg, listing, source)
+
+            if next_cfg:
+                await self.get_preview(next_cfg, listing, source)
 
             duration = await self.preview_duration(cfg, listing)
             if duration is not None: # advance automatically
@@ -1104,8 +1138,6 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
                 break
         self.preview_stage = (self.preview_stage+1) % len(self.config.auto_preview.stages)
         logger.debug(f"new stage: {self.preview_stage}")
-
-        await self.set_playlist_pos(position)
 
 
     async def preview_duration(self, cfg, listing):
@@ -1136,12 +1168,12 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
                 t = self.pending_event_tasks.pop()
                 t.cancel()
 
+            await self.playlist_position_changed(position)
             self.pending_event_tasks.append(
                 asyncio.create_task(
                     self.preview_content()
                 )
             )
-            await self.playlist_position_changed(position)
 
     def on_focus(self, source, position):
 
@@ -1160,7 +1192,8 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
                         self.invalidate_rows([listing_id])
                         self.selection.close_details()
                         self.selection.open_details()
-                        self.refresh()
+                        # necessary to reload sources that may hae changed
+                        # self.refresh()
                         await self.preview_all(playlist_position=self.playlist_position)
                     state.event_loop.create_task(reload(listing.media_listing_id))
         # state.loop.draw_screen()
@@ -1214,8 +1247,12 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             if idx is None:
                 idx = self.playlist_position
 
-            # logger.info(f"playist_replace: {idx}, {url}")
-            self.play_items[idx].locator = url
+            logger.info(f"playist_replace: {idx}, {url}")
+            # FIXME: standardize media source preview locator
+            # if hasattr(self.play_items[idx], "preview_locator"):
+            self.play_items[idx].preview_locator = url
+            # else:
+            #     self.play_items[idx].locator = url
             await self.preview_all(playlist_position=pos)
 
             try:
@@ -1268,13 +1305,13 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
                 #     else (getattr(source, "locator_thumbnail", None) or source.locator)
                 # )
                 # locator=source.locator or getattr(source, "locator_thumbnail", None),
-                locator=source.locator_for_preview(state.listings_view.preview_mode),
-                # locator=source.locator
+                preview_locator=source.locator_for_preview(state.listings_view.preview_mode),
+                locator=source.locator
             )
             for (row_num, row, index, source) in [
                     (row_num, row, index, source) for row_num, row in enumerate(self)
                     for index, source in enumerate(
-                            row.data_source.sources
+                            row.data_source.sources or []
                             if hasattr(row.data_source, "sources")
                             else [
                                 model.MediaSource.attr_class(
@@ -1288,6 +1325,9 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
         ]
         # raise Exception(self.play_items)
 
+    @property
+    def playlist_position_text(self):
+        return f"[{self.focus_position+1}/{len(self)}]"
 
     def on_requery(self, source, count):
         if state.get("tui_enabled"):
@@ -1361,15 +1401,23 @@ class DetailDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseDataTa
 
     @property
     def selected_listing(self):
-        listing_id = self.selected_source.listing.media_listing_id
-        with db_session:
-            return self.provider.LISTING_CLASS[listing_id]
+        return self.parent_table.selected_listing
 
     @property
     def selected_source(self):
-        source_id = self[self.focus_position].data_source.media_source_id
-        with db_session:
-            return self.provider.MEDIA_SOURCE_CLASS[source_id]
+        return self.parent_table.selected_source
+
+    # @property
+    # def selected_listing(self):
+    #     listing_id = self.selection.data.media_listing_id
+    #     # listing_id = self.selected_source.listing.media_listing_id
+    #     with db_session:
+    #         return self.provider.LISTING_CLASS[listing_id]
+
+    # # @property
+    # def selected_source(self):
+    #     import ipdb; ip
+    #     return self.selected_listing.sources[0]
 
     # def key_home(self):
     #     # raise Exception
@@ -1407,10 +1455,11 @@ class DetailDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseDataTa
             dict(
                 source,
                 **dict(
+                    media_listing_id=source.listing.media_listing_id,
                     title=f"[{i+1}/{len(source.listing.sources)}] {source.listing.title}",
-                    feed = source.listing.feed,
-                    created = source.listing.created,
-                    read = source.listing.attrs.get("parts_read", {}).get(i, False)
+                    feed=source.listing.feed,
+                    created=source.listing.created,
+                    read=source.listing.attrs.get("parts_read", {}).get(i, False)
                 ))
               for i, source in enumerate(self.listing.sources)
         ]

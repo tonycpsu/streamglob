@@ -87,6 +87,8 @@ class YouTubeMediaListing(YouTubeMediaListingMixin, model.ContentMediaListing, F
 
 class YouTubeMediaSourceMixin(object):
 
+    KEY_ATTR = "locator"
+
     @property
     def locator(self):
         return f"https://youtu.be/{self.listing.guid}"
@@ -569,15 +571,16 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         self.cancel_pending_tasks()
         super().on_deactivate()
 
-    async def preview_content_storyboard(self, cfg, position, listing, source):
+    async def preview_content_storyboard(self, cfg, listing, source):
 
         async def preview(listing):
             storyboard = await self.storyboard_for(listing, cfg)
             if not storyboard:
                 return
             logger.info(storyboard)
-            await self.playlist_replace(storyboard.img_file, idx=position)
+            # await self.playlist_replace(storyboard.img_file, idx=position)
             state.loop.draw_screen()
+            return storyboard.img_file
 
         if not await listing.storyboards:
             return
@@ -586,7 +589,7 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         #     self.preview_task.cancel()
         # self.preview_task = state.event_loop.create_task(preview(listing))
 
-        await preview(listing)
+        return await preview(listing)
         # await self.preview_task
 
     async def preview_duration(self, cfg, listing):

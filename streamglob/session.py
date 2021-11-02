@@ -65,7 +65,7 @@ class StreamSession(object):
         if not os.path.exists(self.COOKIES_FILE):
             self.cookies.save(self.COOKIES_FILE)
         self.cookies.load(self.COOKIES_FILE, ignore_discard=True)
-        self.session.headers = self.HEADERS
+        self.session.headers.update(self.HEADERS)
         self._state = AttrDict([
             ("proxies", proxies)
         ])

@@ -310,6 +310,7 @@ def snake_to_camel(s):
 
 
 __all__ = [
+    "pairwise",
     "classproperty",
     "valid_date",
     "format_datetime",

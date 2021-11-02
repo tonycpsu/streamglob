@@ -564,9 +564,9 @@ class LogViewer(urwid.Widget):
 
 class TextEditDialog(OKCancelDialog):
 
-    def __init__(self, parent, orig_value=None):
+    def __init__(self, parent, focus=None, orig_value=None):
         self.orig_value = orig_value
-        super().__init__(parent)
+        super().__init__(parent, focus=focus)
 
     @property
     def widgets(self):
@@ -579,6 +579,5 @@ class TextEditDialog(OKCancelDialog):
 
     def confirm(self):
         value = self.edit.get_edit_text()
-        if value != self.orig_value:
-            self.action(value)
+        self.action(value)
         self.close()
