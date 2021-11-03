@@ -315,7 +315,7 @@ class FilesView(
                                       pattern_type="glob",framerate=frame_rate)
         )
         storyboard_file = os.path.join(self.tmp_dir, f"storyboard.{listing.key}.mp4")
-        proc = await inputs.output(storyboard_file).run_asyncio(overwrite_output=True)
+        proc = await inputs.output(storyboard_file).run_asyncio(overwrite_output=True, quiet=True)
         await proc.wait()
 
         for p in itertools.chain(

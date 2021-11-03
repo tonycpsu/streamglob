@@ -11,7 +11,6 @@ import urwid
 import yaml
 from pony.orm import *
 from panwid.autocomplete import AutoCompleteMixin
-from panwid.highlightable import HighlightableTextMixin
 from panwid.keymap import *
 from panwid.dialog import ChoiceDialog, ConfirmDialog, BasePopUp
 from unidecode import unidecode
@@ -27,7 +26,7 @@ from ..widgets import StreamglobScrollBar, TextEditDialog
 
 from ..state import *
 
-class ChannelTreeWidget(HighlightableTextMixin, AttributeTreeWidget):
+class ChannelTreeWidget(HighlightableTreeWidgetMixin, AttributeTreeWidget):
     """ Display widget for leaf nodes """
 
     @property
@@ -51,35 +50,6 @@ class ChannelTreeWidget(HighlightableTextMixin, AttributeTreeWidget):
 
     def selectable(self):
         return True
-
-    # def keypress(self, size, key):
-    #     if key == " ":
-    #         self.toggle_mark()
-    #     # elif self._w.selectable():
-    #     #     return self.__super.keypress(size, key)
-    #     else:
-    #         return key
-
-    @property
-    def highlight_source(self):
-        return self._innerwidget.text
-
-    @property
-    def highlightable_attr_normal(self):
-        return self.attr
-
-    @property
-    def highlightable_attr_highlight(self):
-        return "browser highlight"
-
-    def on_highlight(self):
-        self._innerwidget.set_text(self.highlight_content)
-
-    def on_unhighlight(self):
-        self._innerwidget.set_text(self.display_text)
-
-    def __str__(self):
-        return self._innerwidget.text
 
 
 class ListingCountMixin(object):
@@ -437,32 +407,6 @@ class ChannelGroupNode(ChannelUnionNode):
         return ("folder", self.get_key())
 
 
-
-class MyTreeWalker(urwid.TreeWalker):
-
-    def positions(self, reverse=False):
-
-        widget, pos = self.get_focus()
-        rootnode = pos.get_root()
-        if reverse:
-            rootwidget = rootnode.get_widget()
-            lastwidget = rootwidget.last_child()
-            if lastwidget:
-                first = lastwidget.get_node()
-            else:
-                return
-        else:
-            first = rootnode
-
-        pos = first
-        while pos:
-            yield pos
-            if reverse:
-                pos = self.get_prev(pos)[1]
-            else:
-                pos = self.get_next(pos)[1]
-
-
 class MyTreeListBox(urwid.TreeListBox):
 
     def __init__(self, *args, **kwargs):
@@ -579,7 +523,7 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
 
     def load(self):
         self.tree = ChannelGroupNode(self, self.conf, key=self.label)
-        self.listbox = MyTreeListBox(MyTreeWalker(self.tree))
+        self.listbox = MyTreeListBox(PositionsTreeWalker(self.tree))
         self.listbox.offset_rows = 1
         self.scrollbar = StreamglobScrollBar(self.listbox)
         self.placeholder.original_widget = self.scrollbar

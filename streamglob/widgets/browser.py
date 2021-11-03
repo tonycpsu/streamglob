@@ -2,13 +2,15 @@ import logging
 logger = logging.getLogger(__name__)
 import shutil
 import time
-
 import itertools
 import re
 import os
 from functools import partial
 
 import urwid
+from panwid.autocomplete import AutoCompleteMixin
+from panwid.highlightable import HighlightableTextMixin
+from panwid.keymap import *
 
 from .tree import *
 
@@ -275,9 +277,17 @@ def sort_mtime(root, s):
     # logger.info(f"{root}, {s}")
     return os.stat(os.path.join(root, s)).st_mtime
 
-class FileBrowser(urwid.WidgetWrap):
+@keymapped()
+class FileBrowser(AutoCompleteMixin, urwid.WidgetWrap):
 
     signals = ["focus"]
+
+    KEYMAP = {
+        "/": "complete substring",
+        "?": "complete prefix",
+        "ctrl p": "complete_prev",
+        "ctrl n": "complete_next"
+    }
 
     SORT_KEY_MAP = {
         "basename": sort_basename,
@@ -342,7 +352,10 @@ class FileBrowser(urwid.WidgetWrap):
         self.last_selection = None
 
         self.placeholder = urwid.WidgetPlaceholder(urwid.Filler(urwid.Text("")))
-        super().__init__(self.placeholder)
+        self.pile = urwid.Pile([
+            ("weight", 1, self.placeholder)
+        ])
+        super().__init__(self.pile)
         self.change_directory(self.top_dir)
         if cwd:
             node = self.find_path(
@@ -354,6 +367,9 @@ class FileBrowser(urwid.WidgetWrap):
             if node:
                 self.listbox.set_focus(node)
 
+    def keypress(self, size, key):
+        return super().keypress(size, key)
+
     @property
     def cwd_node(self):
         node = self.selection
@@ -362,9 +378,6 @@ class FileBrowser(urwid.WidgetWrap):
     @property
     def cwd(self):
         return self.cwd_node.full_path
-
-    def keypress(self, size, key):
-        return super().keypress(size, key)
 
     def create_directory(self, directory):
         if not os.path.isabs(directory):
@@ -453,7 +466,7 @@ class FileBrowser(urwid.WidgetWrap):
 
         self.top_dir = directory
         self.tree_root = DirectoryNode(self, self.top_dir)
-        self.listbox = urwid.TreeListBox(urwid.TreeWalker(self.tree_root))
+        self.listbox = urwid.TreeListBox(PositionsTreeWalker(self.tree_root))
         for i in range(1 if self.no_parent_dir else 2):
             try:
                 self.listbox.set_focus(
@@ -563,6 +576,10 @@ class FileBrowser(urwid.WidgetWrap):
     def focus_position(self):
         return self.listbox.focus_position
 
+    @focus_position.setter
+    def focus_position(self, pos):
+        self.listbox.focus_position = pos
+
     @property
     def selected_items(self):
         return self.tree_root.selected_items
@@ -590,8 +607,34 @@ class FileBrowser(urwid.WidgetWrap):
     def find_path(self, path):
         return self.tree_root.find_path(os.path.relpath(path, self.top_dir))
 
-    # return dir_sep().join(w.get_display_text() for w in self.body.get_focus())
+    @property
+    def complete_container(self):
+        return self.pile
 
+    @property
+    def complete_body_position(self):
+        return 0
+
+    @property
+    def complete_container_pos(self):
+        return 1
+
+    @property
+    def complete_body(self):
+        return self.listbox.body
+
+    def complete_widget_at_pos(self, pos):
+        return pos.get_widget()
+
+    def on_complete_select(self, pos):
+        return
+        # self.update_selection()
+
+    # def complete_compare_substring(self, search, candidate):
+    #     try:
+    #         return unidecode(candidate).index(unidecode(search))
+    #     except ValueError:
+    #         return None
 
 
 #######

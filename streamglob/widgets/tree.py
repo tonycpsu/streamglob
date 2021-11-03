@@ -2,6 +2,55 @@ import logging
 logger = logging.getLogger(__name__)
 
 import urwid
+from panwid.highlightable import HighlightableTextMixin
+
+class PositionsTreeWalker(urwid.TreeWalker):
+
+    def positions(self, reverse=False):
+
+        widget, pos = self.get_focus()
+        rootnode = pos.get_root()
+        if reverse:
+            rootwidget = rootnode.get_widget()
+            lastwidget = rootwidget.last_child()
+            if lastwidget:
+                first = lastwidget.get_node()
+            else:
+                return
+        else:
+            first = rootnode
+
+        pos = first
+        while pos:
+            yield pos
+            if reverse:
+                pos = self.get_prev(pos)[1]
+            else:
+                pos = self.get_next(pos)[1]
+
+class HighlightableTreeWidgetMixin(HighlightableTextMixin):
+
+    @property
+    def highlight_source(self):
+        return self._innerwidget.text
+
+    @property
+    def highlightable_attr_normal(self):
+        return self.attr
+
+    @property
+    def highlightable_attr_highlight(self):
+        return "browser highlight"
+
+    def on_highlight(self):
+        self._innerwidget.set_text(self.highlight_content)
+
+    def on_unhighlight(self):
+        self._innerwidget.set_text(self.display_text)
+
+    def __str__(self):
+        return self._innerwidget.text
+
 
 class ExpandableMixin(object):
 
@@ -166,9 +215,9 @@ class AttributeTreeWidget(urwid.TreeWidget):
         return "browser normal"
 
 
-class MarkedTreeWidget(MarkableMixin, AttributeTreeWidget):
+class MarkedTreeWidget(MarkableMixin, HighlightableTreeWidgetMixin, AttributeTreeWidget):
 
-    indent_cols = 2
+    # indent_cols = 2
 
     def selectable(self):
         return True
