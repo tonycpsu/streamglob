@@ -9,7 +9,6 @@ from functools import partial
 
 import urwid
 from panwid.autocomplete import AutoCompleteMixin
-from panwid.highlightable import HighlightableTextMixin
 from panwid.keymap import *
 
 from .tree import *
@@ -50,7 +49,7 @@ class DirectoryWidget(ExpandableMarkedTreeWidget):
     """Widget for a directory."""
 
     def __init__(self, node):
-        self.__super.__init__(node)
+        super().__init__(node)
         path = node.get_value()
         add_widget(path, self)
 
@@ -62,6 +61,9 @@ class DirectoryWidget(ExpandableMarkedTreeWidget):
             )
         else:
             super().update_expanded_icon()
+
+    def selectable(self):
+        return True
 
     def get_display_text(self):
         node = self.get_node()
@@ -78,7 +80,14 @@ class DirectoryWidget(ExpandableMarkedTreeWidget):
             return key
 
 
-class FileNode(TreeNode):
+class FileBrowserTreeNodeMixin(object):
+
+    @property
+    def name(self):
+        return self.get_key()
+
+
+class FileNode(FileBrowserTreeNodeMixin, TreeNode):
     """Metadata storage for individual files"""
 
     def __init__(self, path, parent=None):
@@ -110,19 +119,19 @@ class FileNode(TreeNode):
         self.get_parent().refresh()
 
 
-class EmptyNode(TreeNode):
+class EmptyNode(FileBrowserTreeNodeMixin, TreeNode):
 
     def load_widget(self):
         return EmptyWidget(self)
 
 
-class ErrorNode(TreeNode):
+class ErrorNode(FileBrowserTreeNodeMixin, TreeNode):
 
     def load_widget(self):
         return ErrorWidget(self)
 
 
-class DirectoryNode(TreeParentNode):
+class DirectoryNode(FileBrowserTreeNodeMixin, TreeParentNode):
     """Metadata storage for directories"""
 
     def __init__(self, tree, path, parent=None):
@@ -202,12 +211,12 @@ class DirectoryNode(TreeParentNode):
         return DirectoryWidget(self)
 
     def expand(self):
-        self.get_widget.expand()
+        self.get_widget().expand()
         # self.get_widget().expanded = True
         # self.get_widget().update_expanded_icon()
 
     def collapse(self):
-        self.get_widget.collapse()
+        self.get_widget().collapse()
         # self.get_widget().expanded = False
         # self.get_widget().update_expanded_icon()
 
@@ -356,6 +365,7 @@ class FileBrowser(AutoCompleteMixin, urwid.WidgetWrap):
             ("weight", 1, self.placeholder)
         ])
         super().__init__(self.pile)
+        self.pile.selectable = lambda: True
         self.change_directory(self.top_dir)
         if cwd:
             node = self.find_path(

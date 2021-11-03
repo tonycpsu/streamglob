@@ -149,10 +149,17 @@ class FilesView(
         "backspace": "directory_up",
         # "enter": "open_selection",
         "o": "organize_selection",
+        "(": ("select_prefix", [-1]),
+        ")": ("select_prefix", [1]),
         "O": ("organize_selection", [True]),
         "delete": "delete_selection",
         "!": "open_run_command_dialog"
     }
+
+    SPLIT_RE = re.compile(r"(\w+)\W*", re.U)
+    FILTER_RE = re.compile(r"^\D")
+    STRIP_NUM_PREFIX_EXPR = r"(?:\d+\W*)"
+    STRIP_NUM_PREFIX_RE = re.compile(STRIP_NUM_PREFIX_EXPR)
 
     def __init__(self, provider):
 
@@ -165,6 +172,9 @@ class FilesView(
         self.pile.focus_position = 0
         self.updated = False
         self.storyboard_lock = asyncio.Lock()
+        self.prefix_re = None
+        self.prefix_scope = 0
+
         state.event_loop.create_task(self.check_updated())
         for cmd, cfg in config.settings.profile.files.commands.items():
             if "key" in cfg:
@@ -374,8 +384,8 @@ class FilesView(
     def set_file_sort(self, order, reverse=False):
         self.browser.file_sort = (order, reverse)
 
-    # def keypress(self, size, key):
-    #     return super().keypress(size, key)
+    def keypress(self, size, key):
+        return super().keypress(size, key)
 
     async def check_updated(self):
         while True:
@@ -398,6 +408,7 @@ class FilesView(
 
     def on_focus(self, source, selection):
 
+        self.prefix_scope = 0
         if isinstance(selection, FileNode):
             super().on_focus(source, selection)
             # state.event_loop.create_task(self.sync_playlist_position())
@@ -422,7 +433,7 @@ class FilesView(
 
         self._play_items = [
             AttrDict(
-                title=n.get_key(),
+                title=n.name,
                 path=n.full_path,
                 key=hashlib.md5(n.full_path.encode("utf-8")).hexdigest(),
                 locator=n.full_path,
@@ -567,7 +578,7 @@ class FilesView(
                 for src in self.files:
                     self.parent.browser.move_path(src, destdir)
 
-        dirs = [d.get_key() for d in self.browser.tree_root.child_dirs]
+        dirs = [d.name for d in self.browser.tree_root.child_dirs]
 
         files = [
             f.full_path
@@ -622,6 +633,56 @@ class FilesView(
             self.open_popup(dialog, width=60, height=5)
         else:
             self.browser.delete_node(self.browser.selection)
+
+    def select_prefix(self, step=1):
+
+        if step > 0 or self.prefix_scope > 0:
+            self.prefix_scope += step
+        if not self.prefix_scope:
+            self.browser.cwd_node.unmark()
+            return
+
+        words = [
+            unidecode(w) if self.config.select_prefix.unidecode else w
+            for w in self.SPLIT_RE.findall(self.browser.selection.name)
+        ]
+        if self.config.select_prefix.strip_num:
+            words = list(itertools.dropwhile(
+                lambda w: self.STRIP_NUM_PREFIX_RE.search(w) is not None,
+                words
+            ))
+
+        prefix = r"\W*".join(words[:self.prefix_scope])
+        logger.info(prefix)
+        prefix_expr = (
+            "^"
+            +
+            ( "%s*" %(self.STRIP_NUM_PREFIX_EXPR) if self.config.select_prefix.strip_num else "")
+            +
+            r"\W*"
+            +
+            (".*" if self.config.select_prefix.match_anywhere else "")
+            +
+            prefix
+            +
+            (".*" if self.config.select_prefix.match_anywhere else "")
+            +
+            r"\b"
+        )
+        prefix_re = re.compile(
+            prefix_expr,
+            re.IGNORECASE if self.config.select_prefix.case_sensitive else 0
+        )
+
+        for f in self.browser.cwd_node.child_files:
+            if f.marked:
+                f.unmark()
+            if (prefix_re.search(unidecode(f.name))
+                if self.config.select_prefix.unidecode
+                else prefix_re.search(f.name)):
+                f.mark()
+
+            
 
 
     def browse_file(self, filename):
@@ -680,12 +741,8 @@ class FilesView(
         return f"[{self.selection_index}/{len(self)}]"
 
     def __len__(self):
-        # return 1
-        # logger.info(len(self.browser.cwd_node.child_files))
         return len(self.browser.cwd_node.child_files)
 
-    # def __iter__(self):
-    #     return iter(self.browser.selection.full_path)
 
 
 class FilesProvider(providers.base.BaseProvider):

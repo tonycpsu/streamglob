@@ -73,8 +73,9 @@ class ExpandableMixin(object):
         self.expanded = expanded
         self.update_expanded_icon()
 
+
     def expand(self):
-        self.get_node().parent.refresh()
+        self.get_node().get_parent().refresh()
         self.expanded = True
         self.update_expanded_icon()
 
@@ -214,20 +215,19 @@ class AttributeTreeWidget(urwid.TreeWidget):
     def attr(self):
         return "browser normal"
 
-
-class MarkedTreeWidget(MarkableMixin, HighlightableTreeWidgetMixin, AttributeTreeWidget):
-
-    # indent_cols = 2
-
     def selectable(self):
         return True
 
 
+class MarkedTreeWidget(MarkableMixin, HighlightableTreeWidgetMixin, AttributeTreeWidget):
+    pass
+
 class ExpandableMarkedTreeWidget(ExpandableMixin, MarkedTreeWidget):
+
+    indent_cols = 2
 
     @property
     def selected_items(self):
-
 
         selection = self.get_node().tree.selection
         marked = list(self.get_node().get_marked_nodes(shallow=True))
