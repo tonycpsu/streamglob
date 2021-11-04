@@ -872,7 +872,6 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
     def cycle(self, step=1, pred=None):
         cur = self.listbox.body.get_focus()[1]
         for i in range(abs(step)):
-            # import ipdb; ipdb.set_trace()
             while True:
                 cur = self.listbox.body.get_next(cur) if step > 0 else self.listbox.body.get_prev(cur)
                 if not cur:
@@ -880,9 +879,9 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
                 cur = cur[1]
                 if not cur:
                     return
-                if pred and pred(cur):
+                if not pred or (pred and pred(cur)):
                     break
-        self.tree.unmark_all()
+        self.tree.unmark()
         self.listbox.set_focus(cur)
         self.selection.get_widget().mark()
         self.update_selection()
