@@ -145,6 +145,10 @@ class DirectoryNode(FileBrowserTreeNodeMixin, TreeParentNode):
         urwid.ParentNode.__init__(self, path, key=key, parent=parent,
                                   depth=depth)
 
+    @property
+    def starts_expanded(self):
+        return self.get_depth() < 1
+
     def load_parent(self):
         parentname, myname = os.path.split(self.get_value())
         parent = DirectoryNode(self.tree, parentname)

@@ -73,7 +73,6 @@ class ExpandableMixin(object):
         self.expanded = expanded
         self.update_expanded_icon()
 
-
     def expand(self):
         self.get_node().get_parent().refresh()
         self.expanded = True
@@ -269,7 +268,7 @@ class TreeParentNode(TreeNode, urwid.ParentNode):
 
     @property
     def starts_expanded(self):
-        return self.get_depth() < 1
+        return False
 
     @property
     def selected_items(self):

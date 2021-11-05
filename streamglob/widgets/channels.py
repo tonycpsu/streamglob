@@ -323,6 +323,10 @@ class ChannelUnionNode(ChannelPropertiesMixin, TreeParentNode):
         self.tree = tree
         super().__init__(value, parent=parent, key=key, depth=depth)
 
+    @property
+    def starts_expanded(self):
+        return True
+
     def load_widget(self):
         return ChannelUnionWidget(self)
 
