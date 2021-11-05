@@ -436,7 +436,7 @@ class FilesView(
                 title=n.name,
                 path=n.full_path,
                 key=hashlib.md5(n.full_path.encode("utf-8")).hexdigest(),
-                locator=n.full_path,
+                locator=utils.BLANK_IMAGE_URI,
                 preview_locator=utils.BLANK_IMAGE_URI
             )
             for n in self.browser.cwd_node.child_files

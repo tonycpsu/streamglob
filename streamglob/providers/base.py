@@ -990,7 +990,11 @@ class SynchronizedPlayerMixin(object):
             vf_scale
         ]
 
-        if getattr(self.selected_source, "media_type", None) == "image":
+        frame_count = await state.task_manager.preview_player.command(
+            "get_property", "estimated-frame-count"
+        )
+        logger.info(f"fpsframe_count: {frame_count}")
+        if not frame_count:
             vf_framerate = f"@framerate:framerate=fps={cfg.fps or 30}"
             filters.append(vf_framerate)
 
@@ -1115,7 +1119,7 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
                 continue
 
             preview = await (await self.get_preview(cfg, listing, source))
-            await asyncio.sleep(0.5)
+            # await asyncio.sleep(0.5)
 
             await self.playlist_replace(preview, idx=position)
             await self.set_playlist_pos(position)
@@ -1125,7 +1129,11 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             #     break
 
             if next_cfg and next_cfg.preload:
-                await self.get_preview(next_cfg, listing, source)
+                self.pending_event_tasks.append(
+                    asyncio.create_task(
+                        self.get_preview(next_cfg, listing, source)
+                    )
+                )
 
             duration = await self.preview_duration(cfg, listing)
             if duration is not None: # advance automatically
