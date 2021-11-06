@@ -765,8 +765,11 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
 
         self.conf.save()
         self.load()
-        key = self.find_key(src[0])
-        self.listbox.set_focus(key)
+        try:
+            key = self.find_key(src[0])
+            self.listbox.set_focus(key)
+        except:
+            pass
 
     def rename_channel(self, identifier, name):
 
@@ -856,7 +859,7 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
             self.rename_selection()
         elif key == "V":
             self.move_channel([c.get_key() for c in self.tree.get_marked_nodes()], self.selection.get_key(), -1)
-            self.tree.unmark_all()
+            self.tree.unmark()
         else:
             return key
 
