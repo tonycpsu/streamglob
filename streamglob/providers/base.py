@@ -993,7 +993,6 @@ class SynchronizedPlayerMixin(object):
         frame_count = await state.task_manager.preview_player.command(
             "get_property", "estimated-frame-count"
         )
-        logger.info(f"fpsframe_count: {frame_count}")
         if not frame_count:
             vf_framerate = f"@framerate:framerate=fps={cfg.fps or 30}"
             filters.append(vf_framerate)
@@ -1055,7 +1054,6 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
     async def playlist_position_changed(self, pos):
         pass
 
-
     async def preview_content_thumbnail(self, cfg, listing, source):
         logger.debug(f"preview_content_thumbnail")
         if source.locator_thumbnail is None:
@@ -1078,27 +1076,30 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
     async def get_preview(self, cfg, listing, source):
 
         async def generate_preview():
+            # import ipdb; ipdb.set_trace()
+            preview_fn = getattr(self, f"preview_content_{cfg.mode}")
+
             try:
-                future.set_result(await preview_fn(cfg, listing, source))
+                res = await preview_fn(cfg, listing, source)
+                if res:
+                    previews[cfg.mode].set_result(res)
+                else:
+                    previews[cfg.mode] = asyncio.Future()
             except asyncio.exceptions.CancelledError:
                 logger.warning("CancelledError from preview function")
+                previews[cfg.mode] = asyncio.Future()
 
-        preview_fn = getattr(
-            self, f"preview_content_{cfg.mode}"
-        )
-
-        future = self.previews[source.key][cfg.mode]
-        if not future.done():
+        previews = self.previews[source.key]
+        if not previews[cfg.mode].done():
             self.pending_event_tasks.append(
                 asyncio.create_task(
                     generate_preview()
                 )
             )
-        return future
+        return previews[cfg.mode]
 
     async def preview_content(self):
 
-        # import ipdb; ipdb.set_trace()
         listing = self.selected_listing
         source = self.selected_source
         position = self.playlist_position
@@ -1112,21 +1113,15 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             # if self.playlist_position != position:
             #     return
             logger.debug(f"stage: {cfg.mode}")
-            # import ipdb; ipdb.set_trace()
             # if self.play_items[position].preview_mode == cfg.mode:
             #     continue
             if cfg.media_types and source.media_type not in cfg.media_types:
                 continue
 
             preview = await (await self.get_preview(cfg, listing, source))
-            # await asyncio.sleep(0.5)
 
             await self.playlist_replace(preview, idx=position)
             await self.set_playlist_pos(position)
-            # try:
-            #     self.play_items[position].preview_mode = cfg.mode
-            # except IndexError:
-            #     break
 
             if next_cfg and next_cfg.preload:
                 self.pending_event_tasks.append(
@@ -1412,33 +1407,6 @@ class DetailDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseDataTa
     def selected_source(self):
         return self.parent_table.selected_source
 
-    # @property
-    # def selected_listing(self):
-    #     listing_id = self.selection.data.media_listing_id
-    #     # listing_id = self.selected_source.listing.media_listing_id
-    #     with db_session:
-    #         return self.provider.LISTING_CLASS[listing_id]
-
-    # # @property
-    # def selected_source(self):
-    #     import ipdb; ip
-    #     return self.selected_listing.sources[0]
-
-    # def key_home(self):
-    #     # raise Exception
-    #     if self.focus_position == 0:
-    #         super().key_home()
-    #         # self.parent_table.focus_position = 0
-    #     else:
-    #         self.focus_position = 0
-
-    # def key_end(self):
-    #     if self.focus_position == len(self)-1:
-    #         super().key_end()
-    #         # self.parent_table.focus_position = len(self.parent_table)-1
-    #     else:
-    #         self.focus_position = len(self)-1
-
 
     def keypress(self, size, key):
         if key in ["home", "K"]:
@@ -1490,10 +1458,8 @@ class MultiSourceListingMixin(object):
         return self.inner_table or self
 
     @property
-    def selected_source(self):
-        if not self.selected_listing:
-            return None
-        return self.selected_listing.sources[self.inner_focus]
+    def selected_source_index(self):
+        return self.inner_focus
 
     def decorate(self, row, column, value):
 

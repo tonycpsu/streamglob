@@ -415,8 +415,6 @@ class FilesView(
         elif isinstance(selection, DirectoryNode):
             self.load_play_items()
 
-# state.event_loop.create_task(self.preview_all())
-
     def monitor_path(self, path, recursive=False):
 
         # return # FIXME
@@ -432,33 +430,14 @@ class FilesView(
     def load_play_items(self):
 
         self._play_items = [
-            AttrDict(
-                title=n.name,
-                path=n.full_path,
-                key=hashlib.md5(n.full_path.encode("utf-8")).hexdigest(),
-                locator=utils.BLANK_IMAGE_URI,
-                preview_locator=utils.BLANK_IMAGE_URI
-            )
-            for n in self.browser.cwd_node.child_files
-        ]
-
-    @property
-    def selected_listing(self):
-        idx = self.selection_index
-        path = self.play_items[idx].path
-        return AttrDict(
-            provider_id="files", # FIXME
-            path=path,
-            key=hashlib.md5(path.encode("utf-8")).hexdigest(),
-            title=os.path.basename(path),
-            sources=[
-                AttrDict(
-                    provider_id="files", # FIXME
-                    media_type="video", # FIXME
-                    path=path
-                )
+            AttrDict(listing.sources[0], **dict(
+                title=listing.title
+            ))
+            for listing in [
+                    self.get_listing(n)
+                    for n in range(len(self.browser.cwd_node.child_files))
             ]
-        )
+        ]
 
     @property
     def selection_index(self):
@@ -469,10 +448,29 @@ class FilesView(
         except ValueError:
             return 0
 
-    @property
-    def selected_source(self):
-        idx = self.selection_index
-        return self.play_items[idx]
+    def get_listing(self, index=None):
+        if index is None:
+            index = self.selection_index
+        path = self.browser.cwd_node.child_files[index].full_path
+        key = hashlib.md5(path.encode("utf-8")).hexdigest()
+
+        return AttrDict(
+            provider_id="files", # FIXME
+            path=path,
+            key=key,
+            title=os.path.basename(path),
+            sources=[
+                AttrDict(
+                    provider_id="files", # FIXME
+                    media_type="video", # FIXME
+                    path=path,
+                    key=key,
+                    locator=path,
+                    preview_locator=utils.BLANK_IMAGE_URI
+
+                )
+            ]
+        )
 
     def refresh(self):
         self.browser.refresh()
@@ -505,13 +503,6 @@ class FilesView(
 
     def directory_up(self):
         self.set_root("..")
-
-    # def open_selection(self):
-    #     selection = self.browser.selection
-    #     if isinstance(selection, DirectoryNode):
-    #         self.browser.change_directory(selection.full_path)
-
-    #         # self.load_browser(selection.full_path)
 
     def organize_selection(self, accept_unique=False):
 

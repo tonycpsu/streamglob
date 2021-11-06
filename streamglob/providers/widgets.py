@@ -70,9 +70,39 @@ class FilterToolbar(urwid.WidgetWrap):
             self.filters[k].value = v
 
 
+class ListingViewMixin(object):
+
+    @property
+    def selected_listing(self):
+        return self.get_listing()
+
+    def get_listing(self, index=None):
+        if index is None:
+            index = self.focus_position
+        try:
+            return self[index].data_source
+        except IndexError:
+            return None
+
+    @property
+    def selected_listing(self):
+        return self.get_listing()
+
+    def get_source(self, listing=None, index=None):
+        if listing is None:
+            listing = self.selected_listing
+        if index is None:
+            index = 0
+        return listing.sources[index]
+
+    @property
+    def selected_source(self):
+        return self.get_source()
+
+
 
 @keymapped()
-class PlayListingViewMixin(object):
+class PlayListingViewMixin(ListingViewMixin):
 
     KEYMAP = {
         "p": "play_selection",
@@ -82,28 +112,6 @@ class PlayListingViewMixin(object):
     def active_table(self):
         # subclasses can override to return an inner table
         return self
-
-    @property
-    def selected_listing(self):
-        row_num = self.focus_position
-        try:
-            listing = self[row_num].data_source
-        except IndexError:
-            return None
-        return listing
-
-    # @property
-    # def selected_source(self):
-    #     # import ipdb; ipdb.set_trace()
-    #     if isinstance(self.selected_listing.sources, list):
-    #         return self.selected_listing.sources[0]
-    #     elif isinstance(self.selected_listing, model.db.Entity):
-    #         with db_session:
-    #             return self.selected_listing.sources.select(
-    #                 lambda s: s.rank
-    #             ).first()
-    #     else:
-    #         raise NotImplementedError
 
     async def play_selection(self, *args, **kwargs):
         listing = self.selected_listing
@@ -150,7 +158,7 @@ class PlayListingProviderMixin(object):
 
 
 @keymapped()
-class DownloadListingViewMixin(object):
+class DownloadListingViewMixin(ListingViewMixin):
 
     KEYMAP = {
         "l": "download_selection"
