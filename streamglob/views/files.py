@@ -203,6 +203,23 @@ class FilesView(
             self._storyboards = AttrDict()
         return self._storyboards
 
+    async def make_preview_embedded(self, input_file, output_file, cfg):
+        try:
+            idx = next(
+                stream for stream in ffmpeg.probe(input_file)["streams"]
+                if stream.get("disposition", []).get("attached_pic")
+            )["index"]
+        except StopIteration:
+            return
+        await (
+            ffmpeg
+            .input(input_file)[str(idx)]
+            .output(output_file)
+            .overwrite_output()
+            .run_asyncio(quiet=True)
+        )
+        return output_file
+
     async def make_preview_tile(
             self,
             input_file, output_file,
@@ -221,31 +238,54 @@ class FilesView(
 
     async def make_preview_thumbnail(self, input_file, output_file, cfg):
 
-        media_info = MediaInfo.parse(input_file)
-        duration = next(
-            t for t in media_info.tracks
-            if t.track_type == "General"
-        ).duration/1000
-        logger.info(duration)
+        # media_info = MediaInfo.parse(input_file)
+        # duration = next(
+        #     t for t in media_info.tracks
+        #     if t.track_type == "General"
+        # ).duration/1000
+        # logger.info(duration)
 
         thumbnail_file = await self.make_preview_tile(
             input_file, output_file,
-            position=0.25*duration
+            position=0.25*cfg.video_duration
         )
-        # import ipdb; ipdb.set_trace()
-        return AttrDict(
-            thumbnail_file=thumbnail_file,
-            duration=duration
-        )
+        return thumbnail_file
+        # return AttrDict(
+        #     thumbnail_file=thumbnail_file,
+        #     duration=duration
+        # )
 
     async def thumbnail_for(self, listing, cfg):
-        # import ipdb; ipdb.set_trace()
 
+        # import ipdb; ipdb.set_trace()
         if listing.key not in self.thumbnails:
+            # doesn't work for MKV...
+            # duration = float(next(
+            #     stream for stream in ffmpeg.probe(listing.path)["streams"]
+            #     if stream.get("codec_type") == "video" and not stream.get("disposition", []).get("attached_pic")
+            # )["duration"])
+
+            media_info = MediaInfo.parse(listing.path)
+            duration = next(
+                t for t in media_info.tracks
+                if t.track_type == "General"
+            ).duration/1000
+            logger.info(duration)
+
+            cfg.video_duration = duration
             thumbnail_file = os.path.join(self.tmp_dir, f"thumbnail.{listing.key}.jpg")
-            self.thumbnails[listing.key] = await self.make_preview_thumbnail(
+            thumbnail = await self.make_preview_embedded(
                 listing.path, thumbnail_file, cfg
             )
+            if not thumbnail:
+                thumbnail = await self.make_preview_thumbnail(
+                    listing.path, thumbnail_file, cfg
+                )
+            self.thumbnails[listing.key] = AttrDict(
+                thumbnail_file=thumbnail,
+                video_duration=duration
+            )
+
         return self.thumbnails[listing.key]
 
     async def preview_content_thumbnail(self, cfg, listing, source):
@@ -259,7 +299,7 @@ class FilesView(
         # FIXME: refactor with YouTube version
         PREVIEW_WIDTH = 1280
         PREVIEW_HEIGHT = 720
-        PREVIEW_DURATION_RATIO=0.95
+        PREVIEW_DURATION_RATIO = 0.95
 
         inset_scale = cfg.scale or 0.25
         inset_offset = cfg.offset or 0
@@ -271,7 +311,7 @@ class FilesView(
 
         thumbnail = await self.thumbnail_for(listing, cfg)
         thumbnail_file = thumbnail.thumbnail_file
-        duration = thumbnail.duration
+        video_duration = thumbnail.video_duration
 
         # import ipdb; ipdb.set_trace()
 
@@ -279,7 +319,7 @@ class FilesView(
             self.make_preview_tile(
                 listing.path,
                 os.path.join(self.tmp_dir, f"board.{listing.key}.{n:04d}.jpg"),
-                position=(duration*PREVIEW_DURATION_RATIO)*(n+1)*(1/num_tiles),
+                position=(video_duration*PREVIEW_DURATION_RATIO)*(n+1)*(1/num_tiles),
                 width=480
             )
             for n in range(num_tiles)
@@ -289,8 +329,8 @@ class FilesView(
         thumbnail = wand.image.Image(filename=thumbnail_file)
         thumbnail.trim(fuzz=5)
         if thumbnail.width != PREVIEW_WIDTH:
-            raise Exception
-            thumbnail.transform(resize=f"{PREVIEW_WIDTH}x{PREVIEW_HEIGHT}")
+            thumbnail.transform(resize=f"{PREVIEW_WIDTH}x-2")
+
         i = 0
         tile_width = 0
         tile_height = 0
@@ -346,6 +386,7 @@ class FilesView(
         async with self.storyboard_lock:
             if listing.key not in self.storyboards:
                 self.storyboards[listing.key] = await self.make_preview_storyboard(listing, cfg)
+        # import ipdb; ipdb.set_trace()
         return self.storyboards[listing.key]
 
 

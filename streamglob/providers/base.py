@@ -993,7 +993,7 @@ class SynchronizedPlayerMixin(object):
         frame_count = await state.task_manager.preview_player.command(
             "get_property", "estimated-frame-count"
         )
-        if not frame_count:
+        if frame_count is None or frame_count <= 1:
             vf_framerate = f"@framerate:framerate=fps={cfg.fps or 30}"
             filters.append(vf_framerate)
 
@@ -1108,11 +1108,13 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             logger.debug(f"sleeping: {self.config.auto_preview.delay}")
             await asyncio.sleep(self.config.auto_preview.delay)
 
+        # import ipdb; ipdb.set_trace()
+
         stages = self.config.auto_preview.stages[self.preview_stage:]
         for (cfg, next_cfg) in pairwise(stages + [None]):
             # if self.playlist_position != position:
             #     return
-            logger.debug(f"stage: {cfg.mode}")
+            logger.debug(f"stage: {cfg.mode} {self.preview_stage}")
             # if self.play_items[position].preview_mode == cfg.mode:
             #     continue
             if cfg.media_types and source.media_type not in cfg.media_types:
