@@ -118,12 +118,28 @@ class RunCommandPopUp(OKCancelDialog):
         )
 
 
-@model.attrclass()
-class FilesMediaListing(model.TitledMediaListing):
-    pass
+class FilesMediaListingMixin(object):
+
+    @property
+    def key(self):
+        return hashlib.md5(self.sources[0].locator.encode("utf-8")).hexdigest()
+
+    @property
+    def locator(self):
+        return self.sources[0].locator
 
 @model.attrclass()
-class FilesMediaSource(model.InflatableMediaSource):
+class FilesMediaListing(FilesMediaListingMixin, model.TitledMediaListing):
+    pass
+
+class FilesMediaSourceMixin(object):
+
+    @property
+    def locator_preview(self):
+        return utils.BLANK_IMAGE_URI
+
+@model.attrclass()
+class FilesMediaSource(FilesMediaSourceMixin, model.InflatableMediaSource):
     pass
 
 
@@ -261,11 +277,11 @@ class FilesView(
         if listing.key not in self.thumbnails:
             # doesn't work for MKV...
             # duration = float(next(
-            #     stream for stream in ffmpeg.probe(listing.path)["streams"]
+            #     stream for stream in ffmpeg.probe(listing.locator)["streams"]
             #     if stream.get("codec_type") == "video" and not stream.get("disposition", []).get("attached_pic")
             # )["duration"])
 
-            media_info = MediaInfo.parse(listing.path)
+            media_info = MediaInfo.parse(listing.locator)
             duration = next(
                 t for t in media_info.tracks
                 if t.track_type == "General"
@@ -275,11 +291,11 @@ class FilesView(
             cfg.video_duration = duration
             thumbnail_file = os.path.join(self.tmp_dir, f"thumbnail.{listing.key}.jpg")
             thumbnail = await self.make_preview_embedded(
-                listing.path, thumbnail_file, cfg
+                listing.locator, thumbnail_file, cfg
             )
             if not thumbnail:
                 thumbnail = await self.make_preview_thumbnail(
-                    listing.path, thumbnail_file, cfg
+                    listing.locator, thumbnail_file, cfg
                 )
             self.thumbnails[listing.key] = AttrDict(
                 thumbnail_file=thumbnail,
@@ -287,6 +303,7 @@ class FilesView(
             )
 
         return self.thumbnails[listing.key]
+
 
     async def preview_content_thumbnail(self, cfg, listing, source):
 
@@ -317,7 +334,7 @@ class FilesView(
 
         (done, pending) = await asyncio.wait([
             self.make_preview_tile(
-                listing.path,
+                listing.locator,
                 os.path.join(self.tmp_dir, f"board.{listing.key}.{n:04d}.jpg"),
                 position=(video_duration*PREVIEW_DURATION_RATIO)*(n+1)*(1/num_tiles),
                 width=480
@@ -471,9 +488,12 @@ class FilesView(
     def load_play_items(self):
 
         self._play_items = [
-            AttrDict(listing.sources[0], **dict(
-                title=listing.title
-            ))
+            AttrDict(
+                title=listing.title,
+                key=listing.sources[0].key,
+                locator=listing.sources[0].locator,
+                locator_preview=listing.sources[0].locator_preview
+            )
             for listing in [
                     self.get_listing(n)
                     for n in range(len(self.browser.cwd_node.child_files))
@@ -493,22 +513,15 @@ class FilesView(
         if index is None:
             index = self.selection_index
         path = self.browser.cwd_node.child_files[index].full_path
-        key = hashlib.md5(path.encode("utf-8")).hexdigest()
+        # key = hashlib.md5(path.encode("utf-8")).hexdigest()
 
-        return AttrDict(
-            provider_id="files", # FIXME
-            path=path,
-            key=key,
+        return self.provider.new_listing(
+            # path=path,
             title=os.path.basename(path),
             sources=[
-                AttrDict(
-                    provider_id="files", # FIXME
+                self.new_media_source(
                     media_type="video", # FIXME
-                    path=path,
-                    key=key,
-                    locator=path,
-                    preview_locator=utils.BLANK_IMAGE_URI
-
+                    url=path
                 )
             ]
         )
@@ -632,20 +645,24 @@ class FilesView(
             )
         ]
 
-        if not len(matches):
-            dialog = OrganizeSelectionCreateDirectoryDialog(
-                self, files, orig_value=guess_subject(os.path.basename(src))
+        # if not len(matches):
+        #     dialog = OrganizeSelectionCreateDirectoryDialog(
+        #         self, files, orig_value=guess_subject(os.path.basename(src))
+        #     )
+        #     self.open_popup(dialog, width=60, height=8)
+        if len(matches) == 1 and accept_unique:
+            self.browser.move_path(
+                src, os.path.join(self.browser.cwd, matches[0])
             )
-            self.open_popup(dialog, width=60, height=8)
-        elif len(matches) > 1 or not accept_unique:
+        else:
             dialog = OrganizeSelectionChooseDestinationDialog(
                 self, files, matches
             )
             self.open_popup(dialog, width=60, height=8)
-        else:
-            self.browser.move_path(
-                src, os.path.join(self.browser.cwd, matches[0])
-            )
+        # else:
+        #     self.browser.move_path(
+        #         src, os.path.join(self.browser.cwd, matches[0])
+        #     )
 
     def delete_selection(self):
 

@@ -624,6 +624,8 @@ class BaseProvider(PlayListingProviderMixin, DownloadListingProviderMixin, abc.A
         return {f: self.filters[f].value for f in self.filters}
 
     def extract_sources(self, listing, **kwargs):
+        import ipdb; ipdb.set_trace()
+
         try:
             sources, kwargs = self.play_args(listing, **kwargs)
             kwargs.update({
@@ -1076,6 +1078,7 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
     async def get_preview(self, cfg, listing, source):
 
         async def generate_preview():
+
             # import ipdb; ipdb.set_trace()
             preview_fn = getattr(self, f"preview_content_{cfg.mode}")
 
@@ -1107,8 +1110,6 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
         if self.config.auto_preview.delay:
             logger.debug(f"sleeping: {self.config.auto_preview.delay}")
             await asyncio.sleep(self.config.auto_preview.delay)
-
-        # import ipdb; ipdb.set_trace()
 
         stages = self.config.auto_preview.stages[self.preview_stage:]
         for (cfg, next_cfg) in pairwise(stages + [None]):
@@ -1251,8 +1252,8 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
 
             logger.info(f"playist_replace: {idx}, {url}")
             # FIXME: standardize media source preview locator
-            # if hasattr(self.play_items[idx], "preview_locator"):
-            self.play_items[idx].preview_locator = url
+            # if hasattr(self.play_items[idx], "locator_preview"):
+            self.play_items[idx].locator_preview = url
             # else:
             #     self.play_items[idx].locator = url
             await self.preview_all(playlist_position=pos)
@@ -1307,7 +1308,7 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
                 #     else (getattr(source, "locator_thumbnail", None) or source.locator)
                 # )
                 # locator=source.locator or getattr(source, "locator_thumbnail", None),
-                preview_locator=source.locator_for_preview(state.listings_view.preview_mode),
+                locator_preview=source.locator_for_preview(state.listings_view.preview_mode),
                 locator=source.locator
             )
             for (row_num, row, index, source) in [

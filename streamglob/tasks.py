@@ -71,7 +71,7 @@ class TaskManager(Observable):
             for item in items:
                 m3u.write(ITEM_TEMPLATE.format(
                     title=(item.title or "(no title)").strip(),
-                    locator=getattr(item, "preview_locator", item.locator)
+                    locator=getattr(item, "locator_preview", item.locator)
                 ).encode("utf-8"))
             logger.debug(m3u.name)
 
@@ -108,7 +108,6 @@ class TaskManager(Observable):
 
     async def preview(self, listing, caller, **kwargs):
 
-        # import ipdb; ipdb.set_trace()
         if listing:
             # logger.info(listing)
             task = caller.create_preview_task(listing, **kwargs)

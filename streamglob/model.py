@@ -316,6 +316,10 @@ class MediaSourceMixin(object):
         return self.url
 
     @property
+    def locator_preview(self):
+        return self.url_preview
+
+    @property
     def locator_blank(self):
         return utils.BLANK_IMAGE_URI
 
@@ -533,6 +537,7 @@ class MediaSource(MediaSourceMixin, db.Entity):
     provider_id = Required(str)
     listing = Optional(lambda: MultiSourceMediaListing, reverse="sources")
     url = Optional(str, nullable=True, default=None)
+    url_preview = Optional(str, nullable=True, default=None)
     media_type = Optional(str)
     rank = Required(int, default=0)
     task = Optional(lambda: MediaTask, reverse="sources")
