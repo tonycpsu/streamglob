@@ -100,7 +100,6 @@ class ListingViewMixin(object):
         return self.get_source()
 
 
-
 @keymapped()
 class PlayListingViewMixin(ListingViewMixin):
 

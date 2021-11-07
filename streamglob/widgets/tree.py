@@ -229,7 +229,8 @@ class ExpandableMarkedTreeWidget(ExpandableMixin, MarkedTreeWidget):
     def selected_items(self):
 
         selection = self.get_node().tree.selection
-        marked = list(self.get_node().get_marked_nodes(shallow=True))
+        marked = self.marked_items
+
         if marked:
             # ensure selection is first in the list
             return ([selection] if selection in marked else []) + [
@@ -237,6 +238,11 @@ class ExpandableMarkedTreeWidget(ExpandableMixin, MarkedTreeWidget):
             ]
         else:
             return [selection]
+
+    @property
+    def marked_items(self):
+        return list(self.get_node().get_marked_nodes(shallow=True))
+
 
 class TreeNode(urwid.TreeNode):
 
@@ -273,6 +279,10 @@ class TreeParentNode(TreeNode, urwid.ParentNode):
     @property
     def selected_items(self):
         return self.get_widget().selected_items
+
+    @property
+    def marked_items(self):
+        return self.get_widget().marked_items
 
     @property
     def is_leaf(self):

@@ -624,7 +624,7 @@ class BaseProvider(PlayListingProviderMixin, DownloadListingProviderMixin, abc.A
         return {f: self.filters[f].value for f in self.filters}
 
     def extract_sources(self, listing, **kwargs):
-        import ipdb; ipdb.set_trace()
+        # import ipdb; ipdb.set_trace()
 
         try:
             sources, kwargs = self.play_args(listing, **kwargs)

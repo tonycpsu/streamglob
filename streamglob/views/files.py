@@ -156,7 +156,6 @@ class FilesView(
     KEYMAP = {
         "meta p": "preview_all",
         "ctrl r": "refresh",
-        "c": "create_directory",
         "g": "change_root",
         "m": ("set_file_sort", ["mtime", False]),
         "M": ("set_file_sort", ["mtime", True]),
@@ -164,7 +163,9 @@ class FilesView(
         "B": ("set_file_sort", ["basename", True]),
         "backspace": "directory_up",
         # "enter": "open_selection",
+        "c": "create_directory",
         "o": "organize_selection",
+        "V": "move_selection",
         "(": ("select_prefix", [-1]),
         ")": ("select_prefix", [1]),
         "O": ("organize_selection", [True]),
@@ -397,7 +398,6 @@ class FilesView(
             duration=duration
         )
 
-
     async def storyboard_for(self, listing, cfg):
 
         async with self.storyboard_lock:
@@ -405,7 +405,6 @@ class FilesView(
                 self.storyboards[listing.key] = await self.make_preview_storyboard(listing, cfg)
         # import ipdb; ipdb.set_trace()
         return self.storyboards[listing.key]
-
 
     async def preview_content_storyboard(self, cfg, listing, source):
 
@@ -513,7 +512,6 @@ class FilesView(
         if index is None:
             index = self.selection_index
         path = self.browser.cwd_node.child_files[index].full_path
-        # key = hashlib.md5(path.encode("utf-8")).hexdigest()
 
         return self.provider.new_listing(
             # path=path,
@@ -555,8 +553,24 @@ class FilesView(
         self.open_popup(dialog, width=60, height=8)
 
 
+    def move_selection(self):
+
+        marked_files = [
+            f.full_path
+            for f in self.browser.marked_items
+        ]
+
+        dest = self.browser.cwd
+        if not os.path.isdir(dest):
+            logger.warning(f"{dest} is not a directory")
+
+        for src in marked_files:
+            self.browser.move_path(src, dest)
+
+
     def directory_up(self):
         self.set_root("..")
+
 
     def organize_selection(self, accept_unique=False):
 
@@ -627,12 +641,7 @@ class FilesView(
 
         files = [
             f.full_path
-            for f in [
-                self.browser.selection
-            ] + [
-                item for item in self.browser.selected_items
-                if item != self.browser.selection
-            ]
+            for f in self.browser.selected_items
         ]
 
         src = files[0]

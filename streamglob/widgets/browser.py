@@ -599,6 +599,10 @@ class FileBrowser(AutoCompleteMixin, urwid.WidgetWrap):
         return self.tree_root.selected_items
 
     @property
+    def marked_items(self):
+        return self.tree_root.marked_items
+
+    @property
     def selection_widget(self):
         return self.body.get_focus()[0]
 
