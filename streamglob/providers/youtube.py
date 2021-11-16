@@ -354,40 +354,251 @@ class YouTubeFeed(FeedMediaChannel):
                     ("{http://www.w3.org/2005/Atom}", "title"),
                     ("{http://www.w3.org/2005/Atom}", "published"),
                     (".//{http://search.yahoo.com/mrss/}", "description")
-
             ]
         }
         return res
 
+
     @property
     @db_session
     def end_cursor(self):
-        try:
-            oldest, guid = select(
-                (l.created, l.guid)
-                for l in  self.provider.LISTING_CLASS
-                if l.channel == self
-            ).order_by(lambda c, g: c).first()
-        except TypeError:
-            oldest, guid = (None, None)
+        return (self.oldest_timestamp, self.newest_timestamp, self.listing_offset)
 
-        return (oldest, self.last_offset, guid)
 
     @property
     @db_session
-    def last_offset(self):
-        return self.attrs.get("last_offset", 0)
+    def listing_offset(self):
+        return self.attrs.get("listing_offset", 0)
 
+    @listing_offset.setter
     @db_session
-    def save_last_offset(self, offset):
-        if offset > self.attrs.get("last_offset", 0):
-            self.attrs["last_offset"] = offset
+    def listing_offset(self, value):
+        self.attrs["listing_offset"] = value
         commit()
 
 
     @property
+    @db_session
+    def oldest_timestamp(self):
+        oldest = self.attrs.get("oldest_timestamp", None)
+        if not oldest:
+            return None
+        return dateparser.parse(oldest)
+
+        # saved = self.attrs.get("oldest_timestamp", None)
+        # if saved:
+        #     saved = dateparser.parse(saved)
+
+        # try:
+        #     timestamp = select(
+        #         (l.created)
+        #         for l in self.provider.LISTING_CLASS
+        #         if l.channel == self
+        #     ).order_by(lambda c: c).first()
+        #     if not saved and timestamp and timestamp < saved:
+        #         self.attrs["oldest_timestamp"] = timestamp.isoformat()
+        #         commit()
+        # except TypeError:
+        #     timestamp = saved
+
+        # oldest = self.attrs.get("oldest_timestamp", None)
+        # if not oldest:
+        #     return None
+        # return dateparser.parse(oldest)
+
+    @oldest_timestamp.setter
+    @db_session
+    def oldest_timestamp(self, value):
+        self.attrs["oldest_timestamp"] = value.isoformat()
+        commit()
+
+
+    @property
+    @db_session
+    def newest_timestamp(self):
+        newest = self.attrs.get("newest_timestamp", None)
+        if not newest:
+            return None
+        return dateparser.parse(newest)
+
+        # saved = self.attrs.get("newest_timestamp", None)
+        # if saved:
+        #     saved = dateparser.parse(saved)
+
+        # try:
+        #     timestamp = select(
+        #         (l.created)
+        #         for l in self.provider.LISTING_CLASS
+        #         if l.channel == self
+        #     ).order_by(lambda c: c).first()
+        #     if not saved and timestamp and timestamp < saved:
+        #         self.attrs["newest_timestamp"] = timestamp.isoformat()
+        #         commit()
+        # except TypeError:
+        #     timestamp = saved
+
+        # newest = self.attrs.get("newest_timestamp", None)
+        # if not newest:
+        #     return None
+        # return dateparser.parse(newest)
+
+
+    @newest_timestamp.setter
+    @db_session
+    def newest_timestamp(self, value):
+        self.attrs["newest_timestamp"] = value.isoformat()
+        commit()
+
+
+    @property
+    def batch_size(self):
+        return self.provider.config.get("fetch_limit", 50)
+
+    @property
     def is_channel(self):
         return len(self.locator) == 24 and self.locator.startswith("UC")
+
+    async def get_page(self, offset, limit):
+
+        page = [
+            item async for item in self.session.fetch(
+                self.url, offset=offset, limit=self.batch_size
+            )
+        ]
+
+        if self.provider.config.credentials.api_key:
+            page = [
+                l async for l in self.session.bulk_update(page)
+            ]
+        else:
+            page = [
+                await self.session.extract_video_info(entry)
+                for entry in page
+            ]
+        return page
+
+
+    async def fetch_newer(self):
+
+        batch = []
+        newest = self.newest_timestamp
+        offset = 0
+        while True:
+            logger.debug(f"fetch: offset={offset}, newest={newest}")
+            page = await self.get_page(offset=offset, limit=self.batch_size)
+            logger.debug(f"page: {page}")
+            if not len(page):
+                break
+
+            if newest and not any([
+                # item.created <= newest
+                item.created < newest
+                for item in page
+            ]):
+                logger.debug("fast-forwarding")
+                offset += len(page)
+                continue
+
+            batch += [
+                item for item in page
+                if item not in batch
+                and (not newest or item.created > newest)
+            ]
+
+            if len(batch) >= self.batch_size or offset == 0:
+                break
+            else:
+                logger.debug("rewinding")
+                offset -= min(offset, self.batch_size)
+
+        logger.debug(f"batch: {batch}")
+        # if not len(batch):
+        #     return []
+
+        try:
+            last = next(
+                n for n, item in enumerate(batch)
+                if item.created <= newest
+            ) if newest else None
+        except StopIteration:
+            last = None
+        logger.debug(f"last: {last}")
+        batch = batch[:last][-self.batch_size:]
+        self.save_last_offset(offset)
+        return batch
+
+    async def fetch_older(self):
+
+        oldest = self.oldest_timestamp
+
+        batch = []
+        offset = self.listing_offset
+        rewound = False if offset else True
+        while True:
+            logger.debug(f"fetch: offset={offset}, oldest={oldest}")
+            # page = self.session.fetch(offset, self.batch_size)
+            page = await self.get_page(offset=offset, limit=self.batch_size)
+            logger.debug(f"page: {len(page)}")
+            if not len(page):
+                break
+
+            if not rewound:
+                if not oldest or not any([
+                # item.created >= oldest
+                        item.created > oldest
+                        for item in page
+                ]):
+                    logger.debug("rewinding")
+                    offset -= len(page)
+                else:
+                    logger.debug("rewound")
+                    rewound = True
+                continue
+
+            batch[0:] += [
+                item for item in page
+                if item not in batch
+                and (not oldest or item.created < oldest)
+                and item.guid not in select(item.guid for item in self.items)
+            ]
+
+            if len(batch) >= self.batch_size:
+                break
+            else:
+                logger.debug("fast-forwarding")
+                offset += self.batch_size
+                logger.debug(offset)
+
+
+        try:
+            first = next(
+                n for n, item in enumerate(batch)
+                if item.created <= oldest
+            ) if oldest else None
+        except StopIteration:
+            first = None
+        batch = batch[first:][:self.batch_size]
+        self.save_last_offset(offset)
+        return batch
+
+
+    @db_session
+    def save_last_offset(self, offset):
+        if offset is None:
+            offset = self.items.select().count()
+        saved = self.attrs.get("listing_offset", 0)
+        if offset >= saved:
+            self.attrs["listing_offset"] = offset
+            commit()
+
+
+    @property
+    def url(self):
+        return (
+            self.CHANNEL_URL_TEMPLATE.format(locator=self.locator)
+            if self.is_channel
+            else self.locator
+        )
 
     async def fetch(self, limit=None, resume=False, reverse=False, *args, **kwargs):
 
@@ -399,108 +610,18 @@ class YouTubeFeed(FeedMediaChannel):
                 self.attrs["error"] = True
                 return
 
-        url = (
-            self.CHANNEL_URL_TEMPLATE.format(locator=self.locator)
-            if self.is_channel
-            else self.locator
-        )
-
-        listings = []
-
-        (oldest, num_listings, oldest_guid) = self.end_cursor
-        offset = num_listings if resume else 0
-        new = 0
-
-        while offset >= 0:
-
-            with db_session:
-
-                logger.info(f"fetch: resume={resume}, offset={offset}, limit={limit}, cursor={self.end_cursor}")
-                batch = [
-                    item async for item in self.session.fetch(
-                        url, offset=offset, limit=limit
-                    )
-                ]
-
-                if not len(batch):
-                    break
-
-                # if we're not resuming and we already have the first item,
-                # assume there's nothing new and return early
-                if (
-                        not resume
-                        and self.items.select(
-                            lambda i: i.guid == batch[0]["guid"]
-                    ).first()
-                ):
-                    logger.debug("nothing new")
-                    break
-
-                if self.provider.config.credentials.api_key:
-                    batch = [
-                        l async for l in self.session.bulk_update(batch)
-                    ]
-                else:
-                    batch = [
-                        await self.session.extract_video_info(entry)
-                        for entry in batch
-                    ]
-
-            logger.debug(batch)
-            try:
-                start = next(
-                    i for i, item in enumerate(batch)
-                    if (
-                        (oldest is None or item.created <= oldest)
-                        and item.guid != oldest_guid
-                    )
-                )
-
-                if start and len(listings):
-                    listings[:0] += batch[start:]
-                else:
-                    listings += [l for l in batch[start:]
-                                 if (oldest is None
-                                     or l.created <= oldest)
-                                 and l.guid != oldest_guid]
-                logger.info(listings)
-
-
-            except StopIteration:
-                start = None
-                # these are all newer, so advance and continue
-                offset += limit
-                if resume:
-                    logger.debug("all newer, getting next batch")
-                    continue
-                else:
-                    listings += batch
-
-            if len(listings) >= limit:
-                # there's an item in this batch that's newer, so we don't need
-                # to go back any further
-                break
-            elif not resume:
-                break
-            else:
-                # advance forward to get one more page
-                offset += limit
-                continue
-
-            # go back a page
-            offset -= min(offset, limit)
+        if resume:
+            logger.debug("fetch older")
+            listings = await self.fetch_older()
+        else:
+            logger.debug("fetch newer")
+            listings = await self.fetch_newer()
 
         with db_session:
 
             for item in listings:
 
                 logger.info(item["guid"])
-
-                i = self.items.select(lambda i: i.guid == item["guid"]).first()
-
-                if i:
-                    continue
-                    # raise RuntimeError(f"old listing retrieved: {i}")
 
                 listing = AttrDict(
                     channel = self,
@@ -509,9 +630,14 @@ class YouTubeFeed(FeedMediaChannel):
                     ],
                     **item
                 )
+                if resume:
+                    if not self.oldest_timestamp or listing.created < self.oldest_timestamp:
+                        self.oldest_timestamp = listing.created
+                else:
+                    if not self.newest_timestamp or listing.created > self.newest_timestamp:
+                        self.newest_timestamp = listing.created
                 yield listing
 
-        self.save_last_offset(offset)
 
 
 @keymapped()

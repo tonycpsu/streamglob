@@ -82,7 +82,7 @@ class FeedMediaChannel(model.MediaChannel):
                     continue
                 self.provider.on_new_listing(listing)
                 self.updated = datetime.now()
-                fetched+=1
+                fetched += 1
                 self.provider.update_fetch_indicator(fetched)
 
         self.fetched = datetime.now()
@@ -794,16 +794,17 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
 
     def update_fetch_indicator(self, num, count):
 
-        self.set_position_widget(
-            ProgressBar(
-                width=int(self._width *(1/4)), # FIXME: urwid/urwid#225 strikes again
-                maximum=count,
-                value=num,
-                progress_color="light green",
-                remaining_color="dark green"
+        if self._width:
+            self.set_position_widget(
+                ProgressBar(
+                    width=int(self._width *(1/4)), # FIXME: urwid/urwid#225 strikes again
+                    maximum=count,
+                    value=num,
+                    progress_color="light green",
+                    remaining_color="dark green"
+                )
             )
-        )
-        state.loop.draw_screen()
+            state.loop.draw_screen()
 
     def update_position_indicator(self, count=0):
 
