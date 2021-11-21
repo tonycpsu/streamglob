@@ -1244,7 +1244,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                         provider_id=self.IDENTIFIER,
                         locator=channel.locator
                     )
-                feed.name=channel.name
+                feed.name = channel.name
                 feed.attrs.update(channel.attrs)
 
 
@@ -1374,6 +1374,47 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         with db_session:
             return self.feed_items_query.count()
 
+    def filter_rule_to_query(self, rule):
+
+        BOOL_RE = re.compile(r"\s*([&|])\s*")
+        TERM_MAP = {
+            "&": "AND",
+            "|": "OR"
+        }
+
+        OP_MAP = {
+            "=~": "regexp",
+            "!~": "not regexp",
+        }
+
+        def parse_term(term):
+            if BOOL_RE.search(term):
+                return TERM_MAP.get(term)
+
+            try:
+                (attr, op, value) = re.findall(r'\w+|\S+', term)
+                op = OP_MAP.get(op, op)
+            except ValueError: import ipdb; ipdb.set_trace()
+            if attr == "label":
+                attr = "title"
+                value = self.rule_map[value].pattern
+            return f"lower({attr}) {op} lower('{value}')"
+
+        return "(" + " ".join([
+            parse_term(term)
+            for term in BOOL_RE.split(rule)
+        ]) + ")"
+
+
+    def apply_filters(self, query, filters):
+
+        for rule in filters:
+            sql = self.filter_rule_to_query(rule)
+            # logger.info(sql)
+            query = query.filter(raw_sql(sql))
+
+        return query
+
     @db_session
     def update_query(self, sort=None, cursor=None):
 
@@ -1391,9 +1432,28 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
             self.LISTING_CLASS.select()
         )
 
+        def feed_to_filter(feed):
+            # import ipdb; ipdb.set_trace()
+            sql = f"channel = '{feed.channel_id}'"
+            if "filters" in feed.attrs:
+                sql += " AND " + " AND ".join(
+                    self.filter_rule_to_query(rule)
+                    for rule in feed.attrs["filters"]
+                )
+            return sql
+
+        self.feed_items_query = self.all_items_query
         if self.selected_channels:
-            self.feed_items_query = self.all_items_query.filter(
-                lambda i: i.channel in self.selected_channels
+            self.feed_items_query = self.feed_items_query.filter(
+                raw_sql(
+                    "("
+                    +
+                    " OR ".join(
+                        [feed_to_filter(feed)
+                         for feed in self.selected_channels
+                        ])
+                    + ")"
+                )
             )
         else:
             self.feed_items_query = self.all_items_query
@@ -1418,50 +1478,9 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                 )
 
         if self.custom_filters:
-
-            def parse_label_rules(rules):
-
-                BOOL_RE = re.compile(r"\s*([&|])\s*")
-                TERM_MAP = {
-                    "&": "AND",
-                    "|": "OR"
-                }
-
-                def parse_term(term):
-                    if BOOL_RE.search(term):
-                        return TERM_MAP.get(term)
-                    op = "regexp"
-                    if term.startswith("!"):
-                        op = "not regexp"
-                        term=term[1:].strip()
-                    pattern = self.rule_map[term].pattern
-                    return f"lower(title) {op} lower('{pattern}')"
-
-                def parse_rule(rule):
-                    return " ".join([
-                        parse_term(term)
-                        for term in BOOL_RE.split(rule)
-                    ])
-
-                return " AND ".join(
-                    [
-                        f"({parse_rule(rule)})"
-                        for rule in rules
-                    ]
-                )
-
-            for k, v in self.custom_filters.items():
-                if k == "labels":
-                    sql = parse_label_rules(
-                        [v] if isinstance(v, str) else v
-                    )
-                    self.items_query = self.items_query.filter(
-                        lambda i: raw_sql(sql)
-                    )
-                else:
-                    self.items_query = self.items_query.filter(
-                        lambda i: v in getattr(i, k)
-                    )
+            self.items_query = self.apply_filters(
+                self.items_query, self.custom_filters
+            )
 
         (sort_field, sort_desc) = sort if sort else self.view.sort_by
         if cursor:
@@ -1482,7 +1501,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                 pk_sort_attr = desc(pk_sort_attr)
             # self.items_query = self.items_query.order_by(pk_sort_attr)
             self.items_query = self.items_query.order_by(sort_fn)
-            # logger.info(self.items_query.get_sql())
+            logger.info(self.items_query.get_sql())
         self.view.update_count = True
 
     async def apply_search_query(self, query):
