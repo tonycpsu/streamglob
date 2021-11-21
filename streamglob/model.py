@@ -17,6 +17,7 @@ import traceback
 import glob
 from functools import lru_cache
 import hashlib
+from itertools import chain
 
 import pony.options
 pony.options.CUT_TRACEBACK = False
@@ -369,19 +370,20 @@ class MediaSourceMixin(object):
         if not self.provider:
             return None
 
-        try:
-            tokens = [
-                t for t in self.provider.highlight_re.search(listing.title).groups() if t
-            ]
-            subject = tokens[0]
-        except (AttributeError, IndexError):
-            channel = getattr(listing or self.listing, "channel", None)
-            if channel:
-                with db_session:
-                    channel = MediaChannel[channel.channel_id]
-                    subject = channel.name
-            else:
-                subject = None
+        subjects = listing.subjects
+        # try:
+        #     tokens = [
+        #         t for t in self.provider.highlight_re.search(listing.title).groups() if t
+        #     ]
+        #     subject = tokens[0]
+        # except (AttributeError, IndexError):
+        #     channel = getattr(listing or self.listing, "channel", None)
+        #     if channel:
+        #         with db_session:
+        #             channel = MediaChannel[channel.channel_id]
+        #             subject = channel.name
+        #     else:
+        #         subject = None
 
 
         if isinstance(index, int):
@@ -421,7 +423,8 @@ class MediaSourceMixin(object):
                         uri="uri=" + self.uri.replace("/", "+") +"=" if not glob else "*",
                         index=self.rank+1,
                         num=num or len(listing.sources) if listing else 0,
-                        subject=subject,
+                        subject=",".join(subjects) if subjects else None,
+                        subjects=subjects,
                         **tokens
                         # subject_dir=subject_dir
                     )
@@ -449,23 +452,28 @@ class MediaSourceMixin(object):
             else:
                 template_dir = "."
 
-            if group_by == "subject" and subject:
-                try:
-                    if not subject in SUBJECT_MAP:
-                        SUBJECT_MAP[subject] = next(
-                        e.name for e in os.scandir(
-                            os.path.join(
-                                outpath,
-                                template_dir
+            if listing.group:
+                path_list.append(listing.group)
+
+            elif group_by == "subject" and subjects:
+                for subject in subjects:
+                    try:
+                        if not subject in SUBJECT_MAP:
+                            SUBJECT_MAP[subject] = next(
+                            e.name for e in os.scandir(
+                                os.path.join(
+                                    outpath,
+                                    template_dir
+                                    )
                                 )
-                            )
-                        if e.is_dir()
-                        and unidecode(e.name) == unidecode(subject)
-                    )
-                    if SUBJECT_MAP.get(subject):
-                        path_list.append(SUBJECT_MAP[subject])
-                except StopIteration:
-                    SUBJECT_MAP[subject] = None
+                            if e.is_dir()
+                            and unidecode(e.name) == unidecode(subject)
+                        )
+                        if SUBJECT_MAP.get(subject):
+                            path_list.append(SUBJECT_MAP[subject])
+                            break
+                    except StopIteration:
+                        SUBJECT_MAP[subject] = None
 
             path_list.append(expand_template(template_file, safe=True))
 
@@ -582,6 +590,112 @@ class MediaListingMixin(object):
     @property
     def cover(self):
         return self.cover_locator or utils.BLANK_IMAGE_URI
+
+    @property
+    def tokens(self):
+        return [
+            t for t in self.provider.highlight_re.search(self.title).groups()
+            if t
+        ]
+
+    @property
+    def group(self):
+        try:
+            return next(
+                r.get("group")
+                for r in self.subject_rules
+                if r.get("group")
+            )
+        except StopIteration:
+            return self.channel.attrs.get("group", None)
+
+    @property
+    def subject_rules(self):
+        return [
+            next(
+                v
+                for k, v in self.provider.highlight_map.items()
+                if k.search(token)
+            )
+            for token in self.tokens
+        ]
+
+    @property
+    def subjects(self):
+        # import ipdb; ipdb.set_trace()
+        try:
+            return list(
+                chain.from_iterable(r["subjects"] for r in self.subject_rules)
+            )
+        except (AttributeError, IndexError):
+            subjects = None
+
+        if subjects:
+            return subjects
+
+        cfg = self.channel.attrs.get("subjects", {})
+        if cfg:
+            if isinstance(cfg, str):
+                return cfg
+            elif "match" in cfg:
+                match = cfg["match"]
+                try:
+                    return [
+                        s.strip()
+                        for s in  re.search(
+                                match["pattern"],
+                                getattr(self, match["field"])
+                        ).groups()[0].split(",")
+                    ]
+                except IndexError:
+                    return None
+            else:
+                raise NotImplementedError
+
+    @property
+    def subjects2(self):
+        # import ipdb; ipdb.set_trace()
+        cfg = self.channel.attrs.get("subjects", {})
+        if cfg:
+            if isinstance(cfg, str):
+                return cfg
+            elif "match" in cfg:
+                match = cfg["match"]
+                try:
+                    return [
+                        s.strip()
+                        for s in  re.search(
+                                match["pattern"],
+                                getattr(self, match["field"])
+                        ).groups()[0].split(",")
+                    ]
+                except IndexError:
+                    return None
+            else:
+                raise NotImplementedError
+        else:
+            try:
+                # import ipdb; ipdb.set_trace()
+                return list(chain.from_iterable(
+                    next(
+                        (v.get("subjects", []) or [])
+                        for k, v in self.provider.highlight_map.items()
+                        if k.search(token)
+                    )
+                    for token in self.tokens
+                ))
+
+            except (AttributeError, IndexError):
+                return None
+                # return self.channel.name
+                # channel = getattr(self, "channel", None)
+                # if channel:
+                #     with db_session:
+                #         channel = MediaChannel[channel.channel_id]
+                #         subject = channel.name
+                # else:
+                #     subject = None
+
 
 
 @attrclass()

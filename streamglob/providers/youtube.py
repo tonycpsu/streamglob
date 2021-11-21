@@ -886,12 +886,12 @@ class YouTubeProvider(PaginatedProviderMixin,
                     "align": "right",
                     "sort_icon": False,
                 }),
-                ("guid", {
-                    "label": "id",
-                    "width": 11,
-                    "align": "right",
-                    "sort_icon": False,
-                })
+                # ("guid", {
+                #     "label": "id",
+                #     "width": 11,
+                #     "align": "right",
+                #     "sort_icon": False,
+                # })
             ]
             + attrs[idx:]
         )

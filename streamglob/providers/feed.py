@@ -1185,6 +1185,8 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         feed = {"width": 30, "format_fn": format_feed },
         created = {"width": 19},
         title = {"width": ("weight", 1), "truncate": True},
+        subjects = {"truncate": False},
+        group = {},
     )
     # @property
     # def ATTRIBUTES(self):
@@ -1404,10 +1406,8 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
             if BOOL_RE.search(term):
                 return TERM_MAP.get(term)
 
-            try:
-                (attr, op, value) = re.findall(r'\w+|\S+', term)
-                op = OP_MAP.get(op, op)
-            except ValueError: import ipdb; ipdb.set_trace()
+            (attr, op, value) = re.findall(r'\w+|\S+', term)
+            op = OP_MAP.get(op, op)
             if attr == "label":
                 attr = "title"
                 value = self.rule_map[value].pattern
