@@ -473,25 +473,62 @@ class ProviderDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseData
                         pass
 
                 return dict(
-                    text=urwid_readline.ReadlineEdit(
-                        caption=("bold", "Text: "),
+                    token=urwid_readline.ReadlineEdit(
+                        caption=("bold", "Token: "),
                         edit_text=self.parent.selection.data.title,
                         edit_pos=edit_pos
+                    ),
+                    subject=urwid_readline.ReadlineEdit(
+                        caption=("bold", "Subject: ")
+                    ),
+                    group=urwid_readline.ReadlineEdit(
+                        caption=("bold", "Group: ")
                     ),
                     tag=BaseDropdown(list(self.parent.provider.rules.keys()))
                 )
 
             def action(self):
+                pattern = self.token.get_edit_text()
                 if (
-                        self.text.get_edit_text().lower()
-                        in [x.lower() for x in self.parent.provider.conf_rules.label[self.tag.selected_label]]
+                        pattern.lower()
+                        in [
+                            x.lower() if isinstance(x, str) else x["pattern"].lower()
+                            for x in self.parent.provider.conf_rules.label[self.tag.selected_label]
+                        ]
                     ):
                     return
 
-                bisect.insort(
-                    self.parent.provider.conf_rules.label[self.tag.selected_label],
-                    self.text.get_edit_text()
-                )
+                subjects = [
+                    s.strip()
+                    for s in self.subject.get_edit_text().split(",")
+                ]
+                cfg = {
+                    k: v
+                    for k, v in dict(
+                            pattern=pattern,
+                            subjects=subjects,
+                            group=self.group.get_edit_text()
+                    ).items()
+                    if v
+                }
+                # FIXME: bisect.insort_right doesn't support a key param until
+                # Python 3.10, which we can't upgrade to until Pony ORM is
+                # updated with Python 3.10 support.
+                # bisect.insort_right(
+                #     self.parent.provider.conf_rules.label[self.tag.selected_label],
+                #     cfg,
+                #     key=lambda cfg: cfg["pattern"] if isinstance(cfg, dict) else cfg
+                # )
+
+                for i, rule in enumerate(self.parent.provider.conf_rules.label[self.tag.selected_label]):
+                    pattern = rule if isinstance(rule, str) else rule["pattern"]
+                    # import ipdb; ipdb.set_trace()
+                    if pattern.lower() > cfg["pattern"].lower():
+                        self.parent.provider.conf_rules.label[self.tag.selected_label].insert(
+                            i, cfg
+                        )
+                        break
+
                 self.parent.provider.conf_rules.save()
                 self.parent.provider.load_rules()
                 self.parent.reset()
@@ -518,8 +555,11 @@ class ProviderDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseData
                 for label in rules.keys():
                     try:
                         rules[label] = [
-                            p for p in rules[label]
-                            if not re.search(p, self.text.get_edit_text(), re.IGNORECASE)
+                            r for r in rules[label]
+                            if not re.search(
+                                    r if isinstance(r, str) else r["pattern"],
+                                    self.text.get_edit_text(), re.IGNORECASE
+                            )
                         ]
                         self.parent.provider.conf_rules.save()
                         self.parent.provider.load_rules()
