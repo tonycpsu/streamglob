@@ -607,7 +607,14 @@ class MediaListingMixin(object):
                 if r.get("group")
             )
         except StopIteration:
-            return self.channel.attrs.get("group", None)
+            try:
+                return self.channel.attrs["group"]
+            except KeyError:
+                subjects = self.subjects
+                if subjects and len(subjects) == 1:
+                    return subjects[0]
+                else:
+                    return None
 
     @property
     def subject_rules(self):
