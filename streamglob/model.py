@@ -590,13 +590,17 @@ class MediaListingMixin(object):
 
     @property
     def tokens(self):
-        return [
-            t for t in self.provider.highlight_re.search(self.title).groups()
-            if t
-        ]
+        try:
+            return [
+                t for t in self.provider.highlight_re.search(self.title).groups()
+                if t
+            ]
+        except AttributeError:
+            return []
 
     @property
     def group(self):
+        # import ipdb; ipdb.set_trace()
         try:
             return next(
                 r.get("group")
@@ -628,8 +632,13 @@ class MediaListingMixin(object):
     def subjects(self):
         # import ipdb; ipdb.set_trace()
         try:
-            return list(
-                chain.from_iterable(r["subjects"] for r in self.subject_rules)
+            subjects = list(
+                chain.from_iterable(
+                    [r["subjects"]]
+                    if isinstance(r["subjects"], str)
+                    else r["subjects"]
+                    for r in self.subject_rules
+                )
             )
         except (AttributeError, IndexError):
             subjects = None
@@ -646,7 +655,7 @@ class MediaListingMixin(object):
                 try:
                     return [
                         s.strip()
-                        for s in  re.search(
+                        for s in re.search(
                                 match["pattern"],
                                 getattr(self, match["field"])
                         ).groups()[0].split(",")
@@ -655,51 +664,6 @@ class MediaListingMixin(object):
                     return None
             else:
                 raise NotImplementedError
-
-    @property
-    def subjects2(self):
-        # import ipdb; ipdb.set_trace()
-        cfg = self.channel.attrs.get("subjects", {})
-        if cfg:
-            if isinstance(cfg, str):
-                return cfg
-            elif "match" in cfg:
-                match = cfg["match"]
-                try:
-                    return [
-                        s.strip()
-                        for s in  re.search(
-                                match["pattern"],
-                                getattr(self, match["field"])
-                        ).groups()[0].split(",")
-                    ]
-                except IndexError:
-                    return None
-            else:
-                raise NotImplementedError
-        else:
-            try:
-                # import ipdb; ipdb.set_trace()
-                return list(chain.from_iterable(
-                    next(
-                        (v.get("subjects", []) or [])
-                        for k, v in self.provider.highlight_map.items()
-                        if k.search(token)
-                    )
-                    for token in self.tokens
-                ))
-
-            except (AttributeError, IndexError):
-                return None
-                # return self.channel.name
-                # channel = getattr(self, "channel", None)
-                # if channel:
-                #     with db_session:
-                #         channel = MediaChannel[channel.channel_id]
-                #         subject = channel.name
-                # else:
-                #     subject = None
-
 
 
 @attrclass()
