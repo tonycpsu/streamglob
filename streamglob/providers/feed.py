@@ -1406,7 +1406,10 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
             if BOOL_RE.search(term):
                 return TERM_MAP.get(term)
 
-            (attr, op, value) = re.findall(r'\w+|\S+', term)
+            try:
+                (attr, op, value) = re.findall(r'\w+|\S+', term)
+            except ValueError:
+                import ipdb; ipdb.set_trace()
             op = OP_MAP.get(op, op)
             if attr == "label":
                 attr = "title"
@@ -1492,8 +1495,8 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                 )
 
         if self.custom_filters:
-            self.items_query = self.apply_filters(
-                self.items_query, self.custom_filters
+           self.items_query = self.items_query.filter(
+               raw_sql(self.filter_config_to_query(self.custom_filters))
             )
 
         (sort_field, sort_desc) = sort if sort else self.view.sort_by

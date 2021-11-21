@@ -452,28 +452,25 @@ class MediaSourceMixin(object):
             else:
                 template_dir = "."
 
-            if listing.group:
-                path_list.append(listing.group)
-
-            elif group_by == "subject" and subjects:
-                for subject in subjects:
-                    try:
-                        if not subject in SUBJECT_MAP:
-                            SUBJECT_MAP[subject] = next(
-                            e.name for e in os.scandir(
-                                os.path.join(
-                                    outpath,
-                                    template_dir
-                                    )
+            if group_by == "subject":
+                group = listing.group
+                try:
+                    if not group in SUBJECT_MAP:
+                        SUBJECT_MAP[group] = next(
+                        e.name for e in os.scandir(
+                            os.path.join(
+                                outpath,
+                                template_dir
                                 )
-                            if e.is_dir()
-                            and unidecode(e.name) == unidecode(subject)
-                        )
-                        if SUBJECT_MAP.get(subject):
-                            path_list.append(SUBJECT_MAP[subject])
-                            break
-                    except StopIteration:
-                        SUBJECT_MAP[subject] = None
+                            )
+                        if e.is_dir()
+                        and unidecode(e.name) == unidecode(group)
+                    )
+                    if SUBJECT_MAP.get(group):
+                        path_list.append(SUBJECT_MAP[group])
+
+                except StopIteration:
+                    SUBJECT_MAP[group] = None
 
             path_list.append(expand_template(template_file, safe=True))
 
