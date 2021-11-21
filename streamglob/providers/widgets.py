@@ -492,7 +492,7 @@ class ProviderDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseData
                 if (
                         pattern.lower()
                         in [
-                            x.lower() if isinstance(x, str) else x["pattern"].lower()
+                            x.lower() if isinstance(x, str) else x["patterns"][0].lower()
                             for x in self.parent.provider.conf_rules.label[self.tag.selected_label]
                         ]
                     ):
@@ -505,7 +505,7 @@ class ProviderDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseData
                 cfg = {
                     k: v
                     for k, v in dict(
-                            pattern=pattern,
+                            patterns=[pattern],
                             subjects=subjects,
                             group=self.group.get_edit_text()
                     ).items()
@@ -521,9 +521,9 @@ class ProviderDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseData
                 # )
 
                 for i, rule in enumerate(self.parent.provider.conf_rules.label[self.tag.selected_label]):
-                    pattern = rule if isinstance(rule, str) else rule["pattern"]
+                    pattern = rule if isinstance(rule, str) else rule["patterns"][0]
                     # import ipdb; ipdb.set_trace()
-                    if pattern.lower() > cfg["pattern"].lower():
+                    if pattern.lower() > cfg["patterns"][0].lower():
                         self.parent.provider.conf_rules.label[self.tag.selected_label].insert(
                             i, cfg
                         )

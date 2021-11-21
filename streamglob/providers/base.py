@@ -274,17 +274,27 @@ class BaseProvider(PlayListingProviderMixin, DownloadListingProviderMixin, abc.A
         #     for text in texts
         # ])
         # import ipdb; ipdb.set_trace()
+        def get_patterns(rule):
+            if isinstance(rule, str):
+                return [rule]
+            elif isinstance(rule["patterns"], list):
+                return rule["patterns"]
+            else:
+                return [rule["patterns"]]
+
         self.rule_map = {
             label: re.compile(f"""({
-            '|'.join(r if isinstance(r, str) else r["pattern"]
-            for r in rule)
-            })""")
-            for label, rule in self.rules.items()
+            '|'.join(list(chain.from_iterable(
+            get_patterns(rule)
+            for rule in rules
+            )))})""")
+            for label, rules in self.rules.items()
         }
 
         self.highlight_map = AttrDict([
             (
-                re.compile(rule if isinstance(rule, str) else rule["pattern"], re.IGNORECASE),
+                # re.compile(rule if isinstance(rule, str) else rule["patterns"], re.IGNORECASE),
+                re.compile("|".join(get_patterns(rule)), re.IGNORECASE),
                 dict(
                     attr=self.config.rules.highlight[label],
                     subjects=[rule] if isinstance(rule, str) else rule.get("subjects", rule),
