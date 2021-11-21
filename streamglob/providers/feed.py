@@ -1374,6 +1374,19 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         with db_session:
             return self.feed_items_query.count()
 
+    def filter_config_to_query(self, config):
+
+        OP_MAP = {
+            "all": "AND",
+            "any": "OR"
+        }
+        op = OP_MAP.get(config.get("match", "all"))
+
+        return "(" + f" {op} ".join(
+            self.filter_rule_to_query(rule) for rule in config["rules"]
+        ) + ")"
+
+
     def filter_rule_to_query(self, rule):
 
         BOOL_RE = re.compile(r"\s*([&|])\s*")
@@ -1436,10 +1449,11 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
             # import ipdb; ipdb.set_trace()
             sql = f"channel = '{feed.channel_id}'"
             if "filters" in feed.attrs:
-                sql += " AND " + " AND ".join(
-                    self.filter_rule_to_query(rule)
-                    for rule in feed.attrs["filters"]
-                )
+                sql += " AND " + self.filter_config_to_query(feed.attrs["filters"])
+                # sql += " AND " + " AND ".join(
+                #     self.filter_rule_to_query(rule)
+                #     for rule in feed.attrs["filters"]["rules"]
+                # )
             return sql
 
         self.feed_items_query = self.all_items_query
