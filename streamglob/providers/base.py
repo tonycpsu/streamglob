@@ -763,6 +763,20 @@ class BaseProvider(PlayListingProviderMixin, DownloadListingProviderMixin, abc.A
         )
 
 
+    def rule_for_token(self, token):
+        try:
+            return next(
+                v
+                for k, v in self.highlight_map.items()
+                if k.search(token)
+                or v.get("group") == token
+                or any([token in v.get("subjects", [])])
+            )
+        except StopIteration:
+            return None
+
+
+
 
 class PaginatedProviderMixin(object):
 

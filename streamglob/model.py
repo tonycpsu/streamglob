@@ -616,7 +616,7 @@ class MediaListingMixin(object):
                             [items]
                             for field in find["fields"]
                             for v in find["values"]
-                            for pattern in (self.get_rule(v).patterns or [v])
+                            for pattern in (self.provider.rule_for_token(v).patterns or [v])
                             for items in re.findall(
                                     "|".join([
                                         f"({pattern})"
@@ -650,25 +650,12 @@ class MediaListingMixin(object):
                 else:
                     return None
 
-    def get_rule(self, token):
-        try:
-            return next(
-                v
-                for k, v in self.provider.highlight_map.items()
-                if k.search(token)
-                or v.get("group") == token
-                or any([token in v.get("subjects", [])])
-            )
-        except StopIteration:
-            return []
-
-
     @property
     def subject_rules(self):
         try:
             return [
                 rule for rule in [
-                    self.get_rule(token)
+                    self.provider.rule_for_token(token)
                     for token in self.tokens
                 ]
                 if rule
@@ -680,14 +667,14 @@ class MediaListingMixin(object):
     def subjects(self):
         # import ipdb; ipdb.set_trace()
         try:
-            return list(
+            return list(dict.fromkeys(list(
                 chain.from_iterable(
                     [r["subjects"]]
                     if isinstance(r["subjects"], str)
                     else r["subjects"]
                     for r in self.subject_rules
                 )
-            )
+            )))
         except (AttributeError, IndexError):
             return None
 
