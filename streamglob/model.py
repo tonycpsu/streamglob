@@ -416,6 +416,8 @@ class MediaSourceMixin(object):
                         index=self.rank+1,
                         num=num or len(listing.sources) if listing else 0,
                         subject=",".join(subjects) if subjects else None,
+                        group=f"{listing.group} " if listing.group else "",
+                        group_title=f"""{"%s " %(group) if group else ""}{listing.title}""",
                         subjects=subjects,
                         **tokens
                         # subject_dir=subject_dir
