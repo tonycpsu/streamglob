@@ -588,31 +588,48 @@ class MediaListingMixin(object):
     @property
     def tokens(self):
         try:
-            return [
+            tokens = [
                 t for t in self.provider.highlight_re.search(self.title).groups()
                 if t
             ]
         except AttributeError:
+            tokens = []
             cfg = self.channel.attrs.get("subjects", {})
             if cfg:
-                if isinstance(cfg, str):
-                    return cfg
-                elif "match" in cfg:
+                if "match" in cfg:
                     match = cfg["match"]
                     try:
-                        return [
-                            s.strip()
+                        tokens += list(chain.from_iterable([
+                            [s.strip()]
+                            for field in match["fields"]
                             for s in re.search(
                                     match["pattern"],
-                                    getattr(self, match["field"])
+                                    getattr(self, field)
                             ).groups()[0].split(",")
-                        ]
+                        ]))
                     except (AttributeError, IndexError):
-                        return []
+                        pass
+                if "find" in cfg:
+                    find = cfg["find"]
+                    try:
+                        tokens += list(chain.from_iterable([
+                            [items]
+                            for field in find["fields"]
+                            for v in find["values"]
+                            for pattern in (self.get_rule(v).patterns or [v])
+                            for items in re.findall(
+                                    "|".join([
+                                        f"({pattern})"
+                                    ]),
+                                    getattr(self, field)
+                            )
+                        ]))
+                    except (AttributeError, IndexError):
+                        pass
                 else:
                     raise NotImplementedError
 
-            return []
+        return tokens
 
     @property
     def group(self):
@@ -633,31 +650,37 @@ class MediaListingMixin(object):
                 else:
                     return None
 
+    def get_rule(self, token):
+        try:
+            return next(
+                v
+                for k, v in self.provider.highlight_map.items()
+                if k.search(token)
+                or v.get("group") == token
+                or any([token in v.get("subjects", [])])
+            )
+        except StopIteration:
+            return []
+
+
     @property
     def subject_rules(self):
-        def get_rule(token):
-            try:
-                return next(
-                    v
-                    for k, v in self.provider.highlight_map.items()
-                    if k.search(token)
-                )
-            except StopIteration:
-                return None
-
-        return [
-            rule for rule in [
-                get_rule(token)
-                for token in self.tokens
+        try:
+            return [
+                rule for rule in [
+                    self.get_rule(token)
+                    for token in self.tokens
+                ]
+                if rule
             ]
-            if rule
-        ]
+        except TypeError:
+            import ipdb; ipdb.set_trace()
 
     @property
     def subjects(self):
         # import ipdb; ipdb.set_trace()
         try:
-            subjects = list(
+            return list(
                 chain.from_iterable(
                     [r["subjects"]]
                     if isinstance(r["subjects"], str)
@@ -666,29 +689,7 @@ class MediaListingMixin(object):
                 )
             )
         except (AttributeError, IndexError):
-            subjects = None
-
-        if subjects:
-            return subjects
-
-        cfg = self.channel.attrs.get("subjects", {})
-        if cfg:
-            if isinstance(cfg, str):
-                return cfg
-            elif "match" in cfg:
-                match = cfg["match"]
-                try:
-                    return [
-                        s.strip()
-                        for s in re.search(
-                                match["pattern"],
-                                getattr(self, match["field"])
-                        ).groups()[0].split(",")
-                    ]
-                except (AttributeError, IndexError):
-                    return None
-            else:
-                raise NotImplementedError
+            return None
 
 
 @attrclass()

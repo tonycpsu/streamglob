@@ -304,8 +304,9 @@ class BaseProvider(PlayListingProviderMixin, DownloadListingProviderMixin, abc.A
             (
                 # re.compile(rule if isinstance(rule, str) else rule["patterns"], re.IGNORECASE),
                 re.compile("|".join(get_patterns(rule)), re.IGNORECASE),
-                dict(
+                AttrDict(
                     attr=self.config.rules.highlight[label],
+                    patterns=get_patterns(rule),
                     subjects=[rule] if isinstance(rule, str) else rule.get("subjects", rule),
                     group=rule.get("group", None) if isinstance(rule, dict) else None
                 )

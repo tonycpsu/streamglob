@@ -1368,8 +1368,8 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
     def on_activate(self):
         if isinstance(self.view, InvalidConfigView):
             return
-        super().on_activate()
         self.create_feeds()
+        super().on_activate()
         # self.reset()
 
     # def on_deactivate(self):
@@ -1418,7 +1418,9 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                 return TERM_MAP.get(term)
 
             try:
-                (attr, op, value) = re.findall(r'\w+|\S+', term)
+                (attr, op, value) = re.search(
+                    r"""(\w+)\s*(\S+)\s*(.*)""", term
+                ).groups()
             except ValueError:
                 import ipdb; ipdb.set_trace()
             op = OP_MAP.get(op, op)

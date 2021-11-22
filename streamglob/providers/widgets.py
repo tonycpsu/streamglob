@@ -234,7 +234,7 @@ class ProviderDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseData
 
     KEYMAP = {
         ",": "browse_selection",
-        "?": "show_subject",
+        "?": "show_group",
         "h": "add_highlight_rule",
         "H": "remove_highlight_rule",
         "ctrl o": "strip_emoji_selection",
@@ -288,8 +288,9 @@ class ProviderDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseData
     def config(self):
         return self.provider.config
 
-    def show_subject(self):
-        logger.info(self.selection.data_source.subject)
+    def show_group(self):
+        logger.info(self.selection.data_source.group)
+        logger.info(self.selection.data_source.subjects)
 
     def playlist_position(self):
         return self.focus_position
