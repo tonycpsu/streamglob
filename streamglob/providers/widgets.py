@@ -322,13 +322,15 @@ class ProviderDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseData
             translate = not translate
         self.df.set(index, "_translate", translate)
         if translate:
-            if "_title_translated" not in self.df.columns or not self.df.get(index, "_title_translated"):
-                translated = self.translator.translate(
-                    self.selection.data_source.title,
-                    src=self.selection.data_source.translate_src,
-                    dest=self.provider.translate_dest
-                ).text
-                self.df.set(index, "_title_translated", translated)
+            for attr in ["title", "group"]:
+                if f"_{attr}_translated" not in self.df.columns or not self.df.get(index, "_title_translated"):
+                    translated = self.translator.translate(
+                        getattr(self.selection.data_source, attr),
+                        src=self.selection.data_source.translate_src,
+                        dest=self.provider.translate_dest
+                    ).text
+                    self.df.set(index, f"_{attr}_translated", translated)
+
         self.invalidate_rows([index])
 
     def toggle_translate_all(self):
@@ -337,34 +339,30 @@ class ProviderDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseData
 
     def apply_translation(self):
         if len(self) and self.translate:
-            texts = [
-                (row.index, row.get("title"))
-                for row in self
-                if not isinstance(row.get("_title_translated"), str)
-                and isinstance(row.get("title"), str)
-                and len(row.get("title"))
-            ]
-            # FIXME: bulk translate not working, so we improvise...
-            # translates = self.translator.translate(
-            #     [ t[1] for t in texts ],
-            #     src=self.provider.translate_src or "auto",
-            #     dest=self.provider.translate_dest
-            # )
-            translates = self.translator.translate(
-                "\N{VERTICAL LINE}".join(
-                    [ t[1].replace(
-                        "\N{VERTICAL LINE}", "|"
-                    ) for t in texts ]),
-                src=self.provider.translate_src or "auto",
-                dest=self.provider.translate_dest
-            ).text.split("\N{VERTICAL LINE}")
-            # raise Exception(translated)
-            for (i, _), t in zip(texts, translates):
-                self.df.set(i, "_translate", True)
-                self.df.set(i, "_title_translated", t)
-            self.invalidate_rows(
-                [ row.index for row in self if row.get("_title_translated") ]
-            )
+            for attr in ["title", "group"]:
+                texts = [
+                    (row.index, row.get(attr, ""))
+                    for row in self
+                    if not isinstance(row.get(f"_{attr}_translated"), str)
+                    and isinstance(row.get(attr, ""), str)
+                    # and len(row.get(attr))
+                ]
+                sentinel = "\n\N{RIGHTWARDS ARROW}\n"
+                # FIXME: bulk translate not working, so we improvise...
+                translates = self.translator.translate(
+                    sentinel.join(
+                        [t[1].replace(
+                            sentinel, "|"
+                        ) for t in texts]),
+                    src=self.provider.translate_src or "auto",
+                    dest=self.provider.translate_dest
+                ).text.split(sentinel)
+                for (i, _), t in zip(texts, translates):
+                    self.df.set(i, "_translate", True)
+                    self.df.set(i, f"_{attr}_translated", t)
+                self.invalidate_rows(
+                    [ row.index for row in self if row.get(f"_{attr}_translated") ]
+                )
 
     def toggle_strip_emoji_all(self):
         self.strip_emoji = not self.strip_emoji
@@ -411,24 +409,25 @@ class ProviderDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseData
 
     def decorate(self, row, column, value):
 
-        if column.name == "title":
+        for attr in ["title", "group"]:
+            if column.name == attr:
 
-            if row.get("_title_translated") and (self.translate or row.get("_translate")):
-                value = row.get("_title_translated")
+                if row.get(f"_{attr}_translated") and (self.translate or row.get("_translate")):
+                    value = row.get(f"_{attr}_translated")
 
-            if self.strip_emoji or row.get("_strip_emoji"):
-                value = utils.strip_emoji(value)
+                if self.strip_emoji or row.get("_strip_emoji"):
+                    value = utils.strip_emoji(value)
 
-            if self.provider.highlight_map:
-                markup = [
-                    ( next(v["attr"] for k, v in self.provider.highlight_map.items()
-                           if k.search(x)), x)
-                    if self.provider.highlight_re.search(x)
-                    else x for x in self.provider.highlight_re.split(value) if x
-                ]
-                if len(markup):
-                    row.tokens = [x[1] for x in markup if isinstance(x, tuple)]
-                    value = urwid.Text(markup)
+                if self.provider.highlight_map:
+                    markup = [
+                        (next(v["attr"] for k, v in self.provider.highlight_map.items()
+                               if k.search(x)), x)
+                        if self.provider.highlight_re.search(x)
+                        else x for x in self.provider.highlight_re.split(value) if x
+                    ]
+                    if len(markup):
+                        row.tokens = [x[1] for x in markup if isinstance(x, tuple)]
+                        value = urwid.Text(markup)
 
         return super().decorate(row, column, value)
 
@@ -464,18 +463,23 @@ class ProviderDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseData
             @property
             def widgets(self):
                 edit_pos = 0
-                if self.parent.provider.conf_rules.highlight_words:
+                if self.parent.selection.data_source.group:
+                    default_pattern = self.parent.selection.data_source.group
+                elif self.parent.provider.conf_rules.highlight_words:
+                    token = self.parent.selection.data.title
                     try:
                         edit_pos = [
-                            m.start() for m in re.finditer(r"\S+",self.parent.selection.data.title)
+                            m.start() for m in re.finditer(r"\S+", default_pattern)
                         ][self.parent.provider.conf_rules.highlight_words]-1
                     except IndexError:
                         pass
+                else:
+                    default_pattern = None
 
                 return dict(
                     token=urwid_readline.ReadlineEdit(
-                        caption=("bold", "Token: "),
-                        edit_text=self.parent.selection.data.title,
+                        caption=("bold", "Pattern: "),
+                        edit_text=default_pattern,
                         edit_pos=edit_pos
                     ),
                     subject=urwid_readline.ReadlineEdit(
@@ -484,6 +488,7 @@ class ProviderDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseData
                     group=urwid_readline.ReadlineEdit(
                         caption=("bold", "Group: ")
                     ),
+                    create=urwid.CheckBox("Create directory?", state=True),
                     tag=BaseDropdown(list(self.parent.provider.rules.keys()))
                 )
 
@@ -501,16 +506,29 @@ class ProviderDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseData
                 subjects = [
                     s.strip()
                     for s in self.subject.get_edit_text().split(",")
-                ]
+                ] if self.subject.get_edit_text() else []
+
+                group = self.group.get_edit_text()
+                if not group and len(subjects) == 1:
+                    group = subjects[0]
+
                 cfg = {
                     k: v
                     for k, v in dict(
                             patterns=[pattern],
                             subjects=subjects,
-                            group=self.group.get_edit_text()
+                            group=group
                     ).items()
                     if v
                 }
+
+                if self.create.get_state():
+                    dirname = group or pattern
+                    if dirname in model.SUBJECT_MAP:
+                        del model.SUBJECT_MAP[dirname]
+                    path = os.path.join(self.parent.provider.output_path, dirname)
+                    os.makedirs(path)
+
                 # FIXME: bisect.insort_right doesn't support a key param until
                 # Python 3.10, which we can't upgrade to until Pony ORM is
                 # updated with Python 3.10 support.
@@ -528,6 +546,10 @@ class ProviderDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseData
                             i, cfg
                         )
                         break
+                else:
+                    self.parent.provider.conf_rules.label[self.tag.selected_label].append(
+                        cfg
+                    )
 
                 self.parent.provider.conf_rules.save()
                 self.parent.provider.load_rules()

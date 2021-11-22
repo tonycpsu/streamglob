@@ -392,14 +392,6 @@ class MediaSourceMixin(object):
         if "outfile" in kwargs:
             return kwargs.get("outfile")
 
-        outpath = (
-            self.provider.config.get_path("output.path")
-            or
-            config.settings.profile.get_path("output.path")
-            or
-            "."
-        )
-
         template = (
             self.provider.config.get_path("output.template")
             or
@@ -455,16 +447,19 @@ class MediaSourceMixin(object):
             if group_by == "subject":
                 group = listing.group
                 try:
-                    if not group in SUBJECT_MAP:
+                    if group and not group in SUBJECT_MAP:
                         SUBJECT_MAP[group] = next(
                         e.name for e in os.scandir(
                             os.path.join(
-                                outpath,
+                                self.provider.output_path,
                                 template_dir
                                 )
                             )
                         if e.is_dir()
-                        and unidecode(e.name) == unidecode(group)
+                        and (
+                            e.name == group
+                            or unidecode(e.name) == unidecode(group)
+                        )
                     )
                     if SUBJECT_MAP.get(group):
                         path_list.append(SUBJECT_MAP[group])
@@ -483,7 +478,7 @@ class MediaSourceMixin(object):
         if glob:
             outfile = re.sub("({[^}]+})", "*", outfile)
 
-        return os.path.join(outpath, outfile)
+        return os.path.join(self.provider.output_path, outfile)
 
     def __str__(self):
         return self.locator
@@ -596,6 +591,25 @@ class MediaListingMixin(object):
                 if t
             ]
         except AttributeError:
+            cfg = self.channel.attrs.get("subjects", {})
+            if cfg:
+                if isinstance(cfg, str):
+                    return cfg
+                elif "match" in cfg:
+                    match = cfg["match"]
+                    try:
+                        return [
+                            s.strip()
+                            for s in re.search(
+                                    match["pattern"],
+                                    getattr(self, match["field"])
+                            ).groups()[0].split(",")
+                        ]
+                    except IndexError:
+                        return []
+                else:
+                    raise NotImplementedError
+
             return []
 
     @property
@@ -619,13 +633,22 @@ class MediaListingMixin(object):
 
     @property
     def subject_rules(self):
+        def get_rule(token):
+            try:
+                return next(
+                    v
+                    for k, v in self.provider.highlight_map.items()
+                    if k.search(token)
+                )
+            except StopIteration:
+                return None
+
         return [
-            next(
-                v
-                for k, v in self.provider.highlight_map.items()
-                if k.search(token)
-            )
-            for token in self.tokens
+            rule for rule in [
+                get_rule(token)
+                for token in self.tokens
+            ]
+            if rule
         ]
 
     @property

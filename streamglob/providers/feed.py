@@ -1180,14 +1180,25 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
     def format_feed(feed):
         return feed.name if hasattr(feed, "name") else ""
 
-    ATTRIBUTES = AttrDict(
-        media_listing_id = {"hide": True},
-        feed = {"width": 30, "format_fn": format_feed },
-        created = {"width": 19},
-        title = {"width": ("weight", 1), "truncate": True},
-        subjects = {"truncate": False},
-        group = {},
-    )
+    @property
+    def ATTRIBUTES(self):
+        # import ipdb; ipdb.set_trace()
+        attrs = list(super().ATTRIBUTES.items())
+        idx, attr = next(  (i, a ) for i, a in enumerate(attrs) if a[0] == "title")
+        return AttrDict(
+            attrs[:idx]
+            + [
+                ("media_listing_id", {"hide": True}),
+                ("created", {"width": 19})
+            ]
+            + attrs[idx:]
+        )
+
+    # ATTRIBUTES = AttrDict(
+    #     feed={"width": 30, "format_fn": format_feed},
+    #     created={"width": 19},
+    #     title={"width": ("weight", 1), "truncate": True},
+    # )
     # @property
     # def ATTRIBUTES(self):
     #     def format_feed(feed):
@@ -1518,7 +1529,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                 pk_sort_attr = desc(pk_sort_attr)
             # self.items_query = self.items_query.order_by(pk_sort_attr)
             self.items_query = self.items_query.order_by(sort_fn)
-            logger.info(self.items_query.get_sql())
+            # logger.info(self.items_query.get_sql())
         self.view.update_count = True
 
     async def apply_search_query(self, query):

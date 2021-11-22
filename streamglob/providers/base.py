@@ -196,7 +196,7 @@ class BaseProvider(PlayListingProviderMixin, DownloadListingProviderMixin, abc.A
     LISTING_CLASS = model.TitledMediaListing
     # VIEW_CLASS = SimpleProviderView
     # FILTERS = AttrDict()
-    ATTRIBUTES = AttrDict(title={"width": ("weight", 1)})
+
     MEDIA_TYPES = None
     RPC_METHODS = []
 
@@ -210,6 +210,15 @@ class BaseProvider(PlayListingProviderMixin, DownloadListingProviderMixin, abc.A
         self.load_rules()
 
         self.filters["search"].connect("changed", self.on_search_change)
+
+    @property
+    def ATTRIBUTES(self):
+        return AttrDict(
+            title={"width": ("weight", 1)},
+            subjects={"width": 20},
+            group={"width": 20},
+        )
+
 
     @property
     def tmp_dir(self):

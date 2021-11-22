@@ -875,6 +875,7 @@ class YouTubeProvider(PaginatedProviderMixin,
 
     @property
     def ATTRIBUTES(self):
+
         attrs = list(super().ATTRIBUTES.items())
         idx, attr = next(  (i, a ) for i, a in enumerate(attrs) if a[0] == "title")
         return AttrDict(
@@ -895,6 +896,7 @@ class YouTubeProvider(PaginatedProviderMixin,
             ]
             + attrs[idx:]
         )
+
     @property
     def PREVIEW_TYPES(self):
         return ["default", "storyboard", "full"]
