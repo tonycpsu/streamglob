@@ -607,7 +607,7 @@ class MediaListingMixin(object):
                                     getattr(self, match["field"])
                             ).groups()[0].split(",")
                         ]
-                    except IndexError:
+                    except (AttributeError, IndexError):
                         return []
                 else:
                     raise NotImplementedError
@@ -685,7 +685,7 @@ class MediaListingMixin(object):
                                 getattr(self, match["field"])
                         ).groups()[0].split(",")
                     ]
-                except IndexError:
+                except (AttributeError, IndexError):
                     return None
             else:
                 raise NotImplementedError
