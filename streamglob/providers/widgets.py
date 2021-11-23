@@ -464,18 +464,17 @@ class ProviderDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseData
             @property
             def widgets(self):
                 edit_pos = 0
+                default_pattern = None
                 if self.parent.selection.data_source.group:
                     default_pattern = self.parent.selection.data_source.group
                 elif self.parent.provider.conf_rules.highlight_words:
-                    token = self.parent.selection.data.title
+                    default_pattern = self.parent.selection.data.title
                     try:
                         edit_pos = [
                             m.start() for m in re.finditer(r"\S+", default_pattern)
                         ][self.parent.provider.conf_rules.highlight_words]-1
                     except IndexError:
                         pass
-                else:
-                    default_pattern = None
 
                 return dict(
                     token=urwid_readline.ReadlineEdit(

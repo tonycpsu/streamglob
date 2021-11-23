@@ -770,7 +770,8 @@ class BaseProvider(PlayListingProviderMixin, DownloadListingProviderMixin, abc.A
                 for k, v in self.highlight_map.items()
                 if k.search(token)
                 or v.get("group") == token
-                or any([token in v.get("subjects", [])])
+                or token in v.get("subjects", [])
+                or token in v.get("patterns", [])
             )
         except StopIteration:
             return None

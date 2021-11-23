@@ -1427,7 +1427,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
             if attr == "label":
                 attr = "title"
                 value = self.rule_map[value].pattern
-            return f"lower({attr}) {op} lower('{value}')"
+            return f"""lower({attr}) {op} lower('{value.replace("'", "''")}')"""
 
         return "(" + " ".join([
             parse_term(term)
