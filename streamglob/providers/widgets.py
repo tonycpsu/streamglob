@@ -323,9 +323,9 @@ class ProviderDataTable(
         "?": "show_group",
         "h": "add_highlight_rule",
         "H": "remove_highlight_rule",
-        "ctrl o": "strip_emoji_selection",
+        # "ctrl o": "strip_emoji_selection",
         "ctrl t": "translate_selection",
-        "meta O": "toggle_strip_emoji_all",
+        # "meta O": "toggle_strip_emoji_all",
         "meta T": "toggle_translate_all"
     }
 

@@ -372,9 +372,9 @@ def run_gui(action, provider, **kwargs):
     def global_input(key):
         if key in ('q', 'Q'):
             state.listings_view.quit_app()
-        elif key == "ctrl d":
+        elif key == "meta f":
             state.main_view.set_focus(0, 1) # browser
-        elif key == "ctrl o":
+        elif key == "meta l":
             state.main_view.set_focus(1, 0) # listings
         elif key == "meta C":
             reload_config()
