@@ -579,13 +579,16 @@ class ProviderDataTable(
                 )
 
             def action(self):
-                pattern = self.token.get_edit_text()
+                patterns = self.token.get_edit_text().split(",")
                 if (
-                        pattern.lower()
-                        in [
-                            x.lower() if isinstance(x, str) else x["patterns"][0].lower()
-                            for x in self.parent.provider.conf_rules.label[self.tag.selected_label]
-                        ]
+                        any([
+                            pattern.lower()
+                            in [
+                                x.lower() if isinstance(x, str) else x["patterns"][0].lower()
+                                for x in self.parent.provider.conf_rules.label[self.tag.selected_label]
+                            ]
+                            for pattern in patterns
+                        ])
                     ):
                     return
 
@@ -601,7 +604,7 @@ class ProviderDataTable(
                 cfg = {
                     k: v
                     for k, v in dict(
-                            patterns=[pattern],
+                            patterns=patterns,
                             subjects=subjects,
                             group=group
                     ).items()
