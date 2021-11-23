@@ -86,6 +86,14 @@ class FileBrowserTreeNodeMixin(object):
     def name(self):
         return self.get_key()
 
+    @property
+    def locator(self):
+        return self.full_path
+
+    @property
+    def locators(self):
+        return [self.locator]
+
 
 class FileNode(FileBrowserTreeNodeMixin, TreeNode):
     """Metadata storage for individual files"""

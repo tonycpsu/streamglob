@@ -577,6 +577,13 @@ class MediaListingMixin(object):
         return self.media_listing_id
 
     @property
+    def locators(self):
+        return [
+            s.locator
+            for s in self.sources
+        ]
+
+    @property
     def provider(self):
         return providers.get(self.provider_id)
         # return self.provider.NAME.lower()

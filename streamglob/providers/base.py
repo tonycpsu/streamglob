@@ -187,7 +187,12 @@ class InvalidConfigView(BaseProviderView):
 
 MEDIA_SPEC_RE=re.compile(r"(?:/([^:]+))?(?::(.*))?")
 
-class BaseProvider(PlayListingProviderMixin, DownloadListingProviderMixin, abc.ABC, Observable):
+class BaseProvider(
+        PlayListingProviderMixin,
+        DownloadListingProviderMixin,
+        abc.ABC,
+        Observable
+):
     """
     Abstract base class from which providers should inherit from
     """
@@ -208,8 +213,8 @@ class BaseProvider(PlayListingProviderMixin, DownloadListingProviderMixin, abc.A
                                   for n, f in self.FILTERS.items() })
 
         self.load_rules()
-
         self.filters["search"].connect("changed", self.on_search_change)
+        super().__init__(*args, **kwargs)
 
     @property
     def ATTRIBUTES(self):

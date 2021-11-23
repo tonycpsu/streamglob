@@ -84,39 +84,6 @@ class FilesViewEventHandler(FileSystemEventHandler):
         self.view.updated = True
 
 
-class RunCommandDropdown(BaseDropdown):
-
-    @property
-    def items(self):
-        return config.settings.profile.files.commands
-
-    @property
-    def expanded(self):
-        return True
-
-class RunCommandPopUp(OKCancelDialog):
-
-    def __init__(self, parent):
-
-        super().__init__(parent)
-        urwid.connect_signal(self.dropdown, "change", self.on_dropdown_change)
-
-    def on_dropdown_change(self, source,label,  value):
-        self.pile.set_focus_path(self.ok_focus_path)
-
-    @property
-    def widgets(self):
-
-        return dict(
-            dropdown=RunCommandDropdown()
-        )
-
-    async def action(self):
-
-        await self.parent.run_command_on_seleciton(
-            self.dropdown.selected_value
-        )
-
 
 class FilesMediaListingMixin(object):
 
@@ -124,9 +91,9 @@ class FilesMediaListingMixin(object):
     def key(self):
         return hashlib.md5(self.sources[0].locator.encode("utf-8")).hexdigest()
 
-    @property
-    def locator(self):
-        return self.sources[0].locator
+    # @property
+    # def locator(self):
+    #     return self.sources[0].locator
 
 @model.attrclass()
 class FilesMediaListing(FilesMediaListingMixin, model.TitledMediaListing):
@@ -143,12 +110,12 @@ class FilesMediaSource(FilesMediaSourceMixin, model.InflatableMediaSource):
     pass
 
 
-
 @keymapped()
 class FilesView(
         SynchronizedPlayerProviderMixin,
         PlayListingProviderMixin,
         PlayListingViewMixin,
+        ShellCommandViewMixin,
         StreamglobView):
 
     signals = ["requery"]
@@ -193,13 +160,6 @@ class FilesView(
         self.prefix_scope = 0
 
         state.event_loop.create_task(self.check_updated())
-        for cmd, cfg in config.settings.profile.files.commands.items():
-            if "key" in cfg:
-                func = partial(
-                    self.run_command_on_selection,
-                    cfg
-                    )
-                self.keymap_register(cfg.key, func)
 
     def update(self):
         pass
@@ -282,7 +242,7 @@ class FilesView(
             #     if stream.get("codec_type") == "video" and not stream.get("disposition", []).get("attached_pic")
             # )["duration"])
 
-            media_info = MediaInfo.parse(listing.locator)
+            media_info = MediaInfo.parse(listing.locators[0])
             duration = next(
                 t for t in media_info.tracks
                 if t.track_type == "General"
@@ -292,11 +252,11 @@ class FilesView(
             cfg.video_duration = duration
             thumbnail_file = os.path.join(self.tmp_dir, f"thumbnail.{listing.key}.jpg")
             thumbnail = await self.make_preview_embedded(
-                listing.locator, thumbnail_file, cfg
+                listing.locators[0], thumbnail_file, cfg
             )
             if not thumbnail:
                 thumbnail = await self.make_preview_thumbnail(
-                    listing.locator, thumbnail_file, cfg
+                    listing.locators[0], thumbnail_file, cfg
                 )
             self.thumbnails[listing.key] = AttrDict(
                 thumbnail_file=thumbnail,
@@ -335,7 +295,7 @@ class FilesView(
 
         (done, pending) = await asyncio.wait([
             self.make_preview_tile(
-                listing.locator,
+                listing.locators[0],
                 os.path.join(self.tmp_dir, f"board.{listing.key}.{n:04d}.jpg"),
                 position=(video_duration*PREVIEW_DURATION_RATIO)*(n+1)*(1/num_tiles),
                 width=480
@@ -457,7 +417,7 @@ class FilesView(
 
     @property
     def playlist_title(self):
-        return f"[{self.browser.root}/{self.browser.selection.full_path}]"
+        return f"[{self.browser.root}/{self.selection.full_path}]"
 
     @property
     def root(self):
@@ -490,7 +450,7 @@ class FilesView(
             AttrDict(
                 title=listing.title,
                 key=listing.sources[0].key,
-                locator=listing.sources[0].locator,
+                locator=listing.locators[0],
                 locator_preview=listing.sources[0].locator_preview
             )
             for listing in [
@@ -500,10 +460,14 @@ class FilesView(
         ]
 
     @property
+    def selection(self):
+        return self.browser.selection
+
+    @property
     def selection_index(self):
         try:
             return self.browser.cwd_node.child_files.index(
-                self.browser.selection
+                self.selection
             )
         except ValueError:
             return 0
@@ -686,11 +650,11 @@ class FilesView(
                     self.parent.browser.selection, confirm=True
                 )
 
-        if isinstance(self.browser.selection, DirectoryNode):
+        if isinstance(self.selection, DirectoryNode):
             dialog = DeleteConfirmDialog(self)
             self.open_popup(dialog, width=60, height=5)
         else:
-            self.browser.delete_node(self.browser.selection)
+            self.browser.delete_node(self.selection)
 
     def select_prefix(self, step=1):
 
@@ -702,7 +666,7 @@ class FilesView(
 
         words = [
             unidecode(w) if self.config.select_prefix.unidecode else w
-            for w in self.SPLIT_RE.findall(self.browser.selection.name)
+            for w in self.SPLIT_RE.findall(self.selection.name)
         ]
         if self.config.select_prefix.strip_num:
             words = list(itertools.dropwhile(
@@ -755,34 +719,6 @@ class FilesView(
             return
         self.browser.body.set_focus(node)
         state.main_view.focus_widget(self)
-
-    async def run_command_on_selection(self, cmd_cfg):
-
-        cmd = cmd_cfg.command
-        try:
-            prog = next(programs.ShellCommand.get(cmd))
-        except StopIteration:
-            logger.error(f"program {prog} not found")
-
-        args = [
-            a.format(
-                path=self.browser.selection.full_path,
-                socket=state.task_manager.preview_player.ipc_socket_name
-            )
-            for a in cmd_cfg.args
-        ]
-        # async def show_output():
-        #     output = await prog.output_ready
-        #     logger.info(f"output: {output}")
-        # state.event_loop.create_task(show_output())
-        await prog.run(args)
-
-
-    def open_run_command_dialog(self):
-
-        path = self.browser.selection.full_path
-        popup = RunCommandPopUp(self)
-        self.open_popup(popup, width=60, height=10)
 
 
     def on_view_activate(self):

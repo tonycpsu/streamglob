@@ -18,6 +18,7 @@ from ..widgets import *
 from .filters import *
 from ..state import *
 from .. import model
+from .. import programs
 
 class FilterToolbar(urwid.WidgetWrap):
 
@@ -223,9 +224,94 @@ class DownloadListingProviderMixin(object):
             )
             yield task
 
+class RunCommandDropdown(BaseDropdown):
+
+    @property
+    def items(self):
+        return config.settings.profile.files.commands
+
+    @property
+    def expanded(self):
+        return True
+
+class RunCommandPopUp(OKCancelDialog):
+
+    def __init__(self, parent):
+
+        super().__init__(parent)
+        urwid.connect_signal(self.dropdown, "change", self.on_dropdown_change)
+
+    def on_dropdown_change(self, source,label,  value):
+        self.pile.set_focus_path(self.ok_focus_path)
+
+    @property
+    def widgets(self):
+
+        return dict(
+            dropdown=RunCommandDropdown()
+        )
+
+    async def action(self):
+
+        await self.parent.run_command_on_seleciton(
+            self.dropdown.selected_value
+        )
+
 
 @keymapped()
-class ProviderDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseDataTable):
+class ShellCommandViewMixin(object):
+
+    def __init__(self, *args, **kwargs):
+
+        super().__init__(*args, **kwargs)
+        for cmd, cfg in (
+                list(config.settings.profile.commands.items())
+                + list(self.config.commands.items())
+        ):
+            if "key" in cfg:
+                func = partial(
+                    self.run_command_on_selection,
+                    cfg
+                    )
+                self.keymap_register(cfg.key, func)
+
+    async def run_command_on_selection(self, cmd_cfg):
+
+        cmd = cmd_cfg.command
+        try:
+            prog = next(programs.ShellCommand.get(cmd))
+        except StopIteration:
+            logger.error(f"program {prog} not found")
+
+        args = [
+            a.format(
+                locator=self.selection.locators[0],
+                socket=state.task_manager.preview_player.ipc_socket_name
+            )
+            for a in cmd_cfg.args
+        ]
+        logger.info(args)
+        # async def show_output():
+        #     output = await prog.output_ready
+        #     logger.info(f"output: {output}")
+        # state.event_loop.create_task(show_output())
+        await prog.run(args)
+
+
+    def open_run_command_dialog(self):
+
+        path = self.browser.selection.full_path
+        popup = RunCommandPopUp(self)
+        self.open_popup(popup, width=60, height=10)
+
+
+
+@keymapped()
+class ProviderDataTable(
+        PlayListingViewMixin,
+        DownloadListingViewMixin,
+        ShellCommandViewMixin,
+        BaseDataTable):
 
     ui_sort = True
     query_sort = True
