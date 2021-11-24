@@ -164,12 +164,13 @@ class DownloadDirEdit(AutoCompleteEdit):
         self.provider = provider
         super().__init__(*args, **kwargs)
         self.load_history()
-        self._history_index = 0
-        self._completions = sorted([
+        self._history_index = len(self._history)
+        self._completions = self._history + sorted([
             e.name for e in os.scandir(
                 self.provider.output_path
             )
             if e.is_dir()
+            and e.name not in self._history
         ])
         self._autocomplete_delims = "\t\n;"
         self.enable_autocomplete(self.auto_complete)
@@ -215,7 +216,7 @@ class DownloadDirEdit(AutoCompleteEdit):
                 if item != selection
             ] + [selection]
         )[:self.HISTORY_LENGTH]
-        self._history_index = 0
+        self._history_index = len(self._history)
         state.app_data.downloads["group_history"] = self._history
         state.app_data.save()
 
