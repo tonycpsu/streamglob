@@ -233,6 +233,18 @@ class BaseProvider(
             self._tmp_dir = tmp_dir
         return self._tmp_dir
 
+    @property
+    def conf_dir(self):
+        if not hasattr(self, "_conf_dir"):
+            conf_dir = os.path.join(
+                config.settings._config_dir,
+                self.IDENTIFIER
+            )
+            if not os.path.exists(conf_dir):
+                os.makedirs(conf_dir)
+            self._conf_dir = conf_dir
+        return self._conf_dir
+
     def init_config(self):
         with db_session:
             try:
@@ -254,8 +266,7 @@ class BaseProvider(
         if not getattr(self, "_conf_rules", None):
             self._conf_rules = config.Config(
             os.path.join(
-                config.settings._config_dir,
-                self.IDENTIFIER,
+                self.conf_dir,
                 "rules.yaml"
             )
         )
