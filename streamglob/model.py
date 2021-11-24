@@ -614,7 +614,7 @@ class MediaListingMixin(object):
                             for field in match["fields"]
                             for s in re.search(
                                     match["pattern"],
-                                    getattr(self, field)
+                                    getattr(self, field) or ""
                             ).groups()[0].split(",")
                         ]))
                     except (AttributeError, IndexError):
@@ -632,7 +632,7 @@ class MediaListingMixin(object):
                                     "|".join([
                                         f"({re.escape(pattern)})"
                                     ]),
-                                    getattr(self, field)
+                                    getattr(self, field) or ""
                             )
                         ]))
                     except (AttributeError, IndexError):
