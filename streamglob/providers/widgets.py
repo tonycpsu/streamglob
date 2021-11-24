@@ -254,8 +254,8 @@ class DownloadDialog(OKCancelDialog):
 class DownloadListingViewMixin(ListingViewMixin):
 
     KEYMAP = {
-        "l": ("download_selection", {"fast": True}),
-        "L": "download_selection_with_options"
+        "l": ("download_selection_with_options", {"fast": True}),
+        "L": ("download_selection_with_options", {"fast": False})
     }
 
     @property
@@ -281,8 +281,12 @@ class DownloadListingViewMixin(ListingViewMixin):
         if not listing:
             return
 
-        dialog = DownloadDialog(self)
-        self.provider.view.open_popup(dialog, width=60, height=8)
+        if fast and listing.group:
+            await self.download_selection()
+            return
+        else:
+            dialog = DownloadDialog(self)
+            self.provider.view.open_popup(dialog, width=60, height=8)
 
 
 class DownloadListingProviderMixin(object):
