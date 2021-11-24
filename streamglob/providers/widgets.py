@@ -8,6 +8,7 @@ import bisect
 import urwid
 from panwid.datatable import *
 from panwid.keymap import *
+from panwid.autocomplete import AutoCompleteEdit
 from pony.orm import *
 from pygoogletranslation import Translator
 
@@ -154,14 +155,106 @@ class PlayListingProviderMixin(object):
             kwargs=kwargs
         )
 
+class DownloadDirEdit(AutoCompleteEdit):
 
+    HISTORY_LENGTH = 20
+
+    def __init__(self, provider, *args, **kwargs):
+
+        self.provider = provider
+        super().__init__(*args, **kwargs)
+        self.load_history()
+        self._history_index = 0
+        self._completions = sorted([
+            e.name for e in os.scandir(
+                self.provider.output_path
+            )
+            if e.is_dir()
+        ])
+        self._autocomplete_delims = "\t\n;"
+        self.enable_autocomplete(self.auto_complete)
+
+    def keypress(self, size, key):
+        key = super().keypress(size, key)
+        if key in ["ctrl n", "ctrl p"]:
+            if not len(self._history):
+                return
+            step = -1 if key == "ctrl p" else 1
+            self._history_index = max(
+                min(
+                    self._history_index + step,
+                    len(self._history) - 1
+                ),
+                0
+            )
+            value = self._history[self._history_index]
+            self.set_edit_text(value)
+            self.set_edit_pos(len(value))
+        else:
+            return key
+
+    def auto_complete(self, text, state):
+        tmp = [
+            c for c in self._completions
+            if c and c.lower().startswith(text.lower())
+        ] if text else self._completions
+        try:
+            return tmp[state]
+        except (IndexError, TypeError):
+            return None
+
+    def load_history(self):
+        self._history = state.app_data.get("downloads", {}).get("group_history", [])
+
+    def save_history(self):
+        # import ipdb; ipdb.set_trace()
+        selection = self.get_edit_text()
+        self._history = (
+            [
+                item for item in self._history
+                if item != selection
+            ] + [selection]
+        )[:self.HISTORY_LENGTH]
+        self._history_index = 0
+        state.app_data.downloads["group_history"] = self._history
+        state.app_data.save()
+
+
+class DownloadDialog(OKCancelDialog):
+
+    # def __init__(self, parent):
+
+    #     super().__init__(parent)
+        # urwid.connect_signal(self.dropdown, "change", self.on_dropdown_change)
+
+    # def on_dropdown_change(self, source,label,  value):
+    #     self.pile.set_focus_path(self.ok_focus_path)
+
+    @property
+    def widgets(self):
+
+        return dict(
+            group=DownloadDirEdit(
+                provider=self.parent.provider,
+                caption=("bold", "Group: ")
+            ),
+        )
+
+    async def action(self):
+
+        self.group.save_history()
+        group = self.group.get_edit_text()
+        await self.parent.download_selection(
+            group=group or None
+        )
 
 
 @keymapped()
 class DownloadListingViewMixin(ListingViewMixin):
 
     KEYMAP = {
-        "l": "download_selection"
+        "l": ("download_selection", {"fast": True}),
+        "L": "download_selection_with_options"
     }
 
     @property
@@ -172,16 +265,23 @@ class DownloadListingViewMixin(ListingViewMixin):
         for task in self.provider.create_download_tasks(listing, index=index, **kwargs):
             yield state.task_manager.download(task)
 
-    async def download_selection(self):
+    async def download_selection(self, **kwargs):
 
-        listing = self.selected_listing
-        if not listing:
-            return
         source = self.selected_source
         if not source:
             return
-        async for task in self.download(listing, index=source.rank or 0):
+        async for task in self.download(
+            self.selected_listing, index=source.rank or 0, **kwargs
+        ):
             pass
+
+    async def download_selection_with_options(self, fast=False):
+        listing = self.selected_listing
+        if not listing:
+            return
+
+        dialog = DownloadDialog(self)
+        self.provider.view.open_popup(dialog, width=60, height=8)
 
 
 class DownloadListingProviderMixin(object):
@@ -201,7 +301,7 @@ class DownloadListingProviderMixin(object):
             if index is not None and index != i:
                 continue
             try:
-                filename = source.download_filename(**kwargs, listing=listing)
+                filename = source.download_filename(listing=listing, **kwargs)
             except SGInvalidFilenameTemplate as e:
                 logger.warning(f"filename template is invalid: {e}")
                 raise
@@ -253,7 +353,7 @@ class RunCommandPopUp(OKCancelDialog):
 
     async def action(self):
 
-        await self.parent.run_command_on_seleciton(
+        await self.parent.run_command_on_selection(
             self.dropdown.selected_value
         )
 

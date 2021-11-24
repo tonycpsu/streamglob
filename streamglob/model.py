@@ -363,12 +363,16 @@ class MediaSourceMixin(object):
 
 
     def download_filename(
-            self, listing=None, index=0, num=0,
+            self, listing=None, group=None,
+            index=0, num=0,
             glob=False, **kwargs
     ):
 
         if not self.provider:
             return None
+
+        if group is None:
+           group = f"{listing.group} " if listing.group else ""
 
         subjects = listing.subjects
         # try:
@@ -416,7 +420,7 @@ class MediaSourceMixin(object):
                         index=self.rank+1,
                         num=num or len(listing.sources) if listing else 0,
                         subject=",".join(subjects) if subjects else None,
-                        group=f"{listing.group} " if listing.group else "",
+                        group=group,
                         group_title=f"""{"%s " %(group) if group else ""}{listing.title}""",
                         subjects=subjects,
                         **tokens
@@ -447,7 +451,6 @@ class MediaSourceMixin(object):
                 template_dir = "."
 
             if group_by == "subject":
-                group = listing.group
                 try:
                     if group and not group in SUBJECT_MAP:
                         SUBJECT_MAP[group] = next(
