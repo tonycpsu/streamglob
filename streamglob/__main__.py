@@ -378,7 +378,7 @@ def run_gui(action, provider, **kwargs):
             state.main_view.set_focus(1, 0) # listings
         elif key == "meta C":
             reload_config()
-        elif isinstance(key, str) and key.startswith("meta"):
+        elif isinstance(key, str) and key.startswith("meta") and len(key) == 6:
             try:
                 p = next(
                     p for p in providers.PROVIDERS.keys()
