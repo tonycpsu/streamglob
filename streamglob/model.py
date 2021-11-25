@@ -375,20 +375,6 @@ class MediaSourceMixin(object):
            group = f"{listing.group}" if listing.group else ""
 
         subjects = listing.subjects
-        # try:
-        #     tokens = [
-        #         t for t in self.provider.highlight_re.search(listing.title).groups() if t
-        #     ]
-        #     subject = tokens[0]
-        # except (AttributeError, IndexError):
-        #     channel = getattr(listing or self.listing, "channel", None)
-        #     if channel:
-        #         with db_session:
-        #             channel = MediaChannel[channel.channel_id]
-        #             subject = channel.name
-        #     else:
-        #         subject = None
-
 
         if isinstance(index, int):
             index += 1
@@ -607,21 +593,21 @@ class MediaListingMixin(object):
             cfg = self.channel.attrs.get("subjects", {})
             if cfg:
                 if "match" in cfg:
-                    match = cfg["match"]
-                    try:
-                        tokens += list(chain.from_iterable([
-                            [s.strip()]
-                            for field in match["fields"]
-                            for pattern in match.get("patterns", [])
-                            for s in re.search(
-                                    pattern,
-                                    getattr(self, field) or ""
-                            ).groups()[0].split(",")
-                        ]))
-                    except (AttributeError, IndexError):
-                        pass
+                    match_cfg = cfg["match"]
+                    for field in match_cfg["fields"]:
+                        try:
+                            tokens += list(chain.from_iterable([
+                                [s.strip() for s in match.split(",")]
+                                for pattern in match_cfg.get("patterns") or []
+                                for match in re.findall(
+                                        pattern,
+                                        getattr(self, field)
+                                )
+                            ]))
+                            # import ipdb; ipdb.set_trace()
+                        except (AttributeError, IndexError):
+                            continue
                 if "find" in cfg:
-                    # import ipdb; ipdb.set_trace()
                     find = cfg["find"]
                     try:
                         tokens += list(chain.from_iterable([
@@ -664,14 +650,13 @@ class MediaListingMixin(object):
 
     @property
     def subject_rules(self):
+        # import ipdb; ipdb.set_trace()
         try:
             return [
-                rule for rule in [
-                    self.provider.rule_for_token(token)
-                    for token in self.tokens
-                ]
-                if rule
+                self.provider.rule_for_token(token)
+                for token in self.tokens
             ]
+
         except TypeError:
             import ipdb; ipdb.set_trace()
 

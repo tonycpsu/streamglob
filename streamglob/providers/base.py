@@ -324,7 +324,7 @@ class BaseProvider(
                 AttrDict(
                     attr=self.config.rules.highlight[label],
                     patterns=get_patterns(rule),
-                    subjects=[rule] if isinstance(rule, str) else rule.get("subjects", rule),
+                    subjects=[rule] if isinstance(rule, str) else rule.get("subjects", rule.get("patterns")),
                     group=rule.get("group", None) if isinstance(rule, dict) else None
                 )
             )
@@ -791,7 +791,7 @@ class BaseProvider(
                 # or any(re.search(p, token) for p in v.get("patterns", []))
             )
         except StopIteration:
-            return None
+            return dict(subjects=[token], group=token)
 
 
 
