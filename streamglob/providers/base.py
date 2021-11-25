@@ -788,7 +788,7 @@ class BaseProvider(
                 if k.search(token)
                 or v.get("group") == token
                 or token in v.get("subjects", [])
-                or token in v.get("patterns", [])
+                # or any(re.search(p, token) for p in v.get("patterns", []))
             )
         except StopIteration:
             return None

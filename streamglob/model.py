@@ -372,7 +372,7 @@ class MediaSourceMixin(object):
             return None
 
         if group is None:
-           group = f"{listing.group} " if listing.group else ""
+           group = f"{listing.group}" if listing.group else ""
 
         subjects = listing.subjects
         # try:
@@ -612,8 +612,9 @@ class MediaListingMixin(object):
                         tokens += list(chain.from_iterable([
                             [s.strip()]
                             for field in match["fields"]
+                            for pattern in match.get("patterns", [])
                             for s in re.search(
-                                    match["pattern"],
+                                    pattern,
                                     getattr(self, field) or ""
                             ).groups()[0].split(",")
                         ]))
