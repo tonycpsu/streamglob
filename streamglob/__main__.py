@@ -94,7 +94,7 @@ def reload_config():
 
     logger.info("reload config")
     profiles = config.settings.profile_names
-    config.load(options.config_dir, merge_default=True)
+    config.load(state.options.config_file, merge_default=True)
     providers.load_config()
     for p in profiles:
         config.settings.include_profile(p)
@@ -538,6 +538,7 @@ def main():
     options, args = parser.parse_known_args(args)
 
     state.options = AttrDict(vars(options))
+    state.options.config_file = config_file
 
     logging.captureWarnings(True)
     logger = logging.getLogger()

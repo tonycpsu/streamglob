@@ -212,7 +212,6 @@ class BaseProvider(
         self._filters = AttrDict({n: f(provider=self, name=n)
                                   for n, f in self.FILTERS.items() })
 
-        self.load_rules()
         self.filters["search"].connect("changed", self.on_search_change)
         super().__init__(*args, **kwargs)
 
@@ -260,6 +259,8 @@ class BaseProvider(
                 except (ValueError,):
                     # import ipdb; ipdb.set_trace()
                     pass
+
+        self.load_rules()
 
     @property
     def conf_rules(self):
