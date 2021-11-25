@@ -176,13 +176,77 @@ class YouTubeSession(session.AsyncStreamSession):
         )
         return entry
 
+    async def fetch(self, *args, **kwargs):
+        if self.provider.config.fetch_method == "api_v3":
+            if not self.provider.config.credentials.api_key:
+                raise RuntimeError("must set api_key to use api fetch method")
+            return await self.fetch_playlist_items_api_v3(*args, **kwargs)
+        else:
+            return await self.fetch_playlist_items_ytdl(*args, **kwargs)
 
-    async def fetch_google_data(self, video_ids):
+
+    # async def get_page(self, offset, limit):
+    async def fetch_playlist_items_ytdl(self, playlist_id, page_token=None, limit=50):
+
+        if page_token is None:
+            page_token = 0
+
+        page = [
+            item async for item in self.youtube_dl_query(
+                playlist_id, offset=page_token, limit=limit
+            )
+        ]
+
+        if self.provider.config.credentials.api_key:
+            page = [
+                l async for l in self.bulk_update(page)
+            ]
+        else:
+            page = [
+                await self.extract_video_info(entry)
+                for entry in page
+            ]
+        return (page, page_token+limit, max(0, page_token-limit))
+
+
+    async def fetch_playlist_items_api_v3(self, playlist_id, page_token=None, limit=50):
+
         url = (
-            f"https://www.googleapis.com/youtube/v3/videos?"
-            f"id={','.join(video_ids)}"
-            f"&part=snippet,contentDetails"
-            f"&key={self.provider.config.credentials.api_key}"
+            "https://www.googleapis.com/youtube/v3/playlistItems"
+            f"?key={self.provider.config.credentials.api_key}"
+            f"&playlistId={playlist_id}"
+            f"&pageToken={page_token or ''}"
+            f"&part=snippet&part=contentDetails"
+            f"&maxResults={limit}"
+        )
+
+        # logger.info(url)
+        res = await self.provider.session.get(url)
+        j = await res.json()
+        try:
+            items = [
+                item
+                async for item in self.bulk_update([
+                        AttrDict(
+                            guid=item["snippet"]["resourceId"]["videoId"],
+                            title=item["snippet"]["title"],
+                            content=item["snippet"]["description"],
+                            created=dateparser.parse(item["snippet"]["publishedAt"][:-1]),
+                        )
+                        for item in j["items"]
+                ])
+            ]
+        except KeyError:
+            import ipdb; ipdb.set_trace()
+        return (items, j.get("nextPageToken"), j.get("prevPageToken"))
+
+    async def fetch_video_data(self, video_ids):
+
+        url = (
+            f"https://www.googleapis.com/youtube/v3/videos"
+            f"?key={self.provider.config.credentials.api_key}"
+            f"&id={','.join(video_ids)}"
+            f"&part=snippet&part=contentDetails"
         )
         res = await self.provider.session.get(url)
         return await res.json()
@@ -191,7 +255,7 @@ class YouTubeSession(session.AsyncStreamSession):
     async def bulk_update(self, entries):
 
         vids = [entry.guid for entry in entries]
-        data = await self.fetch_google_data(vids)
+        data = await self.fetch_video_data(vids)
         logger.debug(f"bulk_update: {vids}")
 
         for entry in entries:
@@ -213,12 +277,6 @@ class YouTubeSession(session.AsyncStreamSession):
                 for res in self.THUMBNAIL_RESOLUTIONS
                 if res in item["snippet"]["thumbnails"]
             )
-            yield entry
-
-
-    async def fetch(self, query, offset=None, limit=None):
-
-        async for entry in self.youtube_dl_query(query, offset=offset, limit=limit):
             yield entry
 
     @classmethod
@@ -330,6 +388,14 @@ class YouTubeFeed(FeedMediaChannel):
 
     CHANNEL_URL_TEMPLATE = "https://youtube.com/channel/{locator}/videos"
 
+    @property
+    def url(self):
+        return (
+            self.CHANNEL_URL_TEMPLATE.format(locator=self.locator)
+            if self.is_channel
+            else self.locator
+        )
+
     @async_cached_property
     async def rss_data(self):
         if self.locator.startswith("UC"):
@@ -358,12 +424,10 @@ class YouTubeFeed(FeedMediaChannel):
         }
         return res
 
-
     @property
     @db_session
     def end_cursor(self):
         return (self.oldest_timestamp, self.newest_timestamp, self.listing_offset)
-
 
     @property
     @db_session
@@ -376,6 +440,18 @@ class YouTubeFeed(FeedMediaChannel):
         self.attrs["listing_offset"] = value
         commit()
 
+    @property
+    @db_session
+    def page_token(self):
+        return self.attrs.get("page_token", {}).get(self.provider.config.fetch_method or "ytdl")
+
+    @page_token.setter
+    @db_session
+    def page_token(self, value):
+        if not "page_token" in self.attrs:
+            self.attrs["page_token"] = {}
+        self.attrs["page_token"][self.provider.config.fetch_method or "ytdl"] = value
+        commit()
 
     @property
     @db_session
@@ -384,27 +460,6 @@ class YouTubeFeed(FeedMediaChannel):
         if not oldest:
             return None
         return dateparser.parse(oldest)
-
-        # saved = self.attrs.get("oldest_timestamp", None)
-        # if saved:
-        #     saved = dateparser.parse(saved)
-
-        # try:
-        #     timestamp = select(
-        #         (l.created)
-        #         for l in self.provider.LISTING_CLASS
-        #         if l.channel == self
-        #     ).order_by(lambda c: c).first()
-        #     if not saved and timestamp and timestamp < saved:
-        #         self.attrs["oldest_timestamp"] = timestamp.isoformat()
-        #         commit()
-        # except TypeError:
-        #     timestamp = saved
-
-        # oldest = self.attrs.get("oldest_timestamp", None)
-        # if not oldest:
-        #     return None
-        # return dateparser.parse(oldest)
 
     @oldest_timestamp.setter
     @db_session
@@ -421,34 +476,11 @@ class YouTubeFeed(FeedMediaChannel):
             return None
         return dateparser.parse(newest)
 
-        # saved = self.attrs.get("newest_timestamp", None)
-        # if saved:
-        #     saved = dateparser.parse(saved)
-
-        # try:
-        #     timestamp = select(
-        #         (l.created)
-        #         for l in self.provider.LISTING_CLASS
-        #         if l.channel == self
-        #     ).order_by(lambda c: c).first()
-        #     if not saved and timestamp and timestamp < saved:
-        #         self.attrs["newest_timestamp"] = timestamp.isoformat()
-        #         commit()
-        # except TypeError:
-        #     timestamp = saved
-
-        # newest = self.attrs.get("newest_timestamp", None)
-        # if not newest:
-        #     return None
-        # return dateparser.parse(newest)
-
-
     @newest_timestamp.setter
     @db_session
     def newest_timestamp(self, value):
         self.attrs["newest_timestamp"] = value.isoformat()
         commit()
-
 
     @property
     def batch_size(self):
@@ -458,129 +490,34 @@ class YouTubeFeed(FeedMediaChannel):
     def is_channel(self):
         return len(self.locator) == 24 and self.locator.startswith("UC")
 
-    async def get_page(self, offset, limit):
+    @property
+    def is_playlist(self):
+        return len(self.locator) == 24 and self.locator.startswith("PL")
 
-        page = [
-            item async for item in self.session.fetch(
-                self.url, offset=offset, limit=self.batch_size
+    @async_cached_property
+    async def uploads_playlist(self):
+        if not self.attrs.get("uploads_playlist"):
+            url = (
+                "https://www.googleapis.com/youtube/v3/channels"
+                f"?key={self.provider.config.credentials.api_key}"
+                f"&id={self.locator}"
+                f"&part=contentDetails"
             )
-        ]
+            logger.info(url)
+            res = await self.provider.session.get(url)
+            j = await res.json()
+            logger.debug(j)
+            details = j["items"][0]["contentDetails"]
+            playlist_id = details["relatedPlaylists"]["uploads"]
+            with db_session:
+                self.attrs["uploads_playlist"] = playlist_id
+                commit()
 
-        if self.provider.config.credentials.api_key:
-            page = [
-                l async for l in self.session.bulk_update(page)
-            ]
-        else:
-            page = [
-                await self.session.extract_video_info(entry)
-                for entry in page
-            ]
-        return page
+        return self.attrs["uploads_playlist"]
 
-
-    async def fetch_newer(self):
-
-        batch = []
-        newest = self.newest_timestamp
-        offset = 0
-        while True:
-            logger.debug(f"fetch: offset={offset}, newest={newest}")
-            page = await self.get_page(offset=offset, limit=self.batch_size)
-            logger.debug(f"page: {page}")
-            if not len(page):
-                break
-
-            if newest and not any([
-                # item.created <= newest
-                item.created < newest
-                for item in page
-            ]):
-                logger.debug("fast-forwarding")
-                offset += len(page)
-                continue
-
-            batch += [
-                item for item in page
-                if item not in batch
-                and (not newest or item.created > newest)
-            ]
-
-            if len(batch) >= self.batch_size or offset == 0:
-                break
-            else:
-                logger.debug("rewinding")
-                offset -= min(offset, self.batch_size)
-
-        logger.debug(f"batch: {batch}")
-        # if not len(batch):
-        #     return []
-
-        try:
-            last = next(
-                n for n, item in enumerate(batch)
-                if item.created <= newest
-            ) if newest else None
-        except StopIteration:
-            last = None
-        logger.debug(f"last: {last}")
-        batch = batch[:last][-self.batch_size:]
-        self.save_last_offset(offset)
-        return batch
-
-    async def fetch_older(self):
-
-        oldest = self.oldest_timestamp
-
-        batch = []
-        offset = self.listing_offset
-        rewound = False if offset else True
-        while True:
-            logger.debug(f"fetch: offset={offset}, oldest={oldest}")
-            # page = self.session.fetch(offset, self.batch_size)
-            page = await self.get_page(offset=offset, limit=self.batch_size)
-            logger.debug(f"page: {len(page)}")
-            if not len(page):
-                break
-
-            if not rewound:
-                if not oldest or not any([
-                # item.created >= oldest
-                        item.created > oldest
-                        for item in page
-                ]):
-                    logger.debug("rewinding")
-                    offset -= len(page)
-                else:
-                    logger.debug("rewound")
-                    rewound = True
-                continue
-
-            batch[0:] += [
-                item for item in page
-                if item not in batch
-                and (not oldest or item.created < oldest)
-                and item.guid not in select(item.guid for item in self.items)
-            ]
-
-            if len(batch) >= self.batch_size:
-                break
-            else:
-                logger.debug("fast-forwarding")
-                offset += self.batch_size
-                logger.debug(offset)
-
-
-        try:
-            first = next(
-                n for n, item in enumerate(batch)
-                if item.created <= oldest
-            ) if oldest else None
-        except StopIteration:
-            first = None
-        batch = batch[first:][:self.batch_size]
-        self.save_last_offset(offset)
-        return batch
-
+    @async_cached_property
+    async def playlist_id(self):
+        return self.locator if self.is_playlist else await self.uploads_playlist
 
     @db_session
     def save_last_offset(self, offset):
@@ -591,14 +528,117 @@ class YouTubeFeed(FeedMediaChannel):
             self.attrs["listing_offset"] = offset
             commit()
 
+    async def fetch_newer(self):
 
-    @property
-    def url(self):
-        return (
-            self.CHANNEL_URL_TEMPLATE.format(locator=self.locator)
-            if self.is_channel
-            else self.locator
-        )
+        batch = []
+        newest = self.newest_timestamp
+        token = None
+        while True:
+            (page, next_token, prev_token) = (
+                await self.session.fetch(
+                    await self.playlist_id, token, limit=self.batch_size
+                )
+            )
+            logger.debug(f"token: {token}, page: {len(page)}")
+            if not len(page):
+                break
+
+            if newest and not any([
+                # item.created <= newest
+                item.created < newest
+                for item in page
+            ]):
+                logger.debug("fast-forwarding")
+                token = next_token
+                continue
+
+            batch += [
+                item for item in page
+                if item not in batch
+                and (not newest or item.created > newest)
+            ]
+
+            if len(batch) >= self.batch_size or not prev_token:
+                break
+            else:
+                logger.debug("rewinding")
+                token = prev_token
+
+        # logger.debug(f"batch: {batch}")
+        # if not len(batch):
+        #     return []
+
+        try:
+            last = next(
+                n for n, item in enumerate(batch)
+                if item.created <= newest
+            ) if newest else None
+        except StopIteration:
+            last = None
+        # logger.debug(f"last: {last}")
+        batch = batch[:last][-self.batch_size:]
+        return batch
+
+    async def fetch_older(self):
+
+        oldest = self.oldest_timestamp
+
+        batch = []
+        token = self.page_token
+        rewound = False if token else True
+
+        while True:
+            logger.debug(f"fetch: token={token}, oldest={oldest}")
+            (page, next_token, prev_token) = (
+                await self.session.fetch(
+                    await self.playlist_id, token, limit=self.batch_size
+                )
+            )
+            # logger.debug(f"token: {token}, page: {len(page)}")
+            if not len(page):
+                break
+
+            if not rewound:
+                if prev_token and (
+                        not oldest
+                        or not any([
+                            item.created > oldest
+                            for item in page
+                        ])
+                ):
+                    logger.debug("rewinding")
+                    token = prev_token
+                else:
+                    logger.debug("rewound")
+                    rewound = True
+                continue
+
+
+            batch[0:] += [
+                item for item in page
+                if item not in batch
+                and (not oldest or item.created < oldest)
+                and item.guid not in select(item.guid for item in self.items)
+            ]
+
+            if len(batch) >= self.batch_size or not next_token:
+                token = next_token
+                break
+            else:
+                logger.debug("fast-forwarding")
+                token = next_token
+
+        try:
+            first = next(
+                n for n, item in enumerate(batch)
+                if item.created <= oldest
+            ) if oldest else None
+        except StopIteration:
+            first = None
+        batch = batch[first:][:self.batch_size]
+        self.page_token = token
+        return batch
+
 
     async def fetch(self, limit=None, resume=False, reverse=False, *args, **kwargs):
 
@@ -611,10 +651,11 @@ class YouTubeFeed(FeedMediaChannel):
                 return
 
         if resume:
-            logger.debug("fetch older")
+            # logger.debug("fetch older")
             listings = await self.fetch_older()
+
         else:
-            logger.debug("fetch newer")
+            # logger.debug("fetch newer")
             listings = await self.fetch_newer()
 
         with db_session:
@@ -624,8 +665,8 @@ class YouTubeFeed(FeedMediaChannel):
                 logger.info(item["guid"])
 
                 listing = AttrDict(
-                    channel = self,
-                    sources = [
+                    channel=self,
+                    sources=[
                         AttrDict(media_type="video", url_thumbnail=item.thumbnail)
                     ],
                     **item
