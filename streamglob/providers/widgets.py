@@ -655,8 +655,6 @@ class ProviderDataTable(
 
         class AddHighlightRuleDialog(OKCancelDialog):
 
-            focus = "ok"
-
             @property
             def widgets(self):
                 edit_pos = 0
@@ -687,6 +685,11 @@ class ProviderDataTable(
                     create=urwid.CheckBox("Create directory?", state=True),
                     tag=BaseDropdown(list(self.parent.provider.rules.keys()))
                 )
+
+            @property
+            def focus(self):
+                return "ok" if self.parent.selection.data_source.group else 0
+
 
             def action(self):
                 patterns = self.token.get_edit_text().split(",")
