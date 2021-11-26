@@ -717,7 +717,7 @@ class ProviderDataTable(
                 }
 
                 if self.create.get_state():
-                    dirname = group or pattern
+                    dirname = group or patterns[0]
                     if dirname in model.SUBJECT_MAP:
                         del model.SUBJECT_MAP[dirname]
                     path = os.path.join(self.parent.provider.output_path, dirname)
