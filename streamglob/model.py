@@ -583,49 +583,54 @@ class MediaListingMixin(object):
 
     @property
     def tokens(self):
+
+        tokens = []
+        cfg = self.channel.attrs.get("subjects", {})
+
+        if cfg:
+            if "fixed" in cfg:
+                tokens += cfg["fixed"]
+
+            if "match" in cfg:
+                match_cfg = cfg["match"]
+                for field in match_cfg["fields"]:
+                    try:
+                        tokens += list(chain.from_iterable([
+                            [s.strip() for s in match.split(",")]
+                            for pattern in match_cfg.get("patterns") or []
+                            for match in re.findall(
+                                    pattern,
+                                    getattr(self, field)
+                            )
+                        ]))
+                        # import ipdb; ipdb.set_trace()
+                    except (AttributeError, IndexError):
+                        continue
+            if "find" in cfg:
+                find = cfg["find"]
+                try:
+                    tokens += list(chain.from_iterable([
+                        [items]
+                        for field in find["fields"]
+                        for v in find["values"]
+                        for pattern in (self.provider.rule_for_token(v).patterns or [v])
+                        for items in re.findall(
+                                "|".join([
+                                    f"({re.escape(pattern)})"
+                                ]),
+                                getattr(self, field) or ""
+                        )
+                    ]))
+                except (AttributeError, IndexError):
+                    pass
+
         try:
-            tokens = [
+            tokens += [
                 t for t in self.provider.highlight_re.search(self.title).groups()
                 if t
             ]
         except AttributeError:
-            tokens = []
-            cfg = self.channel.attrs.get("subjects", {})
-            if cfg:
-                if "match" in cfg:
-                    match_cfg = cfg["match"]
-                    for field in match_cfg["fields"]:
-                        try:
-                            tokens += list(chain.from_iterable([
-                                [s.strip() for s in match.split(",")]
-                                for pattern in match_cfg.get("patterns") or []
-                                for match in re.findall(
-                                        pattern,
-                                        getattr(self, field)
-                                )
-                            ]))
-                            # import ipdb; ipdb.set_trace()
-                        except (AttributeError, IndexError):
-                            continue
-                if "find" in cfg:
-                    find = cfg["find"]
-                    try:
-                        tokens += list(chain.from_iterable([
-                            [items]
-                            for field in find["fields"]
-                            for v in find["values"]
-                            for pattern in (self.provider.rule_for_token(v).patterns or [v])
-                            for items in re.findall(
-                                    "|".join([
-                                        f"({re.escape(pattern)})"
-                                    ]),
-                                    getattr(self, field) or ""
-                            )
-                        ]))
-                    except (AttributeError, IndexError):
-                        pass
-                else:
-                    raise NotImplementedError
+            pass
 
         return tokens
 
