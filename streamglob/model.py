@@ -407,7 +407,7 @@ class MediaSourceMixin(object):
                         num=num or len(listing.sources) if listing else 0,
                         subject=",".join(subjects) if subjects else None,
                         group=group,
-                        group_title=f"""{"%s " %(group) if group else ""}{listing.title}""",
+                        group_title=f"""{"[%s] " %(group) if group else ""}{listing.title}""",
                         subjects=subjects,
                         **tokens
                         # subject_dir=subject_dir
