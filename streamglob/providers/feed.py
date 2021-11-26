@@ -1079,7 +1079,18 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
         body = listing.body
         detail = urwid.Pile([
             (1, urwid.Filler(
-                urwid.AttrMap(row, {"table_row_body": "table_row_header"}),
+                urwid.AttrMap(
+                    urwid.Columns([
+                        ("weight", 1, row),
+                        ("weight", 1,
+                         urwid.Text(", ".join(listing.subjects or [""]))
+                         ),
+                    ]),
+                    {
+                        None: "table_row_header",
+                        "table_row_body": "table_row_header"
+                    }
+                ),
                 valign="top"
             )),
             ("weight", 1, urwid.Filler(urwid.Text(listing.body), valign="top"))
