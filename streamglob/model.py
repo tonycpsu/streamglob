@@ -365,11 +365,14 @@ class MediaSourceMixin(object):
     def download_filename(
             self, listing=None, group=None,
             index=0, num=0,
-            glob=False, **kwargs
+            match_glob=False, **kwargs
     ):
 
         if not self.provider:
             return None
+
+        if listing is None:
+            listing=self.listing
 
         if group is None:
            group = f"{listing.group}" if listing.group else ""
@@ -399,22 +402,26 @@ class MediaSourceMixin(object):
             if safe:
                 s = re.sub(r"{listing.title\b", "{listing.safe_title", s)
             try:
+                title = listing.title
+                group_title = f"""{"[%s] " %(group) if group else ""}{title}"""
+                if match_glob:
+                    group_title = glob.escape(group_title)
                 outfile = s.format_map(
                     SafeDict(
-                        self=self, listing=listing or self.listing, # FIXME
-                        uri="uri=" + self.uri.replace("/", "+") +"=" if not glob else "*",
+                        self=self, listing=listing, # FIXME
+                        uri="uri=" + self.uri.replace("/", "+") +"=" if not match_glob else "*",
                         index=self.rank+1,
                         num=num or len(listing.sources) if listing else 0,
                         subject=",".join(subjects) if subjects else None,
                         group=group,
-                        group_title=f"""{"[%s] " %(group) if group else ""}{listing.title}""",
+                        group_title=group_title,
                         subjects=subjects,
                         **tokens
                         # subject_dir=subject_dir
                     )
                 )
 
-                if not glob:
+                if not match_glob:
                     outfile = outfile.format_map(SafeDict(ext=self.ext))
                     outfile = self.provider.translate_template(outfile)
                 if config.settings.profile.unicode_normalization:
@@ -466,8 +473,10 @@ class MediaSourceMixin(object):
         else:
             template = "{listing.provider}.{self.default_name}.{self.timestamp}.{self.ext}"
             outfile = template.format(self=self)
-        if glob:
+        if match_glob:
             outfile = re.sub("({[^}]+})", "*", outfile)
+
+        # import ipdb; ipdb.set_trace()
 
         return os.path.join(self.provider.output_path, outfile)
 
@@ -497,7 +506,7 @@ class MediaSourceMixin(object):
                 # FIXME
                 filename = self.download_filename(
                     listing=listing, num=len(listing.sources) if listing else 1,
-                    glob=True
+                    match_glob=True
                 )
                 if not filename:
                     return None

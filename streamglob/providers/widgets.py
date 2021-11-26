@@ -425,7 +425,7 @@ class ProviderDataTable(
 
     KEYMAP = {
         ",": "browse_selection",
-        "?": "show_group",
+        "?": "show_details",
         "h": "add_highlight_rule",
         "H": "remove_highlight_rule",
         # "ctrl o": "strip_emoji_selection",
@@ -479,9 +479,14 @@ class ProviderDataTable(
     def config(self):
         return self.provider.config
 
-    def show_group(self):
+    def show_details(self):
         logger.info(self.selection.data_source.group)
         logger.info(self.selection.data_source.subjects)
+        logger.info(
+            self.selected_source.download_filename(
+                listing=self.selected_listing,
+                group=self.selection.data_source.group)
+        )
 
     def playlist_position(self):
         return self.focus_position
