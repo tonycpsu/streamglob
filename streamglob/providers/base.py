@@ -780,17 +780,38 @@ class BaseProvider(
 
 
     def rule_for_token(self, token):
+        # import ipdb; ipdb.set_trace()
         try:
             return next(
-                v
-                for k, v in self.highlight_map.items()
-                if k.search(token)
-                or v.get("group") == token
-                or token in v.get("subjects", [])
+                cfg
+                if isinstance(token, str)
+                else AttrDict({
+                        k: v if k != "patterns" else v + token.get("aliases", [])
+                        for k, v in cfg.items()
+
+                })
+                for pattern, cfg in self.highlight_map.items()
+                if any([
+                        pattern.search(t)
+                        for t in (
+                                [token]
+                                if isinstance(token, str)
+                                else [token.get("name")] + token.get("aliases", [])
+                        )
+                ])
+                or cfg.get("group") == token
+                or any([
+                    t in cfg.get("subjects", [])
+                    for t in (
+                            [token]
+                            if isinstance(token, str)
+                            else [token.get("name")] + token.get("aliases", [])
+                    )
+                ])
                 # or any(re.search(p, token) for p in v.get("patterns", []))
             )
         except StopIteration:
-            return dict(subjects=[token], group=token)
+            return AttrDict(subjects=[token], group=token)
 
 
 

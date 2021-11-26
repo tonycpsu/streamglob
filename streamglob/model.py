@@ -605,22 +605,30 @@ class MediaListingMixin(object):
                         ]))
                         # import ipdb; ipdb.set_trace()
                     except (AttributeError, IndexError):
+                        raise
                         continue
             if "find" in cfg:
+                # import ipdb; ipdb.set_trace()
                 find = cfg["find"]
                 try:
-                    tokens += list(chain.from_iterable([
-                        [items]
-                        for field in find["fields"]
-                        for v in find["values"]
-                        for pattern in (self.provider.rule_for_token(v).patterns or [v])
-                        for items in re.findall(
+                    tokens += list(chain.from_iterable(
+                        [
+                            rule.subjects
+                            for rule in
+                            [
+                                self.provider.rule_for_token(value)
+                                for value in find["values"]
+                            ]
+                            for field in find["fields"]
+                            if re.findall(
                                 "|".join([
                                     f"({re.escape(pattern)})"
+                                    for pattern in rule.patterns
                                 ]),
                                 getattr(self, field) or ""
-                        )
-                    ]))
+                            )
+                        ]
+                    ))
                 except (AttributeError, IndexError):
                     pass
 
@@ -663,6 +671,7 @@ class MediaListingMixin(object):
             ]
 
         except TypeError:
+            raise
             import ipdb; ipdb.set_trace()
 
     @property
