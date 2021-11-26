@@ -669,7 +669,8 @@ class FeedProvider(BaseProvider):
         return AttrDict([
             ("status", ItemStatusFilter),
             ("custom", CustomFilter),
-            ("search", TextFilter)
+            ("search", TextFilter),
+            ("subject", BooleanFilter)
         ], **super().FILTERS_OPTIONS)
 
 
@@ -1221,6 +1222,10 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
     def status(self):
         return self.filters["status"].value
 
+    @property
+    def apply_subject_filters(self):
+        return self.filters["subject"].value
+
     # @property
     # def search_string(self):
     #     return self.filters["search"].value
@@ -1464,7 +1469,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         def feed_to_filter(feed):
             # import ipdb; ipdb.set_trace()
             sql = f"channel = '{feed.channel_id}'"
-            if "filters" in feed.attrs:
+            if self.apply_subject_filters and "filters" in feed.attrs:
                 sql += " AND " + self.filter_config_to_query(feed.attrs["filters"])
                 # sql += " AND " + " AND ".join(
                 #     self.filter_rule_to_query(rule)
