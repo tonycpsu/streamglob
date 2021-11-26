@@ -625,7 +625,7 @@ class MediaListingMixin(object):
                             rule.subjects
                             for rule in
                             [
-                                self.provider.rule_for_token(value)
+                                self.provider.rule_for_token(value, create=True)
                                 for value in find["values"]
                             ]
                             for field in find["fields"]

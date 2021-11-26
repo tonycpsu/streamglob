@@ -656,30 +656,52 @@ class ProviderDataTable(
         class AddHighlightRuleDialog(OKCancelDialog):
 
             @property
-            def widgets(self):
-                edit_pos = 0
-                default_pattern = None
-                if self.parent.selection.data_source.group:
-                    default_pattern = self.parent.selection.data_source.group
-                elif self.parent.provider.conf_rules.highlight_words:
-                    default_pattern = self.parent.selection.data.title
-                    try:
-                        edit_pos = [
-                            m.start() for m in re.finditer(r"\S+", default_pattern)
-                        ][self.parent.provider.conf_rules.highlight_words]-1
-                    except IndexError:
-                        pass
+            def default_pattern(self):
+                if not getattr(self, "_defalt_pattern", None):
+                    if self.parent.selection.data_source.group:
+                        self._default_pattern = self.parent.selection.data_source.group
+                    elif self.parent.provider.conf_rules.highlight_words:
+                        self._default_pattern = self.parent.selection.data.title
+                    else:
+                        self._default_pattern = None
+                return self._default_pattern
 
+            @property
+            def widgets(self):
+                try:
+                    edit_pos = [
+                        m.start() for m in re.finditer(r"\S+", self._default_pattern)
+                    ][self.parent.provider.conf_rules.highlight_words]-1
+                except (AttributeError, IndexError):
+                    edit_pos = 0
+
+                # # default_pattern = None
+                # if self.parent.selection.data_source.group:
+                #     default_pattern = self.parent.selection.data_source.group
+                # elif self.parent.provider.conf_rules.highlight_words:
+                #     default_pattern = self.parent.selection.data.title
+                #     try:
+                #         edit_pos = [
+                #             m.start() for m in re.finditer(r"\S+", default_pattern)
+                #         ][self.parent.provider.conf_rules.highlight_words]-1
+                #     except IndexError:
+                #         pass
+
+                rule = self.parent.provider.rule_for_token(self.default_pattern)
+                # import ipdb; ipdb.set_trace()
+                patterns = rule.get("patterns", []) if rule else [self.default_pattern]
                 return dict(
-                    token=urwid_readline.ReadlineEdit(
-                        caption=("bold", "Pattern: "),
-                        edit_text=default_pattern,
+                    patterns=urwid_readline.ReadlineEdit(
+                        caption=("bold", "Patterns: "),
+                        edit_text=", ".join(patterns),
                         edit_pos=edit_pos
                     ),
                     subject=urwid_readline.ReadlineEdit(
-                        caption=("bold", "Subject: ")
+                        edit_text=", ".join(rule.subjects) if rule else "",
+                        caption=("bold", "Subjects: ")
                     ),
                     group=urwid_readline.ReadlineEdit(
+                        edit_text=(rule.group or "") if rule else "",
                         caption=("bold", "Group: ")
                     ),
                     create=urwid.CheckBox("Create directory?", state=True),
@@ -692,18 +714,10 @@ class ProviderDataTable(
 
 
             def action(self):
-                patterns = self.token.get_edit_text().split(",")
-                if (
-                        any([
-                            pattern.lower()
-                            in [
-                                x.lower() if isinstance(x, str) else x["patterns"][0].lower()
-                                for x in self.parent.provider.conf_rules.label[self.tag.selected_label]
-                            ]
-                            for pattern in patterns
-                        ])
-                    ):
-                    return
+
+                patterns = [
+                    p.strip() for p in self.patterns.get_edit_text().split(",")
+                ]
 
                 subjects = [
                     s.strip()
@@ -729,36 +743,14 @@ class ProviderDataTable(
                     if dirname in model.SUBJECT_MAP:
                         del model.SUBJECT_MAP[dirname]
                     path = os.path.join(self.parent.provider.output_path, dirname)
-                    os.makedirs(path)
+                    if not os.path.exists(path):
+                        os.makedirs(path)
 
-                # FIXME: bisect.insort_right doesn't support a key param until
-                # Python 3.10, which we can't upgrade to until Pony ORM is
-                # updated with Python 3.10 support.
-                # bisect.insort_right(
-                #     self.parent.provider.conf_rules.label[self.tag.selected_label],
-                #     cfg,
-                #     key=lambda cfg: cfg["pattern"] if isinstance(cfg, dict) else cfg
-                # )
-
-                for i, rule in enumerate(self.parent.provider.conf_rules.label[self.tag.selected_label]):
-                    pattern = rule if isinstance(rule, str) else rule["patterns"][0]
-                    # import ipdb; ipdb.set_trace()
-                    if pattern.lower() > cfg["patterns"][0].lower():
-                        self.parent.provider.conf_rules.label[self.tag.selected_label].insert(
-                            i, cfg
-                        )
-                        break
-                else:
-                    self.parent.provider.conf_rules.label[self.tag.selected_label].append(
-                        cfg
-                    )
-
-                self.parent.provider.conf_rules.save()
-                self.parent.provider.load_rules()
+                self.parent.provider.add_highlight_rule(self.tag.selected_label, cfg)
                 self.parent.reset()
 
         dialog = AddHighlightRuleDialog(self)
-        self.provider.view.open_popup(dialog, width=60, height=8)
+        self.provider.view.open_popup(dialog, width=60, height=12)
 
     def remove_highlight_rule(self):
 
@@ -775,22 +767,28 @@ class ProviderDataTable(
                 )
 
             def action(self):
-                rules = self.parent.provider.conf_rules.label
-                for label in rules.keys():
-                    try:
-                        rules[label] = [
-                            r for r in rules[label]
-                            if not re.search(
-                                    r if isinstance(r, str) else r["pattern"],
-                                    self.text.get_edit_text(), re.IGNORECASE
-                            )
-                        ]
-                        self.parent.provider.conf_rules.save()
-                        self.parent.provider.load_rules()
-                        self.parent.reset()
-                        break
-                    except ValueError:
-                        continue
+
+                self.parent.provider.remove_highlight_rule(
+                    self.text.get_edit_text()
+                )
+                self.parent.reset()
+
+                # rules = self.parent.provider.conf_rules.label
+                # for label in rules.keys():
+                #     try:
+                #         rules[label] = [
+                #             r for r in rules[label]
+                #             if not re.search(
+                #                     r if isinstance(r, str) else r["pattern"],
+                #                     self.text.get_edit_text(), re.IGNORECASE
+                #             )
+                #         ]
+                #         self.parent.provider.conf_rules.save()
+                #         self.parent.provider.load_rules()
+                #         self.parent.reset()
+                #         break
+                #     except ValueError:
+                #         continue
 
         dialog = RemoveHighlightRuleDialog(self)
         self.provider.view.open_popup(dialog, width=60, height=8)
