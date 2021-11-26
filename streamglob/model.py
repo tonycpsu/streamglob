@@ -622,7 +622,7 @@ class MediaListingMixin(object):
                             for field in find["fields"]
                             if re.findall(
                                 "|".join([
-                                    f"({re.escape(pattern)})"
+                                    f"({pattern})"
                                     for pattern in rule.patterns
                                 ]),
                                 getattr(self, field) or ""
