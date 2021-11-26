@@ -321,13 +321,14 @@ class ListingsView(StreamglobView):
             state.event_loop.create_task(activate_preview_player())
 
     def keypress(self, size, key):
-        if key in self.VIEW_KEYS:
+        key = super().keypress(size, key)
+        if key and key in self.VIEW_KEYS:
             idx = self.VIEW_KEYS.index(key)
             if idx >= len(self.provider.config.views):
                 return
             self.toolbar.view_dropdown.focus_position = idx
             return
-        return super().keypress(size, key)
+        return key
 
     def find_source(self, listing):
 
