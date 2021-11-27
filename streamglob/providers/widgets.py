@@ -616,14 +616,23 @@ class ProviderDataTable(
                     value = utils.strip_emoji(value)
 
                 if self.provider.highlight_map:
-                    markup = [
-                        (next(v["attr"] for k, v in self.provider.highlight_map.items()
-                               if k.search(x)), x)
-                        if self.provider.highlight_re.search(x)
-                        else x for x in self.provider.highlight_re.split(value) if x
-                    ]
+                    index = getattr(row.data_source, self.df.index_name)
+                    markup_column = f"_markup_{attr}"
+                    if not row.get(markup_column):
+                        markup = [
+                            (
+                                next(v["attr"]
+                                     for k, v in self.provider.highlight_map.items()
+                                     if k.search(x)
+                                     ), x)
+                            if self.provider.highlight_re.search(x)
+                            else x
+                            for x in self.provider.highlight_re.split(value)
+                            if x
+                        ]
+                        self.df.set(index, markup_column, markup)
+                    markup = self.df.get(index, markup_column)
                     if len(markup):
-                        row.tokens = [x[1] for x in markup if isinstance(x, tuple)]
                         value = urwid.Text(markup)
 
         return super().decorate(row, column, value)
@@ -758,11 +767,14 @@ class ProviderDataTable(
 
             @property
             def widgets(self):
-                row = self.parent.selection
+                try:
+                    default_text = getattr(self.selected_listing, "subjects")[0]
+                except (IndexError, AttributeError):
+                    default_text = ""
                 return dict(
                     text=urwid_readline.ReadlineEdit(
                         caption=("bold", "Text: "),
-                        edit_text="" if not getattr(row, "tokens", None) else row.tokens[0]
+                        edit_text=default_text
                     )
                 )
 

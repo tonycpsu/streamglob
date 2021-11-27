@@ -615,7 +615,7 @@ class MediaListingMixin(object):
                         # import ipdb; ipdb.set_trace()
                     except (AttributeError, IndexError):
                         raise
-                        continue
+                        # continue
             if "find" in cfg:
                 # import ipdb; ipdb.set_trace()
                 find = cfg["find"]
