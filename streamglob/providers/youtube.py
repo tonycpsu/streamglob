@@ -543,7 +543,7 @@ class YouTubeFeed(FeedMediaChannel):
             if not len(page):
                 break
 
-            if newest and not any([
+            if token and newest and not any([
                 # item.created <= newest
                 item.created < newest
                 for item in page
