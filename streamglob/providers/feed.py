@@ -720,21 +720,6 @@ class FeedProvider(BaseProvider):
                 )
             )
 
-    # @selected_channels.setter
-    # def selected_channels(self, value):
-    #     self.view.selected_channels = value
-
-    # # def feed_entity(self):
-    #     if not self.selected_feed:
-    #         return None
-    #     with db_session:
-    #         feed = self.FEED_CLASS.get(
-    #             provider_id = self.IDENTIFIER,
-    #             locator = self.selected_feed.locator
-    #         )
-    #     return feed
-
-
     def parse_identifier(self, identifier):
         try:
             (feed, guid) = FEED_URI_RE.search(identifier).groups()

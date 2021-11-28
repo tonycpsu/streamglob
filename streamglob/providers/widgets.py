@@ -86,10 +86,6 @@ class ListingViewMixin(object):
         except IndexError:
             return None
 
-    @property
-    def selected_listing(self):
-        return self.get_listing()
-
     def get_source(self, listing=None, index=None):
         if listing is None:
             listing = self.selected_listing
@@ -616,21 +612,14 @@ class ProviderDataTable(
                     value = utils.strip_emoji(value)
 
                 if self.provider.highlight_map:
-                    index = getattr(row.data_source, self.df.index_name)
+                    listing = row.data_source
+                    index = getattr(listing, self.df.index_name)
                     markup_column = f"_markup_{attr}"
                     if not row.get(markup_column):
-                        markup = [
-                            (
-                                next(v["attr"]
-                                     for k, v in self.provider.highlight_map.items()
-                                     if k.search(x)
-                                     ), x)
-                            if self.provider.highlight_re.search(x)
-                            else x
-                            for x in self.provider.highlight_re.split(value)
-                            if x
-                        ]
-                        self.df.set(index, markup_column, markup)
+                        self.df.set(
+                            index, markup_column,
+                            self.provider.rule_config.apply(value)
+                        )
                     markup = self.df.get(index, markup_column)
                     if len(markup):
                         value = urwid.Text(markup)
@@ -696,7 +685,7 @@ class ProviderDataTable(
                 #     except IndexError:
                 #         pass
 
-                rule = self.parent.provider.rule_for_token(self.default_pattern)
+                rule = self.parent.provider.rule_config.rule_for_token(self.default_pattern)
                 # import ipdb; ipdb.set_trace()
                 patterns = rule.get("patterns", []) if rule else [self.default_pattern]
                 return dict(

@@ -625,7 +625,11 @@ class MediaListingMixin(object):
                             rule.subjects
                             for rule in
                             [
-                                self.provider.rule_for_token(value, create=True)
+                                (
+                                    self.provider.rule_for_token(value)
+                                    # self.provider.rule_config.rule_for_token(value)
+                                    # or AttrDict(patterns=[value], subjects=[value])
+                                )
                                 for value in find["values"]
                             ]
                             for field in find["fields"]
@@ -675,7 +679,7 @@ class MediaListingMixin(object):
         # import ipdb; ipdb.set_trace()
         try:
             return [
-                self.provider.rule_for_token(token)
+                self.provider.rule_config.rule_for_token(token)
                 for token in self.tokens
             ]
 
@@ -689,14 +693,22 @@ class MediaListingMixin(object):
         try:
             return list(dict.fromkeys(list(
                 chain.from_iterable(
-                    [r["subjects"]]
-                    if isinstance(r["subjects"], str)
-                    else r["subjects"]
+                    [r.subjects]
                     for r in self.subject_rules
                 )
             )))
         except (AttributeError, IndexError):
             return None
+
+    @property
+    def highlight_map(self):
+        return AttrDict([
+            (re.compile("Show"),
+             dict(
+                 attr="red",
+                 patterns=["Show"]
+             ))
+        ])
 
 
 @attrclass()

@@ -20,6 +20,7 @@ from .widgets import *
 from .filters import *
 from ..session import *
 from ..state import *
+from ..rules import HighlightRuleConfig
 from ..programs import Player, Downloader
 from .. import model
 from .. import config
@@ -274,6 +275,9 @@ class BaseProvider(
 
     def load_rules(self):
 
+
+        self.rule_config = HighlightRuleConfig(self.conf_rules)
+
         self._conf_rules = None
 
         self.rules = AttrDict(
@@ -286,43 +290,22 @@ class BaseProvider(
             **config.settings.profile.labels
         )
 
-        # self.rule_map = AttrDict([
-        #     (re.compile(k, re.IGNORECASE), v)
-        #     for k, v in
-        #     [(r, self.rules[r])
-        #      for r in self.rules.keys()]
-        # ])
-
-        # self.rule_map = AttrDict([
-        #     (re.compile(text, re.IGNORECASE), label)
-        #     for label, texts in self.rules.items()
-        #     for text in texts
-        # ])
-        # import ipdb; ipdb.set_trace()
-        def get_patterns(rule):
-            if isinstance(rule, str):
-                return [rule]
-            elif isinstance(rule["patterns"], list):
-                return rule["patterns"]
-            else:
-                return [rule["patterns"]]
-
-        self.rule_map = {
+        self._rule_map = {
             label: re.compile(f"""({
             '|'.join(list(chain.from_iterable(
-            get_patterns(rule)
+            self.get_highlight_patterns(rule)
             for rule in rules
             )))})""")
             for label, rules in self.rules.items()
         }
 
-        self.highlight_map = AttrDict([
+        self._highlight_map = AttrDict([
             (
-                # re.compile(rule if isinstance(rule, str) else rule["patterns"], re.IGNORECASE),
-                re.compile("|".join(get_patterns(rule)), re.IGNORECASE),
+                re.compile("|".join(self.get_highlight_patterns(rule)), re.IGNORECASE),
                 AttrDict(
+                    rule if isinstance(rule, dict) else dict(),
                     attr=self.config.rules.highlight[label],
-                    patterns=get_patterns(rule),
+                    patterns=self.get_highlight_patterns(rule),
                     subjects=[rule] if isinstance(rule, str) else rule.get("subjects", rule.get("patterns")),
                     group=rule.get("group", None) if isinstance(rule, dict) else None
                 )
@@ -331,11 +314,125 @@ class BaseProvider(
             for rule in rules
         ])
 
-        self.highlight_re = re.compile(
-            "("
-            + "|".join([k.pattern for k in self.highlight_map.keys()])
-            + ")", re.IGNORECASE
-        )
+    def get_highlight_patterns(self, rule):
+        if isinstance(rule, str):
+            return [rule]
+        else:
+            return rule.get("patterns", [])
+
+    @property
+    def rule_map(self):
+        return self._rule_map
+
+
+    def rule_for_token(self, token, create=False):
+        # import ipdb; ipdb.set_trace()
+        try:
+            return next(
+                cfg
+                if isinstance(token, str)
+                else AttrDict({
+                        k: v if k != "patterns" else v + token.get("aliases", [])
+                        for k, v in cfg.items()
+
+                })
+                for pattern, cfg in self.highlight_map.items()
+                if any([
+                        pattern.search(t)
+                        for t in (
+                                [token]
+                                if isinstance(token, str)
+                                else [token.get("name")] + token.get("aliases", [])
+                        )
+                ])
+                or cfg.get("group") == token
+                or any([
+                    t in cfg.get("subjects", [])
+                    for t in (
+                            [token]
+                            if isinstance(token, str)
+                            else [token.get("name")] + token.get("aliases", [])
+                    )
+                ])
+                # or any(re.search(p, token) for p in v.get("patterns", []))
+            )
+        except StopIteration:
+            if create:
+                return AttrDict(patterns=[token], subjects=[token], group=token)
+            return None
+
+
+    @property
+    def highlight_map(self):
+        return self._highlight_map
+
+    @property
+    def highlight_re(self):
+        if not getattr(self, "_highlight_re", None):
+            self._highlight_re = re.compile(
+                "("
+                + "|".join([k.pattern for k in self.highlight_map.keys()])
+                + ")", re.IGNORECASE
+            )
+        return self._highlight_re
+
+
+    def add_highlight_rule(self, tag, rule):
+
+        # FIXME: bisect.insort_right doesn't support a key param until
+        # Python 3.10, which we can't upgrade to until Pony ORM is
+        # updated with Python 3.10 support.
+        # bisect.insort_right(
+        #     self.conf_rules.label[self.tag.selected_label],
+        #     cfg,
+        #     key=lambda cfg: cfg["pattern"] if isinstance(cfg, dict) else cfg
+        # )
+
+        self.remove_highlight_rule(rule.get("subjects"))
+
+        for i, r in enumerate(self.conf_rules.label[tag]):
+            pattern = r if isinstance(r, str) else r["patterns"][0]
+            # import ipdb; ipdb.set_trace()
+            if pattern.lower() > rule["patterns"][0].lower():
+                self.conf_rules.label[tag].insert(
+                    i, rule
+                )
+                break
+        else:
+            self.conf_rules.label[tag].append(
+                rule
+            )
+
+        self.conf_rules.save()
+        self.load_rules()
+
+
+    def remove_highlight_rule(self, targets):
+        if not isinstance(targets, list):
+            targets = [targets]
+
+        rules = self.conf_rules.label
+        for label in rules.keys():
+            try:
+                rules[label] = [
+                    r for r in rules[label]
+                    if not any([
+                            isinstance(r, dict) and target in r.get("patterns", [])
+                            or re.search(
+                                r if isinstance(r, str) else "|".join(r["patterns"]),
+                                target, re.IGNORECASE
+                            )
+                            for target in targets
+                    ]
+                    )
+                ]
+                self.conf_rules.save()
+                self.load_rules()
+                break
+            except ValueError:
+                continue
+
+
 
     @property
     def default_filter_values(self):
@@ -777,99 +874,6 @@ class BaseProvider(
             config.settings.profile.get_path("output.check_downloaded")
             or False
         )
-
-
-    def add_highlight_rule(self, tag, rule):
-
-        # FIXME: bisect.insort_right doesn't support a key param until
-        # Python 3.10, which we can't upgrade to until Pony ORM is
-        # updated with Python 3.10 support.
-        # bisect.insort_right(
-        #     self.conf_rules.label[self.tag.selected_label],
-        #     cfg,
-        #     key=lambda cfg: cfg["pattern"] if isinstance(cfg, dict) else cfg
-        # )
-
-        self.remove_highlight_rule(rule.get("subjects"))
-
-        for i, r in enumerate(self.conf_rules.label[tag]):
-            pattern = r if isinstance(r, str) else r["patterns"][0]
-            # import ipdb; ipdb.set_trace()
-            if pattern.lower() > rule["patterns"][0].lower():
-                self.conf_rules.label[tag].insert(
-                    i, rule
-                )
-                break
-        else:
-            self.conf_rules.label[tag].append(
-                rule
-            )
-
-        self.conf_rules.save()
-        self.load_rules()
-
-
-    def remove_highlight_rule(self, targets):
-        if not isinstance(targets, list):
-            targets = [targets]
-
-        rules = self.conf_rules.label
-        for label in rules.keys():
-            try:
-                rules[label] = [
-                    r for r in rules[label]
-                    if not any([
-                            isinstance(r, dict) and target in r.get("patterns", [])
-                            or re.search(
-                                r if isinstance(r, str) else "|".join(r["patterns"]),
-                                target, re.IGNORECASE
-                            )
-                            for target in targets
-                    ]
-                    )
-                ]
-                self.conf_rules.save()
-                self.load_rules()
-                break
-            except ValueError:
-                continue
-
-
-    def rule_for_token(self, token, create=False):
-        # import ipdb; ipdb.set_trace()
-        try:
-            return next(
-                cfg
-                if isinstance(token, str)
-                else AttrDict({
-                        k: v if k != "patterns" else v + token.get("aliases", [])
-                        for k, v in cfg.items()
-
-                })
-                for pattern, cfg in self.highlight_map.items()
-                if any([
-                        pattern.search(t)
-                        for t in (
-                                [token]
-                                if isinstance(token, str)
-                                else [token.get("name")] + token.get("aliases", [])
-                        )
-                ])
-                or cfg.get("group") == token
-                or any([
-                    t in cfg.get("subjects", [])
-                    for t in (
-                            [token]
-                            if isinstance(token, str)
-                            else [token.get("name")] + token.get("aliases", [])
-                    )
-                ])
-                # or any(re.search(p, token) for p in v.get("patterns", []))
-            )
-        except StopIteration:
-            if create:
-                return AttrDict(patterns=[token], subjects=[token], group=token)
-            return None
 
 
 class PaginatedProviderMixin(object):
