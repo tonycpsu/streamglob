@@ -826,7 +826,7 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
             else channel.name
         )
 
-        dialog = RenameDialog(self, orig_name)
+        dialog = RenameDialog(self, orig_value=orig_name)
         self.provider.view.open_popup(dialog, width=60, height=8)
 
 
