@@ -496,6 +496,15 @@ def run_cli(action, provider, selection, **kwargs):
     except KeyboardInterrupt:
         logger.info("Exiting on keyboard interrupt")
 
+def pdb_on_exception(debugger="pdb", limit=100):
+    """Install handler attach post-mortem pdb console on an exception."""
+    pass
+
+    def pdb_excepthook(exc_type, exc_val, exc_tb):
+        traceback.print_tb(exc_tb, limit=limit)
+        __import__(str(debugger).strip().lower()).post_mortem(exc_tb)
+
+    sys.excepthook = pdb_excepthook
 
 def main():
 
@@ -536,6 +545,13 @@ def main():
                         help="media URI", nargs="?")
 
     options, args = parser.parse_known_args(args)
+
+    if options.verbose:
+        try:
+            import ipdb
+            pdb_on_exception("ipdb")
+        except ImportError:
+            pdb_on_exception()
 
     state.options = AttrDict(vars(options))
     state.options.config_file = config_file
