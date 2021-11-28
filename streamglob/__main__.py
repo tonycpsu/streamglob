@@ -502,6 +502,7 @@ def pdb_on_exception(debugger="pdb", limit=100):
 
     def pdb_excepthook(exc_type, exc_val, exc_tb):
         traceback.print_tb(exc_tb, limit=limit)
+        print(exc_type, exc_val)
         __import__(str(debugger).strip().lower()).post_mortem(exc_tb)
 
     sys.excepthook = pdb_excepthook

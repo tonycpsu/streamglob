@@ -275,55 +275,18 @@ class BaseProvider(
 
     def load_rules(self):
 
-
         self.rule_config = HighlightRuleConfig(self.conf_rules)
-
-        self._conf_rules = None
 
         self.rules = AttrDict(
             self.conf_rules.label or {},
             **config.settings.profile.rules.label or {}
         )
 
-        self.labels = AttrDict(
-            self.config.labels,
-            **config.settings.profile.labels
-        )
-
-        self._rule_map = {
-            label: re.compile(f"""({
-            '|'.join(list(chain.from_iterable(
-            self.get_highlight_patterns(rule)
-            for rule in rules
-            )))})""")
-            for label, rules in self.rules.items()
-        }
-
-        self._highlight_map = AttrDict([
-            (
-                re.compile("|".join(self.get_highlight_patterns(rule)), re.IGNORECASE),
-                AttrDict(
-                    rule if isinstance(rule, dict) else dict(),
-                    attr=self.config.rules.highlight[label],
-                    patterns=self.get_highlight_patterns(rule),
-                    subjects=[rule] if isinstance(rule, str) else rule.get("subjects", rule.get("patterns")),
-                    group=rule.get("group", None) if isinstance(rule, dict) else None
-                )
-            )
-            for label, rules in self.rules.items()
-            for rule in rules
-        ])
-
     def get_highlight_patterns(self, rule):
         if isinstance(rule, str):
             return [rule]
         else:
             return rule.get("patterns", [])
-
-    @property
-    def rule_map(self):
-        return self._rule_map
-
 
     def rule_for_token(self, token, create=False):
         # import ipdb; ipdb.set_trace()
@@ -696,23 +659,23 @@ class BaseProvider(
     def action_mark_read(self, listing):
         listing.mark_read()
 
-    def on_new_listing(self, listing):
-        try:
-            label = next(
-                label
-                for label, pattern in self.rule_map.items()
-                if pattern.search(listing.title)
-            )
-            listing.label = label
-            for action in self.config.rules.actions.get(label, []):
-                func = getattr(self, f"action_{action}", None)
-                if func:
-                    func(listing)
-            # if self.should_download(listing):
-            #     self.download(listing)
+    # def on_new_listing(self, listing):
+    #     try:
+    #         # label = next(
+    #         #     label
+    #         #     for label, pattern in self.rule_map.items()
+    #         #     if pattern.search(listing.title)
+    #         # )
+    #         # listing.label = label
+    #         # for action in self.config.rules.actions.get(label, []):
+    #         #     func = getattr(self, f"action_{action}", None)
+    #         #     if func:
+    #         #         func(listing)
+    #         # if self.should_download(listing):
+    #         #     self.download(listing)
 
-        except StopIteration:
-            pass
+    #     except StopIteration:
+    #         pass
 
 
     @property

@@ -617,33 +617,44 @@ class MediaListingMixin(object):
                         raise
                         # continue
             if "find" in cfg:
-                # import ipdb; ipdb.set_trace()
                 find = cfg["find"]
-                try:
-                    tokens += list(chain.from_iterable(
-                        [
-                            rule.subjects
-                            for rule in
-                            [
-                                (
-                                    self.provider.rule_for_token(value)
-                                    # self.provider.rule_config.rule_for_token(value)
-                                    # or AttrDict(patterns=[value], subjects=[value])
-                                )
-                                for value in find["values"]
-                            ]
+                # import ipdb; ipdb.set_trace()
+                tokens += list(chain.from_iterable(
+                    self.provider.rule_config.get_tokens(
+                        content,
+                        aliases=self.token_aliases
+                    )
+                    for content in [
+                            getattr(self, field)
                             for field in find["fields"]
-                            if re.findall(
-                                "|".join([
-                                    f"({pattern})"
-                                    for pattern in rule.patterns
-                                ]),
-                                getattr(self, field) or ""
-                            )
-                        ]
-                    ))
-                except (AttributeError, IndexError):
-                    pass
+                    ]
+                    if content
+                ))
+                # try:
+                #     tokens += list(chain.from_iterable(
+                #         [
+                #             rule.subjects
+                #             for rule in
+                #             [
+                #                 (
+                #                     # self.provider.rule_for_token(value)
+                #                     self.provider.rule_config.rule_for_token(value)
+                #                     # or AttrDict(patterns=[value], subjects=[value])
+                #                 )
+                #                 for value in find["values"]
+                #             ]
+                #             for field in find["fields"]
+                #             if re.findall(
+                #                 "|".join([
+                #                     f"({pattern})"
+                #                     for pattern in rule.patterns
+                #                 ]),
+                #                 getattr(self, field) or ""
+                #             )
+                #         ]
+                #     ))
+                # except (AttributeError, IndexError):
+                #     pass
 
         try:
             tokens += [
@@ -656,13 +667,24 @@ class MediaListingMixin(object):
         return tokens
 
     @property
+    def token_aliases(self):
+        cfg = self.channel.attrs.get("subjects", {}).get("find", None)
+        if not cfg:
+            return {}
+        return {
+            name: aliases
+            for name, aliases in cfg["values"].items()
+            if aliases
+        }
+
+    @property
     def group(self):
         # import ipdb; ipdb.set_trace()
         try:
             return next(
-                r.get("group")
+                r.group
                 for r in self.subject_rules
-                if r.get("group")
+                if r.group
             )
         except StopIteration:
             try:
@@ -693,7 +715,7 @@ class MediaListingMixin(object):
         try:
             return list(dict.fromkeys(list(
                 chain.from_iterable(
-                    [r.subjects]
+                    r.subjects
                     for r in self.subject_rules
                 )
             )))
@@ -823,11 +845,7 @@ class TitledMediaListing(TitledMediaListingMixin, MultiSourceMediaListing):
 
     @property
     def labels(self):
-        return {
-            label
-            for label, regexp in self.provider.rule_map.items()
-            if regexp.search(self.title)
-        }
+        return self.provider.rule_cfg.get_labels(self.title)
 
 
 class InflatableMediaListingMixin(object):

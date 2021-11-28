@@ -611,14 +611,17 @@ class ProviderDataTable(
                 if self.strip_emoji or row.get("_strip_emoji"):
                     value = utils.strip_emoji(value)
 
-                if self.provider.highlight_map:
+                if self.provider.rule_config:
                     listing = row.data_source
                     index = getattr(listing, self.df.index_name)
                     markup_column = f"_markup_{attr}"
                     if not row.get(markup_column):
                         self.df.set(
                             index, markup_column,
-                            self.provider.rule_config.apply(value)
+                            self.provider.rule_config.apply(
+                                value,
+                                aliases=listing.token_aliases,
+                            )
                         )
                     markup = self.df.get(index, markup_column)
                     if len(markup):
@@ -703,7 +706,7 @@ class ProviderDataTable(
                         caption=("bold", "Group: ")
                     ),
                     create=urwid.CheckBox("Create directory?", state=True),
-                    tag=BaseDropdown(list(self.parent.provider.rules.keys()))
+                    tag=BaseDropdown(list(self.parent.provider.rule_config.labels))
                 )
 
             @property

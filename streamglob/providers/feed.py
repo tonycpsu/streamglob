@@ -80,7 +80,7 @@ class FeedMediaChannel(model.MediaChannel):
                     listing = self.provider.LISTING_CLASS[listing.media_listing_id]
                 except ObjectNotFound:
                     continue
-                self.provider.on_new_listing(listing)
+                # self.provider.on_new_listing(listing)
                 self.updated = datetime.now()
                 fetched += 1
                 self.provider.update_fetch_indicator(fetched)
@@ -1173,6 +1173,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                     max_items = config.settings.profile.cache.max_items,
                     max_age = config.settings.profile.cache.max_age
                 )
+        self.create_feeds()
 
     def format_feed(feed):
         return feed.name if hasattr(feed, "name") else ""
@@ -1241,7 +1242,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
 
     @property
     def translate(self):
-        return (self.translate_src and super().translate)
+        return (self                        .translate_src and super().translate)
 
     def create_feeds(self):
 
@@ -1369,7 +1370,6 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
     def on_activate(self):
         if isinstance(self.view, InvalidConfigView):
             return
-        self.create_feeds()
         super().on_activate()
         # self.reset()
 
@@ -1427,7 +1427,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
             op = OP_MAP.get(op, op)
             if attr == "label":
                 attr = "title"
-                value = self.rule_map[value].pattern
+                value = self.rule_config[value].pattern
             return f"""lower({attr}) {op} lower('{value.replace("'", "''")}')"""
 
         return "(" + " ".join([
