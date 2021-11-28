@@ -430,7 +430,9 @@ class FilesView(
             super().on_focus(source, selection)
             # state.event_loop.create_task(self.sync_playlist_position())
         elif isinstance(selection, DirectoryNode):
-            self.load_play_items()
+            # FIXME
+            if state.main_view.focused_widget == state.files_view:
+                self.load_play_items()
 
     def monitor_path(self, path, recursive=False):
 
@@ -506,7 +508,7 @@ class FilesView(
                 return "Go to directory"
 
             def action(self, value):
-                self.parentparent.set_root(value)
+                self.parent.set_root(value)
 
         dialog = ChangeDirectoryDialog(self, self.browser.cwd)
         self.open_popup(dialog, width=60, height=8)
