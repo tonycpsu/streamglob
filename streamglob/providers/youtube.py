@@ -492,7 +492,7 @@ class YouTubeFeed(FeedMediaChannel):
 
     @property
     def is_playlist(self):
-        return len(self.locator) == 24 and self.locator.startswith("PL")
+        return len(self.locator) == 34 and self.locator.startswith("PL")
 
     @async_cached_property
     async def uploads_playlist(self):
