@@ -657,53 +657,61 @@ class ProviderDataTable(
         class AddHighlightRuleDialog(OKCancelDialog):
 
             @property
-            def default_pattern(self):
-                if not getattr(self, "_defalt_pattern", None):
+            def default_subject(self):
+                if not getattr(self, "_default_subject", None):
                     if self.parent.selection.data_source.group:
-                        self._default_pattern = self.parent.selection.data_source.group
+                        self._default_subject = self.parent.selection.data_source.group
                     elif self.parent.provider.conf_rules.highlight_words:
-                        self._default_pattern = self.parent.selection.data.title
+                        self._default_subject = self.parent.selection.data.title
                     else:
-                        self._default_pattern = None
-                return self._default_pattern
+                        self._default_subject = None
+                return self._default_subject
 
             @property
             def widgets(self):
                 try:
                     edit_pos = [
-                        m.start() for m in re.finditer(r"\S+", self._default_pattern)
+                        m.start() for m in re.finditer(r"\S+", self.default_subject)
                     ][self.parent.provider.conf_rules.highlight_words]-1
                 except (AttributeError, IndexError):
                     edit_pos = 0
 
-                # # default_pattern = None
+                # # default_subject = None
                 # if self.parent.selection.data_source.group:
-                #     default_pattern = self.parent.selection.data_source.group
+                #     default_subject = self.parent.selection.data_source.group
                 # elif self.parent.provider.conf_rules.highlight_words:
-                #     default_pattern = self.parent.selection.data.title
+                #     default_subject = self.parent.selection.data.title
                 #     try:
                 #         edit_pos = [
-                #             m.start() for m in re.finditer(r"\S+", default_pattern)
+                #             m.start() for m in re.finditer(r"\S+", default_subject)
                 #         ][self.parent.provider.conf_rules.highlight_words]-1
                 #     except IndexError:
                 #         pass
 
-                rule = self.parent.provider.rule_config.rule_for_token(self.default_pattern)
+                rule = self.parent.provider.rule_config.rule_for_token(
+                    self.default_subject
+                )
+                if rule:
+                    rule_cfg = rule.to_dict()
+                    group = rule_cfg.get("group", "")
+                    patterns = rule_cfg.get("paterns", [])
+                else:
+                    group = ""
+                    patterns = []
                 # import ipdb; ipdb.set_trace()
-                patterns = rule.get("patterns", []) if rule else [self.default_pattern]
                 return dict(
+                    subject=urwid_readline.ReadlineEdit(
+                        edit_text=self.default_subject or "",
+                        caption=("bold", "Subject: "),
+                        edit_pos=edit_pos
+                    ),
+                    group=urwid_readline.ReadlineEdit(
+                        edit_text=group,
+                        caption=("bold", "Group: ")
+                    ),
                     patterns=urwid_readline.ReadlineEdit(
                         caption=("bold", "Patterns: "),
                         edit_text=", ".join(patterns),
-                        edit_pos=edit_pos
-                    ),
-                    subject=urwid_readline.ReadlineEdit(
-                        edit_text=", ".join(rule.subjects) if rule else "",
-                        caption=("bold", "Subjects: ")
-                    ),
-                    group=urwid_readline.ReadlineEdit(
-                        edit_text=(rule.group or "") if rule else "",
-                        caption=("bold", "Group: ")
                     ),
                     create=urwid.CheckBox("Create directory?", state=True),
                     tag=BaseDropdown(list(self.parent.provider.rule_config.labels))
@@ -716,38 +724,48 @@ class ProviderDataTable(
 
             def action(self):
 
+                subject = self.subject.get_edit_text().strip()
+
                 patterns = [
-                    p.strip() for p in self.patterns.get_edit_text().split(",")
+                    pattern
+                    for pattern in [
+                        p.strip()
+                        for p in self.patterns.get_edit_text().split(",")
+                    ]
+                    if pattern
                 ]
 
-                subjects = [
-                    s.strip()
-                    for s in self.subject.get_edit_text().split(",")
-                ] if self.subject.get_edit_text() else []
+                # subjects = [
+                #     s.strip()
+                #     for s in self.subject.get_edit_text().split(",")
+                # ] if self.subject.get_edit_text() else []
 
-                group = self.group.get_edit_text()
-                if not group and len(subjects) == 1:
-                    group = subjects[0]
+                group = self.group.get_edit_text().strip()
+                # if not group and len(subjects) == 1:
+                #     group = subjects[0]
 
-                cfg = {
-                    k: v
-                    for k, v in dict(
-                            patterns=patterns,
-                            subjects=subjects,
-                            group=group
-                    ).items()
-                    if v
-                }
+                # cfg = {
+                #     k: v
+                #     for k, v in dict(
+                #             patterns=patterns,
+                #             subjects=subjects,
+                #             group=group
+                #     ).items()
+                #     if v
+                # }
 
                 if self.create.get_state():
-                    dirname = group or patterns[0]
+                    dirname = group or subject
                     if dirname in model.SUBJECT_MAP:
                         del model.SUBJECT_MAP[dirname]
                     path = os.path.join(self.parent.provider.output_path, dirname)
                     if not os.path.exists(path):
                         os.makedirs(path)
 
-                self.parent.provider.add_highlight_rule(self.tag.selected_label, cfg)
+                self.parent.provider.rule_config.add_rule(
+                    self.tag.selected_label,
+                    subject, group=group, patterns=patterns
+                )
                 self.parent.reset()
 
         dialog = AddHighlightRuleDialog(self)
@@ -760,7 +778,7 @@ class ProviderDataTable(
             @property
             def widgets(self):
                 try:
-                    default_text = getattr(self.selected_listing, "subjects")[0]
+                    default_text = getattr(self.parent.selected_listing, "subjects")[0]
                 except (IndexError, AttributeError):
                     default_text = ""
                 return dict(
@@ -772,7 +790,7 @@ class ProviderDataTable(
 
             def action(self):
 
-                self.parent.provider.remove_highlight_rule(
+                self.parent.provider.rule_config.remove_rule(
                     self.text.get_edit_text()
                 )
                 self.parent.reset()

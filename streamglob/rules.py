@@ -164,7 +164,6 @@ class HighlightRuleConfig(object):
              )
             for label, rule_dict in self.label_config.items()
         ])
-        # import ipdb; ipdb.set_trace()
         self.RE_MAP = dict()
 
     @property
@@ -182,16 +181,32 @@ class HighlightRuleConfig(object):
     def __getitem__(self, key):
         return self.rules[key]
 
-    def add_rule(self, label, rule):
-        self.rules[label]
+    def add_rule(self, label, subject, group=None, patterns=None):
+        self.remove_rule([subject])
+        rule = HighlightRule(subject, group=group, patterns=patterns)
+        self.rules[label].append(rule)
+        self.save()
+
+    def remove_rule(self, targets):
+        if not isinstance(targets, list):
+            targets = [targets]
+        self.rules = AttrDict([
+            (label, HighlightRuleList(
+                self.highlight_config.get(label),
+                [
+                    r for r in self.rules[label]
+                    if r.subject not in targets
+                    and not any(pattern in targets for pattern in r.patterns)
+                ]
+            ))
+            for label, rule_list in self.rules.items()
+        ])
+
+        self.save()
 
     def save(self):
-        temp_config = config.Config(
-            self._config_file + ".new.yaml"
-        )
-        temp_config.update(self.config.tree)
 
-        temp_config.label = {
+        self.config.label = {
             label: {
                 d.subject: {
                     k: v for k, v in d.items()
@@ -204,7 +219,27 @@ class HighlightRuleConfig(object):
             }
             for label, rule_list in self.rules.items()
         }
-        temp_config.save()
+
+        self.config.save()
+        # temp_config = config.Config(
+        #     self._config_file + ".new.yaml"
+        # )
+        # temp_config.update(self.config.tree)
+
+        # temp_config.label = {
+        #     label: {
+        #         d.subject: {
+        #             k: v for k, v in d.items()
+        #             if k != "subject"
+        #         } or None
+        #         for d in [
+        #             rule.to_dict()
+        #             for rule in sorted(rule_list)
+        #         ]
+        #     }
+        #     for label, rule_list in self.rules.items()
+        # }
+        # temp_config.save()
 
     def get_regex(self, rules):
         rules_set = frozenset(rules.items())

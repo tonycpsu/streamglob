@@ -283,65 +283,6 @@ class BaseProvider(
             )
         )
 
-    def add_highlight_rule(self, tag, rule):
-
-        # FIXME: bisect.insort_right doesn't support a key param until
-        # Python 3.10, which we can't upgrade to until Pony ORM is
-        # updated with Python 3.10 support.
-        # bisect.insort_right(
-        #     self.conf_rules.label[self.tag.selected_label],
-        #     cfg,
-        #     key=lambda cfg: cfg["pattern"] if isinstance(cfg, dict) else cfg
-        # )
-
-        self.remove_highlight_rule(
-            rule.get("subject", rule.get("patterns", []))
-        )
-
-        # for i, r in enumerate(self.conf_rules.label[tag]):
-        #     pattern = r if isinstance(r, str) else r["patterns"][0]
-        #     # import ipdb; ipdb.set_trace()
-        #     if pattern.lower() > rule["patterns"][0].lower():
-        #         self.conf_rules.label[tag].insert(
-        #             i, rule
-        #         )
-        #         break
-        # else:
-        #     self.conf_rules.label[tag].append(
-        #         rule
-        #     )
-
-        self.conf_rules.save()
-        self.load_rules()
-
-
-    def remove_highlight_rule(self, targets):
-        if not isinstance(targets, list):
-            targets = [targets]
-
-        rules = self.conf_rules.label
-        for label in rules.keys():
-            try:
-                rules[label] = [
-                    r for r in rules[label]
-                    if not any([
-                            isinstance(r, dict) and target in r.get("patterns", [])
-                            or re.search(
-                                r if isinstance(r, str) else "|".join(r["patterns"]),
-                                target, re.IGNORECASE
-                            )
-                            for target in targets
-                    ]
-                    )
-                ]
-                self.conf_rules.save()
-                self.load_rules()
-                break
-            except ValueError:
-                continue
-
-
-
     @property
     def default_filter_values(self):
         return AttrDict()
