@@ -634,39 +634,6 @@ class MediaListingMixin(object):
                     ]
                     if content
                 ))
-                # try:
-                #     tokens += list(chain.from_iterable(
-                #         [
-                #             rule.subjects
-                #             for rule in
-                #             [
-                #                 (
-                #                     # self.provider.rule_for_token(value)
-                #                     self.provider.rule_config.rule_for_token(value)
-                #                     # or AttrDict(patterns=[value], subjects=[value])
-                #                 )
-                #                 for value in find["values"]
-                #             ]
-                #             for field in find["fields"]
-                #             if re.findall(
-                #                 "|".join([
-                #                     f"({pattern})"
-                #                     for pattern in rule.patterns
-                #                 ]),
-                #                 getattr(self, field) or ""
-                #             )
-                #         ]
-                #     ))
-                # except (AttributeError, IndexError):
-                #     pass
-
-        # try:
-        #     tokens += [
-        #         t for t in self.provider.highlight_re.search(self.title).groups()
-        #         if t
-        #     ]
-        # except AttributeError:
-        #     pass
 
         return tokens
 
@@ -684,21 +651,14 @@ class MediaListingMixin(object):
     @property
     def group(self):
         # import ipdb; ipdb.set_trace()
-        try:
-            return next(
+        return next(
+            (
                 r.group
                 for r in self.subject_rules
                 if r.group
-            )
-        except StopIteration:
-            try:
-                return self.channel.attrs["group"]
-            except KeyError:
-                subjects = self.subjects
-                if subjects and len(subjects) == 1:
-                    return subjects[0]
-                else:
-                    return None
+            ),
+            None
+        ) or self.channel.attrs.get("group,", None)
 
     @property
     def subject_rules(self):
@@ -719,12 +679,13 @@ class MediaListingMixin(object):
     def subjects(self):
         # import ipdb; ipdb.set_trace()
         try:
-            return list(dict.fromkeys(list(
-                chain.from_iterable(
-                    r.subjects
-                    for r in self.subject_rules
-                )
-            )))
+            return [r.subject for r in self.subject_rules]
+            # return list(dict.fromkeys(list(
+            #     chain.from_iterable(
+            #         [r.subject]
+            #         for r in self.subject_rules
+            #     )
+            # )))
         except (AttributeError, IndexError):
             return None
 

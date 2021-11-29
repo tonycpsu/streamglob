@@ -108,6 +108,10 @@ def yaml_dumper():
 
         self.add_representer(Folder, folder_representer)
         self.add_representer(Union, union_representer)
+        self.add_representer(
+            type(None),
+            lambda dumper, value: dumper.represent_scalar(u'tag:yaml.org,2002:null', '')
+        )
 
     d = {"__init__": __init__}
 
@@ -267,6 +271,14 @@ class Config(ConfigTree):
     def toggle_profile(self, profile):
         self._profile_tree.toggle_profile(profile)
 
+
+    @property
+    def tree(self):
+        d = Tree([ (k, v) for k, v in self.items() if k != "profiles"] )
+        if "profiles" in self:
+            d.update({"profiles": self._profile_tree})
+        return d
+
     def load(self):
         if os.path.exists(self.config_file):
             loader = yaml_loader(ConfigTree, self._config_dir)
@@ -282,16 +294,15 @@ class Config(ConfigTree):
 
     def save(self):
 
-        d = Tree([ (k, v) for k, v in self.items() if k != "profiles"] )
-        if "profiles" in self:
-            d.update({"profiles": self._profile_tree})
         dumper = yaml_dumper()
         with open(self._config_file, 'w') as outfile:
             yaml.dump(
-                d, outfile,
+                self.tree, outfile,
                 Dumper=dumper,
                 allow_unicode=True,
-                default_flow_style=False, indent=4
+                sort_keys=False,
+                default_flow_style=False,
+                indent=4
             )
 
 

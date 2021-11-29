@@ -7,25 +7,23 @@ import os
 from functools import reduce
 from itertools import groupby
 
+from . import config
+
 class HighlightRule(object):
 
-    def __init__(self, patterns, subjects=[], group=None):
-        if not isinstance(patterns, list):
-            patterns = [patterns]
-        self.patterns = patterns
-        self._re = re.compile("|".join(self.patterns))
-        self._subjects = subjects
+    def __init__(self, subject, group=None, patterns=None):
+        self.subject = subject
         self._group = group
+        self._patterns = patterns
+        self._re = re.compile("|".join(self.patterns))
 
     @property
-    def subjects(self):
-        return self._subjects or self.patterns
+    def patterns(self):
+        return self._patterns or  [self.subject]
 
     @property
     def group(self):
-        return self._group or (
-            self.subjects[0] if len(self.subjects) == 1 else None
-        )
+        return self._group or self.subject
 
     def search(self, text, aliases=[]):
         return self._re.search(text) or next(
@@ -42,9 +40,34 @@ class HighlightRule(object):
     def __getitem__(self, key):
         return getattr(self, key)
 
-    def __repr__(self):
-        return f"<HighlightRule: {self.patterns}, {self.subjects}: {self.group}>"
+    def __eq__(self, other):
+        return self.subject == other.subject
 
+    def __ne__(self, other):
+        return self.subject != other.subject
+
+    def __lt__(self, other):
+        return self.subject < other.subject
+
+    def __le__(self, other):
+        return self.subject <= other.subject
+
+    def __gt__(self, other):
+        return self.subject > other.subject
+
+    def __ge__(self, other):
+        return self.subject >= other.subject
+
+    def __repr__(self):
+        return f"<HighlightRule: {self.subject} ({self.group}) {self.patterns}>"
+
+    def to_dict(self):
+        d = AttrDict(subject=self.subject)
+        if self._group and self._group != self.subject:
+            d["group"] = self._group
+        if self._patterns and self._patterns != [self.subject]:
+            d["patterns"] = self._patterns
+        return d
 
 class HighlightRuleList(MutableSequence):
 
@@ -75,7 +98,7 @@ class HighlightRuleList(MutableSequence):
 
     def __iter__(self): return iter(self.rules)
 
-    def __len__(self): return len(selfrules)
+    def __len__(self): return len(self.rules)
 
     def __setitem__(self, i, v): self.rules[i] = v
 
@@ -122,12 +145,26 @@ class HighlightRuleList(MutableSequence):
 
 class HighlightRuleConfig(object):
 
-    def __init__(self, config):
-        self.config = config
+    # def __init__(self, config):
+    def __init__(self, config_file):
+        self._config_file = config_file
+        self.config = config.Config(
+            self._config_file
+        )
         self.rules = AttrDict([
-            (label, HighlightRuleList(self.highlight_config.get(label), rule_list))
-            for label, rule_list in self.label_config.items()
+
+            # (label, HighlightRuleList(self.highlight_config.get(label), rule_list))
+            # for label, rule_list in self.label_config.items()
+
+            (label,
+             HighlightRuleList(
+                 self.highlight_config.get(label),
+                 [ dict(subject=k, **(v or {})) for k, v in rule_dict.items() ]
+             )
+             )
+            for label, rule_dict in self.label_config.items()
         ])
+        # import ipdb; ipdb.set_trace()
         self.RE_MAP = dict()
 
     @property
@@ -144,6 +181,30 @@ class HighlightRuleConfig(object):
 
     def __getitem__(self, key):
         return self.rules[key]
+
+    def add_rule(self, label, rule):
+        self.rules[label]
+
+    def save(self):
+        temp_config = config.Config(
+            self._config_file + ".new.yaml"
+        )
+        temp_config.update(self.config.tree)
+
+        temp_config.label = {
+            label: {
+                d.subject: {
+                    k: v for k, v in d.items()
+                    if k != "subject"
+                } or None
+                for d in [
+                    rule.to_dict()
+                    for rule in sorted(rule_list)
+                ]
+            }
+            for label, rule_list in self.rules.items()
+        }
+        temp_config.save()
 
     def get_regex(self, rules):
         rules_set = frozenset(rules.items())
@@ -213,7 +274,7 @@ class HighlightRuleConfig(object):
                     self.highlight_config[label],
                     [
                         r for r in rule_list
-                        if not set(r.subjects).isdisjoint(candidates)
+                        if r.subject in candidates
                     ]
                 ))
                 for label, rule_list in self.rules.items()

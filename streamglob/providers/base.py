@@ -20,7 +20,7 @@ from .widgets import *
 from .filters import *
 from ..session import *
 from ..state import *
-from ..rules import HighlightRuleConfig
+from ..rules import HighlightRuleConfig, HighlightRule
 from ..programs import Player, Downloader
 from .. import model
 from .. import config
@@ -275,61 +275,13 @@ class BaseProvider(
 
     def load_rules(self):
 
-        self._conf_rules = None
-        self.rule_config = HighlightRuleConfig(self.conf_rules)
-
-        self.rules = AttrDict(
-            self.conf_rules.label or {},
-            **config.settings.profile.rules.label or {}
-        )
-
-    def get_highlight_patterns(self, rule):
-        if isinstance(rule, str):
-            return [rule]
-        else:
-            return rule.get("patterns", [])
-
-    def rule_for_token(self, token, create=False):
-        # import ipdb; ipdb.set_trace()
-        try:
-            return next(
-                cfg
-                if isinstance(token, str)
-                else AttrDict({
-                        k: v if k != "patterns" else v + token.get("aliases", [])
-                        for k, v in cfg.items()
-
-                })
-                for pattern, cfg in self.highlight_map.items()
-                if any([
-                        pattern.search(t)
-                        for t in (
-                                [token]
-                                if isinstance(token, str)
-                                else [token.get("name")] + token.get("aliases", [])
-                        )
-                ])
-                or cfg.get("group") == token
-                or any([
-                    t in cfg.get("subjects", [])
-                    for t in (
-                            [token]
-                            if isinstance(token, str)
-                            else [token.get("name")] + token.get("aliases", [])
-                    )
-                ])
-                # or any(re.search(p, token) for p in v.get("patterns", []))
+        # self._conf_rules = None
+        self.rule_config = HighlightRuleConfig(
+            os.path.join(
+                self.conf_dir,
+                "rules.yaml"
             )
-        except StopIteration:
-            if create:
-                return AttrDict(patterns=[token], subjects=[token], group=token)
-            return None
-
-
-    @property
-    def highlight_map(self):
-        return self._highlight_map
-
+        )
 
     def add_highlight_rule(self, tag, rule):
 
@@ -343,21 +295,21 @@ class BaseProvider(
         # )
 
         self.remove_highlight_rule(
-            rule.get("subjects", rule.get("patterns", []))
+            rule.get("subject", rule.get("patterns", []))
         )
 
-        for i, r in enumerate(self.conf_rules.label[tag]):
-            pattern = r if isinstance(r, str) else r["patterns"][0]
-            # import ipdb; ipdb.set_trace()
-            if pattern.lower() > rule["patterns"][0].lower():
-                self.conf_rules.label[tag].insert(
-                    i, rule
-                )
-                break
-        else:
-            self.conf_rules.label[tag].append(
-                rule
-            )
+        # for i, r in enumerate(self.conf_rules.label[tag]):
+        #     pattern = r if isinstance(r, str) else r["patterns"][0]
+        #     # import ipdb; ipdb.set_trace()
+        #     if pattern.lower() > rule["patterns"][0].lower():
+        #         self.conf_rules.label[tag].insert(
+        #             i, rule
+        #         )
+        #         break
+        # else:
+        #     self.conf_rules.label[tag].append(
+        #         rule
+        #     )
 
         self.conf_rules.save()
         self.load_rules()
