@@ -594,7 +594,10 @@ class MediaListingMixin(object):
     def tokens(self):
 
         tokens = []
-        cfg = self.channel.attrs.get("subjects", {})
+        cfg = AttrDict(
+            self.provider.conf_rules.get("defaults", {}).get("subjects", {}),
+            **self.channel.attrs.get("subjects", {})
+        )
 
         if cfg:
             if "fixed" in cfg:
@@ -616,6 +619,7 @@ class MediaListingMixin(object):
                     except (AttributeError, IndexError):
                         raise
                         # continue
+            # import ipdb; ipdb.set_trace()
             if "find" in cfg:
                 find = cfg["find"]
                 # import ipdb; ipdb.set_trace()
@@ -656,13 +660,13 @@ class MediaListingMixin(object):
                 # except (AttributeError, IndexError):
                 #     pass
 
-        try:
-            tokens += [
-                t for t in self.provider.highlight_re.search(self.title).groups()
-                if t
-            ]
-        except AttributeError:
-            pass
+        # try:
+        #     tokens += [
+        #         t for t in self.provider.highlight_re.search(self.title).groups()
+        #         if t
+        #     ]
+        # except AttributeError:
+        #     pass
 
         return tokens
 
