@@ -275,6 +275,7 @@ class BaseProvider(
 
     def load_rules(self):
 
+        self._conf_rules = None
         self.rule_config = HighlightRuleConfig(self.conf_rules)
 
         self.rules = AttrDict(
@@ -329,16 +330,6 @@ class BaseProvider(
     def highlight_map(self):
         return self._highlight_map
 
-    @property
-    def highlight_re(self):
-        if not getattr(self, "_highlight_re", None):
-            self._highlight_re = re.compile(
-                "("
-                + "|".join([k.pattern for k in self.highlight_map.keys()])
-                + ")", re.IGNORECASE
-            )
-        return self._highlight_re
-
 
     def add_highlight_rule(self, tag, rule):
 
@@ -351,7 +342,9 @@ class BaseProvider(
         #     key=lambda cfg: cfg["pattern"] if isinstance(cfg, dict) else cfg
         # )
 
-        self.remove_highlight_rule(rule.get("subjects"))
+        self.remove_highlight_rule(
+            rule.get("subjects", rule.get("patterns", []))
+        )
 
         for i, r in enumerate(self.conf_rules.label[tag]):
             pattern = r if isinstance(r, str) else r["patterns"][0]

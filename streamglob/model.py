@@ -702,11 +702,13 @@ class MediaListingMixin(object):
 
     @property
     def subject_rules(self):
-        # import ipdb; ipdb.set_trace()
         try:
             return [
-                self.provider.rule_config.rule_for_token(token)
-                for token in self.tokens
+                rule for rule in [
+                    self.provider.rule_config.rule_for_token(token)
+                    for token in self.tokens
+                ]
+                if rule
             ]
 
         except TypeError:

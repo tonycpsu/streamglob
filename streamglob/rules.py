@@ -23,7 +23,9 @@ class HighlightRule(object):
 
     @property
     def group(self):
-        return self._group or None
+        return self._group or (
+            self.subjects[0] if len(self.subjects) == 1 else None
+        )
 
     def search(self, text, aliases=[]):
         return self._re.search(text) or next(
@@ -242,7 +244,6 @@ class HighlightRuleConfig(object):
         ]
 
     def get_tokens(self, text, candidates=[], aliases={}):
-        # import ipdb; ipdb.set_trace()
         return [
             token
             for (label, token) in self.tokenize(text, candidates=candidates, aliases=aliases)
