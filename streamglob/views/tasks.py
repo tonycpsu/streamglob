@@ -117,7 +117,7 @@ class TaskWidget(urwid.WidgetWrap):
 
     @property
     def title(self):
-        return urwid.Text(self.task.title)
+        return urwid.Text(utils.strip_emoji(self.task.title))
 
     @property
     def status(self):
