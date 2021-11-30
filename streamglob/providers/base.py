@@ -911,6 +911,8 @@ class SynchronizedPlayerMixin(object):
     @keymap_command()
     async def preview_all(self, playlist_position=None):
 
+        # import ipdb; ipdb.set_trace()
+
         if not playlist_position:
             try:
                 playlist_position = self.playlist_position
@@ -961,6 +963,7 @@ class SynchronizedPlayerMixin(object):
         await state.task_manager.preview_player.command(
             "set_property", "playlist-pos", pos
         )
+
         # try to ensure video filters aren't lost by waiting for next track
         try:
             event = await state.task_manager.preview_player.wait_for_event(
@@ -1242,20 +1245,25 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             if idx is None:
                 idx = self.playlist_position
 
-            logger.info(f"playist_replace: {idx}, {url}")
+            logger.info(f"playlist_replace: {idx}, {url}")
             # FIXME: standardize media source preview locator
             # if hasattr(self.play_items[idx], "locator_preview"):
             self.play_items[idx].locator_preview = url
-            # else:
-            #     self.play_items[idx].locator = url
-            await self.preview_all(playlist_position=pos)
 
-            try:
-                event = await state.task_manager.preview_player.wait_for_event(
-                    "file-loaded", 0.5
-                )
-            except StopAsyncIteration:
-                pass
+            count = await state.task_manager.preview_player.command(
+                "get_property", "playlist-count"
+            )
+
+            await state.task_manager.preview_player.command(
+                "loadfile", url, "append"
+            )
+            await state.task_manager.preview_player.command(
+                "playlist-move", str(count), str(idx)
+            )
+
+            await state.task_manager.preview_player.command(
+                "playlist-remove", str(idx+1)
+            )
 
 
     def quit_player(self):
