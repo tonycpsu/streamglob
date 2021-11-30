@@ -219,14 +219,6 @@ class DownloadDirEdit(AutoCompleteEdit):
 
 class DownloadDialog(OKCancelDialog):
 
-    # def __init__(self, parent):
-
-    #     super().__init__(parent)
-        # urwid.connect_signal(self.dropdown, "change", self.on_dropdown_change)
-
-    # def on_dropdown_change(self, source,label,  value):
-    #     self.pile.set_focus_path(self.ok_focus_path)
-
     @property
     def widgets(self):
 
@@ -235,15 +227,26 @@ class DownloadDialog(OKCancelDialog):
                 provider=self.parent.provider,
                 caption=("bold", "Group: ")
             ),
+            tag=BaseDropdown(
+                [("(none)", None)]
+                + list(self.parent.provider.rule_config.labels),
+                label="Label: "
+            )
         )
 
     async def action(self):
 
         self.group.save_history()
         group = self.group.get_edit_text()
-        await self.parent.download_selection(
-            group=group or None
-        )
+        if self.tag.selected_value:
+            self.parent.provider.rule_config.add_rule(
+                self.tag.selected_label,
+                group
+            )
+
+        self.parent.provider.load_rules()
+        self.parent.provider.reset()
+        await self.parent.download_selection(group=group or None)
 
 
 @keymapped()
@@ -698,7 +701,7 @@ class ProviderDataTable(
                 else:
                     group = ""
                     patterns = []
-                # import ipdb; ipdb.set_trace()
+
                 return dict(
                     subject=urwid_readline.ReadlineEdit(
                         edit_text=self.default_subject or "",
@@ -735,24 +738,8 @@ class ProviderDataTable(
                     if pattern
                 ]
 
-                # subjects = [
-                #     s.strip()
-                #     for s in self.subject.get_edit_text().split(",")
-                # ] if self.subject.get_edit_text() else []
 
                 group = self.group.get_edit_text().strip()
-                # if not group and len(subjects) == 1:
-                #     group = subjects[0]
-
-                # cfg = {
-                #     k: v
-                #     for k, v in dict(
-                #             patterns=patterns,
-                #             subjects=subjects,
-                #             group=group
-                #     ).items()
-                #     if v
-                # }
 
                 if self.create.get_state():
                     dirname = group or subject
@@ -766,6 +753,7 @@ class ProviderDataTable(
                     self.tag.selected_label,
                     subject, group=group, patterns=patterns
                 )
+                self.parent.provider.load_rules()
                 self.parent.reset()
 
         dialog = AddHighlightRuleDialog(self)
@@ -793,24 +781,8 @@ class ProviderDataTable(
                 self.parent.provider.rule_config.remove_rule(
                     self.text.get_edit_text()
                 )
+                self.parent.provider.load_rules()
                 self.parent.reset()
-
-                # rules = self.parent.provider.conf_rules.label
-                # for label in rules.keys():
-                #     try:
-                #         rules[label] = [
-                #             r for r in rules[label]
-                #             if not re.search(
-                #                     r if isinstance(r, str) else r["pattern"],
-                #                     self.text.get_edit_text(), re.IGNORECASE
-                #             )
-                #         ]
-                #         self.parent.provider.conf_rules.save()
-                #         self.parent.provider.load_rules()
-                #         self.parent.reset()
-                #         break
-                #     except ValueError:
-                #         continue
 
         dialog = RemoveHighlightRuleDialog(self)
         self.provider.view.open_popup(dialog, width=60, height=8)
