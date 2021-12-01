@@ -93,8 +93,8 @@ class InstagramMediaSourceMixin(object):
     async def check(self):
         if self.created > datetime.now() - timedelta(hours=4):
             return True
-        res = await self.provider.session.head(self.locator)
-        return res.status == 200
+        res = self.provider.session.public.head(self.locator)
+        return res.status_code == 200
 
     @property
     def download_helper(self):
@@ -154,7 +154,7 @@ class InstagramMediaListingMixin(object):
             return True
 
     def refresh(self):
-        import ipdb; ipdb.set_trace()
+        # import ipdb; ipdb.set_trace()
         async def foo():
             async with self.provider.session.limiter:
                 await self.attach().inflate(force=True)
@@ -208,7 +208,10 @@ class InstagramFeedMediaChannelMixin(object):
 
     def get_post_info(self, shortcode):
         pk = self.client.media_pk_from_code(shortcode)
-        return self.client.media_info(pk)
+        try:
+            return self.client.media_info(pk)
+        except instagrapi.exceptions.LoginRequired:
+            import ipdb; ipdb.set_trace()
 
     @property
     def posts(self):
@@ -301,7 +304,7 @@ class InstagramFeedMediaChannelMixin(object):
         medias, end_cursor = self.client.user_medias_paginated(
             user_id, self.provider.config.get("fetch_limit", 50), end_cursor=end_cursor
         )
-        import ipdb; ipdb.set_trace()
+        # import ipdb; ipdb.set_trace()
 
 
         for post in medias:
