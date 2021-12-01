@@ -10,7 +10,7 @@ from itertools import chain
 # import textwrap
 # import tempfile
 
-from orderedattrdict import AttrDict, DefaultAttrDict
+from orderedattrdict import AttrDict, DefaultAttrDict, Tree
 from pony.orm import *
 from panwid.dialog import BaseView
 from panwid.keymap import *
@@ -1096,6 +1096,10 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             )
         return previews[cfg.mode]
 
+    @property
+    def preview_stages(self):
+        return [Tree(mode="default")] + self.config.auto_preview.stages
+
     async def preview_content(self):
 
         listing = self.selected_listing
@@ -1106,7 +1110,7 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             logger.debug(f"sleeping: {self.config.auto_preview.delay}")
             await asyncio.sleep(self.config.auto_preview.delay)
 
-        stages = self.config.auto_preview.stages[self.preview_stage:]
+        stages = self.preview_stages[self.preview_stage:]
         for (cfg, next_cfg) in pairwise(stages + [None]):
             # if self.playlist_position != position:
             #     return
@@ -1116,10 +1120,10 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             if cfg.media_types and source.media_type not in cfg.media_types:
                 continue
 
-            preview = await (await self.get_preview(cfg, listing, source))
-
-            await self.playlist_replace(preview, idx=position)
-            await self.set_playlist_pos(position)
+            if cfg.mode != "default":
+                preview = await (await self.get_preview(cfg, listing, source))
+                await self.playlist_replace(preview, idx=position)
+                await self.set_playlist_pos(position)
 
             if next_cfg and next_cfg.preload:
                 self.pending_event_tasks.append(
@@ -1134,7 +1138,7 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
                 await asyncio.sleep(duration)
             else: # wait for next manual advance
                 break
-        self.preview_stage = (self.preview_stage+1) % len(self.config.auto_preview.stages)
+        self.preview_stage = (self.preview_stage+1) % len(self.preview_stages)
         logger.debug(f"new stage: {self.preview_stage}")
 
 
@@ -1166,6 +1170,7 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
                 t = self.pending_event_tasks.pop()
                 t.cancel()
 
+            await self.set_playlist_pos(position)
             await self.playlist_position_changed(position)
             self.pending_event_tasks.append(
                 asyncio.create_task(
@@ -1460,9 +1465,10 @@ class MultiSourceListingMixin(object):
     def active_table(self):
         return self.inner_table or self
 
+
     @property
-    def selected_source_index(self):
-        return self.inner_focus
+    def selected_source(self):
+        return super().get_source(index=self.inner_focus)
 
     def decorate(self, row, column, value):
 
