@@ -12,6 +12,7 @@ import asyncio
 from datetime import timedelta
 import distutils.spawn
 import argparse
+import shlex
 import re
 from dataclasses import *
 import typing
@@ -149,14 +150,14 @@ class Program(object):
 
         self.args = list(self.default_args)
         if isinstance(args, str):
-            self.args += args.split()
+            self.args += shlex.split(args)
         elif isinstance(args, list):
             self.args += args
 
 
         # FIXME: only relevant for downloader/postprocessor
         if isinstance(output_args, str):
-            self.output_args = output_args.split()
+            self.output_args = shlex.split(output_args)
         else:
             self.output_args = output_args
 
