@@ -168,6 +168,8 @@ class TaskWidget(urwid.WidgetWrap):
 
     @property
     def size_downloaded(self):
+        if self.task.status == "done":
+            return self.progress.size_total
         return self.progress.size_downloaded or 0 if self.progress else 0
 
     @property
@@ -180,10 +182,14 @@ class TaskWidget(urwid.WidgetWrap):
 
     @property
     def pct(self):
+        if self.task.status == "done":
+            return 1.0
         return self.progress.percent_downloaded or "?" if self.progress else None
 
     @property
     def transfer_rate(self):
+        if self.task.status == "done":
+            return 0
         return self.progress.transfer_rate or "?" if self.progress else None
 
 
