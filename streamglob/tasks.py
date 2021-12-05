@@ -63,14 +63,21 @@ class TaskManager(Observable):
 
         ITEM_TEMPLATE=textwrap.dedent(
         """\
-        #EXTINF:1,{title}
+        #EXTINF:{attrs},{title}
         {locator}
         """)
         with tempfile.NamedTemporaryFile(suffix=".m3u8", delete=False) as m3u:
             m3u.write(f"#EXTM3U\n".encode("utf-8"))
             for item in items:
+                video_track = item.get("video_track")
+                attrs = ",".join(
+                    ["0"] + [
+                        f"video_track={video_track}"
+                    ] if video_track else []
+                )
                 m3u.write(ITEM_TEMPLATE.format(
                     title=(item.title or "(no title)").strip(),
+                    attrs=attrs,
                     locator=getattr(item, "locator_preview", item.locator)
                 ).encode("utf-8"))
             logger.debug(m3u.name)

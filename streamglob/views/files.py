@@ -105,6 +105,49 @@ class FilesMediaSourceMixin(object):
     def locator_preview(self):
         return utils.BLANK_IMAGE_URI
 
+    @property
+    def locator_thumbnail_embedded(self):
+        track_id = self.thumbnail_track_id
+        if track_id:
+            return AttrDict(
+                locator=self.locator,
+                video_track=track_id,
+                audio_track=0,
+            )
+
+    @property
+    def streams(self):
+        if not getattr(self, "_streams", None):
+            object.__setattr__(self, "_streams", ffmpeg.probe(self.locator)["streams"])
+        return self._streams
+
+    @property
+    def video_streams(self):
+        return [
+            stream
+            for stream in self.streams
+            if stream.get("codec_type") == "video"
+        ]
+
+    @property
+    def thumbnail_stream_id(self):
+        try:
+            return next(
+                i for i, stream in enumerate(self.video_streams)
+                if stream.get("disposition", []).get("attached_pic")
+            )
+        except (StopIteration):
+            return None
+
+    @property
+    def thumbnail_track_id(self):
+        stream_id = self.thumbnail_stream_id
+        if stream_id:
+            return stream_id + 1
+        return None
+
+
+
 @model.attrclass()
 class FilesMediaSource(FilesMediaSourceMixin, model.InflatableMediaSource):
     pass
@@ -180,17 +223,17 @@ class FilesView(
             self._storyboards = AttrDict()
         return self._storyboards
 
-    async def make_preview_embedded(self, input_file, output_file, cfg):
-        try:
-            idx = next(
-                stream for stream in ffmpeg.probe(input_file)["streams"]
-                if stream.get("disposition", []).get("attached_pic")
-            )["index"]
-        except StopIteration:
-            return
+    async def make_preview_embedded(self, listing, output_file, cfg):
+
+        source = listing.sources[0]
+        input_file = source.locator
+        track_id = source.thumbnail_stream_id
+        if not track_id:
+            return None
+
         await (
             ffmpeg
-            .input(input_file)[str(idx)]
+            .input(input_file)[f"v:{track_id}"]
             .output(output_file)
             .overwrite_output()
             .run_asyncio(quiet=True)
@@ -199,9 +242,11 @@ class FilesView(
 
     async def make_preview_tile(
             self,
-            input_file, output_file,
+            listing, output_file,
             position=0, width=1280
     ):
+
+        input_file = listing.locators[0]
 
         await (
             ffmpeg
@@ -213,28 +258,16 @@ class FilesView(
         )
         return output_file
 
-    async def make_preview_thumbnail(self, input_file, output_file, cfg):
-
-        # media_info = MediaInfo.parse(input_file)
-        # duration = next(
-        #     t for t in media_info.tracks
-        #     if t.track_type == "General"
-        # ).duration/1000
-        # logger.info(duration)
+    async def make_preview_thumbnail(self, listing, output_file, cfg):
 
         thumbnail_file = await self.make_preview_tile(
-            input_file, output_file,
+            listing, output_file,
             position=0.25*cfg.video_duration
         )
         return thumbnail_file
-        # return AttrDict(
-        #     thumbnail_file=thumbnail_file,
-        #     duration=duration
-        # )
 
     async def thumbnail_for(self, listing, cfg):
 
-        # import ipdb; ipdb.set_trace()
         if listing.key not in self.thumbnails:
             # doesn't work for MKV...
             # duration = float(next(
@@ -252,11 +285,11 @@ class FilesView(
             cfg.video_duration = duration
             thumbnail_file = os.path.join(self.tmp_dir, f"thumbnail.{listing.key}.jpg")
             thumbnail = await self.make_preview_embedded(
-                listing.locators[0], thumbnail_file, cfg
+                listing, thumbnail_file, cfg
             )
             if not thumbnail:
                 thumbnail = await self.make_preview_thumbnail(
-                    listing.locators[0], thumbnail_file, cfg
+                    listing, thumbnail_file, cfg
                 )
             self.thumbnails[listing.key] = AttrDict(
                 thumbnail_file=thumbnail,
@@ -268,8 +301,9 @@ class FilesView(
 
     async def preview_content_thumbnail(self, cfg, listing, source):
 
-        # import ipdb; ipdb.set_trace()
-        return (await self.thumbnail_for(listing, cfg)).thumbnail_file
+        return source.locator_thumbnail_embedded or (
+            await self.thumbnail_for(listing, cfg)
+        ).thumbnail_file
 
 
     async def make_preview_storyboard(self, listing, cfg):
@@ -291,11 +325,9 @@ class FilesView(
         thumbnail_file = thumbnail.thumbnail_file
         video_duration = thumbnail.video_duration
 
-        # import ipdb; ipdb.set_trace()
-
         (done, pending) = await asyncio.wait([
             self.make_preview_tile(
-                listing.locators[0],
+                listing,
                 os.path.join(self.tmp_dir, f"board.{listing.key}.{n:04d}.jpg"),
                 position=(video_duration*PREVIEW_DURATION_RATIO)*(n+1)*(1/num_tiles),
                 width=480
@@ -325,7 +357,6 @@ class FilesView(
                     top=thumbnail.height-tile.height-inset_offset
                 )
                 tile_file=os.path.join(self.tmp_dir, f"tile.{listing.key}.{n:04d}.jpg")
-                # import ipdb; ipdb.set_trace()
                 thumbnail.save(filename=tile_file)
 
         if cfg.frame_rate:
@@ -363,7 +394,6 @@ class FilesView(
         async with self.storyboard_lock:
             if listing.key not in self.storyboards:
                 self.storyboards[listing.key] = await self.make_preview_storyboard(listing, cfg)
-        # import ipdb; ipdb.set_trace()
         return self.storyboards[listing.key]
 
     async def preview_content_storyboard(self, cfg, listing, source):

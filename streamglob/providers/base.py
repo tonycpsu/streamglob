@@ -678,8 +678,8 @@ class BaseProvider(
 
     @property
     def auto_preview_enabled(self):
-        return state.listings_view.auto_preview_mode
-        # return not self.config.auto_preview.disabled
+        # return state.listings_view.auto_preview_mode
+        return not self.config.auto_preview.disabled
 
     # @property
     # def auto_preview_default(self):
@@ -845,8 +845,8 @@ class SynchronizedPlayerMixin(object):
         while len(self.pending_event_tasks):
             t = self.pending_event_tasks.pop()
             t.cancel()
-        if state.get("tui_enabled"):
-            state.event_loop.create_task(self.preview_all())
+        # if state.get("tui_enabled"):
+        #     state.event_loop.create_task(self.preview_all())
         self.enable_focus_handler()
 
     def load_more(self, position):
@@ -947,7 +947,13 @@ class SynchronizedPlayerMixin(object):
     async def set_playlist_pos(self, pos):
 
         def ffmpeg_escape(s):
-            return s.replace(":", "\\:").replace("'", "'\\\\\\''") # yikes
+            # yikes!
+            return (
+                s.replace(":", "\\:")
+                .replace("'", "'\\\\\\''")
+                .replace("[", "\\[")
+                .replace("]", "\\]")
+            )
 
         if not state.task_manager.preview_player:
             return
@@ -960,6 +966,12 @@ class SynchronizedPlayerMixin(object):
         if not (state.task_manager.preview_player and len(self)):
             return
 
+        # current_pos = await state.task_manager.preview_player.command(
+        #     "get_property", "playlist-pos"
+        # )
+        # if pos == current_pos:
+        #     return
+
         await state.task_manager.preview_player.command(
             "set_property", "playlist-pos", pos
         )
@@ -967,7 +979,7 @@ class SynchronizedPlayerMixin(object):
         # try to ensure video filters aren't lost by waiting for next track
         try:
             event = await state.task_manager.preview_player.wait_for_event(
-                "playback-restart", 0.5
+                "playback-restart", 1
             )
         except StopAsyncIteration:
             pass
@@ -975,24 +987,23 @@ class SynchronizedPlayerMixin(object):
 
         cfg = config.settings.profile.display.overlay
 
-        upscale = cfg.upscale or 1280
-        vf_scale = f"@upscale:lavfi=[scale=w=max(iw\\,{upscale}):h=-2]"
-
         ox = str(cfg.x or 0)
         oy = str(cfg.y or 0)
 
         padding = cfg.text.padding or 0
 
-        filters = [
-            vf_scale
-        ]
+        filters = []
 
         frame_count = await state.task_manager.preview_player.command(
             "get_property", "estimated-frame-count"
         )
+        logger.info(f"frame_count: {frame_count}")
         if frame_count is None or frame_count <= 1:
+            upscale = cfg.upscale or 1280
+            vf_scale = f"@upscale:lavfi=[scale=w=max(iw\\,{upscale}):h=-2]"
             vf_framerate = f"@framerate:framerate=fps={cfg.fps or 30}"
-            filters.append(vf_framerate)
+            # filters += [vf_framerate]
+            filters += [vf_scale, vf_framerate]
 
         if cfg.box:
             box_color = cfg.box.color.default or "000000@0.5"
@@ -1000,6 +1011,8 @@ class SynchronizedPlayerMixin(object):
                 box_color = cfg.box.color.end or box_color
             vf_box = f"@box:drawbox=x={ox}:y={oy}:w=iw:h=(ih/{cfg.text.size or 50}*2)+{padding}:color={box_color}:t=fill"
             filters.append(vf_box)
+
+        # import ipdb; ipdb.set_trace()
 
         try:
             title = self.play_items[pos].title
@@ -1038,8 +1051,11 @@ class SynchronizedPlayerMixin(object):
             vf_text=f"""@{element}:lavfi=[drawtext=text='{text}':fontfile='{font}':\
 x='{x}':y='{y}':fontsize=(h/{size}):fontcolor={color}:bordercolor={border_color}:\
 borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow_color}:expansion=none]"""
+            # import ipdb; ipdb.set_trace()
+            logger.info(vf_text)
             filters.append(vf_text)
 
+        # return
         await state.task_manager.preview_player.command(
             "vf", "add", ",".join(filters)
         )
@@ -1122,8 +1138,14 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
 
             if cfg.mode != "default":
                 preview = await (await self.get_preview(cfg, listing, source))
-                await self.playlist_replace(preview, idx=position)
-                await self.set_playlist_pos(position)
+                if isinstance(preview, dict):
+                    locator = preview["locator"]
+                    video_track = preview.get("video_track")
+                else:
+                    locator = preview
+                    video_track = None
+                await self.playlist_replace(preview, idx=position, video_track=video_track)
+            await self.set_playlist_pos(position)
 
             if next_cfg and next_cfg.preload:
                 self.pending_event_tasks.append(
@@ -1170,8 +1192,6 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
                 t = self.pending_event_tasks.pop()
                 t.cancel()
 
-            await self.set_playlist_pos(position)
-            await self.playlist_position_changed(position)
             self.pending_event_tasks.append(
                 asyncio.create_task(
                     self.preview_content()
@@ -1244,24 +1264,49 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
         asyncio.create_task(async_handler())
 
 
-    async def playlist_replace(self, url, idx=None, pos=None):
+    async def playlist_replace(
+            self, source,
+            idx=None, pos=None,
+            video_track=None, audio_track=None
+    ):
 
+        locator = getattr(source, "locator", source)
+        video_track = getattr(source, "video_track", None)
+        audio_track = getattr(source, "audio_track", None)
+
+        # import ipdb; ipdb.set_trace()
         async with self.playlist_lock:
             if idx is None:
                 idx = self.playlist_position
 
-            logger.info(f"playlist_replace: {idx}, {url}")
+            logger.info(f"playlist_replace: {idx}, {locator}")
             # FIXME: standardize media source preview locator
             # if hasattr(self.play_items[idx], "locator_preview"):
-            self.play_items[idx].locator_preview = url
+            self.play_items[idx].locator_preview = locator
 
             count = await state.task_manager.preview_player.command(
                 "get_property", "playlist-count"
             )
 
+            loadfile_args = ["loadfile", locator, "append"]
+            loadfile_opts = []
+            if video_track is not None:
+                loadfile_opts.append(f"video={video_track}")
+            if audio_track is not None:
+                loadfile_opts.append(f"audio={audio_track}")
+            if loadfile_opts:
+                loadfile_args.append(",".join(loadfile_opts))
             await state.task_manager.preview_player.command(
-                "loadfile", url, "append"
+                *loadfile_args
             )
+
+            # try:
+            #     event = await state.task_manager.preview_player.wait_for_event(
+            #         "file-loaded", 1
+            #     )
+            # except StopAsyncIteration:
+            #     import ipdb; ipdb.set_trace()
+
             await state.task_manager.preview_player.command(
                 "playlist-move", str(count), str(idx)
             )
@@ -1269,6 +1314,12 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             await state.task_manager.preview_player.command(
                 "playlist-remove", str(idx+1)
             )
+
+            # if video_track:
+            #     await state.task_manager.preview_player.command(
+            #         "set_property", "video", str(video_track+1)
+            #     )
+
 
 
     def quit_player(self):
