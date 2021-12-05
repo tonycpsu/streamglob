@@ -960,8 +960,14 @@ class SynchronizedPlayerMixin(object):
 
         if self.video_filters:
             await state.task_manager.preview_player.command(
-                "vf", "del", ",".join([f"@{f}" for f in self.video_filters])
+                "vf", "del", ",".join([f"{f}" for f in self.video_filters])
             )
+            try:
+                event = await state.task_manager.preview_player.wait_for_event(
+                    "video-reconfig", 1
+                )
+            except StopAsyncIteration:
+                pass
 
         if not (state.task_manager.preview_player and len(self)):
             return
@@ -1059,6 +1065,7 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
         await state.task_manager.preview_player.command(
             "vf", "add", ",".join(filters)
         )
+        self.video_filters = filters
 
     @property
     def playlist_position(self):
