@@ -1300,10 +1300,7 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
     ):
 
         locator = getattr(source, "locator", source)
-        # video_track = getattr(source, "video_track", None)
-        # audio_track = getattr(source, "audio_track", None)
 
-        # import ipdb; ipdb.set_trace()
         async with self.playlist_lock:
             if idx is None:
                 idx = self.playlist_position
@@ -1329,12 +1326,9 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
                 *loadfile_args
             )
 
-            # try:
-            #     event = await state.task_manager.preview_player.wait_for_event(
-            #         "file-loaded", 1
-            #     )
-            # except StopAsyncIteration:
-            #     import ipdb; ipdb.set_trace()
+            await state.task_manager.preview_player.command(
+                "playlist-play-index", "none"
+            )
 
             await state.task_manager.preview_player.command(
                 "playlist-move", str(count), str(idx)
@@ -1344,10 +1338,9 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
                 "playlist-remove", str(idx+1)
             )
 
-            # if video_track:
-            #     await state.task_manager.preview_player.command(
-            #         "set_property", "video", str(video_track+1)
-            #     )
+            await state.task_manager.preview_player.command(
+                "playlist-play-index", str(idx)
+            )
 
 
 
