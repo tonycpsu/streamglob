@@ -1108,6 +1108,8 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
 
         previews = self.previews[source.key]
         if not previews[cfg.mode].done():
+            if isinstance(cfg.preload, int):
+                await asyncio.sleep(cfg.preload)
             self.pending_event_tasks.append(
                 asyncio.create_task(
                     generate_preview()
