@@ -239,6 +239,9 @@ class DownloadDialog(OKCancelDialog):
         self.group.save_history()
         group = self.group.get_edit_text()
         if self.tag.selected_value:
+            path = os.path.join(self.parent.provider.output_path, group)
+            if not os.path.exists(path):
+                os.makedirs(path)
             self.parent.provider.rule_config.add_rule(
                 self.tag.selected_label,
                 group
