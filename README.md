@@ -67,3 +67,6 @@ you can do so here:
 <a href="https://www.patreon.com/tonycpsu">
 <img src="https://c5.patreon.com/external/logo/become_a_patron_button@2x.png" width="100"/>
 </a>
+
+`streamglob` uses icons from th studio via
+[https://www.flaticon.com](flaticon.com)

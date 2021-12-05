@@ -5,13 +5,15 @@ import mistune
 import html2text
 import html.parser
 import pathvalidate
+from . import resources
 
-# FIXME
-BLANK_IMAGE_URI = """\
-data://image/png;base64,\
-iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAA\
-AAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=\
-"""
+try:
+    import importlib.resources as pkg_resources
+except ImportError:
+    import importlib_resources as pkg_resources
+
+with pkg_resources.path(resources, "images") as image_path:
+    globals()["BLANK_IMAGE_URI"] = os.path.join(image_path, "video.png")
 
 MEDIA_URI_RE=re.compile("uri=(.*)=\.")
 
