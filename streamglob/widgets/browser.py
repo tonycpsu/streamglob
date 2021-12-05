@@ -352,7 +352,7 @@ class FileBrowser(AutoCompleteMixin, urwid.WidgetWrap):
                  file_sort=None,
                  ignore_files=False,
                  ignore_directories=False,
-                 no_parent_dir=False,
+                 # no_parent_dir=False,
                  expand_empty=False):
 
         self.top_dir = os.path.normpath(top_dir or os.getcwd())
@@ -368,7 +368,7 @@ class FileBrowser(AutoCompleteMixin, urwid.WidgetWrap):
         self._file_sort = file_sort
         self.ignore_files = ignore_files
         self.ignore_directories = ignore_directories
-        self.no_parent_dir = no_parent_dir
+        # self.no_parent_dir = no_parent_dir
         self.expand_empty = expand_empty
         self.last_selection = None
 
@@ -437,7 +437,7 @@ class FileBrowser(AutoCompleteMixin, urwid.WidgetWrap):
         logger.info(f"deleting {node}")
         self.delete_node(node, remove=True)
 
-    def delete_node(self, node, remove=False, confirm=False):
+    def delete_node(self, node, remove=False):
 
         if node.get_key() == "..":
             # nope!
@@ -456,8 +456,9 @@ class FileBrowser(AutoCompleteMixin, urwid.WidgetWrap):
                 except OSError:
                     pass
 
-        elif isinstance(node, DirectoryNode) and confirm:
+        elif isinstance(node, DirectoryNode):
             del node.get_parent()._children[node.get_key()]
+            logger.info(node.full_path)
             if remove:
                 for i in range(3):
                     # FIXME: sometimes rmtree fails?
@@ -489,15 +490,25 @@ class FileBrowser(AutoCompleteMixin, urwid.WidgetWrap):
         self.top_dir = directory
         self.tree_root = DirectoryNode(self, self.top_dir)
         self.listbox = urwid.TreeListBox(PositionsTreeWalker(self.tree_root))
-        for i in range(1 if self.no_parent_dir else 2):
-            try:
-                self.listbox.set_focus(
-                    self.listbox.body.get_next(
-                        self.listbox.get_focus()[1]
-                    )[1] or self.listbox.get_focus()[1]
-                )
-            except IndexError:
-                break
+        # select first item, if present
+        try:
+            self.listbox.set_focus(
+                self.listbox.body.get_next(
+                    self.listbox.get_focus()[1]
+                )[1] or self.listbox.get_focus()[1]
+            )
+        except IndexError:
+            pass
+
+        # for i in range(1 if self.no_parent_dir else 2):
+        #     try:
+        #         self.listbox.set_focus(
+        #             self.listbox.body.get_next(
+        #                 self.listbox.get_focus()[1]
+        #             )[1] or self.listbox.get_focus()[1]
+        #         )
+        #     except IndexError:
+        #         break
         self.listbox.offset_rows = 1
         urwid.connect_signal(
             self.listbox.body, "modified", self.on_modified

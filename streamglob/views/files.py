@@ -696,7 +696,7 @@ class FilesView(
 
             def action(self):
                 self.parent.browser.delete_node(
-                    self.parent.browser.selection, confirm=True
+                    self.parent.browser.selection, remove=True
                 )
 
         if isinstance(self.selection, DirectoryNode):
