@@ -320,9 +320,7 @@ class FilesView(
         inset_offset = cfg.offset or 0
         border_color = cfg.border.color or "black"
         border_width = cfg.border.width or 1
-        tile_skip = cfg.skip or None
-
-        num_tiles = 4
+        num_tiles = cfg.num_tiles or 10
 
         thumbnail = await self.thumbnail_for(listing, cfg)
         thumbnail_file = thumbnail.thumbnail_file
