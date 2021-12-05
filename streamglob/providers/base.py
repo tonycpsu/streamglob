@@ -1067,6 +1067,9 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
     async def playlist_position_changed(self, pos):
         pass
 
+    async def preview_content_default(self, cfg, listing, source):
+        return source.locator_preview
+
     async def preview_content_thumbnail(self, cfg, listing, source):
         logger.debug(f"preview_content_thumbnail")
         if source.locator_thumbnail is None:
@@ -1113,8 +1116,12 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
         return previews[cfg.mode]
 
     @property
+    def preview_stage_default(self):
+        return self.config.auto_preview.get("default", "default")
+
+    @property
     def preview_stages(self):
-        return [Tree(mode="default")] + self.config.auto_preview.stages
+        return [Tree(mode=self.preview_stage_default)] + self.config.auto_preview.stages
 
     async def preview_content(self):
 
@@ -1131,20 +1138,26 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             # if self.playlist_position != position:
             #     return
             logger.debug(f"stage: {cfg.mode} {self.preview_stage}")
+            # import ipdb; ipdb.set_trace()
             # if self.play_items[position].preview_mode == cfg.mode:
             #     continue
             if cfg.media_types and source.media_type not in cfg.media_types:
                 continue
 
-            if cfg.mode != "default":
+            if cfg.mode in [None, "default"]:
+                preview = None
+            else:
+                # import ipdb; ipdb.set_trace()
                 preview = await (await self.get_preview(cfg, listing, source))
-                if isinstance(preview, dict):
-                    locator = preview["locator"]
-                    video_track = preview.get("video_track")
-                else:
-                    locator = preview
-                    video_track = None
-                await self.playlist_replace(preview, idx=position, video_track=video_track)
+
+            locator = getattr(preview, "locator", preview)
+            video_track = getattr(preview, "video_track", None)
+            audio_track = getattr(preview, "audio_track", None)
+
+            if preview:
+                # import ipdb; ipdb.set_trace()
+                await self.playlist_replace(locator, idx=position, video_track=video_track, audio_track=audio_track)
+            # if cfg.mode:
             await self.set_playlist_pos(position)
 
             if next_cfg and next_cfg.preload:
@@ -1161,6 +1174,8 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             else: # wait for next manual advance
                 break
         self.preview_stage = (self.preview_stage+1) % len(self.preview_stages)
+        if self.preview_stage == 0 and self.preview_stage_default == "default":
+            self.preview_stage = 1
         logger.debug(f"new stage: {self.preview_stage}")
 
 
@@ -1200,7 +1215,12 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
 
     def on_focus(self, source, position):
 
-        self.preview_stage = 0
+        self.preview_stage = (
+            1
+            if self.preview_stage_default == "default"
+            else 0
+        )
+        # import ipdb; ipdb.set_trace()
         if self.provider.auto_preview_enabled:
             state.event_loop.create_task(self.sync_playlist_position())
         if len(self):
@@ -1271,8 +1291,8 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
     ):
 
         locator = getattr(source, "locator", source)
-        video_track = getattr(source, "video_track", None)
-        audio_track = getattr(source, "audio_track", None)
+        # video_track = getattr(source, "video_track", None)
+        # audio_track = getattr(source, "audio_track", None)
 
         # import ipdb; ipdb.set_trace()
         async with self.playlist_lock:

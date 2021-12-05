@@ -248,14 +248,17 @@ class FilesView(
 
         input_file = listing.locators[0]
 
-        await (
+        proc = await (
             ffmpeg
             .input(input_file, ss=position)
             .filter("scale", width, -2)
-            .output(output_file, vframes=1)
+            .output(output_file, vframes=1, report=None)
             .overwrite_output()
+            # .run_asyncio()
             .run_asyncio(quiet=True)
         )
+        await proc.wait()
+        # import ipdb; ipdb.set_trace()
         return output_file
 
     async def make_preview_thumbnail(self, listing, output_file, cfg):
@@ -319,7 +322,7 @@ class FilesView(
         border_width = cfg.border.width or 1
         tile_skip = cfg.skip or None
 
-        num_tiles = 10
+        num_tiles = 4
 
         thumbnail = await self.thumbnail_for(listing, cfg)
         thumbnail_file = thumbnail.thumbnail_file
@@ -334,8 +337,15 @@ class FilesView(
             )
             for n in range(num_tiles)
         ])
+        # import ipdb; ipdb.set_trace()
+        # assert not pending
+        # import ipdb; ipdb.set_trace()
 
-        board_files = [f.result() for f in done]
+        exceptions = [e for e in [f.exception() for f in done] if e]
+        if len(exceptions):
+            import ipdb; ipdb.set_trace()
+        board_files = sorted([f.result() for f in done])
+        logger.info(board_files)
         thumbnail = wand.image.Image(filename=thumbnail_file)
         thumbnail.trim(fuzz=5)
         if thumbnail.width != PREVIEW_WIDTH:
@@ -356,7 +366,7 @@ class FilesView(
                     left=thumbnail.width-tile.width-inset_offset,
                     top=thumbnail.height-tile.height-inset_offset
                 )
-                tile_file=os.path.join(self.tmp_dir, f"tile.{listing.key}.{n:04d}.jpg")
+                tile_file = os.path.join(self.tmp_dir, f"tile.{listing.key}.{n:04d}.jpg")
                 thumbnail.save(filename=tile_file)
 
         if cfg.frame_rate:
@@ -370,18 +380,23 @@ class FilesView(
             frame_rate = 1
 
         inputs = ffmpeg.concat(
-            ffmpeg.input(os.path.join(self.tmp_dir, f"tile.{listing.key}.*.jpg"),
-                                      pattern_type="glob",framerate=frame_rate)
+            ffmpeg.input(
+                os.path.join(self.tmp_dir, f"tile.{listing.key}.*.jpg"),
+                pattern_type="glob", framerate=frame_rate,
+            )
         )
         storyboard_file = os.path.join(self.tmp_dir, f"storyboard.{listing.key}.mp4")
-        proc = await inputs.output(storyboard_file).run_asyncio(overwrite_output=True, quiet=True)
+        proc = await inputs.output(
+            storyboard_file,
+                report=None
+        ).run_asyncio(overwrite_output=True, quiet=True)
         await proc.wait()
 
-        for p in itertools.chain(
-            pathlib.Path(self.tmp_dir).glob(f"board.{listing.key}.*"),
-            pathlib.Path(self.tmp_dir).glob(f"tile.{listing.key}.*")
-        ):
-            p.unlink()
+        # for p in itertools.chain(
+        #     pathlib.Path(self.tmp_dir).glob(f"board.{listing.key}.*"),
+        #     pathlib.Path(self.tmp_dir).glob(f"tile.{listing.key}.*")
+        # ):
+        #     p.unlink()
 
         # return storyboard_file
         return AttrDict(
@@ -400,7 +415,7 @@ class FilesView(
 
         storyboard = await self.storyboard_for(listing, cfg)
         if not storyboard:
-            return
+            import ipdb; ipdb.set_trace()
         logger.info(storyboard)
         return storyboard.img_file
 
@@ -464,7 +479,7 @@ class FilesView(
             # state.event_loop.create_task(self.sync_playlist_position())
         elif isinstance(selection, DirectoryNode):
             # FIXME
-                self.load_play_items()
+            self.load_play_items()
 
     def monitor_path(self, path, recursive=False):
 
