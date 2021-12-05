@@ -274,6 +274,9 @@ class TasksView(SynchronizedPlayerProviderMixin,
     def config(self):
         return config.settings.profile.tasks
 
+    def activate(self):
+        pass
+
     @property
     def play_items(self):
         if not self.selected_listing:
@@ -286,8 +289,8 @@ class TasksView(SynchronizedPlayerProviderMixin,
         ]
 
     def on_focus(self, source, selection):
-
-        state.event_loop.create_task(self.preview_all())
+        if state.main_view.focused_widget == state.tasks_view:
+            state.event_loop.create_task(self.preview_all())
 
 
     @property

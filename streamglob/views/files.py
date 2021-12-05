@@ -425,13 +425,15 @@ class FilesView(
 
     def on_focus(self, source, selection):
 
+        if state.main_view.focused_widget != state.files_view:
+            return
+
         self.prefix_scope = 0
         if isinstance(selection, FileNode):
             super().on_focus(source, selection)
             # state.event_loop.create_task(self.sync_playlist_position())
         elif isinstance(selection, DirectoryNode):
             # FIXME
-            if state.main_view.focused_widget == state.files_view:
                 self.load_play_items()
 
     def monitor_path(self, path, recursive=False):
@@ -723,10 +725,13 @@ class FilesView(
         state.main_view.focus_widget(self)
 
 
-    def on_view_activate(self):
+    def activate(self):
+
+        if state.main_view.focused_widget != state.files_view:
+            return
 
         async def activate_preview_player():
-            if self.config.auto_preview.enabled:
+            if self.provider.auto_preview_enabled:
                 await self.preview_all()
 
         state.event_loop.create_task(activate_preview_player())

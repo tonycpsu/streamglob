@@ -210,6 +210,9 @@ class ListingsView(StreamglobView):
         super().__init__(self.pile)
 
     def set_provider(self, provider_name):
+        provider = providers.get(provider_name)
+        if self.provider == provider:
+            return
         self.provider = providers.get(provider_name)
         if  getattr(self, "toolbar", None):
             self.toolbar.provider_dropdown.value = self.provider.IDENTIFIER
@@ -299,9 +302,6 @@ class ListingsView(StreamglobView):
     def cycle_preview_type(self, step=1):
         self.toolbar.cycle_preview_type(step)
 
-    def activate(self):
-        self.set_provider(self.provider.IDENTIFIER)
-
     @property
     def preview_mode(self):
         return self.toolbar.preview_dropdown.value
@@ -310,7 +310,8 @@ class ListingsView(StreamglobView):
     def auto_preview_mode(self):
         return self.toolbar.auto_preview_check_box.get_state()
 
-    def on_view_activate(self):
+    def activate(self):
+        self.set_provider(self.provider.IDENTIFIER)
 
         async def activate_preview_player():
             if self.provider.auto_preview_enabled:

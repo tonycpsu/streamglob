@@ -200,7 +200,7 @@ class MainView(urwid.WidgetWrap):
 
     def focus_changed(self, foo, x, y):
         logger.info(f"focus_changed: {foo}, {x}, {y}")
-        # self.get_widget(x, y).on_view_activate()
+        # self.get_widget(x, y).activate()
         if hasattr(state, "loop"):
             state.loop.draw_screen()
         # self.get_widget(x, y).activate
@@ -229,7 +229,7 @@ class MainView(urwid.WidgetWrap):
                 continue
             break
         self._w.set_focus_path(self.focus_paths[i])
-        self.focused_widget.on_view_activate()
+        self.focused_widget.activate()
         self.last_focused_index = self.focused_index
 
     @property
@@ -262,8 +262,8 @@ class MainView(urwid.WidgetWrap):
 
         key = super().keypress(size, key)
         # try:
-        #     if self.last_focused_index != self.focused_index and hasattr(self.focused_widget, "on_view_activate"):
-        #         self.focused_widget.on_view_activate()
+        #     if self.last_focused_index != self.focused_index and hasattr(self.focused_widget, "activate"):
+        #         self.focused_widget.activate()
         #     self.last_focused_index = self.focused_index
         # except StopIteration:
         #     pass
@@ -277,8 +277,8 @@ class MainView(urwid.WidgetWrap):
 
     def mouse_event(self, size, event, button, col, row, focus):
         try:
-            if self.last_focused_index != self.focused_index and hasattr(self.focused_widget, "on_view_activate"):
-                self.focused_widget.on_view_activate()
+            if self.last_focused_index != self.focused_index and hasattr(self.focused_widget, "activate"):
+                self.focused_widget.activate()
             self.last_focused_index = self.focused_index
         except StopIteration:
             pass

@@ -32,8 +32,8 @@ class BaseTabView(TabView):
         super().__init__(*args, **kwargs)
         urwid.connect_signal(self, "activate", self.on_activate)
 
-    def on_activate(self, source, tab):
-        self.active_tab.content.on_view_activate()
+    # def on_activate(self, source, tab):
+    #     self.active_tab.content.on_view_activate()
 
     def keypress(self, size, key):
 
