@@ -671,8 +671,8 @@ class ProviderDataTable(
             @property
             def default_subject(self):
                 if not getattr(self, "_default_subject", None):
-                    if self.parent.selection.data_source.group:
-                        self._default_subject = self.parent.selection.data_source.group
+                    if self.parent.selection.data_source.subjects:
+                        self._default_subject = self.parent.selection.data_source.subjects[0]
                     elif self.parent.provider.conf_rules.highlight_words:
                         self._default_subject = self.parent.selection.data.title
                     else:
