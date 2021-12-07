@@ -250,6 +250,10 @@ class MediaChannelMixin(object):
     def session(self):
         return self.provider.session
 
+    @property
+    def config(self):
+        return self.provider.channels[self.locator]
+
     def __str__(self):
         return self.name
 
@@ -615,11 +619,9 @@ class MediaListingMixin(object):
                                     getattr(self, field)
                             )
                         ]))
-                        # import ipdb; ipdb.set_trace()
                     except (AttributeError, IndexError):
                         raise
-                        # continue
-            # import ipdb; ipdb.set_trace()
+
             if "find" in cfg:
                 find = cfg["find"]
                 # import ipdb; ipdb.set_trace()
@@ -650,7 +652,7 @@ class MediaListingMixin(object):
 
     @property
     def group(self):
-        # import ipdb; ipdb.set_trace()
+
         return next(
             (
                 r.group
@@ -658,7 +660,20 @@ class MediaListingMixin(object):
                 if r.group
             ),
             None
-        ) or self.channel.attrs.get("group,", None)
+        ) or self.channel.attrs.get("group,", None) or (
+            next(
+                (
+                    (
+                        group for group in (
+                            n.get_value().get("group")
+                            for n in self.channel.config.get_parents()
+                        )
+                        if group
+                    )
+                ),
+                None
+            )
+        )
 
     @property
     def subject_rules(self):

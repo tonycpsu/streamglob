@@ -1228,6 +1228,10 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
     #     return self.filters["search"].value
 
     @property
+    def channels(self):
+        return self.view.channels
+
+    @property
     def feeds(self):
         locators = [c.locator for c in self.view.selected_channels]
         with db_session:

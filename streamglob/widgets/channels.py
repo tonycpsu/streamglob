@@ -339,7 +339,8 @@ class ChannelUnionNode(ChannelPropertiesMixin, TreeParentNode):
         if not data:
             return []
         try:
-            return list(data.keys())
+            keys = list(data.get("channels", data).keys())
+            return keys
         except AttributeError:
             raise Exception(data)
 
@@ -348,13 +349,13 @@ class ChannelUnionNode(ChannelPropertiesMixin, TreeParentNode):
         childdata = self.get_value()
         childdepth = self.get_depth() + 1
         if isinstance(key, config.Folder):
-            return ChannelGroupNode(self.tree, childdata[key], parent=self, key=key, depth=childdepth)
+            return ChannelGroupNode(self.tree, childdata.get("channels", childdata)[key], parent=self, key=key, depth=childdepth)
         elif isinstance(key, config.Union):
-            return ChannelUnionNode(self.tree, childdata[key], parent=self, key=key, depth=childdepth)
+            return ChannelUnionNode(self.tree, childdata.get("channels", childdata)[key], parent=self, key=key, depth=childdepth)
             # node.collapse()
             # return node
         else:
-            return ChannelNode(childdata[key], parent=self, key=key, depth=childdepth)
+            return ChannelNode(childdata.get("channels", childdata)[key], parent=self, key=key, depth=childdepth)
         # return childclass(childdata[key], parent=self, key=key, depth=childdepth)
 
     def find_key(self, key):
@@ -508,6 +509,9 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
         super().__init__(self.pile)
         self.pile.selectable = lambda: True
         self.load()
+
+    def __getitem__(self, key):
+        return self.find_key(key)
 
     @property
     def conf(self):

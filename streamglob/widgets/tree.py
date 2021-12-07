@@ -269,6 +269,14 @@ class TreeNode(urwid.TreeNode):
     def marked(self):
         return self.get_widget().marked
 
+    def get_parents(self):
+
+        node = self.get_parent()
+        while node is not None:
+            yield node
+            node = node.get_parent()
+
+
 
 class TreeParentNode(TreeNode, urwid.ParentNode):
 
