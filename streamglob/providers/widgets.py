@@ -219,12 +219,18 @@ class DownloadDirEdit(AutoCompleteEdit):
 
 class DownloadDialog(OKCancelDialog):
 
+    def __init__(self, parent, default_group):
+
+        self.default_group = default_group
+        super().__init__(parent)
+
     @property
     def widgets(self):
 
         return dict(
             group=DownloadDirEdit(
                 provider=self.parent.provider,
+                edit_text=self.default_group or "",
                 caption=("bold", "Group: ")
             ),
             tag=BaseDropdown(
@@ -287,7 +293,7 @@ class DownloadListingViewMixin(ListingViewMixin):
             await self.download_selection()
             return
         else:
-            dialog = DownloadDialog(self)
+            dialog = DownloadDialog(self, listing.group)
             self.provider.view.open_popup(dialog, width=60, height=8)
 
 
