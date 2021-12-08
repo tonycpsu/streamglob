@@ -275,7 +275,7 @@ class BaseProvider(
 
     def load_rules(self):
 
-        # self._conf_rules = None
+        self._conf_rules = None
         self.rule_config = HighlightRuleConfig(
             os.path.join(
                 self.conf_dir,
@@ -1126,11 +1126,16 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
 
     @property
     def preview_stage_default(self):
-        return self.config.auto_preview.get("default", "default")
+        return (
+            self.config.auto_preview.get("default", None)
+        ) or "default"
 
     @property
     def preview_stages(self):
-        return [Tree(mode=self.preview_stage_default)] + self.config.auto_preview.stages
+        return [Tree(mode=self.preview_stage_default)] + (
+            self.config.auto_preview.stages
+            or []
+        )
 
     async def preview_content(self):
 
@@ -1138,14 +1143,14 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
         source = self.selected_source
         position = self.playlist_position
 
+        # import ipdb; ipdb.set_trace()
+
         if self.config.auto_preview.delay:
             logger.debug(f"sleeping: {self.config.auto_preview.delay}")
             await asyncio.sleep(self.config.auto_preview.delay)
 
         stages = self.preview_stages[self.preview_stage:]
         for (cfg, next_cfg) in pairwise(stages + [None]):
-            # if self.playlist_position != position:
-            #     return
             logger.debug(f"stage: {cfg.mode} {self.preview_stage}")
             # import ipdb; ipdb.set_trace()
             # if self.play_items[position].preview_mode == cfg.mode:

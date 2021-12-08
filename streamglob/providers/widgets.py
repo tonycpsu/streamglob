@@ -674,7 +674,7 @@ class ProviderDataTable(
                     if self.parent.selection.data_source.subjects:
                         self._default_subject = self.parent.selection.data_source.subjects[0]
                     elif self.parent.provider.conf_rules.highlight_words:
-                        self._default_subject = self.parent.selection.data.title
+                        self._default_subject = utils.strip_emoji(self.parent.selection.data.title)
                     else:
                         self._default_subject = None
                 return self._default_subject

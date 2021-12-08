@@ -598,9 +598,17 @@ class MediaListingMixin(object):
     def tokens(self):
 
         tokens = []
+        default_subjects = self.provider.conf_rules.get(
+            "defaults", {}
+        ).get("subjects", {})
+        channel_cfg = self.channel.config.get_value()
+        if isinstance(channel_cfg, dict):
+            subject_cfg = channel_cfg.get("subjects", {})
+        else:
+            subject_cfg = {}
         cfg = AttrDict(
-            self.provider.conf_rules.get("defaults", {}).get("subjects", {}),
-            **self.channel.attrs.get("subjects", {})
+            default_subjects,
+            **subject_cfg
         )
 
         if cfg:
@@ -641,18 +649,25 @@ class MediaListingMixin(object):
 
     @property
     def token_aliases(self):
-        cfg = self.channel.attrs.get("subjects", {}).get("find", None)
-        if not cfg:
+        cfg = self.channel.config.get_value()
+        if not isinstance(cfg, dict):
+            return {}
+        subject_cfg = cfg.get("subjects", {}).get("find", None)
+        if not subject_cfg:
             return {}
         return {
             name: aliases
-            for name, aliases in cfg["values"].items()
+            for name, aliases in subject_cfg["values"].items()
             if aliases
         }
 
     @property
     def group(self):
 
+        # import ipdb; ipdb.set_trace()
+        group_config = self.channel.config.get_value()
+        if not isinstance(group_config, dict):
+            group_config = {}
         return next(
             (
                 r.group
@@ -660,7 +675,9 @@ class MediaListingMixin(object):
                 if r.group
             ),
             None
-        ) or self.channel.attrs.get("group,", None) or (
+        ) or (
+            group_config.get("group,", None)
+        ) or (
             next(
                 (
                     (
