@@ -71,6 +71,7 @@ class RSSSession(session.StreamSession):
          )
     ]
 
+
     def parse(self, url):
         try:
             res = self.session.get(url)
@@ -112,10 +113,27 @@ class RSSFeed(FeedMediaChannel):
                     guid = getattr(item, "guid", item.link) or item.link
                     i = self.items.select(lambda i: i.guid == guid).first()
                     if not i:
-                        source = AttrDict(
-                            url=item.link,
-                            media_type="video" # FIXME: could be something else
-                        )
+                        sources = [
+                            AttrDict(
+                                url=item.link,
+                                url_preview=body_url,
+                                media_type="video" # FIXME: could be something else
+                            )
+                            for body_url in (
+                                    (
+                                        RSSMediaListing.extract_urls(item.content)
+                                        or
+                                        [None]
+                                    )
+                                    if item.content
+                                    else [None]
+                                )
+                        ]
+                        logger.info(sources)
+                        # source = AttrDict(
+                        #     url=item.link,
+                        #     media_type="video" # FIXME: could be something else
+                        # )
                         i = AttrDict(
                             channel = self,
                             guid = guid,
@@ -125,13 +143,32 @@ class RSSFeed(FeedMediaChannel):
                             # created = datetime.fromtimestamp(
                             #     mktime(item.published_parsed)
                             # ),
-                            sources = [source]
+                            # sources = [source]
+                            sources = sources
                         )
                         yield i
         except SGFeedUpdateFailedException:
             logger.warn(f"couldn't update feed {self.name}")
 
+@keymapped()
+class RSSDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
 
+    DETAIL_BOX_CLASS = CachedFeedProviderDetailBox
+
+    # def __init__(self, *args, **kwargs):
+    #     super().__init__(*args, **kwargs)
+    #     # urwid.connect_signal(
+    #     #     self, "end",
+    #     #     self.on_end
+    #     # )
+
+    # def keypress(self, size, key):
+    #     return super().keypress(size, key)
+
+
+
+class RSSProviderBodyView(CachedFeedProviderBodyView):
+    pass
 
 class RSSProvider(PaginatedProviderMixin,
                   CachedFeedProvider):
@@ -143,6 +180,11 @@ class RSSProvider(PaginatedProviderMixin,
     SESSION_CLASS = RSSSession
 
     CHANNELS_LABEL = "feeds"
+
+    @property
+    def VIEW(self):
+        return FeedProviderView(self, RSSProviderBodyView(self, RSSDataTable(self)))
+
 
     @property
     def FILTERS_OPTIONS(self):

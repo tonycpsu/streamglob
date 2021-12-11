@@ -755,15 +755,12 @@ class ContentMediaListingMixin(object):
     def body(self):
         return self.content or ""
 
-    @property
-    def body_urls(self):
-
-        if not self.content:
-            return []
+    @classmethod
+    def extract_urls(cls, content):
 
         extracted_urls = (
-            urlscan.extracthtmlurls(self.content)
-            or urlscan.extracturls(self.content)
+            urlscan.extracthtmlurls(content)
+            or urlscan.extracturls(content)
         )
 
         urls = []
@@ -787,6 +784,15 @@ class ContentMediaListingMixin(object):
                             urls.append(chunk.url)
                             groupurls.append(chunk.url)
         return urls
+
+
+    @property
+    def body_urls(self):
+
+        if not self.content:
+            return []
+
+        return self.extract_urls(self.content)
 
 @attrclass()
 class ContentMediaListing(ContentMediaListingMixin, MediaListing):
