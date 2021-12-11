@@ -12,7 +12,7 @@ from itertools import chain
 
 from orderedattrdict import AttrDict, DefaultAttrDict, Tree
 from pony.orm import *
-from panwid.dialog import BaseView
+from panwid.dialog import *
 from panwid.keymap import *
 from pydantic import BaseModel
 
@@ -1263,37 +1263,67 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
 
     def on_player_load_failed(self, url):
 
+        logger.info(f"on_player_load_failed: {url}")
+
+        if state.task_manager.preview_task.provider != self.provider.IDENTIFIER:
+            return
+
+        class RefreshingMessage(BasePopUp):
+            def __init__(self):
+                self.text = urwid.Text("Media URL(s) expired, refreshing listing...", align="center")
+                self.filler = urwid.Filler(self.text)
+                super().__init__(self.filler)
+
+            def selectable(self):
+                return False
+
+        message = RefreshingMessage()
+        self.provider.view.open_popup(message, width=40, height=5)
+
         async def async_handler():
-            try:
-                old_pos = self.playlist_position
-                failed_index = next(
+
+            pos = await state.task_manager.preview_player.command(
+                "get_property", "playlist-pos"
+            )
+
+            await state.task_manager.preview_player.command(
+                "playlist-play-index", "none"
+            )
+
+            failed_index = next(
+                (
                     i for i, item in enumerate(self.play_items)
-                    if item.locator == url
+                    if url in [item.locator, item.locator_preview]
+                ),
+                pos
+            )
+
+            # import ipdb; ipdb.set_trace()
+            play_item = self.play_items[failed_index]
+            failed_listing_id = play_item.media_listing_id
+            source_rank = play_item.index
+
+            with db_session(optimistic=False):
+                # have to force a reload here since sources may have changed
+                listing = self.provider.LISTING_CLASS[failed_listing_id]#
+                await self.playlist_replace(listing.cover, idx=failed_index)
+                await self.inflate_listing(self.playlist_pos_to_row(failed_index))
+                listing = listing.attach().detach()
+                source = next(
+                    s for s in listing.sources
+                    if s.rank == source_rank
                 )
-                await self.playlist_replace(utils.BLANK_IMAGE_URI, idx=failed_index, pos=old_pos)
-                play_item = self.play_items[failed_index]
-                source_rank = play_item.index
-                failed_listing_id = play_item.media_listing_id
-                with db_session(optimistic=False):
-                    listing = self.provider.LISTING_CLASS[failed_listing_id]
-                    if not await listing.check():
-                        logger.debug("listing broken, fixing...")
-                        listing.refresh()
-                        # have to force a reload here since sources may have changed
-                        listing = listing.attach().detach()
-                        source = next(
-                            s for s in listing.sources
-                            if s.rank == source_rank
-                        )
-                        await self.playlist_replace(
-                            source.locator, idx=failed_index, pos=old_pos
-                        )
+                # print(self.play_items[failed_index].locator)
+                # import ipdb; ipdb.set_trace()
+                # FIXME
+                # print(listing.media_listing_id)
+                # import ipdb; ipdb.set_trace()
+                self.df.update_rows([listing])
+                # print(self.play_items[failed_index].locator)
+                self.load_play_items()
+                await self.playlist_replace(source.locator, idx=failed_index)
 
-
-                # await self.set_playlist_pos(old_pos)
-
-            except StopIteration:
-                logger.warn(f"couldn't find {url} in play items")
+            self.provider.view.close_popup()
 
         asyncio.create_task(async_handler())
 
@@ -1391,7 +1421,8 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
                 #     else (getattr(source, "locator_thumbnail", None) or source.locator)
                 # )
                 # locator=source.locator or getattr(source, "locator_thumbnail", None),
-                locator_preview=source.locator_for_preview(state.listings_view.preview_mode),
+                # locator_preview=source.locator_for_preview(state.listings_view.preview_mode),
+                locator_preview=source.locator_preview,
                 locator=source.locator
             )
             for (row_num, row, index, source) in [
@@ -1409,7 +1440,7 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
                     # if not source.is_bad
             ]
         ]
-        # raise Exception(self.play_items)
+        # import ipdb; ipdb.set_trace()
 
     @property
     def playlist_position_text(self):
@@ -1421,12 +1452,9 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
         super().on_requery(source, count)
 
 
-    # def create_preview_task(self, listing, *args, **kwargs):
-    #     return self.provider.create_preview_task(listing, *args, **kwargs)
-
     def create_preview_task(self, listing, **kwargs):
         return model.PlayMediaTask.attr_class(
-            provider=self.NAME,
+            provider=self.provider.IDENTIFIER,
             title=listing.title,
             sources=listing.sources
         )

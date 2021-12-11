@@ -276,6 +276,10 @@ class TasksView(SynchronizedPlayerProviderMixin,
         return "tasks"
 
     @property
+    def IDENTIFIER(self):
+        return "tasks"
+
+    @property
     def config(self):
         return config.settings.profile.tasks
 

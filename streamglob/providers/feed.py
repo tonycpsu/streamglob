@@ -386,7 +386,7 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
         "N": ("next_unread", [True]),
         "b": "prev_unread",
         "m": "toggle_selection_read",
-        "i": "inflate_selection",
+        "i": "inflate_listing",
         # "a": "mark_feed_read"
     }
 
@@ -434,17 +434,29 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
         return "unread" if not data.read else "normal"
 
     @keymap_command()
-    async def inflate_selection(self):
-        async with self.provider.listing_lock:
-            with db_session:
-                listing = self.selection.data_source.attach()
-                if await listing.inflate(force=True):
-                    # position = self.focus_position
-                    self.invalidate_rows([listing.media_listing_id])
-                    self.selection.close_details()
-                    self.selection.open_details()
-                    self.refresh()
-                    # self.focus_position = position
+    async def inflate_listing(self, index=None):
+        # async with self.provider.listing_lock:
+        with db_session(optimistic=False):
+            listing = self.get_listing(index=index).attach()
+            # listing = self.selection.data_source.attach()
+            if await listing.inflate(force=True):
+                # position = self.focus_position
+                self.invalidate_rows([listing.media_listing_id])
+                self.selection.update()
+
+    # @keymap_command()
+    # async def inflate_selection(self):
+    #     async with self.provider.listing_lock:
+    #         with db_session:
+    #             listing = self.selection.data_source.attach()
+    #             if await listing.inflate(force=True):
+    #                 # position = self.focus_position
+    #                 self.invalidate_rows([listing.media_listing_id])
+    #                 self.selection.update()
+    #                 # self.selection.close_details()
+    #                 # self.selection.open_details()
+    #                 # self.refresh()
+    #                 # self.focus_position = position
 
     # FIXME
     # def on_focus(self, source, position):
@@ -546,21 +558,21 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
             return
         with db_session:
 
-            async with self.provider.listing_lock:
-                    listing = model.MediaListing[row.data_source.media_listing_id]
-                    for i, s in enumerate(listing.sources):
-                        source = FeedMediaSource[s.media_source_id]
-                        # logger.info(f"{i}, {source}")
-                        # source.attach().read = now
-                        source.mark_seen()
-                        commit()
-                        if len(listing.sources) > 1:
-                            logger.info(f"{len(listing.sources)}, {len(row.details.contents.table)}")
-                            row.details.contents.table[i].clear_attr("unread")
-                        # else:
-                        #     listing_source.attach().read = now
-                    row.close_details()
-                    row.clear_attr("unread")
+            # async with self.provider.listing_lock:
+            listing = model.MediaListing[row.data_source.media_listing_id]
+            for i, s in enumerate(listing.sources):
+                source = FeedMediaSource[s.media_source_id]
+                # logger.info(f"{i}, {source}")
+                # source.attach().read = now
+                source.mark_seen()
+                commit()
+                if len(listing.sources) > 1:
+                    logger.info(f"{len(listing.sources)}, {len(row.details.contents.table)}")
+                    row.details.contents.table[i].clear_attr("unread")
+                # else:
+                #     listing_source.attach().read = now
+            row.close_details()
+            row.clear_attr("unread")
 
             old_pos = self.focus_position
             try:

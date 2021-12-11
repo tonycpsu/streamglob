@@ -71,6 +71,10 @@ class InstagramMediaSourceMixin(object):
     EXTENSION_RE = re.compile("\.(\w+)\?")
 
     @property
+    def locator_preview(self):
+        return self.listing.cover
+
+    @property
     def ext(self):
         try:
             return self.EXTENSION_RE.search(self.locator).groups()[0]
@@ -91,6 +95,7 @@ class InstagramMediaSourceMixin(object):
     #     return any(s in (self.locator or self.locator_thumbnail) for s in ["0_0_0", "null.jpg"])
 
     async def check(self):
+        # return True
         if self.created > datetime.now() - timedelta(hours=4):
             return True
         res = self.provider.session.public.head(self.locator)
@@ -101,7 +106,7 @@ class InstagramMediaSourceMixin(object):
         return lambda d: d.is_simple
 
 
-@model.attrclass(InstagramMediaSourceMixin)
+@model.attrclass()
 class InstagramMediaSource(InstagramMediaSourceMixin, model.InflatableMediaSource, FeedMediaSource):
 
     shortcode = Optional(str)
@@ -113,10 +118,15 @@ class InstagramMediaListingMixin(object):
     def shortcode(self):
         return self.guid
 
+    @property
+    def cover(self):
+        return f"https://www.instagram.com/p/{self.guid}/media/?size=l"
+
     async def inflate(self, force=False):
         if self.is_inflated and not force:
             return False
         logger.debug("inflate")
+        # import ipdb; ipdb.set_trace()
         async with self.provider.listing_lock:
             with db_session(optimistic=False):
                 # FIXME: for some reason I don't feel like digging into right now,
@@ -428,10 +438,6 @@ class InstagramProviderBodyView(CachedFeedProviderBodyView):
              )
         ]
 
-
-class InstagramProviderView(FeedProviderView):
-
-    PROVIDER_BODY_CLASS = InstagramDataTable
 
 class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
 
