@@ -1546,6 +1546,7 @@ class DetailDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseDataTa
                     title=f"[{i+1}/{len(source.listing.sources)}] {source.listing.title}",
                     feed=source.listing.feed,
                     created=source.listing.created,
+                    group=(source.group or source.listing.group),
                     read=source.listing.attrs.get("parts_read", {}).get(i, False)
                 ))
               for i, source in enumerate(self.listing.sources)

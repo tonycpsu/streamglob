@@ -531,7 +531,13 @@ class MediaSourceMixin(object):
             except SGInvalidFilenameTemplate as e:
                 logger.error(e)
 
+    @property
+    def subjects(self):
+        return self.listing.subjects
 
+    @property
+    def group(self):
+        return self.listing.group
 
 
 @attrclass()
@@ -689,6 +695,14 @@ class MediaListingMixin(object):
                     )
                 ),
                 None
+            )
+        ) or (
+            self.provider.conf_rules.get(
+                "defaults", {}
+            ).get("group", "").format_map(
+                SafeDict(
+                    feed=self.feed
+                )
             )
         )
 
