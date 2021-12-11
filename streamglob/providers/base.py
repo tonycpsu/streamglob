@@ -219,7 +219,7 @@ class BaseProvider(
     @property
     def ATTRIBUTES(self):
         return AttrDict(
-            title={"width": ("weight", 1)},
+            title={"width": ("weight", 1), "truncate": True},
             group={"width": 20},
         )
 
