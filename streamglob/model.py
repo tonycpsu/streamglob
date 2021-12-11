@@ -291,7 +291,7 @@ SUBJECT_MAP = dict()
 
 class MediaSourceMixin(object):
 
-    TEMPLATE_RE=re.compile("\{((?!(index|num|listing|feed|uri))[^}]+)\}")
+    TEMPLATE_RE = re.compile("\{((?!(index|num|listing|feed|uri))[^}]+)\}")
 
     KEY_ATTR = "url"
 
@@ -322,7 +322,7 @@ class MediaSourceMixin(object):
 
     @property
     def locator_preview(self):
-        return self.url_preview
+        return self.url_preview or self.listing.cover
 
     @property
     def locator_blank(self):
@@ -559,11 +559,15 @@ class InflatableMediaSourceMixin(object):
 
     @property
     def locator_default(self):
-        return self.locator_thumbnail or self.locator
+        return self.locator_thumbnail or self.locator_preview
 
     @property
     def locator_thumbnail(self):
         return self.url_thumbnail
+
+    @property
+    def locator_preview(self):
+        return self.url_thumbnail or super().locator_preview
 
     @property
     def is_inflated(self):

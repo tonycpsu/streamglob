@@ -61,7 +61,7 @@ class TaskManager(Observable):
 
     def make_playlist(self, title, items):
 
-        ITEM_TEMPLATE=textwrap.dedent(
+        ITEM_TEMPLATE = textwrap.dedent(
         """\
         #EXTINF:{attrs},{title}
         {locator}
@@ -78,7 +78,7 @@ class TaskManager(Observable):
                 m3u.write(ITEM_TEMPLATE.format(
                     title=(item.title or "(no title)").strip(),
                     attrs=attrs,
-                    locator=getattr(item, "locator_preview", item.locator)
+                    locator=getattr(item, "locator_preview", None) or item.locator
                 ).encode("utf-8"))
             logger.debug(m3u.name)
 
