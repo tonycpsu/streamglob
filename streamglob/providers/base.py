@@ -998,18 +998,18 @@ class SynchronizedPlayerMixin(object):
 
         padding = cfg.text.padding or 0
 
-        filters = []
+        upscale = cfg.upscale or 1280
+        vf_scale = f"@upscale:lavfi=[scale=w=max(iw\\,{upscale}):h=-2]"
+        filters = [vf_scale]
 
         frame_count = await state.task_manager.preview_player.command(
             "get_property", "estimated-frame-count"
         )
         logger.info(f"frame_count: {frame_count}")
         if frame_count is None or frame_count <= 1:
-            upscale = cfg.upscale or 1280
-            vf_scale = f"@upscale:lavfi=[scale=w=max(iw\\,{upscale}):h=-2]"
             vf_framerate = f"@framerate:framerate=fps={cfg.fps or 30}"
-            # filters += [vf_framerate]
-            filters += [vf_scale, vf_framerate]
+            filters += [vf_framerate]
+            # filters += [vf_scale, vf_framerate]
 
         if cfg.box:
             box_color = cfg.box.color.default or "000000@0.5"
