@@ -560,7 +560,7 @@ class Player(Program):
                 return
 
             if downloader:
-                if downloader.cmd in programs.INTEGRATED_DOWNLOADERS:
+                if downloader.cmd in player.INTEGRATED_DOWNLOADERS:
                     downloader = None
                 else:
                     downloader.source = source

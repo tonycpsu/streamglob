@@ -57,7 +57,9 @@ class TaskManager(Observable):
 
     @property
     def preview_player(self):
-        return self._preview_player.result()
+        if self._preview_player.done():
+            return self._preview_player.result()
+        return None
 
     def make_playlist(self, title, items):
 

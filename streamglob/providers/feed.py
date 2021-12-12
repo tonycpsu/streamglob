@@ -1185,7 +1185,8 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                     max_items = config.settings.profile.cache.max_items,
                     max_age = config.settings.profile.cache.max_age
                 )
-        self.create_feeds()
+        if not isinstance(self.view, InvalidConfigView): # FIXME
+            self.create_feeds()
 
     def format_feed(feed):
         return feed.name if hasattr(feed, "name") else ""

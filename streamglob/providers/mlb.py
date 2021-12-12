@@ -11,6 +11,7 @@ from wand.image import Image
 from wand.color import Color
 from orderedattrdict import AttrDict
 from panwid.datatable import *
+from panwid.dialog import *
 from pony.orm import *
 import requests
 import dateutil.parser

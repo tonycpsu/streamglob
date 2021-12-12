@@ -420,9 +420,13 @@ def run_gui(action, provider, **kwargs):
                 logger.warning(e)
 
         async def preview_foreground(rpc_request):
+            if not state.task_manager.preview_player:
+                return
             await state.task_manager.preview_player.command("set_property", "ontop", "yes")
 
         async def preview_background(rpc_request):
+            if not state.task_manager.preview_player:
+                return
             await state.task_manager.preview_player.command("set_property", "ontop", "no")
 
         methods = [
