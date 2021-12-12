@@ -126,7 +126,6 @@ class HighlightRuleList(MutableSequence):
             if k:
                 out.append(("".join(item[1] for item in g),))
             else:
-                print(list(g))
                 out += [(self.attr, list(g)[0][0])]
         return out
 
@@ -295,12 +294,9 @@ class HighlightRuleConfig(object):
         for subject, alias_list in aliases.items():
             text = re.sub("|".join(
                 (
-                    # The this lookahead here avoids replacements where the
-                    # alias is a prefix of the subject
-                    f"(?!{subject}){alias}"
+                    alias
                     for alias in alias_list
                 )
-
             ), subject, text)
 
         if candidates:
@@ -334,6 +330,7 @@ class HighlightRuleConfig(object):
 
 
     def apply(self, text, candidates=[], aliases={}):
+
         return [
             (self.highlight_config.get(label), token) if label else token
             for (label, token) in self.tokenize(text, candidates=candidates, aliases=aliases)
