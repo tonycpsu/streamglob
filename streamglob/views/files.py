@@ -432,7 +432,7 @@ class FilesView(
 
         self.browser = FileBrowser(
             top_dir,
-            root=config.settings.profile.files.root,
+            root=top_dir,
             dir_sort=self.config.dir_sort,
             file_sort=self.config.file_sort,
             ignore_files=False

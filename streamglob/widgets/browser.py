@@ -237,7 +237,10 @@ class DirectoryNode(FileBrowserTreeNodeMixin, TreeParentNode):
 
     def find_path(self, path):
         d, p = os.path.split(path)
-        node = self.get_first_child()
+        try:
+            node = self.get_first_child()
+        except IndexError:
+            return None
         while True:
             if not d:
                 if node.get_key() == p:
