@@ -407,9 +407,16 @@ class MediaSourceMixin(object):
                 s = re.sub(r"{listing.title\b", "{listing.safe_title", s)
             try:
                 title = listing.title
-                group_title = f"""{"[%s] " %(group) if group else ""}{title}"""
+                # group_title = f"""{"[%s] " %(group) if group else ""}{title}"""
+                # if match_glob:
+                #     group_title = glob.escape(group_title)
+                if self.provider.config.output.title_prefix == "group":
+                    title = f"""{"[%s] " %(group) if group else ""}{title}"""
+                if self.provider.config.output.title_prefix == "subjects":
+                    title = f"""{"[%s] " %(", ".join(subjects)) if subjects else ""}{title}"""
+
                 if match_glob:
-                    group_title = glob.escape(group_title)
+                    title = glob.escape(title)
                 outfile = s.format_map(
                     SafeDict(
                         self=self, listing=listing, # FIXME
@@ -417,8 +424,8 @@ class MediaSourceMixin(object):
                         index=self.rank+1,
                         num=num or len(listing.sources) if listing else 0,
                         subject=",".join(subjects) if subjects else None,
+                        title=title,
                         group=group,
-                        group_title=group_title,
                         subjects=subjects,
                         **tokens
                         # subject_dir=subject_dir
@@ -512,6 +519,7 @@ class MediaSourceMixin(object):
                     listing=listing, num=len(listing.sources) if listing else 1,
                     match_glob=True
                 )
+                # import ipdb; ipdb.set_trace()
                 if not filename:
                     return None
                 try:
@@ -520,10 +528,11 @@ class MediaSourceMixin(object):
 
                 except StopIteration:
                     pass
-                if not getattr(self, "uri", None):
-                    return None
                 dirname = os.path.dirname(filename)
-                filename = os.path.join(dirname, f"*{self.uri}*")
+                if self.provider.config.output.match_type == "uri" and getattr(self, "uri", None):
+                    filename = os.path.join(dirname, f"*{self.uri.replace('/', '+') +'='}*")
+                elif self.provider.config.output.match_type == "guid" and getattr(listing, "guid", None):
+                    filename = os.path.join(dirname, f"*{listing.guid}*")
                 try:
                     return next(glob.iglob(filename))
                 except StopIteration:
