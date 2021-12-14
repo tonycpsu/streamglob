@@ -1445,7 +1445,10 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
             if attr == "label":
                 attr = "title"
                 value = self.rule_config[value].pattern
-            return f"""lower({attr}) {op} lower('{value.replace("'", "''")}')"""
+                sql = f"""lower({attr}) {op} lower('{value.replace("'", "''")}')"""
+            else:
+                sql = f"""{attr} {op} {value}"""
+            return sql
 
         return "(" + " ".join([
             parse_term(term)
@@ -1484,10 +1487,6 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
             sql = f"channel = '{feed.channel_id}'"
             if self.apply_subject_filters and "filters" in feed.attrs:
                 sql += " AND " + self.filter_config_to_query(feed.attrs["filters"])
-                # sql += " AND " + " AND ".join(
-                #     self.filter_rule_to_query(rule)
-                #     for rule in feed.attrs["filters"]["rules"]
-                # )
             return sql
 
         self.feed_items_query = self.all_items_query
