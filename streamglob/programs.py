@@ -708,8 +708,7 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
         ).replace(
             "ctrl+", "ctrl "
         ).replace(
-            "cursor ",
-            ""
+            "cursor ", ""
         )
 
     def __getattr__(self, attr):

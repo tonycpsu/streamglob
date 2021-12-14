@@ -42,6 +42,7 @@ class TaskManager(Observable):
         self.preview_task = None
         self._preview_player = state.event_loop.create_future()
         self._preview_player_lock = asyncio.Lock()
+        self.preview_player_state = AttrDict(playing=False)
         self.to_play = TaskList()
         self.to_download = TaskList()
         self.playing = TaskList()
@@ -157,7 +158,23 @@ class TaskManager(Observable):
                 key = self.preview_player.key_to_urwid(key_name)
                 if key.startswith("mbtn"):
                     return
-                logger.debug(f"mpv key: {key_name}")
+                logger.debug(f"mpv key: {key_name}, {key}")
+                if key in config.settings.profile.preview.input.always.keys():
+                    command = config.settings.profile.preview.input.always[key]
+                    await self.preview_player.command(
+                        *(str(arg) for arg in command)
+                    )
+                    return
+
+                elif (
+                    self.preview_player_state.playing
+                    and key in config.settings.profile.preview.input.playing.keys()
+                ):
+                    command = config.settings.profile.preview.input.playing[key]
+                    await self.preview_player.command(
+                        *(str(arg) for arg in command)
+                    )
+                    return
                 # key = self.view.keypress((100, 100), key)
                 state.loop.process_input([key])
                 # if not state.loop.process_input([key]):
@@ -165,6 +182,14 @@ class TaskManager(Observable):
 
             await self.preview_player.controller.register_unbound_key_callback(
                 handle_mpv_key
+            )
+
+            async def on_pause(name, data):
+                self.preview_player_state.playing = not data
+
+            self.preview_player.controller.bind_property_observer(
+                "pause",
+                on_pause
             )
 
             async def on_log_message(level, prefix, text):
