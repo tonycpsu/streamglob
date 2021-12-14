@@ -1,5 +1,5 @@
 import re
-from orderedattrdict import AttrDict
+from orderedattrdict import AttrDict, Tree
 from itertools import chain
 from collections.abc import MutableSequence
 import yaml
@@ -13,19 +13,20 @@ FUZZY_WHITESPACE_RE = re.compile("(?<=\w) +(?![*+])")
 
 class HighlightRule(object):
 
-    def __init__(self, subject, group=None, patterns=None, fuzzy_whitespace=False):
+    def __init__(self, subject, group=None, patterns=None, config=None):
+        self.config = config or Tree()
+        self.flags = 0 if self.config.match.case_sensitive else re.IGNORECASE
         self.subject = subject
         self._group = group
         self._patterns = patterns
-        self.fuzzy_whitespace = fuzzy_whitespace
         self._re = re.compile("|".join(
             (
                 FUZZY_WHITESPACE_RE.sub("\\\\s+", p)
-                if self.fuzzy_whitespace
+                if self.config.match.fuzzy_whitespace
                 else p
             )
             for p in self.patterns
-        ))
+        ), self.flags)
 
     @property
     def patterns(self):
@@ -82,15 +83,16 @@ class HighlightRule(object):
 
 class HighlightRuleList(MutableSequence):
 
-    def __init__(self, attr, rules, fuzzy_whitespace=False):
-        self.fuzzy_whitespace = fuzzy_whitespace
+    def __init__(self, attr, rules, config=None):
+        self.config = config or Tree()
+        self.flags = 0 if self.config.match.case_sensitive else re.IGNORECASE
         self.attr = attr
         self.rules = [
             rule
             if isinstance(rule, HighlightRule)
-            else HighlightRule(rule, fuzzy_whitespace=self.fuzzy_whitespace)
+            else HighlightRule(rule, config=self.config)
             if isinstance(rule, str)
-            else HighlightRule(**rule, fuzzy_whitespace=self.fuzzy_whitespace)
+            else HighlightRule(**rule, config=self.config)
             for rule in rules
         ]
         if any([type(r.patterns) != list for r in self.rules ]):
@@ -99,7 +101,7 @@ class HighlightRuleList(MutableSequence):
         self.pattern = "|".join(
             (
                 FUZZY_WHITESPACE_RE.sub("\\\\s+", p)
-                if self.fuzzy_whitespace
+                if self.config.match.fuzzy_whitespace
                 else p
             )
             for p in list(chain.from_iterable(
@@ -107,9 +109,10 @@ class HighlightRuleList(MutableSequence):
             for rule in self.rules
         )))
 
-        self._re_search = re.compile(self.pattern)
+        self._re_search = re.compile(self.pattern, self.flags)
         self._re_apply = re.compile(
-            f"\\b({self.pattern})|(?!{self.pattern})(.+?)"
+            f"\\b({self.pattern})|(?!{self.pattern})(.+?)",
+            self.flags
         )
 
     def __repr__(self):
@@ -168,13 +171,14 @@ class HighlightRuleConfig(object):
         self.config = config.Config(
             self._config_file
         )
+        self.flags = 0 if self.config.match.case_sensitive else re.IGNORECASE
         # import ipdb; ipdb.set_trace()
         self.rules = AttrDict([
             (label,
              HighlightRuleList(
                  self.highlight_config.get(label),
                  [ dict(subject=k, **(v or {})) for k, v in rule_dict.items() ],
-                 fuzzy_whitespace=self.config.match.fuzzy_whitespace
+                 config=self.config
              )
              )
             for label, rule_dict in self.label_config.items()
@@ -213,7 +217,7 @@ class HighlightRuleConfig(object):
                     if r.subject not in targets
                     and not any(pattern in targets for pattern in r.patterns)
                 ],
-                 fuzzy_whitespace=self.config.match.fuzzy_whitespace
+                config=self.config
             ))
             for label, rule_list in self.rules.items()
         ])
@@ -276,7 +280,7 @@ class HighlightRuleConfig(object):
                 if len(p)
             ])
             self.RE_MAP[rules_set] = tuple(
-                re.compile(p)
+                re.compile(p, self.flags)
                 for p in [pattern, pattern_grouped, pattern_tokens]
             )
         return self.RE_MAP[rules_set]
@@ -324,7 +328,7 @@ class HighlightRuleConfig(object):
                         r for r in rule_list
                         if r.subject in candidates
                     ],
-                 fuzzy_whitespace=self.config.match.fuzzy_whitespace
+                    config=self.config
                 ))
                 for label, rule_list in self.rules.items()
             ])
