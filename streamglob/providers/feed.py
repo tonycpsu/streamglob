@@ -1445,6 +1445,8 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
             if attr == "label":
                 attr = "title"
                 value = self.rule_config[value].pattern
+
+            if attr in ["title", "content"]:
                 sql = f"""lower({attr}) {op} lower('{value.replace("'", "''")}')"""
             else:
                 sql = f"""{attr} {op} {value}"""
