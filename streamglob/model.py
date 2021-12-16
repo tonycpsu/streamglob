@@ -406,7 +406,7 @@ class MediaSourceMixin(object):
             if safe:
                 s = re.sub(r"{listing.title\b", "{listing.safe_title", s)
             try:
-                title = listing.title
+                title = listing.safe_title
                 # group_title = f"""{"[%s] " %(group) if group else ""}{title}"""
                 # if match_glob:
                 #     group_title = glob.escape(group_title)
