@@ -695,7 +695,7 @@ class MediaListingMixin(object):
             ),
             None
         ) or (
-            group_config.get("group,", None)
+            group_config.get("group", None)
         ) or (
             next(
                 (
