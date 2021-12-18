@@ -30,7 +30,12 @@ class HighlightRule(object):
 
     @property
     def patterns(self):
-        return self._patterns or  [self.subject]
+        return list(
+            dict.fromkeys(
+                [self.subject] + (self._patterns or [])
+            )
+        )
+        # return self._patterns or [self.subject]
 
     @property
     def group(self):
