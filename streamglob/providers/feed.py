@@ -1485,10 +1485,11 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         )
 
         def feed_to_filter(feed):
-            # import ipdb; ipdb.set_trace()
             sql = f"channel = '{feed.channel_id}'"
-            if self.apply_subject_filters and "filters" in feed.attrs:
-                sql += " AND " + self.filter_config_to_query(feed.attrs["filters"])
+            feed_config = feed.config.get_value()
+            if self.apply_subject_filters and "filters" in feed_config:
+                sql += " AND " + self.filter_config_to_query(feed_config["filters"])
+                # import ipdb; ipdb.set_trace()
             return sql
 
         self.feed_items_query = self.all_items_query

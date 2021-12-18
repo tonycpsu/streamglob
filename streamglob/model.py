@@ -414,6 +414,8 @@ class MediaSourceMixin(object):
                     title = f"""{"[%s] " %(group) if group else ""}{title}"""
                 if self.provider.config.output.title_prefix == "subjects":
                     title = f"""{"[%s] " %(", ".join(subjects)) if subjects else ""}{title}"""
+                else:
+                    raise NotImplementedError
 
                 if match_glob:
                     title = glob.escape(title)
@@ -738,13 +740,11 @@ class MediaListingMixin(object):
     def subjects(self):
         # import ipdb; ipdb.set_trace()
         try:
-            return [r.subject for r in self.subject_rules]
-            # return list(dict.fromkeys(list(
-            #     chain.from_iterable(
-            #         [r.subject]
-            #         for r in self.subject_rules
-            #     )
-            # )))
+            return list(
+                dict.fromkeys(
+                    r.subject for r in self.subject_rules
+                )
+            )
         except (AttributeError, IndexError):
             return None
 
