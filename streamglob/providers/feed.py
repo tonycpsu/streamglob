@@ -19,6 +19,7 @@ from panwid.progressbar import ProgressBar
 from limiter import get_limiter, limit
 from pony.orm import *
 import timeago
+import dateparser
 
 from .. import model
 from .. import utils
@@ -29,6 +30,13 @@ from ..widgets.channels import ChannelTreeBrowser
 from .widgets import *
 from .filters import *
 
+
+DATE_RE = r"\b\d{4}(?:[-/]\d{2}(?!\d))?(?:[-/]\d{2}(?!\d))?"
+TIME_RE = r"\d{2}?(?:[:.]\d{2})?(?:[:.]\d{2})?"
+DATETIME_RE = f"{DATE_RE}(?:[T_ ]{TIME_RE})?"
+DATETIME_RANGE_RE = re.compile(
+    f"({DATETIME_RE})?\s*-?\s*({DATETIME_RE})?"
+)
 
 @model.attrclass()
 class FeedMediaChannel(model.MediaChannel):
@@ -1516,8 +1524,32 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         self.items_query = self.items_query.filter(status_filters[self.filters.status.value])
 
         if self.search_filter:
-            (field, query) = re.search("(?:(\w+):)?(.*)", self.search_filter).groups()
-            if field and field in [a.name for a in self.LISTING_CLASS._attrs_]:
+            (field, query) = re.search("(?:(\w+):)?\s*(.*)", self.search_filter).groups()
+            if field == "date":
+                try:
+                    (after, before) = DATETIME_RANGE_RE.search(
+                        query
+                    ).groups()
+                    if after:
+                        d = dateparser.parse(
+                            after, settings={"PREFER_DAY_OF_MONTH": "first"}
+                        )
+                        if d:
+                            self.items_query = self.items_query.filter(
+                                lambda i: i.created >= d
+                            )
+                    if before:
+                        d = dateparser.parse(
+                            before, settings={"PREFER_DAY_OF_MONTH": "first"}
+                        )
+                        if d:
+                            self.items_query = self.items_query.filter(
+                                lambda i: i.created <= d
+                            )
+                except AttributeError:
+                    pass
+
+            elif field and field in [a.name for a in self.LISTING_CLASS._attrs_]:
                 self.items_query = self.items_query.filter(
                     lambda i: getattr(i, field) == query
                 )
