@@ -5,7 +5,12 @@ import mistune
 import html2text
 import html.parser
 import pathvalidate
+import timeago
+import pytz
+from datetime import datetime
+
 from . import resources
+from . import config
 
 try:
     import importlib.resources as pkg_resources
@@ -310,6 +315,16 @@ def snake_to_camel(s):
 # def snake_to_friendly_name(s):
 #     return s.replace("_", " ").title()
 
+def format_age(dt):
+    if not dt.tzinfo:
+       dt = dt.replace(
+           tzinfo=pytz.UTC
+       )
+    return timeago.format(
+        dt, datetime.utcnow().replace(
+            tzinfo=pytz.UTC
+        ), "en_short"
+    ).replace(" ago", "").replace("just now", "now")
 
 __all__ = [
     "pairwise",
@@ -322,5 +337,6 @@ __all__ = [
     "html_to_urwid_text_markup",
     "sanitize_filename",
     "camel_to_snake",
-    "snake_to_camel"
+    "snake_to_camel",
+    "format_age"
 ]

@@ -23,7 +23,7 @@ import pony.options
 pony.options.CUT_TRACEBACK = False
 from pony.orm import *
 from urlscan import urlscan, urlchoose
-
+import pytz
 from orderedattrdict import AttrDict
 from pony.orm.core import EntityMeta
 import pydantic
@@ -256,6 +256,17 @@ class MediaChannelMixin(object):
 
     def __str__(self):
         return self.name
+
+    @property
+    def fetched_age(self):
+        try:
+            return self.fetched.replace(
+                    tzinfo=pytz.timezone(config.settings.profile.time_zone)
+                ) - datetime.now().replace(
+                    tzinfo=pytz.timezone(config.settings.profile.time_zone)
+                )
+        except TypeError:
+            return None
 
 
 @attrclass(MediaChannelMixin)

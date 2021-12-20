@@ -93,7 +93,7 @@ class FeedMediaChannel(model.MediaChannel):
                 fetched += 1
                 self.provider.update_fetch_indicator(fetched)
 
-        self.fetched = datetime.now()
+        self.fetched = datetime.utcnow()
 
         if resume and fetched == 0:
             self.attrs["tail_fetched"] = True

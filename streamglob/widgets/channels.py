@@ -14,9 +14,6 @@ from panwid.autocomplete import AutoCompleteMixin
 from panwid.keymap import *
 from panwid.dialog import ChoiceDialog, ConfirmDialog, BasePopUp
 from unidecode import unidecode
-import timeago
-import pytz
-
 
 from .tree import *
 from .. import config
@@ -92,23 +89,30 @@ class ListingCountMixin(object):
         )[:][0] if self.channel else None
 
     @property
+    def fetched(self):
+        return self.channel.fetched if self.channel else None
+
+    @property
+    def content_age_text(self):
+        if self.last_listing_date:
+            return utils.format_age(self.last_listing_date)
+        else:
+            return None
+
+    @property
+    def fetched_age_text(self):
+        if self.fetched:
+            return utils.format_age(
+                self.fetched
+            )
+        else:
+            return None
+
+    @property
     def text(self):
         unread = self.unread_count
         total = self.listing_count
-        if self.last_listing_date:
-            age = timeago.format(
-                self.last_listing_date.replace(
-                    tzinfo=pytz.UTC
-                ),
-                datetime.utcnow().replace(
-                    tzinfo=pytz.timezone(config.settings.profile.time_zone)
-                ),
-                "en_short"
-            ).replace(" ago", "")
-        else:
-            age = None
 
-        # logger.info(f"{self.name}: {self.attr}")
         return [
             (self.attr, self.name), " ",
             (self.count_attr, "("),
@@ -121,8 +125,11 @@ class ListingCountMixin(object):
              )
         ] + ([
             (self.count_attr, "/"),
-            (self.count_attr, age)
-        ] if age else []) + [
+            (self.count_attr, self.fetched_age_text)
+        ] if self.fetched_age_text else []) + ([
+            (self.count_attr, "/"),
+            (self.count_attr, self.content_age_text)
+        ] if self.content_age_text else []) + [
             (self.count_attr, ")")
         ]
 
@@ -166,6 +173,28 @@ class AggregateListingCountMixin(ListingCountMixin):
         except ValueError:
             return None
 
+    @property
+    def age(self):
+        try:
+            return max([
+                n.get_widget().age
+                for n in self.get_node().get_leaf_nodes()
+                if n.get_widget().age is not None
+            ])
+        except ValueError:
+            return None
+
+    @property
+    def fetched(self):
+        try:
+            return min([
+                n.get_widget().fetched
+                for n in self.get_node().get_leaf_nodes()
+                if n.get_widget().fetched is not None
+            ])
+        except ValueError:
+            return None
+
 class ChannelWidget(ListingCountMixin,
                     MarkableMixin,
                     ChannelTreeWidget):
@@ -179,16 +208,40 @@ class ChannelWidget(ListingCountMixin,
             )
 
     @property
+    def browser(self):
+        return self.get_node().get_parent().tree
+
+    @property
     def provider(self):
-        return self.get_node().get_parent().tree.provider
+        return self.browser.provider
 
     @property
     def attr(self):
+
         head = self.unread_count > 0
         tail = not self.channel.attrs.get("tail_fetched") if self.channel else None
         error = self.channel and self.channel.attrs.get("error")
+
+        dormant = False
+        if (self.channel
+            and self.browser.config.dormant_days
+            and self.channel.fetched
+            and self.last_listing_date):
+
+            dormant_days = (
+                self.channel.fetched - self.last_listing_date
+            ).days
+
+            if (dormant_days >= self.browser.config.dormant_days
+                and (not self.browser.config.dormant_reset_days
+                     or self.channel.fetched_age.days < self.browser.config.dormant_reset_days)
+                ):
+                dormant = True
+
         if error:
             return "browser error"
+        elif dormant:
+            return "browser dormant"
         elif head and tail:
             return "browser head_tail"
         elif head:
@@ -514,23 +567,27 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
         return self.find_key(key)
 
     @property
-    def conf(self):
-        if not getattr(self, "_conf", None):
-            self._conf = config.Config(
+    def config(self):
+        return config.settings.profile.channels
+
+    @property
+    def feed_config(self):
+        if not getattr(self, "_feed_config", None):
+            self._feed_config = config.Config(
             os.path.join(
                 config.settings._config_dir,
                 self.provider.IDENTIFIER,
                 "feeds.yaml"
             )
         )
-        return self._conf
+        return self._feed_config
 
-    @conf.setter
-    def conf(self, conf):
-        self._conf = conf
+    @feed_config.setter
+    def feed_config(self, feed_config):
+        self._feed_config = feed_config
 
     def load(self):
-        self.tree = ChannelGroupNode(self, self.conf, key=self.label)
+        self.tree = ChannelGroupNode(self, self.feed_config, key=self.label)
         self.listbox = MyTreeListBox(PositionsTreeWalker(self.tree))
         self.listbox.offset_rows = 1
         self.scrollbar = StreamglobScrollBar(self.listbox)
@@ -641,7 +698,7 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
                     wid.first_listing_date
                     for wid in wids
                     if wid.first_listing_date
-                ).strftime("%Y-%m-%d")
+                )
             except ValueError:
                 min_date = None
 
@@ -650,20 +707,33 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
                     wid.last_listing_date
                     for wid in wids
                     if wid.last_listing_date
-                ).strftime("%Y-%m-%d")
+                )
             except ValueError:
                 max_date = None
+
+            try:
+                min_fetched = min(
+                    wid.fetched
+                    for wid in wids
+                    if wid.fetched
+                )
+            except ValueError:
+                min_fetched = None
+
             if min_date and max_date:
-                age = timeago.format(
-                    max_date, datetime.now(), "en_short"
-                ).replace(" ago", "")
+                content_age = utils.format_age(max_date)
+
+                fetched_age = utils.format_age(min_fetched)
+
                 details += [
                     ("footer_dim", "("),
-                    ("footer", min_date),
+                    ("footer", min_date.strftime("%Y-%m-%d")),
                     ("footer_dim", "\N{EM DASH}"),
-                    ("footer", max_date),
+                    ("footer", max_date.strftime("%Y-%m-%d")),
+                    ("footer_dim", ","),
+                    ("footer", fetched_age),
                     ("footer_dim", ":"),
-                    ("footer", age),
+                    ("footer", content_age),
                     ("footer_dim", ")")
                 ]
 
@@ -687,7 +757,7 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
                     new_selection = channels.body.get_prev(target)[1].identifier
 
                 channels.delete_channel(channel.locator)
-                channels.conf.save()
+                channels.feed_config.save()
                 channels.load()
                 channels.listbox.set_focus(channels.find_node(new_selection))
 
@@ -764,10 +834,10 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
         for c in src:
             if c == dst:
                 continue
-            val = pop_key(self.conf, c)
-            move_key(self.conf, c, val, dst)
+            val = pop_key(self.feed_config, c)
+            move_key(self.feed_config, c, val, dst)
 
-        self.conf.save()
+        self.feed_config.save()
         self.load()
         try:
             key = self.find_key(src[0])
@@ -797,8 +867,8 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
                     else:
                         rename_key(d[k], key)
 
-        rename_key(self.conf, key)
-        self.conf.save()
+        rename_key(self.feed_config, key)
+        self.feed_config.save()
         self.load()
         focus = self.find_node(
             new_identifier
@@ -844,7 +914,7 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
                     else:
                         remove_key(d[k], key)
 
-        remove_key(self.conf, locator)
+        remove_key(self.feed_config, locator)
 
     def delete_selection(self):
 

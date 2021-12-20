@@ -153,6 +153,7 @@ class MarkableMixin(object):
     def update_w(self):
         """Update the attributes of self.widget based on self.marked.
         """
+        # FIXME
         if self.marked:
             self._w.attr_map = {
                 # None: "browser marked",
@@ -160,6 +161,7 @@ class MarkableMixin(object):
                 "browser head": "browser head marked",
                 "browser tail": "browser tail marked",
                 "browser head_tail": "browser head_tail marked",
+                "browser dormant": "browser dormant marked",
             }
             self._w.focus_map = {
                 # None: "browser marked_focus",
@@ -167,6 +169,7 @@ class MarkableMixin(object):
                 "browser head": "browser head marked_focus",
                 "browser tail": "browser tail marked_focus",
                 "browser head_tail": "browser head_tail marked_focus",
+                "browser dormant": "browser dormant marked_focus",
             }
         else:
             self._w.attr_map = {
@@ -175,6 +178,7 @@ class MarkableMixin(object):
                 "browser head": "browser head",
                 "browser tail": "browser tail",
                 "browser head_tail": "browser head_tail",
+                "browser dormant": "browser dormant",
             }
             self._w.focus_map = {
                 # None: "browser focus",
@@ -182,6 +186,7 @@ class MarkableMixin(object):
                 "browser head": "browser head focus",
                 "browser tail": "browser tail focus",
                 "browser head_tail": "browser head_tail focus",
+                "browser dormant": "browser dormant focus",
             }
 
     def keypress(self, size, key):
