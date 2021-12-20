@@ -839,36 +839,84 @@ class MultiSourceMediaListing(MediaListing):
     sources = Set(MediaSource)
 
 
+DATE_CONFIG_MAP = {
+    "order": "DATE_ORDER"
+}
+
+RE_DOTTED_DATE=re.compile(
+    r"(\d+)\.(\d+)\.(\d+)"
+)
+
 class TitledMediaListingMixin(object):
 
     @property
     def safe_title(self):
         return utils.sanitize_filename(self.title)
 
+    @property
+    def content_date(self):
+        return self.title_date
 
     @property
     def title_date(self):
 
+        default_config = {
+            "DATE_ORDER": "YMD"
+        }
+
         configs = [
-            {'DATE_ORDER': 'YMD'},
-            {}
+            {} # default
         ]
 
-        s = self.title.replace("_", "-").replace("/", " ")
-        for config in configs:
-            try:
-                d = next(
-                    d for d in
-                    dateparser.search.search_dates(
-                        s, settings=config
+        td = self.attrs.get("title_date", None)
+        if td:
+            td = datetime.strptime(td, "%Y-%m-%d").date()
+        else:
+            datetime_config = {
+                k: v for x in [
+                    config for config in (
+                        n.get_value().get("datetime")
+                        for n in reversed(
+                                [self.channel.config] + list(self.channel.config.get_parents())
+                        )
                     )
-                    if any(c.isdigit() for c in d[0])
-                )
-                return d[1].date()
-            except (TypeError, StopIteration):
-                continue
+                    if config
+                ]
+                for k,v in x.items()
+            }
 
-        return None
+            if datetime_config:
+                datetime_config = {
+                    DATE_CONFIG_MAP.get(k, k): v
+                    for k, v in datetime_config.items()
+                }
+                configs.insert(0, datetime_config)
+
+            s = self.title.replace("_", "-").replace("/", " ")
+            # workaround for datepaser.search not handling periods
+            # in dates
+            s = RE_DOTTED_DATE.sub(r"\1-\2-\3", s)
+
+            for config in configs:
+                try:
+                    d = next(
+                        d for d in
+                        dateparser.search.search_dates(
+                            s,
+                            settings=dict(default_config, **config),
+                        )
+                        if any(c.isdigit() for c in d[0])
+                    )
+                    td = d[1].date()
+                except (TypeError, StopIteration):
+                    continue
+
+        if td:
+            with db_session:
+                listing = self.attach()
+                listing.attrs["title_date"] = td.strftime("%Y-%m-%d")
+
+        return td
 
 @attrclass()
 class TitledMediaListing(TitledMediaListingMixin, MultiSourceMediaListing):

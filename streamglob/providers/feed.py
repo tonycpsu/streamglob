@@ -1203,12 +1203,20 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
     def ATTRIBUTES(self):
         # import ipdb; ipdb.set_trace()
         attrs = list(super().ATTRIBUTES.items())
-        idx, attr = next(  (i, a ) for i, a in enumerate(attrs) if a[0] == "title")
+        idx, attr = next(
+            (i, a ) for i, a in enumerate(attrs)
+            if a[0] == "title"
+        )
         return AttrDict(
             attrs[:idx]
             + [
                 ("media_listing_id", {"hide": True}),
-                ("created", {"width": 19})
+                ("created", {"width": 19}),
+                ("content_date", {
+                    "label": "date",
+                    "width": 10,
+                    "truncate": True}
+                 )
             ]
             + attrs[idx:]
         )
