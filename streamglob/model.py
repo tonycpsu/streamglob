@@ -504,8 +504,19 @@ class MediaSourceMixin(object):
     @property
     # @lru_cache(256)
     def local_path(self):
+        try:
+            return self.get_local_path()[0]
+        except (TypeError, IndexError):
+            return None
 
-        # logger.debug(f"local_path: {self.locator}")
+    def get_local_path(self, match_types=None):
+
+        if match_types == None:
+            try:
+                match_types = self.provider.config.output.match_types or None
+            except AttributeError:
+                match_types = ["exact"]
+
         listing = self.listing
         with db_session:
             # FIXME: so hacky
@@ -521,26 +532,31 @@ class MediaSourceMixin(object):
                     listing=listing, num=len(listing.sources) if listing else 1,
                     match_glob=True
                 )
-                # import ipdb; ipdb.set_trace()
-                if not filename:
-                    return None
-                try:
-                    ret = next(glob.iglob(filename))
-                    return ret
-
-                except StopIteration:
-                    pass
-                dirname = os.path.dirname(filename)
-                if self.provider.config.output.match_type == "uri" and getattr(self, "uri", None):
-                    filename = os.path.join(dirname, f"*{self.uri.replace('/', '+') +'='}*")
-                elif self.provider.config.output.match_type == "guid" and getattr(listing, "guid", None):
-                    filename = os.path.join(dirname, f"*{listing.guid}*")
-                try:
-                    return next(glob.iglob(filename))
-                except StopIteration:
-                    return None
             except SGInvalidFilenameTemplate as e:
                 logger.error(e)
+
+            if not filename:
+                return None
+
+            dirname = os.path.dirname(filename)
+
+            for match_type in match_types:
+                if match_type == "exact":
+                    path = filename
+                elif match_type == "uri" and getattr(self, "uri", None):
+                    path = os.path.join(dirname, f"*{self.uri.replace('/', '+') +'='}*")
+                elif match_type == "guid" and getattr(listing, "guid", None):
+                    path = os.path.join(dirname, f"*{listing.guid}*")
+                elif match_type == "group_date":
+                    path = os.path.join(dirname, f"*{listing.group}*{listing.content_date}*")
+                else:
+                    raise NotImplementedError
+
+                ret = next(glob.iglob(path), None)
+                if ret:
+                    return (ret, match_type)
+
+            return None
 
     @property
     def subjects(self):
@@ -875,14 +891,18 @@ class TitledMediaListingMixin(object):
             datetime_config = {
                 k: v for x in [
                     config for config in (
-                        n.get_value().get("datetime")
+                        (
+                            n.get_value().get("datetime")
+                            if isinstance(n.get_value(), dict)
+                            else None
+                        )
                         for n in reversed(
                                 [self.channel.config] + list(self.channel.config.get_parents())
                         )
                     )
                     if config
                 ]
-                for k,v in x.items()
+                for k, v in x.items()
             }
 
             if datetime_config:

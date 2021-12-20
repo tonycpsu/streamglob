@@ -491,9 +491,7 @@ class ProviderDataTable(
         logger.info(self.selection.data_source.group)
         logger.info(self.selection.data_source.subjects)
         logger.info(
-            self.selected_source.download_filename(
-                listing=self.selected_listing,
-                group=self.selection.data_source.group)
+            self.selected_source.get_local_path()
         )
 
     def playlist_position(self):
@@ -589,15 +587,31 @@ class ProviderDataTable(
     async def row_attr(self, row):
         if not self.provider.check_downloaded:
             return None
-        if all([s.local_path for s in row.data.sources]):
+        paths = set(
+            [s.get_local_path() for s in row.data.sources]
+        )
+        status = {
+            t[1]
+            for t in paths
+            if t and len(t) > 1
+        }
+        # import ipdb; ipdb.set_trace()
+        if not len(status):
+            return None
+        if status == {"exact"}:
             return "downloaded"
-        return None
+        elif len(status) == 1:
+            return f"downloaded.{status.pop()}"
+        else:
+            return "downloaded.mixed"
 
     async def update_row_attribute(self, row):
         attr = await self.row_attr(row)
         if attr:
             cur = row.get_attr()
-            row.set_attr(" ".join([ a for a in [attr, cur] if a ]))
+            attr = " ".join([ a for a in [attr, cur] if a ])
+            # logger.info(attr)
+            row.set_attr(attr)
 
     async def update_row_attributes(self):
         for row in self:

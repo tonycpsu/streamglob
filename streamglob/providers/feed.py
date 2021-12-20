@@ -1212,13 +1212,15 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
             + [
                 ("media_listing_id", {"hide": True}),
                 ("created", {"width": 19}),
+            ]
+            + attrs[idx:]
+            + [
                 ("content_date", {
                     "label": "date",
                     "width": 10,
                     "truncate": True}
                  )
             ]
-            + attrs[idx:]
         )
 
     # ATTRIBUTES = AttrDict(
