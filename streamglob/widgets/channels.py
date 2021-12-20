@@ -672,12 +672,16 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
     def update_selection(self):
         self._emit("change", self.selected_items)
         self._emit("select", self.selected_items)
+        self.update_header()
         self.update_footer()
 
     def update_header(self):
-
+        all_channels = list(self.all_channels)
+        selected_channels = list(self.selected_items)
         self.channel_count_placeholder.original_widget = urwid.Text(
-            f"({len(list(self.all_channels))})"
+            f"({len(selected_channels)}/{len(all_channels)})"
+            f""" {", ".join(c.name for c in selected_channels)}""",
+            wrap="ellipsis"
         )
 
     def update_footer(self):

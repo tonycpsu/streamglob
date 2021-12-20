@@ -1086,11 +1086,12 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
             (1, urwid.Filler(
                 urwid.AttrMap(
                     urwid.Columns([
+                        ("pack", urwid.Text(listing.channel.name)),
                         ("weight", 1, row),
                         ("weight", 1,
                          urwid.Text(", ".join(listing.subjects or [""]))
                          ),
-                    ]),
+                    ], dividechars=1),
                     {
                         None: "table_row_header",
                         "table_row_body": "table_row_header"
@@ -1171,9 +1172,6 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
         self.search_filter = None
         self.items_query = None
         self.custom_filters = AttrDict()
-        if not isinstance(self.view, InvalidConfigView):
-            urwid.connect_signal(self.view, "feed_change", self.on_feed_change)
-            urwid.connect_signal(self.view, "feed_select", self.on_feed_select)
         self.filters["status"].connect("changed", self.on_status_change)
         self.filters["custom"].connect("changed", self.on_custom_change)
         self.pagination_cursor = None
@@ -1182,7 +1180,10 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
 
     @property
     def VIEW(self):
-        return FeedProviderView(self, CachedFeedProviderBodyView(self, CachedFeedProviderDataTable(self)))
+        view = FeedProviderView(self, CachedFeedProviderBodyView(self, CachedFeedProviderDataTable(self)))
+        if not isinstance(view, InvalidConfigView):
+            urwid.connect_signal(view, "feed_change", self.on_feed_change)
+            urwid.connect_signal(view, "feed_select", self.on_feed_select)
 
     def init_config(self):
         super().init_config()
