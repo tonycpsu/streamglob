@@ -207,7 +207,8 @@ class HighlightRuleConfig(object):
         return self.rules[key]
 
     def add_rule(self, label, subject, group=None, patterns=None):
-        self.remove_rule([subject])
+        targets = [subject] + (patterns if patterns else [])
+        self.remove_rule(targets)
         rule = HighlightRule(subject, group=group, patterns=patterns)
         self.rules[label].append(rule)
         self.save()
