@@ -160,7 +160,8 @@ class HighlightRuleList(MutableSequence):
         return next(
             (
                 r for r in self.rules
-                if r.search(
+                if token in r.patterns
+                or r.search(
                     token if isinstance(token, str) else token.get("name"),
                     aliases=[] if isinstance(token, str) else token.get("aliases")
                 )
