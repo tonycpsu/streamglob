@@ -1181,12 +1181,13 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
     @property
     def VIEW(self):
         view = FeedProviderView(self, CachedFeedProviderBodyView(self, CachedFeedProviderDataTable(self)))
-        if not isinstance(view, InvalidConfigView):
-            urwid.connect_signal(view, "feed_change", self.on_feed_change)
-            urwid.connect_signal(view, "feed_select", self.on_feed_select)
+        return view
 
     def init_config(self):
         super().init_config()
+        if not isinstance(self.view, InvalidConfigView):
+            urwid.connect_signal(self.view, "feed_change", self.on_feed_change)
+            urwid.connect_signal(self.view, "feed_select", self.on_feed_select)
         if config.settings.profile.cache.max_age > 0:
             with db_session(optimistic=False):
                 FeedMediaChannel.purge_all(
@@ -1212,6 +1213,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
             attrs[:idx]
             + [
                 ("media_listing_id", {"hide": True}),
+                ("channel", {"width": 20, "truncate": True, "hide": True}),
                 ("created", {"width": 19}),
             ]
             + attrs[idx:]
@@ -1278,7 +1280,7 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
 
     @property
     def translate(self):
-        return (self                        .translate_src and super().translate)
+        return (self.translate_src and super().translate)
 
     def create_feeds(self):
 

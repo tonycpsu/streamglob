@@ -670,6 +670,10 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
         return self.tree.find_node(identifier)
 
     def update_selection(self):
+        if len(list(self.selected_items)) == 1:
+            self.provider.view.hide_columns(["channel"])
+        else:
+            self.provider.view.show_columns(["channel"])
         self._emit("change", self.selected_items)
         self._emit("select", self.selected_items)
         self.update_header()
