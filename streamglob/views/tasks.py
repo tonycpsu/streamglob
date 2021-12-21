@@ -199,6 +199,9 @@ def format_task(task):
 @keymapped()
 class TaskTable(BaseDataTable):
 
+    KEYMAP = {
+        "delete": "kill_selection"
+    }
 
     index = "task_id"
 
@@ -215,7 +218,8 @@ class TaskTable(BaseDataTable):
         to_download="pending",
         active="downloading",
         postprocessing="processing",
-        done="done"
+        done="done",
+        errors="err",
     )
 
     def __init__(self, *args, **kwargs):
@@ -237,16 +241,25 @@ class TaskTable(BaseDataTable):
                 ):
                 yield AttrDict(
                     task,
+                    task=task, # FIXME
                     status=status
                 )
 
     def query(self, *args, **kwargs):
 
-        for task in self.get_tasks():
+        for task_data in self.get_tasks():
             yield AttrDict(
-                task_id=task.task_id,
-                task=task
+                task_id=task_data.task.task_id,
+                task=task_data # FIXME
             )
+
+    def kill_selection(self):
+        task = self.selection.data_source.task.task # FIXME
+        # import ipdb; ipdb.set_trace()
+        if not task:
+            return None
+        task.stop()
+
 
 
 @keymapped()

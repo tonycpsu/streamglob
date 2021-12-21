@@ -1008,13 +1008,19 @@ class ProgramMediaTaskMixin(object):
         self.result = asyncio.get_event_loop().create_future()
 
     def reset(self):
-        self.program = asyncio.get_event_loop().create_future()
+        # self.program = asyncio.get_event_loop().create_future()
         self.proc = asyncio.get_event_loop().create_future()
 
     def finalize(self):
         logger.debug(f"finalize program: {self.result} {self.proc} {self.proc.result().returncode}")
         self.result.set_result(self.proc.result().returncode)
         logger.debug("-finalize program")
+
+    def stop(self):
+        if not self.proc.done():
+            return
+        self.proc.result().terminate()
+        # self.reset()
 
 
 @attrclass()
@@ -1091,7 +1097,10 @@ class DownloadMediaTaskMixin(object):
             if not os.path.isdir(d):
                 os.makedirs(d)
             shutil.move(self.stage_results[-1], self.dest)
-        shutil.rmtree(self.tempdir)
+        try:
+            shutil.rmtree(self.tempdir)
+        except FileNotFoundError:
+            pass
         with db_session:
             now = datetime.now()
             for s in self.sources:
@@ -1104,6 +1113,12 @@ class DownloadMediaTaskMixin(object):
                 if listing.download:
                     listing.download.delete()
         super().finalize()
+
+
+    def stop(self):
+        super().stop()
+        if os.path.isfile(self.dest):
+            os.remove(self.dest)
 
 
 @attrclass(DownloadMediaTaskMixin)

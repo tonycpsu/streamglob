@@ -49,6 +49,7 @@ class TaskManager(Observable):
         self.active = TaskList()
         self.postprocessing = TaskList()
         self.done = TaskList()
+        self.errors = TaskList()
         self.current_task_id = 0
         self.started = asyncio.Condition()
 
@@ -364,15 +365,26 @@ class TaskManager(Observable):
         postprocessing_list = TaskList(postprocessing)
 
         active_list = TaskList(active)
-        done_list = TaskList(itertools.chain(done, postprocessing_done))
+        all_done_list = TaskList(itertools.chain(done, postprocessing_done))
 
-        for task in done_list:
+        for task in all_done_list:
             logger.debug(f"finalizing {task} {type(task)} {task.__class__.mro()}")
-            task.finalize()
+            if task.program.done() and task.proc.done():
+                proc = task.proc.result()
+                if proc.returncode == 0:
+                    task.finalize()
+                else:
+                    logger.warning(f"{task} returned non-zero rc: {proc.returncode}")
 
         self.active = active_list
         self.postprocessing = postprocessing_list
-        self.done += done_list
+
+        (done, errors) = utils.partition(
+            lambda t: t.program.done() and t.proc.done() and t.proc.result().returncode,
+            all_done_list
+        )
+        self.done += TaskList(done)
+        self.errors += TaskList(errors)
 
         for task in self.playing + self.active:
             prog = await task.program
