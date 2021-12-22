@@ -558,8 +558,8 @@ class MediaSourceMixin(object):
                     path = os.path.join(dirname, f"*{self.uri.replace('/', '+') +'='}*")
                 elif match_type == "guid" and getattr(listing, "guid", None):
                     path = os.path.join(dirname, f"*{listing.guid}*")
-                elif match_type == "group_date":
-                    path = os.path.join(dirname, f"*{listing.group}*{listing.content_date}*")
+                elif match_type == "date_group":
+                    path = os.path.join(dirname, f"*{listing.content_date}*{listing.group}*")
                 else:
                     raise NotImplementedError
 
