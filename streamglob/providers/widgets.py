@@ -6,6 +6,7 @@ import re
 import bisect
 
 import urwid
+from panwid.dialog import ConfirmDialog
 from panwid.datatable import *
 from panwid.keymap import *
 from panwid.autocomplete import AutoCompleteEdit
@@ -439,7 +440,8 @@ class ProviderDataTable(
         # "ctrl o": "strip_emoji_selection",
         "ctrl t": "translate_selection",
         # "meta O": "toggle_strip_emoji_all",
-        "meta T": "toggle_translate_all"
+        "meta T": "toggle_translate_all",
+        "delete": "delete_selection",
     }
 
     def __init__(self, provider, *args, **kwargs):
@@ -821,3 +823,28 @@ class ProviderDataTable(
 
     def clear_search_query(self):
         self.reset_filters()
+
+    def open_delete_confirm_dialog(self, filename):
+
+        class DeleteConfirmDialog(ConfirmDialog):
+
+            def __init__(self, parent, filename):
+                self.filename = filename
+                super().__init__(parent)
+
+            @property
+            def prompt(self):
+                return f"""Delete "{self.filename}"?"""
+
+            def action(self):
+                os.remove(self.filename)
+
+        dialog = DeleteConfirmDialog(self.provider.view, filename)
+        self.provider.view.open_popup(dialog, width=80, height=8)
+
+    def delete_selection(self):
+
+        listing = self.selected_listing
+        filename = self.selected_source.local_path
+        if filename:
+            self.open_delete_confirm_dialog(filename)
