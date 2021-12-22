@@ -98,7 +98,9 @@ class FeedMediaChannel(model.MediaChannel):
         if resume and fetched == 0:
             self.attrs["tail_fetched"] = True
 
-        await self.provider.view.channels.find_node(self.locator).refresh()
+        node = self.provider.view.channels.find_node(self.locator)
+        if node:
+            await node.refresh()
         return fetched
 
 
@@ -586,9 +588,17 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
             try:
                 idx = next(
                     r.data.media_listing_id
-                    for r in self[self.focus_position+1:]
+                    for r in (
+                            self[i]
+                            for i in range(self.focus_position+1, len(self))
+                    )
                     if predicate(r)
                 )
+                # idx = next(
+                #     r.data.media_listing_id
+                #     for r in self[self.focus_position+1:]
+                #     if predicate(r)
+                # )
             except (StopIteration, AttributeError):
                 if self.focus_position == len(self)-1:
                     if self.selection.data["read"]:
@@ -973,10 +983,7 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
         # self.reset()
 
     def on_unread_change(self, source, listing):
-        async def refresh_channels():
-            await self.channels.find_node(listing.locator).refresh()
-        asyncio.create_task(refresh_channels())
-        # self.channels._invalidate()
+        self.channels.find_node(listing.locator).refresh()
 
     def on_next_feed(self, source):
         self.channels.cycle(step=1)

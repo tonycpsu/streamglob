@@ -332,14 +332,22 @@ class ChannelGroupWidget(
 
 class ChannelPropertiesMixin(object):
 
-    async def refresh(self):
+    def refresh(self):
+        if getattr(self, "_refreshing", None):
+            return
+        self._refreshing = True
+        self._refresh_future = state.event_loop.run_in_executor(
+            None, self.refresh_self_and_parents
+        )
+
+    def refresh_self_and_parents(self):
         node = self
         while node:
             widget = node.get_widget(reload=True)
             widget._invalidate()
             node = node.get_parent()
         self.get_parent().tree.listbox._invalidate()
-        # self.get_parent().tree.listbox.body._modified()
+        self._refreshing = False
 
     @property
     def locator(self):
