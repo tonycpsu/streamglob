@@ -11,6 +11,8 @@ from panwid.datatable import *
 from panwid.keymap import *
 from panwid.autocomplete import AutoCompleteEdit
 from pony.orm import *
+import httpcore
+httpcore.SyncHTTPTransport = None
 from googletrans import Translator
 # from pygoogletranslation import Translator
 
