@@ -858,7 +858,7 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
 
         thumbnail = await self.thumbnail_for(listing)
         thumbnail = wand.image.Image(filename=thumbnail)
-        thumbnail.trim(fuzz=5)
+        thumbnail.trim(fuzz=20)
         if thumbnail.width != PREVIEW_WIDTH:
             thumbnail.transform(resize=f"{PREVIEW_WIDTH}x{PREVIEW_HEIGHT}")
 
@@ -867,8 +867,7 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
             rich_thumbnail_img = wand.image.Image(filename=rich_thumbnail)
             for i in range(len(rich_thumbnail_img.sequence)//RICH_THUMBNAIL_SKIP):
                 clone = thumbnail.clone()
-                tile = rich_thumbnail_img.sequence[i * RICH_THUMBNAIL_SKIP].clone()
-                tile.trim(color=Color("#000", fuzz=5))
+                tile = rich_thumbnail_img.sequence[i * RICH_THUMBNAIL_SKIP]
                 tile_width = int(clone.width * inset_scale)
                 tile_height = int(clone.height * inset_scale)
                 tile.transform(
