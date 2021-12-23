@@ -743,7 +743,20 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
 
     async def rich_thumbnail_for(self, listing):
         if listing.guid not in self.rich_thumbnails:
-            self.rich_thumbnails[listing.guid] = await listing.rich_thumbnail
+            url = await listing.rich_thumbnail
+            if not url:
+                return await self.thumbnail_for(listing)
+            # mpv/ffmpeg can't do webp animations, so we convert
+            # see https://trac.ffmpeg.org/ticket/4907
+            thumb_file = os.path.join(self.tmp_dir, f"rich_thumbnail.webp")
+            try:
+                await self.download_file(url, thumb_file)
+            except asyncio.CancelledError:
+                return
+            img = wand.image.Image(filename=thumb_file)
+            thumb_mp4 = os.path.join(self.tmp_dir, f"rich_thumbnail.mp4")
+            img.save(filename=thumb_mp4)
+            self.rich_thumbnails[listing.guid] = thumb_mp4
         return self.rich_thumbnails[listing.guid]
 
     def keypress(self, size, key):
