@@ -896,7 +896,9 @@ class TitledMediaListingMixin(object):
         ]
 
         td = self.attrs.get("title_date", None)
-        if td:
+        if td == "":
+            return None
+        elif td is not None:
             td = datetime.strptime(td, "%Y-%m-%d").date()
         else:
             datetime_config = {
@@ -942,10 +944,13 @@ class TitledMediaListingMixin(object):
                 except (TypeError, StopIteration):
                     continue
 
-        if td:
-            with db_session:
-                listing = self.attach()
+        with db_session:
+            listing = self.attach()
+            if td:
                 listing.attrs["title_date"] = td.strftime("%Y-%m-%d")
+            else:
+                # empty string prevents trying again
+                listing.attrs["title_date"] = ""
 
         return td
 
