@@ -82,6 +82,7 @@ setup(name=name,
           "watchdog==1.0.2",
           "wand",
           "xdg",
+          "youtube-search-python ~= 1.5.3",
           "yt-dlp >= 2021.09.02",
           # see https://github.com/ping/instagram_private_api/pull/269/commits
       ],

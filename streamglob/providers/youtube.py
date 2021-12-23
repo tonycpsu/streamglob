@@ -41,6 +41,7 @@ except ImportError:
 
 from pytube.innertube import InnerTube
 from thumbframes_dl import YouTubeFrames
+from youtubesearchpython import Search
 
 class ChannelNotFoundError(Exception):
     pass
@@ -75,8 +76,25 @@ class YouTubeMediaListingMixin(object):
             self.guid,
             vi["storyboards"]["playerStoryboardSpecRenderer"]["spec"]
         )
-        return [ t.url for t in thumbs[list(thumbs.keys())[-1]] ]
+        # import ipdb; ipdb.set_trace()
+        return thumbs[list(thumbs.keys())[-1]]
 
+    @async_cached_property
+    async def rich_thumbnail(self):
+        # FIXME: `Video` class doesn't return richThumbnail, but `Search` does,
+        # so we try to search by Video ID
+        search = Search(self.guid).result()
+        thumbnail = next(
+            (
+                s["richThumbnail"]
+                for s in search["result"]
+                if s["id"] == self.guid
+            ),
+            None
+        )
+        if not thumbnail:
+            return None
+        return thumbnail["url"]
 
 @model.attrclass()
 class YouTubeMediaListing(YouTubeMediaListingMixin, model.ContentMediaListing, FeedMediaListing):
@@ -695,6 +713,12 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
             self._thumbnails = AttrDict()
         return self._thumbnails
 
+    @property
+    def rich_thumbnails(self):
+        if not hasattr(self, "_rich_thumbnails"):
+            self._rich_thumbnails = AttrDict()
+        return self._rich_thumbnails
+
     async def thumbnail_for(self, listing):
         if listing.guid not in self.thumbnails:
             thumbnail = os.path.join(self.tmp_dir, f"thumbnail.{listing.guid}.jpg")
@@ -716,6 +740,11 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
             if listing.guid not in self.storyboards:
                 self.storyboards[listing.guid] = await self.make_preview_storyboard(listing, cfg)
         return self.storyboards[listing.guid]
+
+    async def rich_thumbnail_for(self, listing):
+        if listing.guid not in self.rich_thumbnails:
+            self.rich_thumbnails[listing.guid] = await listing.rich_thumbnail
+        return self.rich_thumbnails[listing.guid]
 
     def keypress(self, size, key):
         return super().keypress(size, key)
@@ -757,7 +786,11 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         # self.preview_task = state.event_loop.create_task(preview(listing))
 
         return await preview(listing)
-        # await self.preview_task
+
+    async def preview_content_rich_thumbnail(self, cfg, listing, source):
+        # import ipdb; ipdb.set_trace()
+        return await self.rich_thumbnail_for(listing)
+
 
     async def preview_duration(self, cfg, listing):
 
@@ -797,8 +830,8 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         PREVIEW_WIDTH = 1280
         PREVIEW_HEIGHT = 720
 
-        TILES_X = 5
-        TILES_Y = 5
+        # TILES_X = 5
+        # TILES_Y = 5
 
         inset_scale = cfg.scale or 0.25
         inset_offset = cfg.offset or 0
@@ -806,14 +839,15 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         border_width = cfg.border.width or 1
         tile_skip = cfg.skip or None
 
-
         board_files = []
         boards = await listing.storyboards
+
         for i, board in enumerate(boards):
+            url = board.url
             board_file = os.path.join(self.tmp_dir, f"board.{listing.guid}.{i:02d}.jpg")
             try:
                 try:
-                    await self.download_file(board, board_file)
+                    await self.download_file(url, board_file)
                 except asyncio.CancelledError:
                     return
                 board_files.append(board_file)
@@ -823,6 +857,9 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
                     pass
                 else:
                     logger.error("".join(traceback.format_exc()))
+
+        cols = boards[0].cols
+        rows = boards[0].rows
 
         logger.info(board_files)
         thumbnail = await self.thumbnail_for(listing)
@@ -841,8 +878,8 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
                 if i == 0:
                     # calculate tile width / height on first iteration since
                     # last board might not be full height
-                    tile_width = img.width // TILES_X
-                    tile_height = img.height // TILES_Y
+                    tile_width = img.width // cols
+                    tile_height = img.height // rows
                 for h in range(0, img.height, tile_height):
                     for w in range(0, img.width, tile_width):
                         i += 1
