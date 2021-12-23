@@ -1307,21 +1307,22 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
                 # have to force a reload here since sources may have changed
                 listing = self.provider.LISTING_CLASS[failed_listing_id]#
                 await self.playlist_replace(listing.cover, idx=failed_index)
-                await self.inflate_listing(self.playlist_pos_to_row(failed_index))
-                listing = listing.attach().detach()
-                source = next(
-                    s for s in listing.sources
-                    if s.rank == source_rank
-                )
-                # print(self.play_items[failed_index].locator)
-                # import ipdb; ipdb.set_trace()
-                # FIXME
-                # print(listing.media_listing_id)
-                # import ipdb; ipdb.set_trace()
-                self.df.update_rows([listing])
-                # print(self.play_items[failed_index].locator)
-                self.load_play_items()
-                await self.playlist_replace(source.locator, idx=failed_index)
+                if hasattr(self, "inflate_listing"):
+                    await self.inflate_listing(self.playlist_pos_to_row(failed_index))
+                    listing = listing.attach().detach()
+                    source = next(
+                        s for s in listing.sources
+                        if s.rank == source_rank
+                    )
+                    # print(self.play_items[failed_index].locator)
+                    # import ipdb; ipdb.set_trace()
+                    # FIXME
+                    # print(listing.media_listing_id)
+                    # import ipdb; ipdb.set_trace()
+                    self.df.update_rows([listing])
+                    # print(self.play_items[failed_index].locator)
+                    self.load_play_items()
+                    await self.playlist_replace(source.locator, idx=failed_index)
 
             self.provider.view.close_popup()
 

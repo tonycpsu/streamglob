@@ -100,7 +100,7 @@ class FeedMediaChannel(model.MediaChannel):
 
         node = self.provider.view.channels.find_node(self.locator)
         if node:
-            await node.refresh()
+            node.refresh()
         return fetched
 
 
@@ -448,6 +448,8 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
         # async with self.provider.listing_lock:
         with db_session(optimistic=False):
             listing = self.get_listing(index=index).attach()
+            if not hasattr(listing, "inflate"):
+                return
             # listing = self.selection.data_source.attach()
             if await listing.inflate(force=True):
                 # position = self.focus_position
