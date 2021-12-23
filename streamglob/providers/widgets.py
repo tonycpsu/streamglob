@@ -11,7 +11,8 @@ from panwid.datatable import *
 from panwid.keymap import *
 from panwid.autocomplete import AutoCompleteEdit
 from pony.orm import *
-from pygoogletranslation import Translator
+from googletrans import Translator
+# from pygoogletranslation import Translator
 
 from . import config
 from .. import utils
@@ -505,7 +506,8 @@ class ProviderDataTable(
     @property
     def translator(self):
         if not self._translator:
-            self._translator = Translator(sleep=1)
+            # self._translator = Translator(sleep=1)
+            self._translator = Translator()
         return self._translator
 
     def strip_emoji_selection(self):
@@ -535,7 +537,8 @@ class ProviderDataTable(
                         dest=self.provider.translate_dest
                     ).text
                     self.df.set(index, f"_{attr}_translated", translated)
-
+                    # force regeneration of text markup
+                    self.df.set(index, f"_markup_{attr}", None)
         self.invalidate_rows([index])
 
     def toggle_translate_all(self):
@@ -562,9 +565,10 @@ class ProviderDataTable(
                     src=self.provider.translate_src or "auto",
                     dest=self.provider.translate_dest
                 ).text.split(sentinel)
-                for (i, _), t in zip(texts, translates):
-                    self.df.set(i, "_translate", True)
-                    self.df.set(i, f"_{attr}_translated", t)
+                for (index, _), t in zip(texts, translates):
+                    self.df.set(index, "_translate", True)
+                    self.df.set(index, f"_{attr}_translated", t)
+                    self.df.set(index, f"_markup_{attr}", None)
                 self.invalidate_rows(
                     [ row.index for row in self if row.get(f"_{attr}_translated") ]
                 )
