@@ -19,6 +19,7 @@ import dateparser
 import isodate
 import wand.image
 import wand.drawing
+from wand.color import Color
 import ffmpeg
 from orderedattrdict import AttrDict
 from async_property import async_property, async_cached_property
@@ -842,6 +843,7 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
 
         PREVIEW_WIDTH = 1280
         PREVIEW_HEIGHT = 720
+        RICH_THUMBNAIL_SKIP = 4
 
         # TILES_X = 5
         # TILES_Y = 5
@@ -852,9 +854,40 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         border_width = cfg.border.width or 1
         tile_skip = cfg.skip or None
 
+        n = 0
+
+        thumbnail = await self.thumbnail_for(listing)
+        thumbnail = wand.image.Image(filename=thumbnail)
+        thumbnail.trim(fuzz=5)
+        if thumbnail.width != PREVIEW_WIDTH:
+            thumbnail.transform(resize=f"{PREVIEW_WIDTH}x{PREVIEW_HEIGHT}")
+
+        rich_thumbnail = await self.rich_thumbnail_for(listing)
+        if rich_thumbnail:
+            rich_thumbnail_img = wand.image.Image(filename=rich_thumbnail)
+            for i in range(len(rich_thumbnail_img.sequence)//RICH_THUMBNAIL_SKIP):
+                clone = thumbnail.clone()
+                tile = rich_thumbnail_img.sequence[i * RICH_THUMBNAIL_SKIP].clone()
+                tile.trim(color=Color("#000", fuzz=5))
+                tile_width = int(clone.width * inset_scale)
+                tile_height = int(clone.height * inset_scale)
+                tile.transform(
+                    resize=f"{tile_width}x{tile_height}"
+                )
+                tile.border(border_color, border_width, border_width)
+                clone.composite(
+                    tile,
+                    left=clone.width-tile.width-inset_offset,
+                    top=clone.height-tile.height-inset_offset
+                )
+                tile_file=os.path.join(self.tmp_dir, f"tile.{listing.guid}.{n:04d}.jpg")
+                clone.save(filename=tile_file)
+                n += 1
+
         board_files = []
         boards = await listing.storyboards
 
+        # import ipdb; ipdb.set_trace()
         for i, board in enumerate(boards):
             url = board.url
             board_file = os.path.join(self.tmp_dir, f"board.{listing.guid}.{i:02d}.jpg")
@@ -875,14 +908,8 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         rows = boards[0].rows
 
         logger.info(board_files)
-        thumbnail = await self.thumbnail_for(listing)
 
-        thumbnail = wand.image.Image(filename=thumbnail)
-        thumbnail.trim(fuzz=5)
-        if thumbnail.width != PREVIEW_WIDTH:
-            thumbnail.transform(resize=f"{PREVIEW_WIDTH}x{PREVIEW_HEIGHT}")
         i = 0
-        n = 0
         tile_width = 0
         tile_height = 0
         for board_file in board_files:
@@ -903,16 +930,21 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
                         h_end = h + tile_height
                         with img[w:w_end, h:h_end] as tile:
                             clone = thumbnail.clone()
-                            tile.resize(int(thumbnail.width * inset_scale),
-                                         int(thumbnail.height * inset_scale))
-                            tile.border(border_color, border_width, border_width)
-                            thumbnail.composite(
-                                tile,
-                                left=thumbnail.width-tile.width-inset_offset,
-                                top=thumbnail.height-tile.height-inset_offset
+                            new_tile_width = int(clone.width * inset_scale)
+                            new_tile_height = int(clone.height * inset_scale)
+                            tile.transform(
+                                resize=f"{new_tile_width}x{new_tile_height}"
                             )
-                            tile_file=os.path.join(self.tmp_dir, f"tile.{listing.guid}.{n:04d}.jpg")
-                            thumbnail.save(filename=tile_file)
+                            # tile.resize(int(thumbnail.width * inset_scale),
+                            #              int(thumbnail.height * inset_scale))
+                            tile.border(border_color, border_width, border_width)
+                            clone.composite(
+                                tile,
+                                left=clone.width-tile.width-inset_offset,
+                                top=clone.height-tile.height-inset_offset
+                            )
+                            tile_file = os.path.join(self.tmp_dir, f"tile.{listing.guid}.{n:04d}.jpg")
+                            clone.save(filename=tile_file)
 
         if cfg.frame_rate:
             frame_rate = cfg.frame_rate
