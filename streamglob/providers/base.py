@@ -804,6 +804,15 @@ class BackgroundTasksMixin(object):
                 self._tasks[name] = None
         super().on_deactivate()
 
+class PreviewState(object):
+
+    def __init__(self):
+        self.lock = asyncio.Lock()
+        self.previews = DefaultAttrDict(lambda: asyncio.Future())
+
+    def __getitem__(self, key):
+        return self.previews.__getitem__(key)
+
 
 @keymapped()
 class SynchronizedPlayerMixin(object):
@@ -835,7 +844,8 @@ class SynchronizedPlayerMixin(object):
     @property
     def previews(self):
         if not hasattr(self, "_previews"):
-            self._previews = DefaultAttrDict(lambda: DefaultAttrDict(lambda: asyncio.Future()))
+            self._previews = DefaultAttrDict(lambda: PreviewState())
+            # self._previews = DefaultAttrDict(lambda: DefaultAttrDict(lambda: asyncio.Future()))
         return self._previews
 
 
@@ -1096,32 +1106,38 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
         return source.locator
         # await self.playlist_replace(source.locator, idx=position)
 
-    async def get_preview(self, cfg, listing, source):
+    async def get_preview(self, stages, listing, source):
 
-        async def generate_preview():
+        previews = self.previews[source.key]
+
+        async def generate_preview(cfg):
 
             # import ipdb; ipdb.set_trace()
             preview_fn = getattr(self, f"preview_content_{cfg.mode}")
 
             try:
                 res = await preview_fn(cfg, listing, source)
-                if res:
-                    previews[cfg.mode].set_result(res)
-                else:
-                    previews[cfg.mode] = asyncio.Future()
+                previews[cfg.mode].set_result(res)
+                # if res:
+                #     previews[cfg.mode].set_result(res)
+                # else:
+                #     preview[cfg.mode]
+                #     # previews[cfg.mode] = asyncio.Future()
             except asyncio.exceptions.CancelledError:
                 logger.warning("CancelledError from preview function")
                 previews[cfg.mode] = asyncio.Future()
 
-        previews = self.previews[source.key]
-        if not previews[cfg.mode].done():
-            if isinstance(cfg.preload, int):
-                await asyncio.sleep(cfg.preload)
-            self.pending_event_tasks.append(
-                asyncio.create_task(
-                    generate_preview()
-                )
-            )
+        # import ipdb; ipdb.set_trace()
+
+        async with previews.lock:
+            for cfg in stages:
+                if not previews[cfg.mode].done():
+                    if isinstance(cfg.preload, int):
+                        await asyncio.sleep(cfg.preload)
+                    await generate_preview(cfg)
+                    if previews[cfg.mode].done() and previews[cfg.mode].result():
+                        break
+
         return previews[cfg.mode]
 
     @property
@@ -1150,36 +1166,33 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             await asyncio.sleep(self.config.auto_preview.delay)
 
         stages = self.preview_stages[self.preview_stage:]
-        for (cfg, next_cfg) in pairwise(stages + [None]):
+
+        for stage_index in range(len(stages)):
+
+            cfg = stages[stage_index]
             logger.debug(f"stage: {cfg.mode} {self.preview_stage}")
-            # import ipdb; ipdb.set_trace()
-            # if self.play_items[position].preview_mode == cfg.mode:
-            #     continue
+
+            if cfg.mode in [None, "default"]:
+                break
+
             if cfg.media_types and source.media_type not in cfg.media_types:
                 continue
 
-            if cfg.mode in [None, "default"]:
-                preview = None
-            else:
-                # import ipdb; ipdb.set_trace()
-                preview = await (await self.get_preview(cfg, listing, source))
-
-            locator = getattr(preview, "locator", preview)
-            video_track = getattr(preview, "video_track", None)
-            audio_track = getattr(preview, "audio_track", None)
-
+            preview = await (await self.get_preview([cfg], listing, source))
             if preview:
-                # import ipdb; ipdb.set_trace()
+                locator = getattr(preview, "locator", preview)
+                video_track = getattr(preview, "video_track", None)
+                audio_track = getattr(preview, "audio_track", None)
                 await self.playlist_replace(locator, idx=position, video_track=video_track, audio_track=audio_track)
-            # if cfg.mode:
-            await self.set_playlist_pos(position)
+                await self.set_playlist_pos(position)
 
-            if next_cfg and next_cfg.preload:
                 self.pending_event_tasks.append(
                     asyncio.create_task(
-                        self.get_preview(next_cfg, listing, source)
+                        self.get_preview(stages[stage_index:], listing, source)
                     )
                 )
+            else:
+                continue
 
             duration = await self.preview_duration(cfg, listing)
             if duration is not None: # advance automatically
@@ -1187,7 +1200,8 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
                 await asyncio.sleep(duration)
             else: # wait for next manual advance
                 break
-        self.preview_stage = (self.preview_stage+1) % len(self.preview_stages)
+
+        self.preview_stage = (self.preview_stage+stage_index+1) % len(self.preview_stages)
         if self.preview_stage == 0 and self.preview_stage_default == "default":
             self.preview_stage = 1
         logger.debug(f"new stage: {self.preview_stage}")
