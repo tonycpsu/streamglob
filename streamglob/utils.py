@@ -326,6 +326,16 @@ def format_age(dt):
         ), "en_short"
     ).replace(" ago", "").replace("just now", "now")
 
+
+def ffmpeg_escape(s):
+    # yikes!
+    return (
+        s.replace(":", "\\:")
+        .replace("'", "'\\\\\\''")
+        .replace("[", "\\[")
+        .replace("]", "\\]")
+    )
+
 __all__ = [
     "pairwise",
     "classproperty",
@@ -338,5 +348,6 @@ __all__ = [
     "sanitize_filename",
     "camel_to_snake",
     "snake_to_camel",
-    "format_age"
+    "format_age",
+    "ffmpeg_escape"
 ]

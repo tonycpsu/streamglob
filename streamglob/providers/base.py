@@ -813,6 +813,14 @@ class PreviewState(object):
     def __getitem__(self, key):
         return self.previews.__getitem__(key)
 
+    @property
+    def available_previews(self):
+        return [
+            k
+            for k, v in self.previews.items()
+            if v and v.done() and v.result()
+        ]
+
 
 @keymapped()
 class SynchronizedPlayerMixin(object):
@@ -955,15 +963,6 @@ class SynchronizedPlayerMixin(object):
             return row
 
     async def set_playlist_pos(self, pos):
-
-        def ffmpeg_escape(s):
-            # yikes!
-            return (
-                s.replace(":", "\\:")
-                .replace("'", "'\\\\\\''")
-                .replace("[", "\\[")
-                .replace("]", "\\]")
-            )
 
         if not state.task_manager.preview_player:
             return
@@ -1118,6 +1117,23 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             try:
                 res = await preview_fn(cfg, listing, source)
                 previews[cfg.mode].set_result(res)
+                if res:
+                    text_cfg = config.settings.profile.display.overlay.text
+                    text = ffmpeg_escape(", ".join(previews.available_previews))
+                    font = ffmpeg_escape(text_cfg.font)
+                    await state.task_manager.preview_player.command(
+                        "vf", "remove", "@previews"
+                    )
+                    # import ipdb; ipdb.set_trace()
+                    vf_previews = f"""@previews:lavfi=[drawtext=text='{text}':fontfile='{font}':\
+x=0:y=(h-{text_cfg.size}):fontsize=(h/{text_cfg.size}):fontcolor={text_cfg.color.default}:bordercolor={text_cfg.border.color}:\
+borderw={text_cfg.border.width}:shadowx={text_cfg.shadow.x}:shadowy={text_cfg.shadow.y}:shadowcolor={text_cfg.shadow.color}:expansion=none]"""
+                    logger.info(vf_previews)
+                    self.video_filters.append("@previews")
+                    await state.task_manager.preview_player.command(
+                        "vf", "add", vf_previews
+                    )
+
                 # if res:
                 #     previews[cfg.mode].set_result(res)
                 # else:
