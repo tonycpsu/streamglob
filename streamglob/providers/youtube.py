@@ -81,7 +81,7 @@ class YouTubeMediaListingMixin(object):
         return thumbs[list(thumbs.keys())[-1]]
 
     @async_cached_property
-    async def rich_thumbnail(self):
+    async def animation(self):
         # FIXME: `Video` class doesn't return richThumbnail, but `Search` does,
         # so we try to search by Video ID
         search = Search(self.guid).result()
@@ -715,10 +715,10 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         return self._thumbnails
 
     @property
-    def rich_thumbnails(self):
-        if not hasattr(self, "_rich_thumbnails"):
-            self._rich_thumbnails = AttrDict()
-        return self._rich_thumbnails
+    def animations(self):
+        if not hasattr(self, "_animations"):
+            self._animations = AttrDict()
+        return self._animations
 
     async def thumbnail_for(self, listing):
         if listing.guid not in self.thumbnails:
@@ -742,24 +742,24 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
                 self.storyboards[listing.guid] = await self.make_preview_storyboard(listing, cfg)
         return self.storyboards[listing.guid]
 
-    async def rich_thumbnail_for(self, listing):
-        if listing.guid not in self.rich_thumbnails:
-            url = await listing.rich_thumbnail
+    async def animation_for(self, listing):
+        if listing.guid not in self.animations:
+            url = await listing.animation
             if not url:
-                self.rich_thumbnails[listing.guid] = None
+                self.animations[listing.guid] = None
             else:
                 # mpv/ffmpeg can't do webp animations, so we convert
                 # see https://trac.ffmpeg.org/ticket/4907
-                thumb_file = os.path.join(self.tmp_dir, f"rich_thumbnail.{listing.guid}webp")
+                thumb_file = os.path.join(self.tmp_dir, f"animation.{listing.guid}webp")
                 try:
                     await self.download_file(url, thumb_file)
-                except asyncio.CancelledError:
+                except (asyncio.CancelledError, aiohttp.client_exceptions.ClientResponseError):
                     return
                 img = wand.image.Image(filename=thumb_file)
-                thumb_mp4 = os.path.join(self.tmp_dir, f"rich_thumbnail.{listing.guid}.mp4")
+                thumb_mp4 = os.path.join(self.tmp_dir, f"animation.{listing.guid}.mp4")
                 img.save(filename=thumb_mp4)
-                self.rich_thumbnails[listing.guid] = thumb_mp4
-        return self.rich_thumbnails[listing.guid]
+                self.animations[listing.guid] = thumb_mp4
+        return self.animations[listing.guid]
 
     def keypress(self, size, key):
         return super().keypress(size, key)
@@ -802,9 +802,9 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
 
         return await preview(listing)
 
-    async def preview_content_rich_thumbnail(self, cfg, listing, source):
+    async def preview_content_animation(self, cfg, listing, source):
         # import ipdb; ipdb.set_trace()
-        return await self.rich_thumbnail_for(listing)
+        return await self.animation_for(listing)
 
 
     async def preview_duration(self, cfg, listing):
@@ -844,7 +844,7 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
 
         PREVIEW_WIDTH = 1280
         PREVIEW_HEIGHT = 720
-        RICH_THUMBNAIL_SKIP = 4
+        ANIMATION_SKIP = 4
 
         # TILES_X = 5
         # TILES_Y = 5
@@ -863,12 +863,12 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         if thumbnail.width != PREVIEW_WIDTH:
             thumbnail.transform(resize=f"{PREVIEW_WIDTH}x{PREVIEW_HEIGHT}")
 
-        rich_thumbnail = await self.rich_thumbnail_for(listing)
-        if rich_thumbnail:
-            rich_thumbnail_img = wand.image.Image(filename=rich_thumbnail)
-            for i in range(len(rich_thumbnail_img.sequence)//RICH_THUMBNAIL_SKIP):
+        animation = await self.animation_for(listing)
+        if animation:
+            animation_img = wand.image.Image(filename=animation)
+            for i in range(len(animation_img.sequence)//ANIMATION_SKIP):
                 clone = thumbnail.clone()
-                tile = rich_thumbnail_img.sequence[i * RICH_THUMBNAIL_SKIP]
+                tile = animation_img.sequence[i * ANIMATION_SKIP]
                 tile_width = int(clone.width * inset_scale)
                 tile_height = int(clone.height * inset_scale)
                 tile.transform(

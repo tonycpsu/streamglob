@@ -806,12 +806,18 @@ class BackgroundTasksMixin(object):
 
 class PreviewState(object):
 
-    def __init__(self):
+    def __init__(self, stages):
+        self.stages = stages
         self.lock = asyncio.Lock()
         self.previews = DefaultAttrDict(lambda: asyncio.Future())
+        for stage in stages:
+            self.previews[stage.mode] = asyncio.Future()
 
     def __getitem__(self, key):
         return self.previews.__getitem__(key)
+
+    def __setitem__(self, key, value):
+        self.previews.__setitem__(key, value)
 
     @property
     def available_previews(self):
@@ -820,6 +826,18 @@ class PreviewState(object):
             for k, v in self.previews.items()
             if v and v.done() and v.result()
         ]
+
+    def get_available_previews_text(self, current_stage):
+        stages = self.previews.keys()
+        loaded = [p for p in self.previews.values() if p.done()]
+        return f"""{
+        ", ".join(
+            "[%s]" %(stage) if stage == current_stage else stage
+            for stage in stages
+            if stage in self.available_previews
+        )
+        }{"…" if len(loaded) < len(stages) else ""}"""
+
 
 
 @keymapped()
@@ -847,12 +865,18 @@ class SynchronizedPlayerMixin(object):
         self.sync_player_playlist = False
         self.video_filters = []
         self.playlist_lock = asyncio.Lock()
-        self.preview_stage = 0
+        self.preview_stage = -1
+
+    @property
+    def preview_stage_mode(self):
+        return self.preview_stages[self.preview_stage].mode
 
     @property
     def previews(self):
         if not hasattr(self, "_previews"):
-            self._previews = DefaultAttrDict(lambda: PreviewState())
+            self._previews = DefaultAttrDict(
+                lambda: PreviewState(self.preview_stages)
+            )
             # self._previews = DefaultAttrDict(lambda: DefaultAttrDict(lambda: asyncio.Future()))
         return self._previews
 
@@ -962,43 +986,53 @@ class SynchronizedPlayerMixin(object):
             # FIXME
             return row
 
-    async def set_playlist_pos(self, pos):
-
-        if not state.task_manager.preview_player:
-            return
-
-        if self.video_filters:
-            await state.task_manager.preview_player.command(
-                "vf", "del", ",".join([f"{f}" for f in self.video_filters])
-            )
-            try:
-                event = await state.task_manager.preview_player.wait_for_event(
-                    "video-reconfig", 1
-                )
-            except StopAsyncIteration:
-                pass
+    async def update_video_filters(self, filters=None):
 
         if not (state.task_manager.preview_player and len(self)):
             return
 
-        # current_pos = await state.task_manager.preview_player.command(
-        #     "get_property", "playlist-pos"
-        # )
-        # if pos == current_pos:
-        #     return
+        logger.info(f"filters before: {self.video_filters}")
 
-        await state.task_manager.preview_player.command(
-            "set_property", "playlist-pos", pos
-        )
+        filters = filters or [
+            "upscale",
+            "framerate",
+            "box",
+            "playlist",
+            "title",
+            "previews"
+        ]
+        if not filters:
+            return
+
+        pos = self.playlist_position
+
+        # import ipdb; ipdb.set_trace()
+        remove_filters = [
+            f"@{f}" for f in filters
+            if any([vf.startswith(f"@{f}") for vf in self.video_filters])
+        ]
+
+        if remove_filters:
+            await state.task_manager.preview_player.command(
+                "vf", "remove", *remove_filters
+            )
+
+        # try:
+        #     event = await state.task_manager.preview_player.wait_for_event(
+        #         "video-reconfig", 1
+        #     )
+        # except StopAsyncIteration:
+        #     pass
+
+        self.video_filters = [f for f in self.video_filters if f not in filters]
 
         # try to ensure video filters aren't lost by waiting for next track
-        try:
-            event = await state.task_manager.preview_player.wait_for_event(
-                "playback-restart", 1
-            )
-        except StopAsyncIteration:
-            pass
-
+        # try:
+        #     event = await state.task_manager.preview_player.wait_for_event(
+        #         "playback-restart", 1
+        #     )
+        # except StopAsyncIteration:
+        #     pass
 
         cfg = config.settings.profile.display.overlay
 
@@ -1007,25 +1041,30 @@ class SynchronizedPlayerMixin(object):
 
         padding = cfg.text.padding or 0
 
-        upscale = cfg.upscale or 1280
-        vf_scale = f"@upscale:lavfi=[scale=w=max(iw\\,{upscale}):h=-2]"
-        filters = [vf_scale]
+        added_filters = []
 
-        frame_count = await state.task_manager.preview_player.command(
-            "get_property", "estimated-frame-count"
-        )
-        logger.info(f"frame_count: {frame_count}")
-        if frame_count is None or frame_count <= 1:
-            vf_framerate = f"@framerate:framerate=fps={cfg.fps or 30}"
-            filters += [vf_framerate]
-            # filters += [vf_scale, vf_framerate]
+        if "upscale" in filters:
+            upscale = cfg.upscale or 1280
+            vf_scale = f"@upscale:lavfi=[scale=w=max(iw\\,{upscale}):h=-2]"
+            added_filters = [vf_scale]
 
-        if cfg.box:
-            box_color = cfg.box.color.default or "000000@0.5"
-            if self.playlist_position == len(self.play_items)-1:
-                box_color = cfg.box.color.end or box_color
-            vf_box = f"@box:drawbox=x={ox}:y={oy}:w=iw:h=(ih/{cfg.text.size or 50}*2)+{padding}:color={box_color}:t=fill"
-            filters.append(vf_box)
+        if "framerate" in filters:
+            frame_count = await state.task_manager.preview_player.command(
+                "get_property", "estimated-frame-count"
+            )
+            logger.info(f"frame_count: {frame_count}")
+            if frame_count is None or frame_count <= 1:
+                vf_framerate = f"@framerate:framerate=fps={cfg.fps or 30}"
+                added_filters += [vf_framerate]
+                # filters += [vf_scale, vf_framerate]
+
+        if "box" in filters:
+            if cfg.box:
+                box_color = cfg.box.color.default or "000000@0.5"
+                if self.playlist_position == len(self.play_items)-1:
+                    box_color = cfg.box.color.end or box_color
+                vf_box = f"@box:drawbox=x={ox}:y={oy}:w=iw:h=(ih/{cfg.text.size or 50}*2)+{padding}:color={box_color}:t=fill"
+                added_filters.append(vf_box)
 
         # import ipdb; ipdb.set_trace()
 
@@ -1034,47 +1073,74 @@ class SynchronizedPlayerMixin(object):
         except IndexError:
             logger.warning(f"IndexError in play_items: {pos}, {len(self.play_items)}")
             return
-        for element, text in dict(
-                playlist=f"{self.playlist_title} {self.playlist_position_text}",
-                title=title
-            ).items():
-            text = ffmpeg_escape(text)
-            el_cfg = cfg.get(element)
-            color = el_cfg.text.color.default or cfg.text.color.default or "white"
-            if self.playlist_position == len(self.play_items)-1:
-                color = el_cfg.text.color.end or cfg.text.color.end or color
-            elif getattr(self.active_table.selected_source, "local_path", None):
-                color = el_cfg.text.color.downloaded or cfg.text.color.downloaded or color
 
-            font = ffmpeg_escape(el_cfg.text.font or cfg.text.font or "sans")
-            size = el_cfg.text.size or cfg.text.size or 50
-            shadow_color = el_cfg.text.shadow.color or cfg.text.shadow.color or "black"
-            border_color = el_cfg.text.border.color or cfg.text.border.color or "black"
-            border_width = el_cfg.text.border.width or cfg.text.border.width or 1
-            shadow_x = el_cfg.text.shadow.x or cfg.text.shadow.x or 1
-            shadow_y = el_cfg.text.shadow.y or cfg.text.shadow.y or 1
+        text_map = dict(
+            playlist=lambda: f"{self.playlist_title} {self.playlist_position_text}",
+            title=lambda: title,
+            previews=lambda: self.previews[self.selected_source.key].get_available_previews_text(
+                self.preview_stage_mode
+            )
+        )
+        # FIXME
+        # import ipdb; ipdb.set_trace()
+        if set(filters).intersection(set(text_map.keys())):
+        # if "playlist" in filters or "title" in filters:
+            for element, text_fn in text_map.items():
+                text = ffmpeg_escape(text_fn())
+                el_cfg = cfg.get(element, cfg)
+                color = el_cfg.text.color.default or cfg.text.color.default or "white"
+                if self.playlist_position == len(self.play_items)-1:
+                    color = el_cfg.text.color.end or cfg.text.color.end or color
+                elif getattr(self.active_table.selected_source, "local_path", None):
+                    color = el_cfg.text.color.downloaded or cfg.text.color.downloaded or color
 
-            x = el_cfg.x or ox
-            if isinstance(x, int):
-                x = str(x)
-            if isinstance(x, dict):
-                scroll_speed = x.scroll or 5
-                pause = x.scroll_pause or 3
-                x=f"w-w/{scroll_speed}*mod(if(lt(t, {pause}), 0, if(gt(text_w, w), t-{pause}, 0) ),{scroll_speed}*(w+tw/2)/w)-w"
-            x = x.format(x=ox, y=oy, padding=padding)
-            y = str(el_cfg.y or cfg.y).format(x=ox, y=oy, padding=padding)
-            vf_text=f"""@{element}:lavfi=[drawtext=text='{text}':fontfile='{font}':\
+                font = ffmpeg_escape(el_cfg.text.font or cfg.text.font or "sans")
+                size = el_cfg.text.size or cfg.text.size or 50
+                shadow_color = el_cfg.text.shadow.color or cfg.text.shadow.color or "black"
+                border_color = el_cfg.text.border.color or cfg.text.border.color or "black"
+                border_width = el_cfg.text.border.width or cfg.text.border.width or 1
+                shadow_x = el_cfg.text.shadow.x or cfg.text.shadow.x or 1
+                shadow_y = el_cfg.text.shadow.y or cfg.text.shadow.y or 1
+
+                x = el_cfg.x or ox
+                y = el_cfg.y or oy
+                if isinstance(x, int):
+                    x = str(x)
+                if isinstance(x, dict):
+                    scroll_start = str(x.scroll.start or 0).format(ox=ox)
+                    scroll_speed = x.scroll.speed or 5
+                    pause = x.scroll.pause or 3
+                    x=f"{scroll_start} + w - w/{scroll_speed}*mod(if(lt(t, {pause}), 0, if(gt(text_w, w), t-{pause}, 0) ),{scroll_speed}*(w+tw/2)/w)-w"
+                x = x.format(ox=ox, oy=oy, padding=padding)
+                # import ipdb; ipdb.set_trace()
+                y = str(y).format(ox=ox, oy=oy, padding=padding)
+                ox = x
+                oy = y
+                vf_text=f"""@{element}:lavfi=[drawtext=text='{text}':fontfile='{font}':\
 x='{x}':y='{y}':fontsize=(h/{size}):fontcolor={color}:bordercolor={border_color}:\
 borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow_color}:expansion=none]"""
-            # import ipdb; ipdb.set_trace()
-            logger.info(vf_text)
-            filters.append(vf_text)
+                logger.info(vf_text)
+                if element in filters:
+                    added_filters.append(vf_text)
 
         # return
         await state.task_manager.preview_player.command(
-            "vf", "add", ",".join(filters)
+            "vf", "add", ",".join(added_filters)
         )
-        self.video_filters = filters
+        self.video_filters += added_filters
+        logger.info(f"filters after: {self.video_filters}")
+
+
+    async def set_playlist_pos(self, pos):
+
+        if not state.task_manager.preview_player:
+            return
+
+        await self.update_video_filters()
+
+        await state.task_manager.preview_player.command(
+            "set_property", "playlist-pos", pos
+        )
 
     @property
     def playlist_position(self):
@@ -1117,22 +1183,22 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             try:
                 res = await preview_fn(cfg, listing, source)
                 previews[cfg.mode].set_result(res)
-                if res:
-                    text_cfg = config.settings.profile.display.overlay.text
-                    text = ffmpeg_escape(", ".join(previews.available_previews))
-                    font = ffmpeg_escape(text_cfg.font)
-                    await state.task_manager.preview_player.command(
-                        "vf", "remove", "@previews"
-                    )
-                    # import ipdb; ipdb.set_trace()
-                    vf_previews = f"""@previews:lavfi=[drawtext=text='{text}':fontfile='{font}':\
-x=0:y=(h-{text_cfg.size}):fontsize=(h/{text_cfg.size}):fontcolor={text_cfg.color.default}:bordercolor={text_cfg.border.color}:\
-borderw={text_cfg.border.width}:shadowx={text_cfg.shadow.x}:shadowy={text_cfg.shadow.y}:shadowcolor={text_cfg.shadow.color}:expansion=none]"""
-                    logger.info(vf_previews)
-                    self.video_filters.append("@previews")
-                    await state.task_manager.preview_player.command(
-                        "vf", "add", vf_previews
-                    )
+#                 if res:
+#                     text_cfg = config.settings.profile.display.overlay.text
+#                     text = ffmpeg_escape(", ".join(previews.available_previews))
+#                     font = ffmpeg_escape(text_cfg.font)
+#                     await state.task_manager.preview_player.command(
+#                         "vf", "remove", "@previews"
+#                     )
+#                     # import ipdb; ipdb.set_trace()
+#                     vf_previews = f"""@previews:lavfi=[drawtext=text='{text}':fontfile='{font}':\
+# x=0:y=(h-{text_cfg.size}):fontsize=(h/{text_cfg.size}):fontcolor={text_cfg.color.default}:bordercolor={text_cfg.border.color}:\
+# borderw={text_cfg.border.width}:shadowx={text_cfg.shadow.x}:shadowy={text_cfg.shadow.y}:shadowcolor={text_cfg.shadow.color}:expansion=none]"""
+#                     logger.info(vf_previews)
+#                     self.video_filters.append("@previews")
+#                     await state.task_manager.preview_player.command(
+#                         "vf", "add", vf_previews
+#                     )
 
                 # if res:
                 #     previews[cfg.mode].set_result(res)
@@ -1154,6 +1220,7 @@ borderw={text_cfg.border.width}:shadowx={text_cfg.shadow.x}:shadowy={text_cfg.sh
                     if previews[cfg.mode].done() and previews[cfg.mode].result():
                         break
 
+        await self.update_video_filters()
         return previews[cfg.mode]
 
     @property
@@ -1181,7 +1248,10 @@ borderw={text_cfg.border.width}:shadowx={text_cfg.shadow.x}:shadowy={text_cfg.sh
             logger.debug(f"sleeping: {self.config.auto_preview.delay}")
             await asyncio.sleep(self.config.auto_preview.delay)
 
+        self.preview_stage = (self.preview_stage+1) % len(self.preview_stages)
+
         stages = self.preview_stages[self.preview_stage:]
+        preview_state = self.previews[source.key]
 
         for stage_index in range(len(stages)):
 
@@ -1217,9 +1287,10 @@ borderw={text_cfg.border.width}:shadowx={text_cfg.shadow.x}:shadowy={text_cfg.sh
             else: # wait for next manual advance
                 break
 
-        self.preview_stage = (self.preview_stage+stage_index+1) % len(self.preview_stages)
-        if self.preview_stage == 0 and self.preview_stage_default == "default":
-            self.preview_stage = 1
+        self.preview_stage += stage_index
+        # self.preview_stage = (self.preview_stage+stage_index+1) % len(self.preview_stages)
+        # if self.preview_stage == 0 and self.preview_stage_default == "default":
+        #     self.preview_stage = 1
         logger.debug(f"new stage: {self.preview_stage}")
 
 
@@ -1259,11 +1330,12 @@ borderw={text_cfg.border.width}:shadowx={text_cfg.shadow.x}:shadowy={text_cfg.sh
 
     def on_focus(self, source, position):
 
-        self.preview_stage = (
-            1
-            if self.preview_stage_default == "default"
-            else 0
-        )
+        self.preview_stage = -1
+        # self.preview_stage = (
+        #     0
+        #     if self.preview_stage_default == "default"
+        #     else -1
+        # )
         # import ipdb; ipdb.set_trace()
         if self.provider.auto_preview_enabled:
             state.event_loop.create_task(self.sync_playlist_position())
