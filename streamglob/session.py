@@ -11,6 +11,7 @@ import functools
 from contextlib import contextmanager
 
 from http.cookiejar import LWPCookieJar, Cookie
+import browser_cookie3
 from io import StringIO
 import requests
 import asyncio
@@ -56,15 +57,17 @@ class StreamSession(object):
             self,
             provider_id,
             proxies=None,
+            cookies_file=None,
             *args, **kwargs
     ):
 
         self.provider_id = provider_id
         self.session = self.SESSION_CLASS()
-        self.cookies = LWPCookieJar()
-        if not os.path.exists(self.COOKIES_FILE):
-            self.cookies.save(self.COOKIES_FILE)
-        self.cookies.load(self.COOKIES_FILE, ignore_discard=True)
+        self.cookies_file = cookies_file or self.COOKIES_FILE
+        self.cookies = self.get_cookie_jar()
+        if not os.path.exists(self.cookies_file):
+            self.save_cookies()
+        self.load_cookies()
         self.session.headers.update(self.HEADERS)
         self._state = AttrDict([
             ("proxies", proxies)
@@ -77,6 +80,9 @@ class StreamSession(object):
     @property
     def provider(self):
         return providers.get(self.provider_id)
+
+    def get_cookie_jar(self):
+        return LWPCookieJar()
 
     def login(self):
         pass
@@ -93,7 +99,7 @@ class StreamSession(object):
     def COOKIES_FILE(self):
         return self._COOKIES_FILE()
 
-    @classmethod
+    # @classmethod
     def _SESSION_FILE(cls):
         return os.path.join(config.settings.CONFIG_DIR, f"{cls.session_type()}.session")
 
@@ -117,12 +123,16 @@ class StreamSession(object):
     def cookies(self, value):
         self.session.cookies = value
 
+    # @classmethod
+    def destroy_cookies(self):
+        if os.path.exists(self.cookies_file):
+            os.remove(self.cookies_file)
+
     @classmethod
     def destroy(cls):
-        if os.path.exists(cls.COOKIES_FILE):
-            os.remove(cls.COOKIES_FILE)
         if os.path.exists(cls.SESSION_FILE):
             os.remove(cls.SESSION_FILE)
+        cls.destroy_cookies()
 
     @classmethod
     def load(cls, provider_id, **kwargs):
@@ -134,8 +144,13 @@ class StreamSession(object):
         logger.trace(f"load: {self.__class__.__name__}, {self._state}")
         with open(self.SESSION_FILE, 'w') as outfile:
             yaml.dump(self._state, outfile, default_flow_style=False)
-        self.cookies.save(self.COOKIES_FILE)
+        self.save_cookies()
 
+    def load_cookies(self):
+        self.cookies.load(self.cookies_file, ignore_discard=True)
+
+    def save_cookies(self):
+        self.cookies.save(self.cookies_file)
 
     def get_cookie(self, name):
         return requests.utils.dict_from_cookiejar(self.cookies).get(name)
@@ -219,6 +234,34 @@ class StreamSession(object):
 
     def cache_responses_long(self):
         return self.cache_responses(model.CACHE_DURATION_LONG)
+
+
+class BrowserCookieStreamSessionMixin(object):
+
+
+    def __init__(self,
+                 provider_id,
+                 cookies_provider=None,
+                 *args, **kwargs):
+        self.cookies_provider = cookies_provider
+        self.cookie_jar_method = getattr(browser_cookie3, self.cookies_provider)
+        if not self.cookie_jar_method:
+            raise NotImplementedError
+        super().__init__(provider_id, *args, **kwargs)
+
+
+    def get_cookie_jar(self):
+        return self.cookie_jar_method(cookie_file=self.cookies_file)
+
+    def load_cookies(self):
+        pass
+
+    def save_cookies(self):
+        pass
+
+    @classmethod
+    def destroy_cookies(cls):
+        pass
 
 
 class AsyncStreamSession(StreamSession):

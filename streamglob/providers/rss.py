@@ -44,7 +44,7 @@ class RSSMediaSource(RSSMediaSourceMixin, FeedMediaSource):
 class RSSMediaListing(model.ContentMediaListing, FeedMediaListing):
     pass
 
-class RSSSession(session.StreamSession):
+class RSSSession(BrowserCookieStreamSessionMixin, session.StreamSession):
 
     def get_rss_link(item):
 
@@ -70,7 +70,6 @@ class RSSSession(session.StreamSession):
          get_atom_link
          )
     ]
-
 
     def parse(self, url):
         try:

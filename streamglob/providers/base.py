@@ -326,7 +326,11 @@ class BaseProvider(
 
     @property
     def session_params(self):
-        return {"proxies": config.settings.profile.get("proxies")}
+        return {
+            "proxies": config.settings.profile.get("proxies"),
+            "cookies_file": self.config.get("cookies_file"),
+            "cookies_provider": self.config.get("cookies_provider")
+        }
 
     @property
     def PREVIEW_TYPES(self):

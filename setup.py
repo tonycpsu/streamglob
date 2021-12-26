@@ -37,6 +37,7 @@ setup(name=name,
           "async_property",
           "atoma",
           "bitmath",
+          "browser_cookie3 ~= 0.13.0"
           "dateparser",
           "ffmpeg-python @ git+https://github.com/hdk5/ffmpeg-python@asyncio_support#egg=ffmpeg-python",
           # "googletransx",
