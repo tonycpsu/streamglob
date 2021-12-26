@@ -864,11 +864,9 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
 
     async def make_preview_montage(self, listing, cfg):
 
-        CONTACT_SHEET_WIDTH = 1280
-        CONTACT_SHEET_HEIGHT = 720
-        # DEFAULT_NUM_IMAGES = 49
+        MONTAGE_WIDTH = 1280
+        MONTAGE_HEIGHT = 720
         DEFAULT_GRID = (5, 5)
-        ANIMATION_SKIP = 4
 
         board_files = []
         boards = await listing.storyboards
@@ -929,17 +927,20 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         tile_images = sample_evenly(tile_images, cfg.get("images", out_cols*out_rows))
 
         with wand.image.Image(
-                width=CONTACT_SHEET_WIDTH,
-                height=CONTACT_SHEET_HEIGHT,
+                width=MONTAGE_WIDTH,
+                height=MONTAGE_HEIGHT,
                 background="black"
         ) as img:
-            tile_width = CONTACT_SHEET_WIDTH // out_cols
-            tile_height = CONTACT_SHEET_HEIGHT // out_rows
+            tile_width = MONTAGE_WIDTH // out_cols
+            tile_height = MONTAGE_HEIGHT // out_rows
             # img.options["ashlar:best-fit"] = "true"
             for r in range(out_rows):
                 for c in range(out_cols):
                     n = (r * out_cols) + c
-                    tile_img = tile_images[n]
+                    try:
+                        tile_img = tile_images[n]
+                    except IndexError:
+                        break
                     tile_img.transform(
                         resize=f"{tile_width}x{tile_height}"
                     )
