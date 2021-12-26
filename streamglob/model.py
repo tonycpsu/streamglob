@@ -421,12 +421,13 @@ class MediaSourceMixin(object):
                 # group_title = f"""{"[%s] " %(group) if group else ""}{title}"""
                 # if match_glob:
                 #     group_title = glob.escape(group_title)
-                if self.provider.config.output.title_prefix == "group":
-                    title = f"""{"[%s] " %(group) if group else ""}{title}"""
-                if self.provider.config.output.title_prefix == "subjects":
-                    title = f"""{"[%s] " %(", ".join(subjects)) if subjects else ""}{title}"""
-                else:
-                    raise NotImplementedError
+                if self.provider.config.output.title_prefix:
+                    if self.provider.config.output.title_prefix == "group":
+                        title = f"""{"[%s] " %(group) if group else ""}{title}"""
+                    if self.provider.config.output.title_prefix == "subjects":
+                        title = f"""{"[%s] " %(", ".join(subjects)) if subjects else ""}{title}"""
+                    else:
+                        raise NotImplementedError
 
                 if match_glob:
                     title = glob.escape(title)
