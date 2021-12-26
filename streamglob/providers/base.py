@@ -1231,7 +1231,12 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
 
     @property
     def preview_stages(self):
-        return [Tree(mode=self.preview_stage_default)] + (
+        return [
+            Tree(
+                mode=self.preview_stage_default,
+                duration=self.config.auto_preview.get("duration")
+            )
+        ] + (
             self.config.auto_preview.stages
             or []
         )

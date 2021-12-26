@@ -698,7 +698,11 @@ class YouTubeFeed(FeedMediaChannel):
                         self.newest_timestamp = listing.created
                 yield listing
 
+def sample_evenly_indexes(m, n):
+    return [i*n//m + n//(2*m) for i in range(m)]
 
+def sample_evenly(l, n):
+    return [l[idx] for idx in sample_evenly_indexes(min(n, len(l)), len(l))]
 
 @keymapped()
 class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
@@ -715,10 +719,23 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         return self._thumbnails
 
     @property
+    def montages(self):
+        if not hasattr(self, "_montages"):
+            self._montages = AttrDict()
+        return self._montages
+
+    @property
     def animations(self):
         if not hasattr(self, "_animations"):
             self._animations = AttrDict()
         return self._animations
+
+    @property
+    def storyboards(self):
+        if not hasattr(self, "_storyboards"):
+            self._storyboards = AttrDict()
+        return self._storyboards
+
 
     async def thumbnail_for(self, listing):
         if listing.guid not in self.thumbnails:
@@ -727,20 +744,18 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
             self.thumbnails[listing.guid] = thumbnail
         return self.thumbnails[listing.guid]
 
-    @property
-    def storyboards(self):
-        if not hasattr(self, "_storyboards"):
-            self._storyboards = AttrDict()
-        return self._storyboards
-
-    async def storyboard_for(self, listing, cfg):
-        if not await listing.storyboards:
-            return await self.thumbnail_for(listing)
+    async def combined_for(self, listing, cfg):
 
         async with self.storyboard_lock:
             if listing.guid not in self.storyboards:
-                self.storyboards[listing.guid] = await self.make_preview_storyboard(listing, cfg)
+                self.storyboards[listing.guid] = await self.make_preview_combined(listing, cfg)
         return self.storyboards[listing.guid]
+
+    async def montage_for(self, listing, cfg):
+
+        if listing.guid not in self.montages:
+            self.montages[listing.guid] = await self.make_preview_montage(listing, cfg)
+        return self.montages[listing.guid]
 
     async def animation_for(self, listing):
         if listing.guid not in self.animations:
@@ -782,10 +797,10 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         self.cancel_pending_tasks()
         super().on_deactivate()
 
-    async def preview_content_storyboard(self, cfg, listing, source):
+    async def preview_content_combined(self, cfg, listing, source):
 
         async def preview(listing):
-            storyboard = await self.storyboard_for(listing, cfg)
+            storyboard = await self.combined_for(listing, cfg)
             if not storyboard:
                 return
             logger.info(storyboard)
@@ -802,6 +817,12 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
 
         return await preview(listing)
 
+    async def preview_content_montage(self, cfg, listing, source):
+        montage = await self.montage_for(listing, cfg)
+        if not montage:
+            return None
+        return montage.img_file
+
     async def preview_content_animation(self, cfg, listing, source):
         # import ipdb; ipdb.set_trace()
         return await self.animation_for(listing)
@@ -813,7 +834,7 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         if cfg.mode != "storyboard" or duration is None:
             return duration
 
-        storyboard = await self.storyboard_for(listing, cfg)
+        storyboard = await self.combined_for(listing, cfg)
         if not storyboard:
             return 0
 
@@ -840,7 +861,107 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
                         break
                     await f.write(chunk)
 
-    async def make_preview_storyboard(self, listing, cfg):
+
+    async def make_preview_montage(self, listing, cfg):
+
+        CONTACT_SHEET_WIDTH = 1280
+        CONTACT_SHEET_HEIGHT = 720
+        # DEFAULT_NUM_IMAGES = 49
+        DEFAULT_GRID = (5, 5)
+        ANIMATION_SKIP = 4
+
+        board_files = []
+        boards = await listing.storyboards
+
+        for i, board in enumerate(boards):
+            url = board.url
+            board_file = os.path.join(self.tmp_dir, f"board.{listing.guid}.{i:02d}.jpg")
+            try:
+                try:
+                    await self.download_file(url, board_file)
+                except asyncio.CancelledError:
+                    return
+                board_files.append(board_file)
+            except:
+                # sometimes the last one doesn't exist
+                if i == len(boards)-1:
+                    pass
+                else:
+                    logger.error("".join(traceback.format_exc()))
+
+        cols = boards[0].cols
+        rows = boards[0].rows
+
+        i = 0
+        tile_width = 0
+        tile_height = 0
+        tile_skip = cfg.skip or None
+
+        tile_images = []
+        for board_file in board_files:
+            # logger.debug(board_file)
+            img = wand.image.Image(filename=board_file)
+            if i == 0:
+                # calculate tile width / height on first iteration since
+                # last board might not be full height
+                tile_width = img.width // cols
+                tile_height = img.height // rows
+            for h in range(0, img.height, tile_height):
+                for w in range(0, img.width, tile_width):
+                    i += 1
+                    if tile_skip and i % tile_skip:
+                        continue
+                    # n += 1
+                    w_end = w + tile_width
+                    h_end = h + tile_height
+                    tile = img[w:w_end, h:h_end]
+                    tile_images.append(tile)
+
+        # import ipdb; ipdb.set_trace()
+        montage_file = os.path.join(self.tmp_dir, f"montage.{listing.guid}.jpg")
+        try:
+            out_cols, out_rows = [
+                int(n)
+                for n in re.search("(\d+)\s*[xX]\s*(\d+)", cfg.grid).groups()
+            ]
+        except (TypeError, AttributeError):
+            out_cols, out_rows = DEFAULT_GRID
+        tile_images = sample_evenly(tile_images, cfg.get("images", out_cols*out_rows))
+
+        with wand.image.Image(
+                width=CONTACT_SHEET_WIDTH,
+                height=CONTACT_SHEET_HEIGHT,
+                background="black"
+        ) as img:
+            tile_width = CONTACT_SHEET_WIDTH // out_cols
+            tile_height = CONTACT_SHEET_HEIGHT // out_rows
+            # img.options["ashlar:best-fit"] = "true"
+            for r in range(out_rows):
+                for c in range(out_cols):
+                    n = (r * out_cols) + c
+                    tile_img = tile_images[n]
+                    tile_img.transform(
+                        resize=f"{tile_width}x{tile_height}"
+                    )
+                    img.composite(
+                        tile_img,
+                        left=c * tile_width,
+                        top=r * tile_height
+                    )
+
+                # img.sequence.append(tile_img)
+            img.save(filename=montage_file)
+
+        for p in itertools.chain(
+            pathlib.Path(self.tmp_dir).glob(f"board.{listing.guid}.*")
+        ):
+            p.unlink()
+
+        return AttrDict(
+            img_file=montage_file
+        )
+
+    async def make_preview_combined(self, listing, cfg):
 
         PREVIEW_WIDTH = 1280
         PREVIEW_HEIGHT = 720
@@ -887,7 +1008,6 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         board_files = []
         boards = await listing.storyboards
 
-        # import ipdb; ipdb.set_trace()
         for i, board in enumerate(boards):
             url = board.url
             board_file = os.path.join(self.tmp_dir, f"board.{listing.guid}.{i:02d}.jpg")
