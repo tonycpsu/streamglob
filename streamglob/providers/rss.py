@@ -30,10 +30,11 @@ class RSSMediaSourceMixin(object):
 
     @property
     def locator_thumbnail(self):
-        try:
-            return self.listing.body_urls[0]
-        except IndexError:
-            return utils.BLANK_IMAGE_URI
+        return self.url_preview
+        # try:
+        #     return self.listing.body_urls[0]
+        # except IndexError:
+        #     return utils.BLANK_IMAGE_URI
 
 
 @model.attrclass()
@@ -42,7 +43,9 @@ class RSSMediaSource(RSSMediaSourceMixin, FeedMediaSource):
 
 @model.attrclass()
 class RSSMediaListing(model.ContentMediaListing, FeedMediaListing):
+
     pass
+
 
 class RSSSession(BrowserCookieStreamSessionMixin, session.StreamSession):
 
@@ -112,21 +115,31 @@ class RSSFeed(FeedMediaChannel):
                     guid = getattr(item, "guid", item.link) or item.link
                     i = self.items.select(lambda i: i.guid == guid).first()
                     if not i:
+                        session = self.provider.session
+                        # import ipdb; ipdb.set_trace()
+                        full_content = session.get(guid).content.decode("utf-8")
+                        patterns = [
+                            re.compile(pattern)
+                            for pattern in self.provider.config.content.links.filters
+                        ]
+                        urls = [
+                            u for u in dict.fromkeys(
+                                RSSMediaListing.extract_urls(item.content)
+                                +
+                                RSSMediaListing.extract_urls(full_content)
+                            )
+                            if not patterns or any([
+                                    p.search(u)
+                                    for p in patterns
+                            ])
+                        ]
                         sources = [
                             AttrDict(
                                 url=item.link,
                                 url_preview=body_url,
                                 media_type="video" # FIXME: could be something else
                             )
-                            for body_url in (
-                                    (
-                                        RSSMediaListing.extract_urls(item.content)
-                                        or
-                                        [None]
-                                    )
-                                    if item.content
-                                    else [None]
-                                )
+                            for body_url in urls or [None]
                         ]
                         logger.info(sources)
                         # source = AttrDict(

@@ -995,7 +995,7 @@ class SynchronizedPlayerMixin(object):
         if not (state.task_manager.preview_player and len(self)):
             return
 
-        logger.info(f"filters before: {self.video_filters}")
+        # logger.debug(f"filters before: {self.video_filters}")
 
         filters = filters or [
             "upscale",
@@ -1132,7 +1132,7 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             "vf", "add", ",".join(added_filters)
         )
         self.video_filters += added_filters
-        logger.info(f"filters after: {self.video_filters}")
+        # logger.debug(f"filters after: {self.video_filters}")
 
 
     async def set_playlist_pos(self, pos):
@@ -1251,8 +1251,6 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
         source = self.selected_source
         position = self.playlist_position
 
-        # import ipdb; ipdb.set_trace()
-
         if self.config.auto_preview.delay:
             logger.debug(f"sleeping: {self.config.auto_preview.delay}")
             await asyncio.sleep(self.config.auto_preview.delay)
@@ -1268,6 +1266,7 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             logger.debug(f"stage: {cfg.mode} {self.preview_stage}")
 
             if cfg.mode in [None, "default"]:
+                await self.set_playlist_pos(position)
                 break
 
             if cfg.media_types and source.media_type not in cfg.media_types:
@@ -1705,8 +1704,6 @@ class MultiSourceListingMixin(object):
             return
         # urwid.connect_signal(box.table, "focus", lambda s, i: self.on_focus(s, self.focus_position))
 
-        # def on_inner_focus(source, position):
-        #     logger.info(position)
         box = self.DETAIL_BOX_CLASS(data, self)
         urwid.connect_signal(box.table, "focus", lambda s, i: self.on_focus(s, self.focus_position))
         return box
@@ -1715,10 +1712,6 @@ class MultiSourceListingMixin(object):
 
     async def sync_playlist_position(self):
         return await super().sync_playlist_position()
-
-
-    def on_inner_focus(self, position):
-        state.event_loop.create_task(self.sync_playlist_position())
 
     @property
     def playlist_position(self):
