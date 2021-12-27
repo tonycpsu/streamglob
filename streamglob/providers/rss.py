@@ -117,7 +117,7 @@ class RSSFeed(FeedMediaChannel):
                     if not i:
                         session = self.provider.session
                         # import ipdb; ipdb.set_trace()
-                        full_content = session.get(guid).content.decode("utf-8")
+                        full_content = session.get(guid).text#.decode("utf-8")
                         patterns = [
                             re.compile(pattern)
                             for pattern in self.provider.config.content.links.filters
