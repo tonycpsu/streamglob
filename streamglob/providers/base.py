@@ -512,11 +512,12 @@ class BaseProvider(
         )
 
     async def play(self, listing, **kwargs):
-        # sources, kwargs = self.extract_sources(listing, **kwargs)
+        import ipdb; ipdb.set_trace()
         task = self.create_play_task(listing, **kwargs)
         yield state.task_manager.play(task)
 
     async def download(self, listing, index=None, no_task_manager=False, **kwargs):
+        import ipdb; ipdb.set_trace()
         for task in self.create_download_tasks(listing, index=index, **kwargs):
             yield state.task_manager.download(task)
 
@@ -1570,17 +1571,6 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
             sources=listing.sources
         )
 
-    # def create_play_task(self, listing, *args, **kwargs):
-    #     return self.provider.create_play_task(listing, *args, **kwargs)
-
-    # def create_download_task(self, listing, *args, **kwargs):
-    #     return self.provider.create_download_task(listing, *args, **kwargs)
-
-    # def extract_sources(self, listing, **kwargs):
-    #     if not listing:
-    #         return ([], kwargs)
-    #     return self.provider.extract_sources(listing, **kwargs)
-
 
 class DetailBox(urwid.WidgetWrap):
 
@@ -1682,7 +1672,6 @@ class MultiSourceListingMixin(object):
     @property
     def active_table(self):
         return self.inner_table or self
-
 
     @property
     def selected_source(self):

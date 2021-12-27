@@ -1111,8 +1111,6 @@ class YouTubeProvider(PaginatedProviderMixin,
 
     SESSION_CLASS = YouTubeSession
 
-    DOWNLOADER = "youtube-dl"
-
     @property
     def VIEW(self):
         return FeedProviderView(self, CachedFeedProviderBodyView(self, YouTubeDataTable(self)))

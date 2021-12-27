@@ -81,6 +81,8 @@ class ProgressStats:
     eta: typing.Optional[timedelta] = None
     dest: typing.Optional[str] = None
     status: typing.Optional[str] = None
+    guid: typing.Optional[str] = None
+    lock: typing.Optional[asyncio.Lock] = asyncio.Lock()
 
     @property
     def size_downloaded(self):
@@ -180,12 +182,14 @@ class Program(object):
             self.stdout = subprocess.PIPE
         else:
             self.stdout = stdout
+
         self.stderr = stderr
         self.ssh_host = ssh_host
         self.proc = None
 
         self.output_stream = None
         self.output_read_task = None
+        self.update_progress_task = None
 
         # for OutputHandling.COLLECT
         self.output = []
@@ -367,7 +371,7 @@ class Program(object):
         }
 
         self.extra_args_pre += [
-            f"{k}={v}"
+            f"{k}={v}" if v else f"{k}"
             for k, v in program_args.items()
         ]
 
@@ -433,7 +437,6 @@ class Program(object):
                 self.stdout = subprocess.PIPE
                 self.stderr = subprocess.PIPE
 
-        # else:
         logger.info(f"full cmd: {' '.join(self.full_command)}")
 
         if not self.source_integrated:
@@ -448,8 +451,10 @@ class Program(object):
                     self.output_stream, pty_stream = pty.openpty()
                     if self.output_fd_name == "stderr":
                         self.stderr = pty_stream
-                    else:
+                    elif self.output_fd_name == "stdout":
                         self.stdout = pty_stream
+                    else:
+                        raise NotImplementedError
 
                 if self.stdin is None:
                     self.stdin = subprocess.DEVNULL
@@ -464,9 +469,9 @@ class Program(object):
                 logger.info(self.full_command + list(args))
                 self.proc = await spawn_func(
                     *self.full_command + list(args),
-                    stdin = self.stdin,
-                    stdout = self.stdout,
-                    stderr = self.stderr,
+                    stdin=self.stdin,
+                    stdout=self.stdout,
+                    stderr=self.stderr,
                 )
 
             except SGException as e:
@@ -501,12 +506,13 @@ class Program(object):
                         except UnicodeDecodeError as e:
                             logger.warning(e)
                             continue
-                        if self.output_newline:
-                            line = line.strip()
-                        if self.output_handling == OutputHandling.WATCH:
-                            await self.process_output_line(line)
-                        elif self.output_handling == OutputHandling.COLLECT:
-                            self.output.append(line)
+                        async with self.progress.lock:
+                            if self.output_newline:
+                                line = line.strip()
+                            if self.output_handling == OutputHandling.WATCH:
+                                await self.process_output_line(line)
+                            elif self.output_handling == OutputHandling.COLLECT:
+                                self.output.append(line)
 
                     self.output_ready.set_result(self.output)
 
@@ -524,10 +530,31 @@ class Program(object):
     async def kill(self):
         self.proc.kill()
 
+    def check_completed(self):
+        return True
+
+    @property
+    def is_complete(self):
+
+        if not self.proc:
+            return False
+
+        return (
+            self.proc.returncode is not None
+            and self.check_completed()
+        )
+
     @classmethod
     def supports_url(cls, url):
         return False
 
+    @property
+    def manages_downloads(self):
+        return False
+
+    @property
+    def progress_interval(self):
+        return 1
 
     def __repr__(self):
         return "<%s: %s %s>" %(self.__class__.__name__, self.cmd, self.args)
@@ -758,10 +785,12 @@ class Downloader(Program):
         return self._fifo
 
     @classmethod
-    async def download(cls, task, outfile, downloader_spec=None, **kwargs):
-        # FIXME: downloader may handle file naming
-        if os.path.exists(outfile):
-            raise SGFileExists(f"File {outfile} already exists")
+    async def download(cls, task, downloader_spec=None, **kwargs):
+
+        # # FIXME: downloader may handle file naming
+        # if os.path.exists(outfile):
+        #     raise SGFileExists(f"File {outfile} already exists")
+
         source = task.sources[0] # FIXME
 
         if isinstance(downloader_spec, MutableMapping):
@@ -773,12 +802,24 @@ class Downloader(Program):
             logger.warn(e)
             return
 
-        downloader.process_args(task, outfile, **kwargs)
+        if not downloader.manages_downloads:
+            try:
+                outfile = source.download_filename(listing=task.listing, **kwargs)
+            except SGInvalidFilenameTemplate as e:
+                logger.warning(f"filename template is invalid: {e}")
+                raise
+
+            if outfile and os.path.exists(outfile):
+                raise SGFileExists(f"File {outfile} already exists")
+
+            downloader.process_args(task, outfile, **kwargs)
+
+
         downloader.source = source
         downloader.listing = task.listing
 
         task.program.set_result(downloader)
-        logger.info(f"downloader: {downloader.cmd}, downloading {source} to {outfile}")
+        logger.info(f"downloader: {downloader.cmd}, downloading {source}")
         proc = await downloader.run(**kwargs)
         return proc
 
@@ -789,7 +830,7 @@ class Downloader(Program):
     def get(cls, spec, url=None, **kwargs):
         def sort_key(p):
             if isinstance(spec, MutableMapping):
-                return spec.index(h.cmd) if h.cmd in spec else len(spec)+1
+                return spec.index(p.cmd) if p.cmd in spec else len(spec)+1
             else:
                 return 0
 
@@ -804,7 +845,7 @@ class Downloader(Program):
                 sorted((
                     h for h in super().get(spec, **kwargs)
                     if h.supports_url(url)),
-                    key = sort_key
+                    key=sort_key
             )))
         except (TypeError, StopIteration) as e:
             logger.error(e)
@@ -997,6 +1038,111 @@ class StreamlinkDownloader(Downloader):
             return
         self.progress.dled = bitmath.parse_string(dled)
         self.progress.rate = bitmath.parse_string(rate.split("/")[0]) if rate else None
+
+
+class TransmissionRemoteDownloader(Downloader):
+
+    CMD = "transmission-remote"
+
+    ARG_MAP = {
+        "info": "info",
+        "torrent": "torrent"
+    }
+
+    output_handling = OutputHandling.WATCH
+    output_newline = True
+
+    def __init__(self, path, *args, **kwargs):
+        super().__init__(path, *args, **kwargs)
+        self.extra_args_pre += ["--debug", "--add"]
+
+    @property
+    def manages_downloads(self):
+        return True
+
+    @property
+    def output_fd_name(self):
+        return "stderr" if self.progress.guid is None else "stdout"
+
+    async def process_output_line(self, line):
+        logger.debug(line)
+        if not line:
+            return
+
+        if not self.progress.guid:
+            if not line.startswith("{"):
+                return
+            try:
+                data = json.loads(line)
+            except json.decoder.JSONDecodeError as e:
+                logger.warning(e)
+                return
+            if "result" not in data:
+                return
+            if data["result"] != "success":
+                logger.warning(data["result"])
+                return
+
+            for status in ["torrent-added", "torrent-duplicate"]:
+                if status in data["arguments"]:
+                    self.progress.guid = data["arguments"][status]["hashString"]
+        else:
+            # FIXME: see below re: workaround for empty status when torrent
+            # isn't found
+            self._found = True
+
+            if "State:" in line:
+                self.progress.status = line.split(":")[1].strip().lower()
+            elif "Location:" in line:
+                self.progress.dest = line.split(":")[1].strip()
+            elif "Have:" in line:
+                try:
+                    verified = re.search("Have: .*\((.*) verified\)", line).groups()[0]
+                except IndexError:
+                    return
+                self.progress.dled = bitmath.parse_string(verified)
+            elif "Total size:" in line:
+                total = line.split(":")[1].strip().split("(")[0].strip()
+                self.progress.total = bitmath.parse_string(total)
+            elif "Percent Done:" in line:
+                self.progress.pct = line.split(":")[1].strip()
+            elif "Download Speed:" in line:
+                rate = line.split(":")[1].strip()
+                self.progress.rate = bitmath.parse_string(rate.split("/")[0]) if rate else None
+            elif "ETA:" in line:
+                self.progress.eta = line.split(":")[1].strip()
+            else:
+                return
+
+    async def update_progress(self):
+        if not self.progress.guid:
+            return
+        self.progress.status = "not found"
+        # FIXME: hacks to reset program status
+        self.extra_args_pre = ["--debug"]
+        self.source = None
+        self.stdout = subprocess.PIPE
+        self.stderr = None
+        self.output_ready = asyncio.Future()
+        self.output_ready = asyncio.Future()
+        # FIXME: we need a way to detect whether the torrent was found. Ideally
+        # we'd collect and parse full output and check for empty output, but for
+        # some reason the full output isn't being captured using the COLLECT
+        # output mode.  This workaround uses a flag to detect if any lines
+        # were processed, which should have the same effect.
+        self._found = False
+        await self.run(torrent=self.progress.guid, info=None)
+        await self.proc.wait()
+        if not self._found:
+            self.progress.status = "not found"
+
+
+    def check_completed(self):
+        return self.progress.status in ["stopped", "not found"]
+
+    @property
+    def progress_interval(self):
+        return 5
 
 
 class WgetDownloader(Downloader):

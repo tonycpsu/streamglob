@@ -1025,7 +1025,10 @@ class ProgramMediaTaskMixin(object):
     def stop(self):
         if not self.proc.done():
             return
-        self.proc.result().terminate()
+        try:
+            self.proc.result().terminate()
+        except ProcessLookupError:
+            pass
         # self.reset()
 
 
@@ -1035,6 +1038,7 @@ class ProgramMediaTask(ProgramMediaTaskMixin, MediaTask):
     pid = Optional(int)
     started = Optional(datetime)
     elapsed = Optional(timedelta)
+    last_progress = Optional(datetime)
 
     program: typing.Optional[typing.Awaitable] = None
     proc: typing.Optional[typing.Awaitable] = None

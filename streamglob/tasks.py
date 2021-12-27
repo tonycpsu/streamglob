@@ -288,7 +288,7 @@ class TaskManager(Observable):
         elif isinstance(task, (model.DownloadMediaTask, model.DownloadMediaTask.attr_class)):
             try:
                 outfile = task.stage_outfile
-                run_task = programs.Downloader.download(task, outfile, *task.args, **task.kwargs)
+                run_task = programs.Downloader.download(task, *task.args, **task.kwargs)
                 task.stage_results.append(outfile)
             except SGFileExists as e:
                 logger.warn(e)
@@ -310,6 +310,7 @@ class TaskManager(Observable):
 
         task.started = datetime.now()
         task.elapsed = timedelta(0)
+        task.last_progress = None
 
     async def worker(self):
 
@@ -336,7 +337,7 @@ class TaskManager(Observable):
     async def poller(self):
 
         (playing_done, playing) = utils.partition(
-            lambda t: t.proc.result().returncode is None,
+            lambda t: not t.program.done() or not t.program.result().is_complete,
             self.playing)
 
         playing_done = TaskList(playing_done)
@@ -347,7 +348,7 @@ class TaskManager(Observable):
         self.playing = TaskList(playing)
 
         (complete, active) = utils.partition(
-            lambda t: t.proc.done() and t.proc.result().returncode is None,
+            lambda t: not t.program.done() or not t.program.result().is_complete,
             self.active)
 
         (done, to_postprocess) = utils.partition(
@@ -380,7 +381,7 @@ class TaskManager(Observable):
         self.postprocessing = postprocessing_list
 
         (done, errors) = utils.partition(
-            lambda t: t.program.done() and t.proc.done() and t.proc.result().returncode,
+            lambda t: t.proc.result().returncode,
             all_done_list
         )
         self.done += TaskList(done)
@@ -388,11 +389,17 @@ class TaskManager(Observable):
 
         for task in self.playing + self.active:
             prog = await task.program
-            task.elapsed = datetime.now() - task.started
+            now = datetime.now()
+            task.elapsed = now - task.started
             if hasattr(prog, "update_progress"):
-                await prog.update_progress()
+                if (task.last_progress is None) or (now - task.last_progress).total_seconds() > prog.progress_interval:
+                    task.last_progress = now
+                    await prog.update_progress()
             if hasattr(prog.source, "update_progress"):
-                await prog.source.update_progress()
+                # FIXME: is this still used anywhere?
+                if (task.last_progress is None) or (now - task.last_progress).total_seconds() > prog.progress_interval:
+                    task.last_progress = now
+                    await prog.source.update_progress()
 
         for task in self.postprocessing:
             task.elapsed = datetime.now() - task.started

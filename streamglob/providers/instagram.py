@@ -449,8 +449,6 @@ class InstagramProvider(PaginatedProviderMixin, CachedFeedProvider):
 
     SESSION_CLASS = InstagramSession
 
-    HELPER = "youtube-dl"
-
     POST_TYPE_MAP = {
         "image": "img",
         "video": "vid",

@@ -103,6 +103,8 @@ class TaskWidget(urwid.WidgetWrap):
 
     @property
     def progress_bar(self):
+        if self.size_downloaded is None:
+            return urwid.Text("")
         return ProgressBar(
                 width=20,
                 maximum=self.size_total,

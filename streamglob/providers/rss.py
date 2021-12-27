@@ -21,7 +21,7 @@ class SGFeedUpdateFailedException(Exception):
 class RSSMediaSourceMixin(object):
 
     @property
-    def locator(self):
+    def locator_preview(self):
         return utils.BLANK_IMAGE_URI
         # try:
         #     return self.listing.body_urls[0]
@@ -36,9 +36,14 @@ class RSSMediaSourceMixin(object):
         # except IndexError:
         #     return utils.BLANK_IMAGE_URI
 
+    @property
+    def download_helper(self):
+        return self.listing.feed.config.get_value().get("helper")
+
 
 @model.attrclass()
 class RSSMediaSource(RSSMediaSourceMixin, FeedMediaSource):
+
     pass
 
 @model.attrclass()
@@ -148,16 +153,12 @@ class RSSFeed(FeedMediaChannel):
                         #     media_type="video" # FIXME: could be something else
                         # )
                         i = AttrDict(
-                            channel = self,
-                            guid = guid,
-                            title = item.title,
-                            content = item.content,
-                            created = item.pub_date.replace(tzinfo=None),
-                            # created = datetime.fromtimestamp(
-                            #     mktime(item.published_parsed)
-                            # ),
-                            # sources = [source]
-                            sources = sources
+                            channel=self,
+                            guid=guid,
+                            title=item.title,
+                            content=item.content,
+                            created=item.pub_date.replace(tzinfo=None),
+                            sources=sources
                         )
                         yield i
         except SGFeedUpdateFailedException:
@@ -167,6 +168,14 @@ class RSSFeed(FeedMediaChannel):
 class RSSDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
 
     DETAIL_BOX_CLASS = CachedFeedProviderDetailBox
+
+    # FIXME: sources all use the same link, so we just grab the first.  A more
+    # complete fix would address this with provider properties or a separate
+    # mixin for multi source listings that share a single link
+    def extract_sources(self, listing, **kwargs):
+        sources, kwargs = super().extract_sources(listing, **kwargs)
+        return ([sources[0]], kwargs)
+
 
     # def __init__(self, *args, **kwargs):
     #     super().__init__(*args, **kwargs)

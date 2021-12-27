@@ -122,7 +122,7 @@ class PlayListingViewMixin(ListingViewMixin):
             pass
 
     async def play(self, listing, **kwargs):
-        # sources, kwargs = self.extract_sources(listing, **kwargs)
+
         task = self.provider.create_play_task(listing, **kwargs)
         yield state.task_manager.play(task)
 
@@ -317,11 +317,7 @@ class DownloadListingProviderMixin(object):
 
             if index is not None and index != i:
                 continue
-            try:
-                filename = source.download_filename(listing=listing, **kwargs)
-            except SGInvalidFilenameTemplate as e:
-                logger.warning(f"filename template is invalid: {e}")
-                raise
+
             downloader_spec = downloader_spec or source.download_helper
             with db_session:
                 listing = model.MediaListing[listing.media_listing_id]
@@ -334,7 +330,7 @@ class DownloadListingProviderMixin(object):
                 title=utils.sanitize_filename(listing.title),
                 sources=[source],
                 listing=listing,
-                dest=filename,
+                # dest=filename,
                 args=(downloader_spec,),
                 kwargs=dict(index=index, **kwargs),
                 postprocessors=(self.config.get("postprocessors", None) or []).copy()
