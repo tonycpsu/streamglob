@@ -105,6 +105,7 @@ class RSSSession(BrowserCookieStreamSessionMixin, session.StreamSession):
 # class RSSListing(model.TitledMediaListing):
 #     pass
 
+DEFAULT_MAX_LINKS = 10
 class RSSFeed(FeedMediaChannel):
 
     # @db_session
@@ -132,7 +133,7 @@ class RSSFeed(FeedMediaChannel):
                                     p.search(u)
                                     for p in patterns
                             ])
-                        ]
+                        ][:self.provider.config.content.links.get("max", DEFAULT_MAX_LINKS)]
                         sources = [
                             AttrDict(
                                 url=item.link,
