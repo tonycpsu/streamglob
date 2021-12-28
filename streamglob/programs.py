@@ -1143,7 +1143,7 @@ class TransmissionRemoteDownloader(Downloader):
 
 
     def check_completed(self):
-        return self.progress.status in ["stopped", "not found"]
+        return self.progress.status in ["stopped", "finished", "not found"]
 
     @property
     def progress_interval(self):
