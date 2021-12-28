@@ -629,7 +629,7 @@ class MediaListingMixin(object):
 
     @property
     def locators(self):
-        return [
+        return [self.locator] + [
             s.locator
             for s in self.sources
         ]
@@ -642,6 +642,10 @@ class MediaListingMixin(object):
     @property
     def cover(self):
         return self.cover_locator or utils.BLANK_IMAGE_URI
+
+    @property
+    def download_locator(self):
+        return self.locator
 
     @property
     def tokens(self):
@@ -797,6 +801,7 @@ class MediaListing(MediaListingMixin, db.Entity):
     download = Optional(lambda: MediaDownload, reverse="media_listing")
     downloaded = Optional(datetime)
     viewed = Optional(datetime)
+    locator = Optional(str)
     cover_locator = Optional(str)
 
 
@@ -813,6 +818,8 @@ class ContentMediaListingMixin(object):
     @classmethod
     def extract_urls(cls, content):
 
+        if not content:
+            return []
         extracted_urls = (
             urlscan.extracthtmlurls(content)
             or urlscan.extracturls(content)
@@ -984,6 +991,7 @@ class MediaDownload(MediaListingMixin, db.Entity):
     media_listing = Required(lambda: MediaListing, reverse="download")
     retries = Required(int, default=0)
     done = Required(bool, default=False)
+    source_index = Required(int, default=0)
 
     @classmethod
     @db_session

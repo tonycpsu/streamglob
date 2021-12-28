@@ -385,6 +385,8 @@ class Program(object):
             return [
                 (s.local_path or s.locator
                  if isinstance(self, Player)
+                 else getattr(s, "locator_download", s.locator)
+                 if isinstance(self, Downloader)
                  else s.locator
                 ) for s in self.source
             ]
@@ -1100,7 +1102,10 @@ class TransmissionRemoteDownloader(Downloader):
                     verified = re.search("Have: .*\((.*) verified\)", line).groups()[0]
                 except IndexError:
                     return
-                self.progress.dled = bitmath.parse_string(verified)
+                try:
+                    self.progress.dled = bitmath.parse_string(verified)
+                except ValueError:
+                    return
             elif "Total size:" in line:
                 total = line.split(":")[1].strip().split("(")[0].strip()
                 self.progress.total = bitmath.parse_string(total)

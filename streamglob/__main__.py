@@ -452,7 +452,7 @@ def run_gui(action, provider, **kwargs):
                 listing = download.media_listing
                 logger.info(f"queuing {listing}")
                 provider = listing.provider
-                for task in provider.create_download_tasks(listing):
+                for task in provider.create_download_tasks(listing, index=download.source_index):
                     state.task_manager.download(task)
 
 

@@ -1,3 +1,6 @@
+from datetime import datetime
+from time import mktime
+
 from .feed import *
 
 from ..exceptions import *
@@ -11,8 +14,6 @@ from .filters import *
 
 import atoma
 
-from datetime import datetime
-from time import mktime
 from pony.orm import *
 
 class SGFeedUpdateFailedException(Exception):
@@ -30,7 +31,7 @@ class RSSMediaSourceMixin(object):
 
     @property
     def locator_thumbnail(self):
-        return self.url_preview
+        return self.url
         # try:
         #     return self.listing.body_urls[0]
         # except IndexError:
@@ -40,16 +41,35 @@ class RSSMediaSourceMixin(object):
     def download_helper(self):
         return self.listing.feed.config.get_value().get("helper")
 
+    @property
+    def locator_download(self):
+        return self.listing.locator_download
+
 
 @model.attrclass()
 class RSSMediaSource(RSSMediaSourceMixin, FeedMediaSource):
 
     pass
 
-@model.attrclass()
-class RSSMediaListing(model.ContentMediaListing, FeedMediaListing):
 
-    pass
+class RSSMediaListingMixin(object):
+
+    @property
+    def locator_download(self):
+        link_attr = self.channel.config.get_value().get("download_link")
+        if not link_attr:
+            return self.locator
+        elif link_attr == "enclosure":
+            try:
+                return self.enclosures[0]
+            except IndexError:
+                return self.locator
+
+
+@model.attrclass()
+class RSSMediaListing(RSSMediaListingMixin, model.ContentMediaListing, FeedMediaListing):
+
+    enclosures = Required(Json, default=[])
 
 
 class RSSSession(BrowserCookieStreamSessionMixin, session.StreamSession):
@@ -57,23 +77,23 @@ class RSSSession(BrowserCookieStreamSessionMixin, session.StreamSession):
     def get_rss_link(item):
 
         try:
-            return next( (e.url for e in item.enclosures) )
-        except StopIteration:
             return item.link
+        except StopIteration:
+            return next(e.url for e in item.enclosures)
 
     def get_atom_link(item):
 
         try:
-            return next( (l.href for l in item.links) )
+            return next(l.href for l in item.links)
         except StopIteration:
-            return item.id_
+            return item.id_# ???
 
     PARSE_FUNCS = [
         (atoma.parse_rss_bytes, "items", "guid", "pub_date", "description",
          lambda i: i.title,
          get_rss_link
          ),
-        (atoma.parse_atom_bytes, "entries", "id_", "published", "content",
+        (atoma.parse_atom_bytes, "entries", "id", "published", "content",
          lambda i: i.title.value,
          get_atom_link
          )
@@ -98,7 +118,10 @@ class RSSSession(BrowserCookieStreamSessionMixin, session.StreamSession):
                         link=link_func(item),
                         title=title_func(item),
                         content=getattr(item, desc_attr),
-                        pub_date=getattr(item, pub_attr)
+                        pub_date=getattr(item, pub_attr),
+                        enclosures=[
+                            e.url for e in getattr(item, "enclosures", [])
+                        ]
                     )
             except atoma.exceptions.FeedParseError:
                 # try next parse function
@@ -115,12 +138,14 @@ class RSSFeed(FeedMediaChannel):
 
     # @db_session
     async def fetch(self, limit=None, **kwargs):
+        n = 0
         try:
             for item in self.session.parse(self.locator):
                 with db_session:
                     guid = getattr(item, "guid", item.link) or item.link
                     i = self.items.select(lambda i: i.guid == guid).first()
                     if not i:
+
                         session = self.provider.session
                         # import ipdb; ipdb.set_trace()
                         full_content = session.get(guid).text#.decode("utf-8")
@@ -141,8 +166,8 @@ class RSSFeed(FeedMediaChannel):
                         ][:self.provider.config.content.links.get("max", DEFAULT_MAX_LINKS)]
                         sources = [
                             AttrDict(
-                                url=item.link,
-                                url_preview=body_url,
+                                # url=item.link,
+                                url=body_url,
                                 media_type="video" # FIXME: could be something else
                             )
                             for body_url in urls or [None]
@@ -156,11 +181,16 @@ class RSSFeed(FeedMediaChannel):
                             channel=self,
                             guid=guid,
                             title=item.title,
+                            locator=item.link,
                             content=item.content,
                             created=item.pub_date.replace(tzinfo=None),
-                            sources=sources
+                            sources=sources,
+                            enclosures=item.enclosures
                         )
+                        n += 1
                         yield i
+                        if n >= limit:
+                            return
         except SGFeedUpdateFailedException:
             logger.warn(f"couldn't update feed {self.name}")
 

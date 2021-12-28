@@ -322,7 +322,10 @@ class DownloadListingProviderMixin(object):
             with db_session:
                 listing = model.MediaListing[listing.media_listing_id]
                 download = model.MediaDownload.upsert(
-                    dict(media_listing=listing)
+                    dict(
+                        media_listing=listing,
+                        source_index=index
+                    )
                 )
 
             task = model.DownloadMediaTask.attr_class(
@@ -398,7 +401,7 @@ class ShellCommandViewMixin(object):
 
         args = [
             a.format(
-                locator=self.selection.locators[0],
+                locator=self.selection.locator or self.selection.locators[0],
                 socket=state.task_manager.preview_player.ipc_socket_name
             )
             for a in cmd_cfg.args
