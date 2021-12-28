@@ -13,7 +13,6 @@ from .. import utils
 from .filters import *
 
 import atoma
-
 from pony.orm import *
 
 class SGFeedUpdateFailedException(Exception):
@@ -56,14 +55,43 @@ class RSSMediaListingMixin(object):
 
     @property
     def locator_download(self):
-        link_attr = self.channel.config.get_value().get("download_link")
-        if not link_attr:
-            return self.locator
-        elif link_attr == "enclosure":
-            try:
-                return self.enclosures[0]
-            except IndexError:
-                return self.locator
+        with db_session:
+            listing = self.attach()
+            channel_config = listing.channel.config.get_value()
+            link_attr = channel_config.get("download_link")
+            if not link_attr:
+                return listing.locator
+            elif link_attr == "enclosure":
+                try:
+                    return listing.enclosures[0]
+                except IndexError:
+                    return listing.locator
+            else:
+
+                html = listing.provider.session.get(listing.locator).html
+
+                try:
+                    url = html._make_absolute(
+                        html.find(link_attr, first=True).attrs["href"]
+                    )
+                except (KeyError, AttributeError):
+                    logger.warning(f"couldn't find link using CSS selector {link_attr}")
+                    return listing.locator
+
+                if channel_config.get("fetch_download_link"):
+                    res = listing.provider.session.get(url)
+                    disposition = res.headers['content-disposition']
+                    filename = re.findall("""filename="?([^"]+)"?""", disposition)[0]
+                    local_file = os.path.join(listing.provider.tmp_dir, filename)
+                    with open(local_file, "wb") as f:
+                        f.write(res.content)
+                    return local_file
+                else:
+                    return url
+
+    @property
+    def full_content(self):
+        return self.provider.session.get(self.locator).text
 
 
 @model.attrclass()
@@ -148,7 +176,7 @@ class RSSFeed(FeedMediaChannel):
 
                         session = self.provider.session
                         # import ipdb; ipdb.set_trace()
-                        full_content = session.get(guid).text#.decode("utf-8")
+                        full_content = session.get(item.link).text#.decode("utf-8")
                         patterns = [
                             re.compile(pattern)
                             for pattern in self.provider.config.content.links.filters

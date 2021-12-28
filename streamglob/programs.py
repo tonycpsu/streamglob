@@ -1067,7 +1067,7 @@ class TransmissionRemoteDownloader(Downloader):
         return "stderr" if self.progress.guid is None else "stdout"
 
     async def process_output_line(self, line):
-        logger.debug(line)
+        logger.trace(line)
         if not line:
             return
 

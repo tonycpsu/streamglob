@@ -644,7 +644,7 @@ class MediaListingMixin(object):
         return self.cover_locator or utils.BLANK_IMAGE_URI
 
     @property
-    def download_locator(self):
+    def locator_download(self):
         return self.locator
 
     @property
@@ -1135,7 +1135,7 @@ class DownloadMediaTaskMixin(object):
 
     def stop(self):
         super().stop()
-        if os.path.isfile(self.dest):
+        if self.dest and os.path.isfile(self.dest):
             os.remove(self.dest)
 
 
