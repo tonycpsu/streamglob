@@ -14,6 +14,7 @@ from http.cookiejar import LWPCookieJar, Cookie
 import browser_cookie3
 from io import StringIO
 import requests
+from requests_html import HTMLSession
 import asyncio
 import aiohttp
 from aiolimiter import AsyncLimiter
@@ -51,7 +52,7 @@ class StreamSession(object):
         "User-agent": USER_AGENT
     }
 
-    SESSION_CLASS = requests.Session
+    SESSION_CLASS = HTMLSession
 
     def __init__(
             self,
