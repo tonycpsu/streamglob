@@ -13,12 +13,13 @@ FUZZY_WHITESPACE_RE = re.compile("(?<=\w) +(?![*+])")
 
 class HighlightRule(object):
 
-    def __init__(self, subject, group=None, patterns=None, config=None):
+    def __init__(self, subject, group=None, patterns=None, config=None, attr=None):
         self.config = config or Tree()
         self.flags = 0 if self.config.match.case_sensitive else re.IGNORECASE
         self.subject = subject
         self._group = group
         self._patterns = patterns
+        self._attr = attr
         self._re = re.compile("|".join(
             (
                 FUZZY_WHITESPACE_RE.sub("\\\\s+", p)
@@ -40,6 +41,10 @@ class HighlightRule(object):
     @property
     def group(self):
         return self._group or self.subject
+
+    @property
+    def attr(self):
+        return self._attr
 
     def search(self, text, aliases=[]):
         return self._re.search(text) or next(
@@ -83,6 +88,8 @@ class HighlightRule(object):
             d["group"] = self._group
         if self._patterns and self._patterns != [self.subject]:
             d["patterns"] = self._patterns
+        if self._attr:
+            d["attr"] = self._attr
         return d
 
 
@@ -147,14 +154,16 @@ class HighlightRuleList(MutableSequence):
     def findall(self, text):
         return self._re_search.findall(text)
 
-    def apply(self, text):
-        out = []
-        for k, g in groupby(self._re_apply.findall(text), lambda x: not x[0]):
-            if k:
-                out.append(("".join(item[1] for item in g),))
-            else:
-                out += [(self.attr, list(g)[0][0])]
-        return out
+    # def apply(self, text):
+    #     out = []
+    #     for k, g in groupby(self._re_apply.findall(text), lambda x: not x[0]):
+    #         if k:
+    #             out.append(("".join(item[1] for item in g),))
+    #         else:
+    #             text = list(g)[0][0]
+    #             rule = self.rule_for_token(text)
+    #             out += [(rule.attr or self.attr, text)]
+    #     return out
 
     def rule_for_token(self, token):
         return next(
@@ -354,7 +363,10 @@ class HighlightRuleConfig(object):
             if k:
                 out.append((None, "".join(item[1] for item in g)))
             else:
-                out.append(next(g))
+                (attr, text) = next(g)
+                rule = self.rule_for_token(text)
+                attr = rule.attr if (rule and rule.attr) else attr
+                out.append((attr, text))
         return out
 
 
