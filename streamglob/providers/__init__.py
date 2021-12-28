@@ -68,6 +68,10 @@ def load_config(default=None):
     for p in PROVIDERS.values():
         p.init_config()
 
+def apply_settings():
+    for p in PROVIDERS.values():
+        p.apply_settings()
+
 
 def log_plugin_exception(manager, entrypoint, exception):
     logger.error("Failed to load {entrypoint}")

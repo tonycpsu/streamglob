@@ -467,7 +467,7 @@ class ProviderDataTable(
     def columns(self):
         return [
             DataTableColumn(k, **v if v else {})
-            for k, v in self.provider.ATTRIBUTES.items()
+            for k, v in self.provider.attributes.items()
         ]
 
     @property

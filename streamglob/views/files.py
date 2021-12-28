@@ -279,11 +279,13 @@ class FilesView(
             # )["duration"])
 
             media_info = MediaInfo.parse(listing.locators[0])
-            duration = next(
-                t for t in media_info.tracks
-                if t.track_type == "General"
-            ).duration/1000
-            logger.info(duration)
+            try:
+                duration = next(
+                    t for t in media_info.tracks
+                    if t.track_type == "General"
+                ).duration/1000
+            except TypeError:
+                duration = None
 
             cfg.video_duration = duration
             thumbnail_file = os.path.join(self.tmp_dir, f"thumbnail.{listing.key}.jpg")

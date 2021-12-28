@@ -52,20 +52,25 @@ class TabularProviderMixin(object):
 
     def init_config(self):
         super().init_config()
-        # raise Exception(self.provider.ATTRIBUTES)
-        # for name, attrs in config.columns.items():
-        #     for attr, value in attrs.items():
-        #         col = next(c for c in self._columns if c.name == name)
-        #         logger.warning(f"set {col}.{attr}={value}")
-        #         setattr(col, attr, value)
-        # for name, options in self.provider.ATTRIBUTES.items():
-            # if name == "title":
-            #
-        attrs = self.ATTRIBUTES
         for name, opts in self.config.display.tables.columns.items():
-            for optname, optvalue in opts.items():
-                attr = next(a for a in self.ATTRIBUTES if a == name)
-                self.ATTRIBUTES[attr].update({optname: optvalue})
+            opts = {
+                k: (
+                    v
+                    if k != "value"
+                    else (
+                            self.token_value(v.split(".")[1])
+                            if v.startswith("token.")
+                            else v
+                    )
+                )
+                for k, v in opts.items()
+            }
+            if name in self.attributes:
+                self.attributes[name].update(**opts)
+            else:
+                # import ipdb; ipdb.set_trace()
+                self.attributes[name] = AttrDict(opts)
+
 
 @keymapped()
 class SimpleProviderView(BaseProviderView):
@@ -212,7 +217,7 @@ class BaseProvider(
         self._active = False
         self._filters = AttrDict({n: f(provider=self, name=n)
                                   for n, f in self.FILTERS.items() })
-
+        self.attributes = self.ATTRIBUTES
         self.filters["search"].connect("changed", self.on_search_change)
         super().__init__(*args, **kwargs)
 
@@ -222,6 +227,20 @@ class BaseProvider(
             title={"width": ("weight", 1), "truncate": True},
             group={"width": 20, "truncate": True},
         )
+
+    def token_value(self, token):
+        def inner(table, row):
+            tokens = self.rule_config.tokenize(row.data.title)
+            return next(
+                (
+                    value
+                    for ((label, attr), value)
+                    in tokens
+                    if label == token
+                ),
+                None
+            )
+        return inner
 
 
     @property
@@ -251,6 +270,9 @@ class BaseProvider(
             except AttributeError:
                 self.provider_data = model.ProviderData(name=self.IDENTIFIER).settings
 
+        self.load_rules()
+
+    def apply_settings(self):
         for name, f in self.filters.items():
             value = self.default_filter_values.get(name, None)
             if value:
@@ -259,8 +281,6 @@ class BaseProvider(
                 except (ValueError,):
                     # import ipdb; ipdb.set_trace()
                     pass
-
-        self.load_rules()
 
     @property
     def conf_rules(self):
@@ -511,15 +531,15 @@ class BaseProvider(
             **kwargs
         )
 
-    async def play(self, listing, **kwargs):
-        import ipdb; ipdb.set_trace()
-        task = self.create_play_task(listing, **kwargs)
-        yield state.task_manager.play(task)
+    # async def play(self, listing, **kwargs):
+    #     import ipdb; ipdb.set_trace()
+    #     task = self.create_play_task(listing, **kwargs)
+    #     yield state.task_manager.play(task)
 
-    async def download(self, listing, index=None, no_task_manager=False, **kwargs):
-        import ipdb; ipdb.set_trace()
-        for task in self.create_download_tasks(listing, index=index, **kwargs):
-            yield state.task_manager.download(task)
+    # async def download(self, listing, index=None, no_task_manager=False, **kwargs):
+    #     import ipdb; ipdb.set_trace()
+    #     for task in self.create_download_tasks(listing, index=index, **kwargs):
+    #         yield state.task_manager.download(task)
 
 
     def translate_template(self, template):

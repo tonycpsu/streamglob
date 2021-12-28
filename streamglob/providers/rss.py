@@ -265,7 +265,7 @@ class RSSProvider(PaginatedProviderMixin,
     def VIEW(self):
         return FeedProviderView(self, RSSProviderBodyView(self, RSSDataTable(self)))
 
-
     @property
     def FILTERS_OPTIONS(self):
         return super().FILTERS_OPTIONS
+
