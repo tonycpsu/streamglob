@@ -721,7 +721,7 @@ class ProviderDataTable(
                 #     except IndexError:
                 #         pass
 
-                rule = self.parent.provider.rule_config.rule_for_token(
+                label, rule = self.parent.provider.rule_config.rule_for_token(
                     self.default_subject
                 )
                 if rule:

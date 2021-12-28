@@ -361,37 +361,40 @@ class HighlightRuleConfig(object):
         out = []
         for k, g in groupby(tokens, lambda x: x[0] == "none"):
             if k:
-                out.append((None, "".join(item[1] for item in g)))
+                out.append(((None, None), "".join(item[1] for item in g)))
             else:
                 (attr, text) = next(g)
-                rule = self.rule_for_token(text)
+                label, rule = self.rule_for_token(text)
                 attr = rule.attr if (rule and rule.attr) else attr
-                out.append((attr, text))
+                out.append(((label, attr), text))
         return out
 
 
     def apply(self, text, candidates=[], aliases={}):
 
         return [
-            (self.highlight_config.get(label), token) if label else token
-            for (label, token) in self.tokenize(text, candidates=candidates, aliases=aliases)
+            (attr, token) if attr else token
+            for attr, token in [
+                    (self.highlight_config.get(attr, attr), token)
+                    for ( (label, attr), token) in self.tokenize(text, candidates=candidates, aliases=aliases)
+                ]
         ]
 
     def get_tokens(self, text, candidates=[], aliases={}):
         return [
             token
-            for (label, token) in self.tokenize(text, candidates=candidates, aliases=aliases)
-            if label
+            for (attr, token) in self.tokenize(text, candidates=candidates, aliases=aliases)
+            if attr
         ]
 
     def rule_for_token(self, token):
         return next(
             (
-                rule for rule in (
-                    rules.rule_for_token(token)
+                (label, rule) for label, rule in (
+                    (label, rules.rule_for_token(token))
                     for label, rules in self.rules.items()
                 )
                 if rule
             ),
-            None
+            (None, None)
         )

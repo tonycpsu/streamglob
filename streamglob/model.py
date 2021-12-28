@@ -757,7 +757,7 @@ class MediaListingMixin(object):
     def subject_rules(self):
         try:
             return [
-                rule for rule in [
+                rule for label, rule in [
                     self.provider.rule_config.rule_for_token(token)
                     for token in self.tokens
                 ]
