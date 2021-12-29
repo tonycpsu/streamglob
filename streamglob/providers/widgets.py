@@ -635,7 +635,7 @@ class ProviderDataTable(
 
     def decorate(self, row, column, value):
 
-        for attr in ["title", "group"]:
+        for attr in self.provider.config.display.tables.decorate:
             if column.name == attr:
 
                 if row.get(f"_{attr}_translated") and (self.translate or row.get("_translate")):
