@@ -444,6 +444,8 @@ class ProviderDataTable(
         # "meta O": "toggle_strip_emoji_all",
         "meta T": "toggle_translate_all",
         "delete": "delete_selection",
+        "meta up": "prev_item",
+        "meta down": "next_item"
     }
 
     def __init__(self, provider, *args, **kwargs):
@@ -815,7 +817,15 @@ class ProviderDataTable(
 
         dialog = RemoveHighlightRuleDialog(self)
         self.provider.view.open_popup(dialog, width=60, height=8)
-    
+
+    async def prev_item(self):
+        if self.focus_position > 0:
+            self.focus_position -= 1
+
+    async def next_item(self):
+        if self.focus_position < len(self)-1:
+            self.focus_position += 1
+
     async def browse_selection(self):
         listing = self.selected_listing
         filename = self.selected_source.local_path

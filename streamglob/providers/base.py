@@ -1684,10 +1684,10 @@ class DetailBox(urwid.WidgetWrap):
 @keymapped()
 class DetailDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseDataTable):
 
-    # KEYMAP = {
-    #     "home": "key_home",
-    #     "end": "key_end"
-    # }
+    KEYMAP = {
+        "meta up": "prev_item",
+        "meta down": "next_item"
+    }
 
     with_header = False
 
@@ -1735,6 +1735,14 @@ class DetailDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseDataTa
                 ))
               for i, source in enumerate(self.listing.sources)
         ]
+
+    @keymap_command
+    async def prev_item(self):
+        await self.parent_table.prev_item()
+
+    @keymap_command
+    async def next_item(self):
+        await self.parent_table.next_item()
 
 
 @keymapped()

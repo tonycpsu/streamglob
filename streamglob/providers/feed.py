@@ -333,8 +333,6 @@ class CachedFeedProviderDetailDataTable(DetailDataTable):
         "m": "toggle_selection_seen",
         "n": "next_unseen",
         "N": "next_unread",
-        "meta up": "prev_item",
-        "meta down": "next_item"
     }
 
     def keypress(self, size, key):
@@ -392,13 +390,6 @@ class CachedFeedProviderDetailDataTable(DetailDataTable):
     async def next_unread(self):
         await self.parent_table.next_unread(no_sources=True)
 
-    @keymap_command
-    async def prev_item(self):
-        await self.parent_table.prev_item()
-
-    @keymap_command
-    async def next_item(self):
-        await self.parent_table.next_item()
 
 
 @keymapped()
@@ -565,14 +556,6 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
     #         listing.feed.attach().mark_all_items_read()
     #     self._emit("unread_change", listing.channel.detach())
     #     self.reset()
-
-    async def prev_item(self):
-        if self.focus_position > 0:
-            self.focus_position -= 1
-
-    async def next_item(self):
-        if self.focus_position < len(self)-1:
-            self.focus_position += 1
 
     @staticmethod
     def is_unread(listing):
