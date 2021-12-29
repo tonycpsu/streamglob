@@ -100,8 +100,10 @@ class RSSMediaListingMixin(object):
 
     @property
     def links(self):
+
         urls = []
         cfg = self.channel.content_config.links
+
         if "feed" in cfg.sources:
             urls += super().links
 
@@ -128,7 +130,7 @@ class RSSMediaListingMixin(object):
             )
 
         urls = [
-            u for u in urls
+            u for u in dict.fromkeys(urls)
             if (
                 not link_include_patterns or any([
                     p.search(u)
@@ -256,6 +258,7 @@ class RSSFeed(FeedMediaChannel):
                             guid=guid,
                             title=item.title,
                             url=item.link,
+                            locator=item.link, # FIXME: have to specify twice because pydantic doesn't handle properties
                             content=item.content,
                             created=item.pub_date.replace(tzinfo=None),
                             # sources=sources,
@@ -268,7 +271,7 @@ class RSSFeed(FeedMediaChannel):
                                 url=body_url,
                                 media_type="video" # FIXME: could be something else
                             )
-                            for body_url in item.links or [item.link]
+                            for body_url in item.links or [item.locator]
                         ]
 
                         n += 1
