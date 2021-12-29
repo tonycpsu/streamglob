@@ -1362,7 +1362,7 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
                 video_track = getattr(preview, "video_track", None)
                 audio_track = getattr(preview, "audio_track", None)
                 await self.playlist_replace(locator, idx=position, video_track=video_track, audio_track=audio_track)
-                await self.set_playlist_pos(position)
+                # await self.set_playlist_pos(position)
 
                 self.pending_event_tasks.append(
                     asyncio.create_task(
