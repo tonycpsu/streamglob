@@ -1,8 +1,11 @@
 from datetime import datetime
 from time import mktime
 
-from .feed import *
+import atoma
+from pony.orm import *
+from mergedeep import merge, Strategy
 
+from .feed import *
 from ..exceptions import *
 from ..state import *
 from .. import config
@@ -12,8 +15,6 @@ from .. import utils
 
 from .filters import *
 
-import atoma
-from pony.orm import *
 
 class SGFeedUpdateFailedException(Exception):
     pass
@@ -93,6 +94,53 @@ class RSSMediaListingMixin(object):
     def full_content(self):
         return self.provider.session.get(self.locator).text
 
+    @property
+    def links(self):
+        urls = []
+        cfg = self.channel.content_config.links
+        if "feed" in cfg.sources:
+            urls += super().links
+
+        if "fetch" in cfg.sources:
+
+            link_include_patterns = [
+                re.compile(pattern)
+                for pattern in cfg.include
+            ]
+            link_ignore_patterns = [
+                re.compile(pattern)
+                for pattern in cfg.ignore
+            ]
+
+            html = self.provider.session.get(self.locator).html
+            urls += html.xpath(
+                "|".join(
+                    f".//{expr}"
+                    for expr in (
+                            cfg.fetch.match
+                            or [".//a/@href"]
+                    )
+                )
+            )
+
+        urls = [
+            u for u in urls
+            if (
+                not link_include_patterns or any([
+                    p.search(u)
+                    for p in link_include_patterns
+                ])
+            ) and (
+                not link_ignore_patterns or not any([
+                    p.search(u)
+                    for p in link_ignore_patterns
+
+                ])
+            )
+        ][:cfg.get("max", DEFAULT_MAX_LINKS)]
+
+        return urls
+
 
 @model.attrclass()
 class RSSMediaListing(RSSMediaListingMixin, model.ContentMediaListing, FeedMediaListing):
@@ -167,60 +215,75 @@ class RSSFeed(FeedMediaChannel):
     # @db_session
     async def fetch(self, limit=None, **kwargs):
         n = 0
+        include_patterns = [
+            re.compile(pattern)
+            for pattern in self.content_config.include
+        ]
+        ignore_patterns = [
+            re.compile(pattern)
+            for pattern in self.content_config.ignore
+        ]
+
         try:
             for item in self.session.parse(self.locator):
                 with db_session:
                     guid = getattr(item, "guid", item.link) or item.link
+
+                    if (
+                        include_patterns and not any([
+                            p.search(item.link)
+                            for p in include_patterns
+                        ])
+                    ) or (
+                        ignore_patterns and any([
+                            p.search(item.link)
+                            for p in ignore_patterns
+                        ])
+                    ):
+                        continue
+
                     i = self.items.select(lambda i: i.guid == guid).first()
                     if not i:
 
-                        session = self.provider.session
                         # import ipdb; ipdb.set_trace()
-                        full_content = session.get(item.link).text#.decode("utf-8")
-                        patterns = [
-                            re.compile(pattern)
-                            for pattern in self.provider.config.content.links.filters
-                        ]
-                        urls = [
-                            u for u in dict.fromkeys(
-                                RSSMediaListing.extract_urls(item.content)
-                                +
-                                RSSMediaListing.extract_urls(full_content)
-                            )
-                            if not patterns or any([
-                                    p.search(u)
-                                    for p in patterns
-                            ])
-                        ][:self.provider.config.content.links.get("max", DEFAULT_MAX_LINKS)]
-                        sources = [
-                            AttrDict(
-                                # url=item.link,
-                                url=body_url,
-                                media_type="video" # FIXME: could be something else
-                            )
-                            for body_url in urls or [None]
-                        ]
-                        logger.info(sources)
-                        # source = AttrDict(
-                        #     url=item.link,
-                        #     media_type="video" # FIXME: could be something else
-                        # )
-                        i = AttrDict(
+                        item = self.provider.new_listing(
                             channel=self,
                             guid=guid,
                             title=item.title,
                             locator=item.link,
                             content=item.content,
                             created=item.pub_date.replace(tzinfo=None),
-                            sources=sources,
-                            enclosures=item.enclosures
+                            # sources=sources,
+                            enclosures=item.enclosures,
+                            fetched=None # FIXME
                         )
+                        item.sources = [
+                            self.provider.new_media_source(
+                                # url=item.link,
+                                url=body_url,
+                                media_type="video" # FIXME: could be something else
+                            )
+                            for body_url in item.links or [None]
+                        ]
+
                         n += 1
-                        yield i
+                        yield item
                         if n >= limit:
                             return
         except SGFeedUpdateFailedException:
             logger.warn(f"couldn't update feed {self.name}")
+
+    @property
+    def content_config(self):
+        return config.ConfigTree(
+            merge(
+                config.ConfigTree(),
+                self.provider.config.content,
+                self.config.get_value().content,
+                # strategy=Strategy.ADDITIVE
+            )
+        )
+
 
 @keymapped()
 class RSSDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):

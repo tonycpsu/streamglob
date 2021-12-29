@@ -815,14 +815,14 @@ class ContentMediaListingMixin(object):
     def body(self):
         return self.content or ""
 
-    @classmethod
-    def extract_urls(cls, content):
+    @property
+    def links(self):
 
-        if not content:
+        if not self.content:
             return []
         extracted_urls = (
-            urlscan.extracthtmlurls(content)
-            or urlscan.extracturls(content)
+            urlscan.extracthtmlurls(self.content)
+            or urlscan.extracturls(self.content)
         )
 
         urls = []

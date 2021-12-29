@@ -68,16 +68,32 @@ class FeedMediaChannel(model.MediaChannel):
                 *args, **kwargs
         ):
             with db_session:
-                old = self.provider.LISTING_CLASS.get(guid=item["guid"])
+
+                old = self.provider.LISTING_CLASS.get(guid=item.guid)
                 if old:
                     old.delete()
-                item["sources"] = [
-                    self.provider.new_media_source(rank=i, **s).attach()
-                    for i, s in enumerate(item["sources"])
+                item.sources = [
+                    self.provider.new_media_source(
+                        **dict(
+                            {
+                                k: v
+                                for k, v in
+                                (s.dict() if hasattr(s, "dict") else s).items()
+                                if k not in ["provider_id", "rank", "created"]
+                            },
+                            rank=i
+                        )
+                    ).attach()
+                    for i, s in enumerate(item.sources)
                 ]
 
                 listing = self.provider.new_listing(
-                    **item
+                    **{
+                        k: v
+                        for k, v in
+                        (item.dict() if hasattr(item, "dict") else item).items()
+                        if k not in ["provider_id"]
+                    }
                 ).attach()
                 commit()
                 if self.provider.config.get("inflate_on_fetch") and not listing.is_inflated:
