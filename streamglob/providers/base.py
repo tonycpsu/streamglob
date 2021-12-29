@@ -7,6 +7,7 @@ import asyncio
 import dataclasses
 import re
 from itertools import chain
+
 # import textwrap
 # import tempfile
 
@@ -15,6 +16,7 @@ from pony.orm import *
 from panwid.dialog import *
 from panwid.keymap import *
 from pydantic import BaseModel
+from mergedeep import merge
 
 from .widgets import *
 from .filters import *
@@ -48,28 +50,28 @@ class BaseProviderView(StreamglobView):
     def config(self):
         return self.provider.config
 
-class TabularProviderMixin(object):
+# class TabularProviderMixin(object):
 
-    def init_config(self):
-        super().init_config()
-        for name, opts in self.config.display.tables.columns.items():
-            opts = {
-                k: (
-                    v
-                    if k != "value"
-                    else (
-                            self.token_value(v.split(".")[1])
-                            if v.startswith("token.")
-                            else v
-                    )
-                )
-                for k, v in opts.items()
-            }
-            if name in self.attributes:
-                self.attributes[name].update(**opts)
-            else:
-                # import ipdb; ipdb.set_trace()
-                self.attributes[name] = AttrDict(opts)
+#     def init_config(self):
+#         super().init_config()
+#         for name, opts in self.config.display.tables.columns.items():
+#             opts = {
+#                 k: (
+#                     v
+#                     if k != "value"
+#                     else (
+#                             self.token_value(v.split(".")[1])
+#                             if v.startswith("token.")
+#                             else v
+#                     )
+#                 )
+#                 for k, v in (opts or {}).items()
+#             }
+#             if name in self.attributes:
+#                 self.attributes[name].update(**opts)
+#             else:
+#                 # import ipdb; ipdb.set_trace()
+#                 self.attributes[name] = AttrDict(opts)
 
 
 @keymapped()
@@ -205,8 +207,6 @@ class BaseProvider(
 
     SESSION_CLASS = StreamSession
     LISTING_CLASS = model.TitledMediaListing
-    # VIEW_CLASS = SimpleProviderView
-    # FILTERS = AttrDict()
 
     MEDIA_TYPES = None
     RPC_METHODS = []
@@ -217,9 +217,44 @@ class BaseProvider(
         self._active = False
         self._filters = AttrDict({n: f(provider=self, name=n)
                                   for n, f in self.FILTERS.items() })
-        self.attributes = self.ATTRIBUTES
+        self.attributes = self.column_config or self.ATTRIBUTES
         self.filters["search"].connect("changed", self.on_search_change)
         super().__init__(*args, **kwargs)
+
+    @property
+    def column_config(self):
+        return config.ConfigTree([
+            (
+                column,
+                config.ConfigTree(
+                    self.ATTRIBUTES.get(column, {}), **{
+                        k: (
+                        v
+                         if k != "value"
+                         else (
+                                 self.token_value(v.split(".")[1])
+                                 if v.startswith("token.")
+                                 else v
+                         )
+                        )
+                        for k, v in options.items()
+                    }
+                )
+            )
+            for column, options in [
+                    (
+                        list(column.keys())[0]
+                        if isinstance(column, dict)
+                        else column,
+                        (
+                            (list(column.values())[0] or {})
+                            if isinstance(column, dict)
+                            else {}
+                        )
+                    )
+                for column in (self.config.display.tables.columns or [])
+            ]
+        ])
 
     @property
     def ATTRIBUTES(self):
@@ -422,10 +457,24 @@ class BaseProvider(
         return self.VIEW
 
     @classproperty
+    def IDENTIFIERS(cls):
+        return list(
+            dict.fromkeys(
+                [
+                    c.__module__.split(".")[-1]
+                    for c in cls.__mro__
+                    if issubclass(c, BaseProvider)
+                ]
+            )
+        )
+
+    @classproperty
     def IDENTIFIER(cls):
-        return next(
-            c.__module__ for c in cls.__mro__
-            if __package__ in c.__module__).split(".")[-1]
+        return cls.IDENTIFIERS[0]
+        # import ipdb; ipdb.set_trace()
+        # return next(
+        #     c.__module__ for c in cls.__mro__
+        #     if __package__ in c.__module__).split(".")[-1]
 
     @classproperty
     @abc.abstractmethod
@@ -592,8 +641,14 @@ class BaseProvider(
     @property
     def config(self):
         return config.ConfigTree(
-            config.settings.profile.providers.get(
-                self.IDENTIFIER, {}
+            merge({}, *[
+                    config.ConfigTree(
+                        config.settings.profile.providers.get(
+                            identifier, config.ConfigTree()
+                        ) or config.ConfigTree()
+                    )
+                    for identifier in reversed(self.IDENTIFIERS)
+                ]
             )
         )
 

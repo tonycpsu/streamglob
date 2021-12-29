@@ -1172,7 +1172,7 @@ class FeedProviderView(SimpleProviderView):
         return getattr(self.body, attr)
 
 
-class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvider):
+class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
 
     UPDATE_INTERVAL = (60 * 60 * 4)
 
@@ -1244,29 +1244,6 @@ class CachedFeedProvider(BackgroundTasksMixin, TabularProviderMixin, FeedProvide
                  )
             ]
         )
-
-    # ATTRIBUTES = AttrDict(
-    #     feed={"width": 30, "format_fn": format_feed},
-    #     created={"width": 19},
-    #     title={"width": ("weight", 1), "truncate": True},
-    # )
-    # @property
-    # def ATTRIBUTES(self):
-    #     def format_feed(feed):
-    #         return feed.name if hasattr(feed, "name") else ""
-
-    #     return AttrDict(
-    #         media_listing_id = {"hide": True},
-    #         feed = {"width": 32, "format_fn": format_feed },
-    #         created = {"width": 19},
-    #         title = {"width": ("weight", 1), "truncate": False},
-    #     )
-
-    # @property
-    # def RPC_METHODS(self):
-    #     return [
-    #         ("mark_items_read", self.mark_items_read)
-    #     ]
 
     @property
     def status(self):
