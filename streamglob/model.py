@@ -644,6 +644,10 @@ class MediaListingMixin(object):
         return self.cover_locator or utils.BLANK_IMAGE_URI
 
     @property
+    def locator_play(self):
+        return self.locator
+
+    @property
     def locator_download(self):
         return self.locator
 

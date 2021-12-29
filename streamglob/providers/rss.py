@@ -42,6 +42,10 @@ class RSSMediaSourceMixin(object):
         return self.listing.feed.config.get_value().get("helper")
 
     @property
+    def locator_play(self):
+        return self.listing.locator_play
+
+    @property
     def locator_download(self):
         return self.listing.locator_download
 
@@ -245,12 +249,13 @@ class RSSFeed(FeedMediaChannel):
                     i = self.items.select(lambda i: i.guid == guid).first()
                     if not i:
 
-                        # import ipdb; ipdb.set_trace()
+                        if not item.link:
+                            import ipdb; ipdb.set_trace()
                         item = self.provider.new_listing(
                             channel=self,
                             guid=guid,
                             title=item.title,
-                            locator=item.link,
+                            url=item.link,
                             content=item.content,
                             created=item.pub_date.replace(tzinfo=None),
                             # sources=sources,
@@ -263,7 +268,7 @@ class RSSFeed(FeedMediaChannel):
                                 url=body_url,
                                 media_type="video" # FIXME: could be something else
                             )
-                            for body_url in item.links or [None]
+                            for body_url in item.links or [item.link]
                         ]
 
                         n += 1

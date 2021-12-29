@@ -383,7 +383,7 @@ class Program(object):
             return [] # source is either piped or integrated
         elif isinstance(self.source[0], (model.MediaSource, model.MediaSource.attr_class)):
             return [
-                (s.local_path or s.locator
+                (s.local_path or getattr(s, "locator_play", s.locator)
                  if isinstance(self, Player)
                  else getattr(s, "locator_download", s.locator)
                  if isinstance(self, Downloader)
