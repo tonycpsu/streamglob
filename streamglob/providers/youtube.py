@@ -110,7 +110,13 @@ class YouTubeMediaSourceMixin(object):
 
     @property
     def locator(self):
-        return f"https://youtu.be/{self.listing.guid}"
+        try:
+            return f"https://youtu.be/{self.listing.guid}"
+        except AttributeError:
+            # FIXME: sigh...
+            with db_session:
+                listing = YouTubeMediaListing[self.listing.media_listing_id]
+                return f"https://youtu.be/{listing.guid}"
 
     @property
     def ext(self):

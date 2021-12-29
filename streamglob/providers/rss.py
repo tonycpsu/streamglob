@@ -41,9 +41,9 @@ class RSSMediaSourceMixin(object):
     def download_helper(self):
         return self.listing.feed.config.get_value().get("helper")
 
-    @property
-    def locator_play(self):
-        return self.listing.locator_play
+    # @property
+    # def locator_play(self):
+    #     return self.listing.locator_play
 
     @property
     def locator_download(self):

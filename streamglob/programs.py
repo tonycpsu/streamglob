@@ -34,6 +34,7 @@ from orderedattrdict import AttrDict, Tree
 import bitmath
 import youtube_dl
 import streamlink
+from pony.orm import *
 
 from . import config
 from . import model
@@ -379,30 +380,34 @@ class Program(object):
     @property
     def source_args(self):
 
-        if not self.source or self.source_is_program:
-            return [] # source is either piped or integrated
-        elif isinstance(self.source[0], (model.MediaSource, model.MediaSource.attr_class)):
-            return [
-                (s.local_path or getattr(s, "locator_play", s.locator)
-                 if isinstance(self, Player)
-                 else getattr(s, "locator_download", s.locator)
-                 if isinstance(self, Downloader)
-                 else s.locator
-                ) for s in self.source
-            ]
-        elif isinstance(self.source[0], (model.MediaTask, model.MediaTask.attr_class)):
-            return [s.locator for s in self.source.sources]
-        elif isinstance(self.source[0], str):
-            return self.source
-        else:
-            raise RuntimeError(f"unsupported source: {self.source}")
+        with db_session:
+
+            if not self.source or self.source_is_program:
+                return [] # source is either piped or integrated
+            elif isinstance(self.source[0], (model.MediaSource, model.MediaSource.attr_class)):
+                return [
+                    (s.local_path or getattr(s, "locator_play", s.locator)
+                     if isinstance(self, Player)
+                     else getattr(s, "locator_download", s.locator)
+                     if isinstance(self, Downloader)
+                     else s.locator
+                    ) for s in [
+                        s.attach()#.prefetch()
+                        for s in  self.source
+                    ]
+                ]
+            elif isinstance(self.source[0], (model.MediaTask, model.MediaTask.attr_class)):
+                return [s.locator for s in self.source.sources]
+            elif isinstance(self.source[0], str):
+                return self.source
+            else:
+                raise RuntimeError(f"unsupported source: {self.source}")
 
     @property
     def full_command(self):
 
         # if not self.source:
         #     raise RuntimeError("source not available")
-
         cmd = (
             self.executable_path
             + self.extra_args_pre
@@ -793,7 +798,9 @@ class Downloader(Program):
         # if os.path.exists(outfile):
         #     raise SGFileExists(f"File {outfile} already exists")
 
+
         source = task.sources[0] # FIXME
+        source = source.attach()
 
         if isinstance(downloader_spec, MutableMapping):
             downloader_spec = downloader_spec.get(None, downloader_spec, **kwargs)
@@ -806,6 +813,7 @@ class Downloader(Program):
 
         if not downloader.manages_downloads:
             try:
+                # import ipdb; ipdb.set_trace()
                 outfile = source.download_filename(listing=task.listing, **kwargs)
             except SGInvalidFilenameTemplate as e:
                 logger.warning(f"filename template is invalid: {e}")
@@ -1128,7 +1136,6 @@ class TransmissionRemoteDownloader(Downloader):
         self.source = None
         self.stdout = subprocess.PIPE
         self.stderr = None
-        self.output_ready = asyncio.Future()
         self.output_ready = asyncio.Future()
         # FIXME: we need a way to detect whether the torrent was found. Ideally
         # we'd collect and parse full output and check for empty output, but for

@@ -174,12 +174,12 @@ class attrclass(object):
                     keys = {
                         k.name: getattr(self, k.name, None)
                         for k in (self.orm_class._pk_
-                                  if isinstance(cls._pk_, tuple)
+                                  if isinstance(self.orm_class._pk_, tuple)
                                   else (self.orm_class._pk_,))
                     }
 
                     attached = self.orm_class.get(**keys)
-
+                    # import ipdb; ipdb.set_trace()
                     if not attached:
                         attached = self.orm_class(
                         **self.dict(exclude_unset = True, exclude_none = True)
@@ -226,6 +226,23 @@ class attrclass(object):
         cls.attr_class = attr_class
         cls.from_orm = attr_class.from_orm
 
+        def prefetch(self):
+            keys = {
+                k.name: getattr(self, k.name, None)
+                for k in (cls._pk_
+                          if isinstance(cls._pk_, tuple)
+                          else (cls._pk_,))
+            }
+
+            types = [
+                    a.py_type for a in self._attrs_
+                    if a.is_relation or a.is_collection
+                ]
+            return self.orm_class.select(**keys).prefetch(
+                *types
+            ).first()
+
+
         def detach(self):
             # FIXME
             return self.attr_class.from_orm(self)
@@ -236,6 +253,7 @@ class attrclass(object):
             #         setattr(detached, attr, None)
             # return detached
         cls.detach = detach
+        cls.prefetch = prefetch
         cls.attach = lambda self: self
         cls.orm_class = cls
         return cls
@@ -387,10 +405,14 @@ class MediaSourceMixin(object):
             return None
 
         if listing is None:
-            listing=self.listing
+            listing = self.listing
 
-        if group is None:
-           group = f"{listing.group}" if listing.group else ""
+
+        with db_session:
+            listing = listing.prefetch()
+
+            if group is None:
+                group = f"{listing.group}" if listing.group else ""
 
         subjects = listing.subjects
 
@@ -431,26 +453,30 @@ class MediaSourceMixin(object):
 
                 if match_glob:
                     title = glob.escape(title)
-                outfile = s.format_map(
-                    SafeDict(
-                        self=self, listing=listing, # FIXME
-                        uri="uri=" + self.uri.replace("/", "+") +"=" if not match_glob else "*",
-                        index=self.rank+1,
-                        num=num or len(listing.sources) if listing else 0,
-                        subject=",".join(subjects) if subjects else None,
-                        title=title,
-                        group=group,
-                        subjects=subjects,
-                        **tokens
-                        # subject_dir=subject_dir
-                    )
-                )
 
-                if not match_glob:
-                    outfile = outfile.format_map(SafeDict(ext=self.ext))
-                    outfile = self.provider.translate_template(outfile)
-                if config.settings.profile.unicode_normalization:
-                    outfile = unicodedata.normalize(config.settings.profile.unicode_normalization, outfile)
+                with db_session:
+
+                    # import ipdb; ipdb.set_trace()
+                    outfile = s.format_map(
+                        SafeDict(
+                            self=self, listing=listing.prefetch(), # FIXME
+                            uri="uri=" + self.uri.replace("/", "+") +"=" if not match_glob else "*",
+                            index=self.rank+1,
+                            num=num or len(listing.sources) if listing else 0,
+                            subject=",".join(subjects) if subjects else None,
+                            title=title,
+                            group=group,
+                            subjects=subjects,
+                            **tokens
+                            # subject_dir=subject_dir
+                        )
+                    )
+
+                    if not match_glob:
+                        outfile = outfile.format_map(SafeDict(ext=self.ext))
+                        outfile = self.provider.translate_template(outfile)
+                    if config.settings.profile.unicode_normalization:
+                        outfile = unicodedata.normalize(config.settings.profile.unicode_normalization, outfile)
             except Exception as e:
                 logger.exception("".join(traceback.format_exc()))
                 raise SGInvalidFilenameTemplate(str(e))
