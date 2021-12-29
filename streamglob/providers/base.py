@@ -223,19 +223,27 @@ class BaseProvider(
 
     @property
     def column_config(self):
+        def parse_column_value(v):
+            if not isinstance(v, dict):
+                return v
+            elif isinstance(v, dict):
+                value_type, opts = next(iter(v.items()))
+                if value_type == "token":
+                    attr = opts["attr"]
+                    default = opts.get("default")
+                    return self.token_value(attr, default=default)
+                else:
+                    raise NotImplementedError
+
         return config.ConfigTree([
             (
                 column,
                 config.ConfigTree(
                     self.ATTRIBUTES.get(column, {}), **{
                         k: (
-                        v
-                         if k != "value"
-                         else (
-                                 self.token_value(v.split(".")[1])
-                                 if v.startswith("token.")
-                                 else v
-                         )
+                            v
+                            if k != "value"
+                            else parse_column_value(v)
                         )
                         for k, v in options.items()
                     }
@@ -263,7 +271,7 @@ class BaseProvider(
             group={"width": 20, "truncate": True},
         )
 
-    def token_value(self, token):
+    def token_value(self, token, default=None):
         def inner(table, row):
             tokens = self.rules.tokenize(row.data.title)
             return next(
@@ -273,7 +281,7 @@ class BaseProvider(
                     in tokens
                     if label == token
                 ),
-                None
+                default
             )
         return inner
 
