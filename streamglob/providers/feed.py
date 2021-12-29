@@ -1461,7 +1461,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
             op = OP_MAP.get(op, op)
             if attr == "label":
                 attr = "title"
-                value = self.rule_config[value].pattern
+                value = self.rules[value].pattern
 
             if attr in ["title", "content"]:
                 sql = f"""lower({attr}) {op} lower('{value.replace("'", "''")}')"""

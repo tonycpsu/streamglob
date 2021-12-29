@@ -239,7 +239,7 @@ class DownloadDialog(OKCancelDialog):
             ),
             tag=BaseDropdown(
                 [("(none)", None)]
-                + list(self.parent.provider.rule_config.labels),
+                + list(self.parent.provider.rules.labels),
                 label="Label: "
             )
         )
@@ -252,7 +252,7 @@ class DownloadDialog(OKCancelDialog):
             path = os.path.join(self.parent.provider.output_path, group)
             if not os.path.exists(path):
                 os.makedirs(path)
-            self.parent.provider.rule_config.add_rule(
+            self.parent.provider.rules.add_rule(
                 self.tag.selected_label,
                 group
             )
@@ -644,14 +644,14 @@ class ProviderDataTable(
                 if self.strip_emoji or row.get("_strip_emoji"):
                     value = utils.strip_emoji(value)
 
-                if self.provider.rule_config:
+                if self.provider.rules:
                     listing = row.data_source
                     index = getattr(listing, self.df.index_name)
                     markup_column = f"_markup_{attr}"
                     if not row.get(markup_column):
                         self.df.set(
                             index, markup_column,
-                            self.provider.rule_config.apply(
+                            self.provider.rules.apply(
                                 value,
                                 aliases=listing.token_aliases,
                             )
@@ -721,7 +721,7 @@ class ProviderDataTable(
                 #     except IndexError:
                 #         pass
 
-                label, rule = self.parent.provider.rule_config.rule_for_token(
+                label, rule = self.parent.provider.rules.rule_for_token(
                     self.default_subject
                 )
                 if rule:
@@ -747,7 +747,7 @@ class ProviderDataTable(
                         edit_text=", ".join(patterns),
                     ),
                     create=urwid.CheckBox("Create directory?", state=True),
-                    tag=BaseDropdown(list(self.parent.provider.rule_config.labels))
+                    tag=BaseDropdown(list(self.parent.provider.rules.labels))
                 )
 
             @property
@@ -778,7 +778,7 @@ class ProviderDataTable(
                     if not os.path.exists(path):
                         os.makedirs(path)
 
-                self.parent.provider.rule_config.add_rule(
+                self.parent.provider.rules.add_rule(
                     self.tag.selected_label,
                     subject, group=group, patterns=patterns
                 )
@@ -807,7 +807,7 @@ class ProviderDataTable(
 
             def action(self):
 
-                self.parent.provider.rule_config.remove_rule(
+                self.parent.provider.rules.remove_rule(
                     self.text.get_edit_text()
                 )
                 self.parent.provider.load_rules()

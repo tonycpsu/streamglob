@@ -154,17 +154,6 @@ class HighlightRuleList(MutableSequence):
     def findall(self, text):
         return self._re_search.findall(text)
 
-    # def apply(self, text):
-    #     out = []
-    #     for k, g in groupby(self._re_apply.findall(text), lambda x: not x[0]):
-    #         if k:
-    #             out.append(("".join(item[1] for item in g),))
-    #         else:
-    #             text = list(g)[0][0]
-    #             rule = self.rule_for_token(text)
-    #             out += [(rule.attr or self.attr, text)]
-    #     return out
-
     def rule_for_token(self, token):
         return next(
             (

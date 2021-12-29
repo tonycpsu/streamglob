@@ -687,7 +687,7 @@ class MediaListingMixin(object):
                 find = cfg["find"]
                 # import ipdb; ipdb.set_trace()
                 tokens += list(chain.from_iterable(
-                    self.provider.rule_config.get_tokens(
+                    self.provider.rules.get_tokens(
                         content,
                         aliases=self.token_aliases
                     )
@@ -758,10 +758,10 @@ class MediaListingMixin(object):
         try:
             return [
                 rule for label, rule in [
-                    self.provider.rule_config.rule_for_token(token)
+                    self.provider.rules.rule_for_token(token)
                     for token in self.tokens
                 ]
-                if rule
+                if rule and label in self.provider.rules.config.groups.labels
             ]
 
         except TypeError:

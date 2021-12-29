@@ -265,7 +265,7 @@ class BaseProvider(
 
     def token_value(self, token):
         def inner(table, row):
-            tokens = self.rule_config.tokenize(row.data.title)
+            tokens = self.rules.tokenize(row.data.title)
             return next(
                 (
                     value
@@ -331,7 +331,7 @@ class BaseProvider(
     def load_rules(self):
 
         self._conf_rules = None
-        self.rule_config = HighlightRuleConfig(
+        self.rules = HighlightRuleConfig(
             os.path.join(
                 self.conf_dir,
                 "rules.yaml"
