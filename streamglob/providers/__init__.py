@@ -14,7 +14,7 @@ from .. import config
 from ..exceptions import *
 
 PROVIDERS = AttrDict()
-DEFAULT_PROVIDER=None
+DEFAULT_PROVIDER = None
 
 # FOO=1
 def get(provider, *args, **kwargs):
@@ -25,7 +25,8 @@ def get(provider, *args, **kwargs):
     try:
         return PROVIDERS.get(provider)
     except TypeError:
-        raise Exception(provider, PROVIDERS)
+        return None
+        # raise Exception(provider, PROVIDERS)
 
 URI_SPEC_RE=re.compile(r"(?:(\w+)://)?([^:/]*)(.*)")
 
@@ -40,10 +41,7 @@ def parse_uri(uri):
     if not action:
         action = "play"
 
-    if not provider:
-        provider = DEFAULT_PROVIDER
-
-    p = get(provider)
+    p = get(provider) or get(next(iter(PROVIDERS.keys())))
 
     if not p:
         raise Exception(f"provider {provider} not found")
@@ -77,6 +75,9 @@ def log_plugin_exception(manager, entrypoint, exception):
     logger.error("Failed to load {entrypoint}")
     logger.error("".join(traceback.format_exc(exception)))
 
+
+DISABLED_PROVIDERS = ["twitch"] # Broken
+
 def load():
     global PROVIDERS
 
@@ -87,6 +88,6 @@ def load():
     PROVIDERS = AttrDict(
         (x.name, x.plugin())
         for x in mgr
+        if x.name not in DISABLED_PROVIDERS
     )
 
-    # load_config()

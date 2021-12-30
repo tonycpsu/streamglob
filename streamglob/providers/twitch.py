@@ -106,7 +106,10 @@ class TwitchSession(StreamSession):
 
     def check_channel(self, username):
 
-        user_id = self.user_name_to_id(username)
+        try:
+            user_id = self.user_name_to_id(username)
+        except IndexError:
+            return None
         stream = AttrDict(self.client.streams.get_stream_by_user(user_id) or {})
         logger.error(stream)
         if stream:
@@ -136,6 +139,10 @@ class TwitchProvider(LiveStreamProvider):
     def on_channel_change(self, *args):
         self.refresh()
 
+    @property
+    def config_is_valid(self):
+        # FIXME
+        return False
     # @property
     # def auto_preview(self):
     #     return True

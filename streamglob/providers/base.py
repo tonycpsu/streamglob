@@ -461,7 +461,7 @@ class BaseProvider(
     # @abc.abstractmethod
     def make_view(self):
         if not self.config_is_valid:
-            return InvalidConfigView(self.NAME, self.REQUIRED_CONFIG)
+            return InvalidConfigView(self.NAME, getattr(self, "REQUIRED_CONFIG", []))
         return self.VIEW
 
     @classproperty
