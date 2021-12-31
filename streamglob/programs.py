@@ -231,7 +231,7 @@ class Program(object):
     @classmethod
     def get(cls, spec, *args, **kwargs):
 
-        logger.info(f"get: {spec}")
+        logger.debug(f"get: {spec}")
         ptype = camel_to_snake(cls.__name__)
         if spec is None:
             return None
@@ -444,7 +444,7 @@ class Program(object):
                 self.stdout = subprocess.PIPE
                 self.stderr = subprocess.PIPE
 
-        logger.info(f"full cmd: {' '.join(self.full_command)}")
+        logger.debug(f"full cmd: {' '.join(self.full_command)}")
 
         if not self.source_integrated:
 
@@ -454,7 +454,6 @@ class Program(object):
             if not self.FOREGROUND:
 
                 if self.output_handling is not OutputHandling.IGNORE:
-                    logger.info(f"opening output stream: {self.__class__.__name__}")
                     self.output_stream, pty_stream = pty.openpty()
                     if self.output_fd_name == "stderr":
                         self.stderr = pty_stream
@@ -473,7 +472,7 @@ class Program(object):
                 raise NotImplementedError
 
             try:
-                logger.info(self.full_command + list(args))
+                logger.debug(self.full_command + list(args))
                 self.proc = await spawn_func(
                     *self.full_command + list(args),
                     stdin=self.stdin,
@@ -584,7 +583,7 @@ class Player(Program):
             else:
                 downloader_spec= downloader_spec.get(None, None)
 
-        logger.info(f"player: {player}")
+        logger.debug(f"player: {player}")
         if downloader_spec:
             # FIXME: assumption if downloader supports first source, it supports the rest
             try:
@@ -602,7 +601,7 @@ class Player(Program):
 
         task.program.set_result(player)
         player.source = source
-        logger.info(f"player: {player.cmd}: downloader={downloader.cmd if downloader else downloader}, playing {source}")
+        logger.debug(f"player: {player.cmd}: downloader={downloader.cmd if downloader else downloader}, playing {source}")
         proc = await player.run(
             **kwargs
         )
@@ -675,7 +674,7 @@ class MPVPlayer(Player, MEDIA_TYPES={"audio", "image", "video"}):
     async def run(self, *args, **kwargs):
         rc = await super().run(*args, **kwargs)
         if self.with_controller:
-            logger.info("starting controller")
+            logger.debug("starting controller")
             await self.wait_for_socket()
             controller = MPV(
                 socket=self.ipc_socket_name,
@@ -829,7 +828,7 @@ class Downloader(Program):
         downloader.listing = task.listing
 
         task.program.set_result(downloader)
-        logger.info(f"downloader: {downloader.cmd}, downloading {source}")
+        logger.debug(f"downloader: {downloader.cmd}, downloading {source}")
         proc = await downloader.run(**kwargs)
         return proc
 
@@ -994,7 +993,7 @@ class StreamlinkDownloader(Downloader):
     def process_kwargs(self, kwargs):
 
         resolution = kwargs.pop("resolution", "best")
-        logger.info("resolution: %s" %(resolution))
+        logger.debug("resolution: %s" %(resolution))
         # if resolution:
         self.extra_args_post.insert(0, resolution)
 
@@ -1004,7 +1003,7 @@ class StreamlinkDownloader(Downloader):
             # offset_delta = timedelta(seconds=offset)
             # offset_timestamp = str(offset_delta)
             offset_seconds = int(offset.total_seconds())
-            logger.info("time offset: %s" %(offset_seconds))
+            logger.debug("time offset: %s" %(offset_seconds))
             self.extra_args_pre += ["--hls-start-offset", str(offset_seconds)]
 
         headers = kwargs.pop("headers", None)
@@ -1266,12 +1265,6 @@ class Postprocessor(Program):
             for a in (self.output_args or [outfile])
         ]
 
-    # def process(self, infile):
-    #     logger.info("process")
-    #     outfile = f"{infile}.moved"
-    #     shutil.move(infile, outfile)
-    #     return outfile
-
 
 class ShellCommand(Program):
 
@@ -1317,7 +1310,6 @@ def load():
                     # Give up and make it a generic program
                     klass = pcls
             if cfg.get("disabled") == True:
-                logger.info(f"player {name} is disabled")
                 continue
             state.PROGRAMS[ptype][name] = ProgramDef(
                 cls=klass,
