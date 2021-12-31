@@ -876,6 +876,8 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
 
         board_files = []
         boards = await listing.storyboards
+        if not boards:
+            return None
 
         for i, board in enumerate(boards):
             url = board.url
