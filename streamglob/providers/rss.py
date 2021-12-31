@@ -296,7 +296,7 @@ class RSSFeed(FeedMediaChannel):
 @keymapped()
 class RSSDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
 
-    DETAIL_BOX_CLASS = CachedFeedProviderDetailBox
+    # DETAIL_BOX_CLASS = CachedFeedProviderDetailBox
 
     # FIXME: sources all use the same link, so we just grab the first.  A more
     # complete fix would address this with provider properties or a separate
@@ -304,18 +304,6 @@ class RSSDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
     def extract_sources(self, listing, **kwargs):
         sources, kwargs = super().extract_sources(listing, **kwargs)
         return ([sources[0]], kwargs)
-
-
-    # def __init__(self, *args, **kwargs):
-    #     super().__init__(*args, **kwargs)
-    #     # urwid.connect_signal(
-    #     #     self, "end",
-    #     #     self.on_end
-    #     # )
-
-    # def keypress(self, size, key):
-    #     return super().keypress(size, key)
-
 
 
 class RSSProviderBodyView(CachedFeedProviderBodyView):

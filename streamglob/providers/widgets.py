@@ -421,32 +421,7 @@ class ShellCommandViewMixin(object):
         self.open_popup(popup, width=60, height=10)
 
 
-
-@keymapped()
-class ProviderDataTable(
-        PlayListingViewMixin,
-        DownloadListingViewMixin,
-        ShellCommandViewMixin,
-        BaseDataTable):
-
-    ui_sort = True
-    query_sort = True
-
-    signals = ["cycle_filter"]
-
-    KEYMAP = {
-        ",": "browse_selection",
-        "?": "show_details",
-        "h": "add_highlight_rule",
-        "H": "remove_highlight_rule",
-        # "ctrl o": "strip_emoji_selection",
-        "ctrl t": "translate_selection",
-        # "meta O": "toggle_strip_emoji_all",
-        "meta T": "toggle_translate_all",
-        "delete": "delete_selection",
-        "meta up": "prev_item",
-        "meta down": "next_item"
-    }
+class DecoratedTableMixin(object):
 
     def __init__(self, provider, *args, **kwargs):
 
@@ -454,57 +429,36 @@ class ProviderDataTable(
         self.translate = self.provider.translate
         self.strip_emoji = self.provider.strip_emoji
         self._translator = None
-        self.update_task = None
-        super(ProviderDataTable,  self).__init__(*args, **kwargs)
+        super(DecoratedTableMixin,  self).__init__(*args, **kwargs)
 
-    @property
-    def tmp_dir(self):
-        return self.provider.tmp_dir
+    def decorate(self, row, column, value):
 
-    @property
-    def NAME(self):
-        return self.provider.NAME
+        for attr in self.provider.config.display.tables.decorate:
+            if column.name == attr:
 
-    @property
-    def columns(self):
-        return [
-            DataTableColumn(k, **v if v else {})
-            for k, v in self.provider.attributes.items()
-        ]
+                if row.get(f"_{attr}_translated") and (self.translate or row.get("_translate")):
+                    value = row.get(f"_{attr}_translated")
 
-    @property
-    def limit(self):
-        return self.provider.limit
+                if self.strip_emoji or row.get("_strip_emoji"):
+                    value = utils.strip_emoji(value)
 
-    def query(self, *args, **kwargs):
-        try:
-            for l in self.listings(*args, **kwargs):
-                # FIXME
-                # l._provider = self.provider
+                if self.provider.rules:
+                    listing = row.data_source
+                    index = getattr(listing, self.df.index_name)
+                    markup_column = f"_markup_{attr}"
+                    if not row.get(markup_column):
+                        self.df.set(
+                            index, markup_column,
+                            self.provider.rules.apply(
+                                value,
+                                aliases=listing.token_aliases,
+                            )
+                        )
+                    markup = self.df.get(index, markup_column)
+                    if len(markup):
+                        value = urwid.Text(markup)
 
-                # self.provider.on_new_listing(l)
-                yield(l)
-
-        except SGException as e:
-            logger.exception(e)
-            return []
-
-    @property
-    def config(self):
-        return self.provider.config
-
-    def show_details(self):
-        logger.info(self.selection.data_source.group)
-        logger.info(self.selection.data_source.subjects)
-        logger.info(
-            self.selected_source.get_local_path()
-        )
-
-    def playlist_position(self):
-        return self.focus_position
-
-    def listings(self, *args, **kwargs):
-        yield from self.provider.listings(*args, **kwargs)
+        return super().decorate(row, column, value)
 
     @property
     def translator(self):
@@ -582,13 +536,107 @@ class ProviderDataTable(
             [ row.index for row in self ]
         )
 
+    def reset(self, *args, **kwargs):
+        super().reset(*args, **kwargs)
+        self.translate = self.provider.translate
+        self.apply_translation()
+        # if self.update_task:
+        #     self.update_task.cancel()
+        # self.update_task = state.event_loop.create_task(self.update_row_attributes())
+
+
+@keymapped()
+class ProviderDataTable(
+        DecoratedTableMixin,
+        PlayListingViewMixin,
+        DownloadListingViewMixin,
+        ShellCommandViewMixin,
+        BaseDataTable):
+
+    ui_sort = True
+    query_sort = True
+
+    signals = ["cycle_filter"]
+
+    KEYMAP = {
+        ",": "browse_selection",
+        "?": "show_details",
+        "h": "add_highlight_rule",
+        "H": "remove_highlight_rule",
+        # "ctrl o": "strip_emoji_selection",
+        "ctrl t": "translate_selection",
+        # "meta O": "toggle_strip_emoji_all",
+        "meta T": "toggle_translate_all",
+        "delete": "delete_selection",
+        "meta up": "prev_item",
+        "meta down": "next_item"
+    }
+
+    def __init__(self, provider, *args, **kwargs):
+
+        self.provider = provider
+        # self.translate = self.provider.translate
+        # self.strip_emoji = self.provider.strip_emoji
+        # self._translator = None
+        self.update_task = None
+        super(ProviderDataTable,  self).__init__(provider, *args, **kwargs)
+
+    @property
+    def tmp_dir(self):
+        return self.provider.tmp_dir
+
+    @property
+    def NAME(self):
+        return self.provider.NAME
+
+    @property
+    def columns(self):
+        return [
+            DataTableColumn(k, **v if v else {})
+            for k, v in self.provider.attributes.items()
+        ]
+
+    @property
+    def limit(self):
+        return self.provider.limit
+
+    def query(self, *args, **kwargs):
+        try:
+            for l in self.listings(*args, **kwargs):
+                # FIXME
+                # l._provider = self.provider
+
+                # self.provider.on_new_listing(l)
+                yield(l)
+
+        except SGException as e:
+            logger.exception(e)
+            return []
+
+    @property
+    def config(self):
+        return self.provider.config
+
+    def show_details(self):
+        logger.info(self.selection.data_source.group)
+        logger.info(self.selection.data_source.subjects)
+        logger.info(
+            self.selected_source.get_local_path()
+        )
+
+    def playlist_position(self):
+        return self.focus_position
+
+    def listings(self, *args, **kwargs):
+        yield from self.provider.listings(*args, **kwargs)
+
     def keypress(self, size, key):
         return super().keypress(size, key)
 
     def reset(self, *args, **kwargs):
         super().reset(*args, **kwargs)
-        self.translate = self.provider.translate
-        self.apply_translation()
+        # self.translate = self.provider.translate
+        # self.apply_translation()
         if self.update_task:
             self.update_task.cancel()
         self.update_task = state.event_loop.create_task(self.update_row_attributes())
@@ -634,35 +682,6 @@ class ProviderDataTable(
     @property
     def playlist_position_text(self):
         return f"[{self.focus_position+1}/{len(self)}]"
-
-    def decorate(self, row, column, value):
-
-        for attr in self.provider.config.display.tables.decorate:
-            if column.name == attr:
-
-                if row.get(f"_{attr}_translated") and (self.translate or row.get("_translate")):
-                    value = row.get(f"_{attr}_translated")
-
-                if self.strip_emoji or row.get("_strip_emoji"):
-                    value = utils.strip_emoji(value)
-
-                if self.provider.rules:
-                    listing = row.data_source
-                    index = getattr(listing, self.df.index_name)
-                    markup_column = f"_markup_{attr}"
-                    if not row.get(markup_column):
-                        self.df.set(
-                            index, markup_column,
-                            self.provider.rules.apply(
-                                value,
-                                aliases=listing.token_aliases,
-                            )
-                        )
-                    markup = self.df.get(index, markup_column)
-                    if len(markup):
-                        value = urwid.Text(markup)
-
-        return super().decorate(row, column, value)
 
     def on_activate(self):
         pass

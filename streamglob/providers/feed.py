@@ -311,17 +311,31 @@ class FeedMediaSource(FeedMediaSourceMixin, model.MediaSource):
     created = Required(datetime, default=datetime.now)
 
 
-class CachedFeedProviderDetailBox(DetailBox):
+# class CachedFeedProviderDetailBox(DetailBox):
 
-    def detail_table(self):
-        columns = [
-            c for c in  self.parent_table._columns.copy()
-            if not isinstance(c, DataTableDivider)
-        ]
-        return CachedFeedProviderDetailDataTable(
-            self.parent_table.provider,
-            self.listing, self.parent_table, columns=columns
-        )
+#     def detail_table(self):
+#         columns = self.parent_table.columns.copy()
+
+#         # columns = [
+#         #     c for c in  self.parent_table._columns.copy()
+#         #     if not isinstance(c, DataTableDivider)
+#         # ]
+#         # title_index = next(
+#         #     (i for i, c in enumerate(columns) if c.name == "title"),
+#         #     None
+#         # )
+#         # if title_index:
+#         #     columns["title"].truncate = True
+#         #     columns.insert(
+#         #         title_index,
+#         #         DataTableColumn("spacer", width=1, value=None)
+#         #     )
+
+
+#         return CachedFeedProviderDetailDataTable(
+#             self.parent_table.provider,
+#             self.listing, self.parent_table, columns=columns
+#         )
 
 
 @keymapped()

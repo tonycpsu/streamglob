@@ -383,7 +383,7 @@ class InstagramFeedMediaChannel(InstagramFeedMediaChannelMixin, FeedMediaChannel
 @keymapped()
 class InstagramDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
 
-    DETAIL_BOX_CLASS = CachedFeedProviderDetailBox
+    # DETAIL_BOX_CLASS = CachedFeedProviderDetailBox
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

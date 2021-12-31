@@ -7,7 +7,7 @@ import asyncio
 import dataclasses
 import re
 from itertools import chain
-
+from collections.abc import Mapping
 # import textwrap
 # import tempfile
 
@@ -1682,7 +1682,7 @@ class DetailBox(urwid.WidgetWrap):
 
 
 @keymapped()
-class DetailDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseDataTable):
+class DetailDataTable(DecoratedTableMixin, PlayListingViewMixin, DownloadListingViewMixin, BaseDataTable):
 
     KEYMAP = {
         "meta up": "prev_item",
@@ -1690,12 +1690,13 @@ class DetailDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseDataTa
     }
 
     with_header = False
+    with_scrollbar = False
 
     def __init__(self, provider, listing, parent_table, columns=None):
         self.provider = provider
         self.listing = listing
         self.parent_table = parent_table
-        super().__init__(columns=columns)
+        super().__init__(provider, columns=columns)
 
     @property
     def selected_listing(self):
@@ -1720,20 +1721,27 @@ class DetailDataTable(PlayListingViewMixin, DownloadListingViewMixin, BaseDataTa
         else:
             return key
 
-
     def query(self, *args, **kwargs):
         return [
             dict(
-                source,
+                source.dict() if hasattr(source, "dict")
+                else source.to_dict() if hasattr(source, "to_dict")
+                else source,
                 **dict(
-                    media_listing_id=source.listing.media_listing_id,
-                    title=f"[{i+1}/{len(source.listing.sources)}] {source.listing.title}",
-                    feed=source.listing.feed,
-                    created=source.listing.created,
-                    group=(source.group or source.listing.group),
-                    read=source.listing.attrs.get("parts_read", {}).get(i, False)
-                ))
-              for i, source in enumerate(self.listing.sources)
+                    source.listing.dict() if hasattr(source.listing, "dict")
+                    else source.listing.to_dict() if hasattr(source.listing, "to_dict")
+                    else source.listing,
+                    **dict(
+                        title=f"[{i+1}/{len(source.listing.sources)}] {source.listing.title}",
+                        # FIXME: have to handle properties manually here
+                        token_aliases=source.listing.token_aliases,
+                        group=source.listing.group,
+                        content_date=source.listing.content_date
+                    )
+
+                )
+            )
+            for i, source in enumerate(self.listing.sources)
         ]
 
     @keymap_command

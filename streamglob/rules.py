@@ -302,7 +302,6 @@ class HighlightRuleConfig(object):
     def pattern_rules_tokens(self):
         return self.get_regex(self.rules)[2]
 
-
     def search(self, text):
         return next(
             (
