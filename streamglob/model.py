@@ -148,7 +148,10 @@ class attrclass(object):
                     continue
                 # I don't know if there's a less hacky way to add type annotations
                 # to dynamically-created classes, but this seems to work
-                ns[attr.name] = default
+                if callable(default):
+                    ns[attr.name] = default()
+                else:
+                    ns[attr.name] = default
                 ns["__annotations__"][attr.name] = attr_type
                 if validator_fn:
                     val_func_name = f"validate_{attr.name}"
@@ -809,16 +812,6 @@ class MediaListingMixin(object):
             )
         except (AttributeError, IndexError):
             return None
-
-    @property
-    def highlight_map(self):
-        return AttrDict([
-            (re.compile("Show"),
-             dict(
-                 attr="red",
-                 patterns=["Show"]
-             ))
-        ])
 
 
 @attrclass()

@@ -390,7 +390,10 @@ class TaskManager(Observable):
         for task in self.playing + self.active:
             prog = await task.program
             now = datetime.now()
-            task.elapsed = now - task.started
+            try:
+                task.elapsed = now - task.started
+            except TypeError:
+                import ipdb; ipdb.set_trace()
             if hasattr(prog, "update_progress"):
                 if (task.last_progress is None) or (now - task.last_progress).total_seconds() > prog.progress_interval:
                     task.last_progress = now
