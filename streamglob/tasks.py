@@ -393,7 +393,7 @@ class TaskManager(Observable):
             try:
                 task.elapsed = now - task.started
             except TypeError:
-                import ipdb; ipdb.set_trace()
+                task.elapsed = 0
             if hasattr(prog, "update_progress"):
                 if (task.last_progress is None) or (now - task.last_progress).total_seconds() > prog.progress_interval:
                     task.last_progress = now

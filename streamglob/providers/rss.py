@@ -1,9 +1,18 @@
 from datetime import datetime
 from time import mktime
+import http.cookiejar
 
 import atoma
 from pony.orm import *
 from mergedeep import merge, Strategy
+
+from selenium import webdriver
+from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
+from selenium.common.exceptions import TimeoutException
+
 
 from .feed import *
 from ..exceptions import *
@@ -14,6 +23,85 @@ from .. import session
 from .. import utils
 
 from .filters import *
+
+class WebHelper(object):
+
+    def __init__(self, profile_path=None, show_browser=False):
+        self.profile_path = profile_path
+        self.show_browser = show_browser
+
+    @property
+    def driver(self):
+        if not getattr(self, "_driver", None):
+            options = Options()
+            if not self.show_browser:
+                options.headless = True
+            if self.profile_path:
+                options.set_preference('profile', self.profile_path)
+            self._driver = webdriver.Firefox(options=options)
+        return self._driver
+
+    def run_script(self, url, script, params):
+
+        self.driver.get(url)
+
+        for command in script:
+            print(command)
+            action = command.action
+            target = next(
+                (getattr(By, k.upper()), v)
+                for k, v in command.target.items()
+            )
+            if action == "wait":
+                timeout = command.get("timeout", 1)
+                try:
+                    myElem = WebDriverWait(self.driver, timeout).until(
+                        EC.presence_of_element_located(target)
+                    )
+                except TimeoutException:
+                    print("Loading took too much time!")
+
+            elif action == "send_keys":
+                self.driver.find_element(*target).send_keys(
+                    command.value.format_map(params)
+                )
+            elif action == "click":
+                self.driver.find_element(*target).click()
+            else:
+                raise NotImplementedError(action)
+
+    def fetch_cookies(self, cookies=None):
+
+        return [
+            self.to_cookielib_cookie(c)
+            for c in self.driver.get_cookies()
+            if cookies is None or c.get("name") in cookies
+        ]
+
+    def quit(self):
+        self.driver.quit()
+
+    @staticmethod
+    def to_cookielib_cookie(selenium_cookie):
+        return http.cookiejar.Cookie(
+            version=0,
+            name=selenium_cookie['name'],
+            value=selenium_cookie['value'],
+            port='80',
+            port_specified=False,
+            domain=selenium_cookie['domain'],
+            domain_specified=True,
+            domain_initial_dot=False,
+            path=selenium_cookie['path'],
+            path_specified=True,
+            secure=selenium_cookie['secure'],
+            expires=selenium_cookie['expiry'],
+            discard=False,
+            comment=None,
+            comment_url=None,
+            rest={},
+            rfc2109=False
+        )
 
 
 class SGFeedUpdateFailedException(Exception):
@@ -57,20 +145,31 @@ class RSSMediaSource(RSSMediaSourceMixin, FeedMediaSource):
 
 
 class RSSMediaListingMixin(object):
+    # FIXME: way too much fetching from DB here
+
+    @property
+    def channel_config(self):
+        with db_session:
+            listing = self.attach()
+            return listing.channel.config.get_value()
+
 
     @property
     def locator_download(self):
+
         with db_session:
             listing = self.attach()
-            channel_config = listing.channel.config.get_value()
-            link_attr = channel_config.get("download_link")
+            link_attr = self.channel_config.get("download_link")
+
             if not link_attr:
                 return listing.locator
+
             elif link_attr == "enclosure":
                 try:
                     return listing.enclosures[0]
                 except IndexError:
                     return listing.locator
+
             else:
 
                 html = listing.provider.session.get(listing.locator).html
@@ -80,19 +179,78 @@ class RSSMediaListingMixin(object):
                         html.find(link_attr, first=True).attrs["href"]
                     )
                 except (KeyError, AttributeError):
-                    logger.warning(f"couldn't find link using CSS selector {link_attr}")
-                    return listing.locator
+                    login_cfg = self.channel_config.login
+                    if login_cfg:
+                        if login_cfg.method == "session":
+                            self.session_login(login_cfg)
+                        elif login_cfg.method == "browser":
+                            self.browser_login(login_cfg)
+                        else:
+                            raise NotImplementedError
 
-                if channel_config.get("fetch_download_link"):
-                    res = listing.provider.session.get(url)
-                    disposition = res.headers['content-disposition']
-                    filename = re.findall("""filename="?([^"]+)"?""", disposition)[0]
-                    local_file = os.path.join(listing.provider.tmp_dir, filename)
-                    with open(local_file, "wb") as f:
-                        f.write(res.content)
-                    return local_file
-                else:
-                    return url
+                    html = listing.provider.session.get(listing.locator).html
+
+                    try:
+                        url = html._make_absolute(
+                            html.find(link_attr, first=True).attrs["href"]
+                        )
+                    except (KeyError, AttributeError):
+                        logger.warning(f"couldn't find link using CSS selector {link_attr}")
+                        return listing.locator
+
+
+            if self.channel_config.get("fetch_download_link"):
+                res = listing.provider.session.get(url)
+                disposition = res.headers['content-disposition']
+                filename = re.findall("""filename="?([^"]+)"?""", disposition)[0]
+                local_file = os.path.join(listing.provider.tmp_dir, filename)
+                with open(local_file, "wb") as f:
+                    f.write(res.content)
+                return local_file
+            else:
+                return url
+
+    def session_login(self, cfg):
+        url = cfg.url
+        credentials = cfg.credentials
+        params = cfg.params.copy()
+        extract = cfg.extract
+        values = {}
+        if extract:
+            url = cfg.extract.url or cfg.url
+            res = self.provider.session.get(url)
+            values = {
+                param: res.html.xpath(expr)
+                for param, expr in extract.params.values()
+            }
+
+        data = {
+            k: v.format_map(dict(credentials, **values))
+            for k, v in params.items()
+        }
+        import ipdb; ipdb.set_trace()
+        res = self.provider.session.post(
+            url,
+            data=data
+        )
+        return res.raise_for_status()
+
+    def browser_login(self, cfg):
+
+        self.provider.web_helper.run_script(
+            cfg.url,
+            cfg.script,
+            cfg.credentials
+        )
+        cookies = self.provider.web_helper.fetch_cookies(
+            cfg.cookies or None
+        )
+
+        for c in cookies:
+            self.provider.session.cookies.set_cookie(c)
+
+        self.provider.session.save_cookies()
+
 
     @property
     def full_content(self):
@@ -154,7 +312,7 @@ class RSSMediaListing(RSSMediaListingMixin, model.ContentMediaListing, FeedMedia
     enclosures = Required(Json, default=[])
 
 
-class RSSSession(BrowserCookieStreamSessionMixin, session.StreamSession):
+class RSSSession(session.StreamSession):
 
     def get_rss_link(item):
 
@@ -328,3 +486,11 @@ class RSSProvider(PaginatedProviderMixin,
     def FILTERS_OPTIONS(self):
         return super().FILTERS_OPTIONS
 
+    @property
+    def web_helper(self):
+        if not getattr(self, "_web_helper", None):
+            self._web_helper = WebHelper(
+                profile_path=self.config.browser_profile or None,
+                show_browser=self.config.show_browser or None,
+            )
+        return self._web_helper

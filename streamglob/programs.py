@@ -377,31 +377,29 @@ class Program(object):
         ]
 
 
+    def get_locator(self, source):
+        with db_session:
+            try:
+                locator = getattr(source, "locator", source)
+            except pony.orm.core.DatabaseSessionIsOver:
+                source = source.attach()
+                locator = getattr(source, "locator", source)
+
+        return locator
+
     @property
     def source_args(self):
 
-        with db_session:
-
-            if not self.source or self.source_is_program:
-                return [] # source is either piped or integrated
-            elif isinstance(self.source[0], (model.MediaSource, model.MediaSource.attr_class)):
-                return [
-                    (s.local_path or getattr(s, "locator_play", s.locator)
-                     if isinstance(self, Player)
-                     else getattr(s, "locator_download", s.locator)
-                     if isinstance(self, Downloader)
-                     else s.locator
-                    ) for s in [
-                        s.attach()#.prefetch()
-                        for s in  self.source
-                    ]
-                ]
-            elif isinstance(self.source[0], (model.MediaTask, model.MediaTask.attr_class)):
-                return [s.locator for s in self.source.sources]
-            elif isinstance(self.source[0], str):
-                return self.source
-            else:
-                raise RuntimeError(f"unsupported source: {self.source}")
+        if not self.source or self.source_is_program:
+            return [] # source is either piped or integrated
+        elif isinstance(self.source[0], (model.MediaSource, model.MediaSource.attr_class)):
+            return [self.get_locator(s) for s in self.source]
+        elif isinstance(self.source[0], (model.MediaTask, model.MediaTask.attr_class)):
+            return [s.locator for s in self.source.sources] # FIXME
+        elif isinstance(self.source[0], str):
+            return self.source
+        else:
+            raise RuntimeError(f"unsupported source: {self.source}")
 
     @property
     def full_command(self):
@@ -612,6 +610,18 @@ class Player(Program):
         self.source =  sources
         proc = await self.run()
         return proc
+
+    def get_locator(self, source):
+
+        try:
+            locator = getattr(source, "locator_play", None)
+        except pony.orm.core.DatabaseSessionIsOver:
+            with db_session:
+                source = source.attach().prefetch()
+                locator = getattr(source, "locator_play", None)
+
+        return locator or super().get_locator(source)
+
 
 
 # Put image-only viewers first so they're selected for image links by default
@@ -867,6 +877,16 @@ class Downloader(Program):
     def process_args(self, task, outfile, **kwargs):
         pass
 
+    def get_locator(self, source):
+
+        try:
+            locator = getattr(source, "locator_download", None)
+        except pony.orm.core.DatabaseSessionIsOver:
+            with db_session:
+                source = source.attach().prefetch()
+                locator = getattr(source, "locator_download", None)
+
+        return locator or super().get_locator(source)
 
 class YouTubeDLDownloader(Downloader):
 
