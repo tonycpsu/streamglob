@@ -273,7 +273,9 @@ class BaseProvider(
 
     def token_value(self, token, default=None):
         def inner(table, row):
-            tokens = self.rules.tokenize(row.data.title)
+            tokens = self.rules.tokenize(
+                row.title
+            )
             return next(
                 (
                     value

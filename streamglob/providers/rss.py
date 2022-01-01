@@ -109,13 +109,9 @@ class SGFeedUpdateFailedException(Exception):
 
 class RSSMediaSourceMixin(object):
 
-    @property
-    def locator_preview(self):
-        return utils.BLANK_IMAGE_URI
-        # try:
-        #     return self.listing.body_urls[0]
-        # except IndexError:
-        #     return utils.BLANK_IMAGE_URI
+    # @property
+    # def locator_preview(self):
+    #     return utils.BLANK_IMAGE_URI
 
     @property
     def locator_thumbnail(self):
@@ -129,9 +125,9 @@ class RSSMediaSourceMixin(object):
     def download_helper(self):
         return self.listing.feed.config.get_value().get("helper")
 
-    # @property
-    # def locator_play(self):
-    #     return self.listing.locator_play
+    @property
+    def locator_play(self):
+        return self.listing.locator_play
 
     @property
     def locator_download(self):
