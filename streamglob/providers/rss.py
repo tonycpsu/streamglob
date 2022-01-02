@@ -308,6 +308,11 @@ class RSSMediaListingMixin(object):
                 )
             )
 
+        if len(self.subject_rules):
+            max_links = cfg.max.get("subjects", DEFAULT_MAX_LINKS)
+        else:
+            max_links = cfg.max.get("others", DEFAULT_MAX_LINKS)
+
         urls = [
             u for u in dict.fromkeys(urls)
             if (
@@ -322,7 +327,7 @@ class RSSMediaListingMixin(object):
 
                 ])
             )
-        ][:cfg.get("max", DEFAULT_MAX_LINKS)]
+        ][:max_links]
 
         return urls
 
