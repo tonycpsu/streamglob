@@ -1255,10 +1255,9 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
         # if getattr(source, "locator_thumbnail", None) is None:
         #     logger.debug("full: no thumbnail")
         #     return
-        if source.locator is None:
-            logger.debug("no full")
+        if source.locator_play is None:
             return
-        return source.locator
+        return source.locator_play
         # await self.playlist_replace(source.locator, idx=position)
 
     async def get_preview(self, stages, listing, source):
