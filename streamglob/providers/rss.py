@@ -159,6 +159,7 @@ class RSSMediaListingMixin(object):
         with db_session:
             listing = self.attach()
             link_attr = self.channel_config.get("download_link")
+            login_cfg = self.channel_config.login
 
             if not link_attr:
                 return listing.locator
@@ -178,12 +179,11 @@ class RSSMediaListingMixin(object):
                         html.find(link_attr, first=True).attrs["href"]
                     )
                 except (KeyError, AttributeError):
-                    login_cfg = self.channel_config.login
                     if login_cfg:
                         if login_cfg.method == "session":
-                            self.session_login(login_cfg)
+                            self.session_login()
                         elif login_cfg.method == "browser":
-                            self.browser_login(login_cfg)
+                            self.browser_login()
                         else:
                             raise NotImplementedError
 
@@ -209,32 +209,40 @@ class RSSMediaListingMixin(object):
             else:
                 return url
 
-    def session_login(self, cfg):
+    def session_login(self):
+
+        cfg = self.channel_config.login
         url = cfg.url
         credentials = cfg.credentials
         params = cfg.params.copy()
         extract = cfg.extract
         values = {}
+
         if extract:
             url = cfg.extract.url or cfg.url
             res = self.provider.session.get(url)
             values = {
-                param: res.html.xpath(expr)
-                for param, expr in extract.params.values()
+                param: res.html.xpath(expr, first=True)
+                for param, expr in extract.params.items()
             }
 
         data = {
             k: v.format_map(dict(credentials, **values))
             for k, v in params.items()
         }
-        import ipdb; ipdb.set_trace()
+
         res = self.provider.session.post(
             url,
             data=data
         )
-        return res.raise_for_status()
 
-    def browser_login(self, cfg):
+        res.raise_for_status()
+        self.provider.session.save_cookies()
+        return
+
+    def browser_login(self):
+
+        cfg = self.channel_config.login
 
         self.provider.web_helper.run_script(
             cfg.url,
@@ -276,12 +284,26 @@ class RSSMediaListingMixin(object):
             ]
 
             html = self.provider.session.get(self.locator).html
+
+            if cfg.fetch.session_test:
+                expr = cfg.fetch.session_test
+                found = html.find(expr, first=True)
+                if not found:
+                    self.session_login()
+                    html = self.provider.session.get(self.locator).html
+                    found = html.find(expr, first=True)
+                    if not found:
+                        logger.warning(f"couldn't find {expr} after login")
+
             urls += html.xpath(
                 "|".join(
                     f".//{expr}"
                     for expr in (
                             cfg.fetch.match
-                            or [".//a/@href"]
+                            or [
+                                ".//a/@href",
+                                ".//img/@src"
+                            ]
                     )
                 )
             )
@@ -426,7 +448,8 @@ class RSSFeed(FeedMediaChannel):
                             self.provider.new_media_source(
                                 # url=item.link,
                                 url=body_url,
-                                media_type="video" # FIXME: could be something else
+                                media_type="video", # FIXME: could be something else
+                                play_listing=self.content_config.play_listing or False
                             )
                             for body_url in item.links or [item.locator]
                         ]

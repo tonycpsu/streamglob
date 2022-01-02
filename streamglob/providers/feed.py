@@ -602,8 +602,12 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
                 source.mark_seen()
                 commit()
                 if len(listing.sources) > 1:
-                    logger.info(f"{len(listing.sources)}, {len(row.details.contents.table)}")
-                    row.details.contents.table[i].clear_attr("unread")
+                    # logger.info(f"{len(listing.sources)}, {len(row.details.contents.table)}")
+                    try:
+                        row.details.contents.table[i].clear_attr("unread")
+                    except IndexError:
+                        # FIXME: not really sure why IndexError comes back here
+                        pass
                 # else:
                 #     listing_source.attach().read = now
             row.close_details()
