@@ -29,9 +29,6 @@ from pony.orm.core import EntityMeta
 import pydantic
 from pydantic import BaseModel, Field, validator
 
-# monkey-patch
-from marshmallow import fields as mm_fields
-
 from . import config
 from . import providers
 from . import utils
