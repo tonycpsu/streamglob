@@ -25,10 +25,10 @@ setup(name=name,
           ('share/doc/%s' % name, ["docs/config.yaml.sample"]),
       ],
       include_package_data=True,
-      package_data = {
+      package_data={
           "streamglob": ["data/*"]
       },
-      install_requires = [
+      install_requires=[
           "aio-mpv-jsonipc @ git+https://github.com/tonycpsu/aio-mpv-jsonipc@master#egg=aio-mpv-jsonipc",
           "aiofiles",
           "aiohttp",
@@ -37,7 +37,7 @@ setup(name=name,
           "async_property",
           "atoma",
           "bitmath",
-          "browser_cookie3 ~= 0.13.0"
+          "browser_cookie3 ~= 0.13.0",
           "dateparser",
           "ffmpeg-python @ git+https://github.com/hdk5/ffmpeg-python@asyncio_support#egg=ffmpeg-python",
           # "googletransx",
