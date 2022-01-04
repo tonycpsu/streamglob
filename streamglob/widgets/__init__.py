@@ -315,6 +315,17 @@ class BaseDropdown(Observable, KeymapMovementMixin, panwid.Dropdown):
     def keypress(self, size, key):
         return super().keypress(size, key)
 
+    @property
+    def value(self):
+        return self.selected_value
+
+    @value.setter
+    def value(self, value):
+        try:
+            self.selected_label = value
+        except ValueError:
+            import ipdb; ipdb.set_trace()
+
 
 class ScrollbackListBox(panwid.listbox.ScrollingListBox):
 

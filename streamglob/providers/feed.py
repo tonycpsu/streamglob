@@ -1547,7 +1547,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
             for f in self.feed_filters:
                 self.items_query = self.items_query.filter(f)
 
-        self.items_query = self.items_query.filter(status_filters[self.filters.status.value])
+        self.items_query = self.items_query.filter(status_filters[self.filters.status.value.lower()])
 
         if self.search_filter:
             (field, query) = re.search("(?:(\w+):)?\s*(.*)", self.search_filter).groups()
