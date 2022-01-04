@@ -215,7 +215,7 @@ class ListingsView(StreamglobView):
             return
         self.provider = providers.get(provider_name)
         if  getattr(self, "toolbar", None):
-            self.toolbar.provider_dropdown.value = self.provider.IDENTIFIER
+            self.toolbar.provider_dropdown.label = self.provider.IDENTIFIER
         else:
             self.toolbar = ProviderToolbar(self)
             self.toolbar_placeholder.original_widget = self.toolbar
