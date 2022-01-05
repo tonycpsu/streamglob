@@ -981,7 +981,7 @@ class TitledMediaListingMixin(object):
                     continue
 
         with db_session:
-            listing = self.prefetch()
+            listing = self.attach().prefetch()
             if td:
                 listing.attrs["title_date"] = td.strftime("%Y-%m-%d")
             else:

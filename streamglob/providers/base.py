@@ -1729,22 +1729,21 @@ class DetailDataTable(DecoratedTableMixin, PlayListingViewMixin, DownloadListing
 
     def query(self, *args, **kwargs):
         return [
-            dict(
-                source.dict() if hasattr(source, "dict")
-                else source.to_dict() if hasattr(source, "to_dict")
-                else source,
-                **dict(
+            merge(
+                (
                     source.listing.dict() if hasattr(source.listing, "dict")
                     else source.listing.to_dict() if hasattr(source.listing, "to_dict")
-                    else source.listing,
-                    **dict(
-                        title=f"[{i+1}/{len(source.listing.sources)}] {source.listing.title}",
-                        # FIXME: have to handle properties manually here
-                        token_aliases=source.listing.token_aliases,
-                        group=source.listing.group,
-                        content_date=source.listing.content_date
-                    )
-
+                    else source.listing
+                ),
+                (
+                    source.dict() if hasattr(source, "dict")
+                    else source.to_dict() if hasattr(source, "to_dict")
+                    else source,
+                ),
+                dict(
+                    token_aliases=source.listing.token_aliases,
+                    group=source.listing.group,
+                    content_date=source.listing.content_date
                 )
             )
             for i, source in enumerate(self.listing.sources)
