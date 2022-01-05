@@ -650,14 +650,21 @@ class BaseProvider(
 
     @property
     def config(self):
+        merged = merge(
+            config.ConfigTree(), *[
+                config.ConfigTree(
+                    config.settings.profile.providers.get(
+                        identifier, config.ConfigTree()
+                    ) or config.ConfigTree()
+                )
+                for identifier in reversed(self.IDENTIFIERS)
+            ]
+        )
+
         cfg = config.settings.profile.providers.get(
             self.IDENTIFIER, config.ConfigTree()
         )
-        cfg.update({
-            k: v
-            for k, v in getattr(super(), "config", {}).items()
-            if k not in cfg
-        })
+        cfg.update(merged)
         return cfg
 
     @property
