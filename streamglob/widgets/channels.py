@@ -595,6 +595,7 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
         self._feed_config = feed_config
 
     def load(self):
+        self._feed_config = None
         self.tree = ChannelGroupNode(self, self.feed_config, key=self.label)
         self.listbox = MyTreeListBox(PositionsTreeWalker(self.tree))
         self.listbox.offset_rows = 1

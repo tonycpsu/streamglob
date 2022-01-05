@@ -1233,6 +1233,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
                 )
         if not isinstance(self.view, InvalidConfigView): # FIXME
             self.create_feeds()
+            self.channels.load()
 
     def format_feed(feed):
         return feed.name if hasattr(feed, "name") else ""
