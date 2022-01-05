@@ -1730,6 +1730,7 @@ class DetailDataTable(DecoratedTableMixin, PlayListingViewMixin, DownloadListing
     def query(self, *args, **kwargs):
         return [
             merge(
+                AttrDict(),
                 (
                     source.listing.dict() if hasattr(source.listing, "dict")
                     else source.listing.to_dict() if hasattr(source.listing, "to_dict")
