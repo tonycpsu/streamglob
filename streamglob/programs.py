@@ -518,6 +518,9 @@ class Program(object):
                             elif self.output_handling == OutputHandling.COLLECT:
                                 self.output.append(line)
 
+                    if self.output_ready.done():
+                        logger.warn("FIXME: attempt to set result twice")
+                        return
                     self.output_ready.set_result(self.output)
 
                 self.output_read_task = state.event_loop.create_task(
