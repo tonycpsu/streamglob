@@ -650,17 +650,15 @@ class BaseProvider(
 
     @property
     def config(self):
-        return config.ConfigTree(
-            merge({}, *[
-                    config.ConfigTree(
-                        config.settings.profile.providers.get(
-                            identifier, config.ConfigTree()
-                        ) or config.ConfigTree()
-                    )
-                    for identifier in reversed(self.IDENTIFIERS)
-                ]
-            )
+        cfg = config.settings.profile.providers.get(
+            self.IDENTIFIER, config.ConfigTree()
         )
+        cfg.update({
+            k: v
+            for k, v in getattr(super(), "config", {}).items()
+            if k not in cfg
+        })
+        return cfg
 
     @property
     def config_is_valid(self):
