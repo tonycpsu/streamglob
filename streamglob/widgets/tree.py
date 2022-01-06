@@ -28,6 +28,30 @@ class PositionsTreeWalker(urwid.TreeWalker):
             else:
                 pos = self.get_next(pos)[1]
 
+    def get_next(self, start_from):
+        node = start_from
+        while True:
+            target = node.get_widget().next_inorder()
+            if target is None:
+                return None, None
+            elif target.get_node().hidden:
+                node = target.get_node()
+                continue
+            else:
+                return target, target.get_node()
+
+    def get_prev(self, start_from):
+        node = start_from
+        while True:
+            target = node.get_widget().prev_inorder()
+            if target is None:
+                return None, None
+            elif target.get_node().hidden:
+                node = target.get_node()
+                continue
+            else:
+                return target, target.get_node()
+
 class HighlightableTreeWidgetMixin(HighlightableTextMixin):
 
     @property
@@ -280,6 +304,10 @@ class TreeNode(urwid.TreeNode):
         while node is not None:
             yield node
             node = node.get_parent()
+
+    @property
+    def hidden(self):
+        return False
 
 
 

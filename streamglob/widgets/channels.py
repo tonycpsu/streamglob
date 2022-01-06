@@ -216,13 +216,7 @@ class ChannelWidget(ListingCountMixin,
         return self.browser.provider
 
     @property
-    def attr(self):
-
-        head = self.unread_count > 0
-        tail = not self.channel.attrs.get("tail_fetched") if self.channel else None
-        error = self.channel and self.channel.attrs.get("error")
-
-        dormant = False
+    def dormant(self):
         if (self.channel
             and self.browser.config.dormant_days
             and self.channel.fetched
@@ -236,11 +230,19 @@ class ChannelWidget(ListingCountMixin,
                 and (not self.browser.config.dormant_reset_days
                      or self.channel.fetched_age.days < self.browser.config.dormant_reset_days)
                 ):
-                dormant = True
+                return True
+        return False
+
+    @property
+    def attr(self):
+
+        head = self.unread_count > 0
+        tail = not self.channel.attrs.get("tail_fetched") if self.channel else None
+        error = self.channel and self.channel.attrs.get("error")
 
         if error:
             return "browser error"
-        elif dormant:
+        elif self.dormant:
             return "browser dormant"
         elif head and tail:
             return "browser head_tail"
@@ -378,6 +380,12 @@ class ChannelNode(ChannelPropertiesMixin, TreeNode):
     def identifier(self):
         return self.get_key()
 
+    @property
+    def hidden(self):
+        return (
+            self.root.tree.config.hide_dormant and self.get_widget().dormant
+        )
+
 class ChannelUnionNode(ChannelPropertiesMixin, TreeParentNode):
 
     def __init__(self, tree, value, parent=None, key=None, depth=None):
@@ -401,6 +409,12 @@ class ChannelUnionNode(ChannelPropertiesMixin, TreeParentNode):
             return []
         try:
             keys = list(data.get("channels", data).keys())
+            # show_dormant = self.tree.config.show_dormant
+            # keys = [
+            #     locator
+            #     for locator, value in data.get("channels", data).items()
+            #     if show_dormant or not value.dormant
+            # ]
             return keys
         except AttributeError:
             raise Exception(data)
@@ -425,9 +439,14 @@ class ChannelUnionNode(ChannelPropertiesMixin, TreeParentNode):
         except StopIteration:
             return None
 
-    def find_node(self, identifier):
+    def find_node(self, identifier, include_hidden=False):
         try:
-            return next(self.get_nodes(lambda n: n.identifier == identifier))
+            return next(
+                self.get_nodes(
+                    lambda n: n.identifier == identifier
+                    and include_hidden or not n.hidden
+                )
+            )
         except StopIteration:
             return None
 
@@ -471,6 +490,10 @@ class ChannelGroupNode(ChannelUnionNode):
     @property
     def identifier(self):
         return ("folder", self.get_key())
+
+    @property
+    def hidden(self):
+        return False
 
 
 class MyTreeListBox(urwid.TreeListBox):
