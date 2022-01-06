@@ -1732,14 +1732,16 @@ class DetailDataTable(DecoratedTableMixin, PlayListingViewMixin, DownloadListing
             merge(
                 AttrDict(),
                 (
-                    source.listing.dict() if hasattr(source.listing, "dict")
+                    source.listing if isinstance(source.listing, dict)
+                    else source.listing.dict() if hasattr(source.listing, "dict")
                     else source.listing.to_dict() if hasattr(source.listing, "to_dict")
-                    else source.listing
+                    else {}
                 ),
                 (
-                    source.dict() if hasattr(source, "dict")
+                    source if isinstance(source, dict)
+                    else source.dict() if hasattr(source, "dict")
                     else source.to_dict() if hasattr(source, "to_dict")
-                    else source,
+                    else {}
                 ),
                 dict(
                     token_aliases=source.listing.token_aliases,
