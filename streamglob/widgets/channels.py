@@ -458,6 +458,14 @@ class ChannelUnionNode(ChannelPropertiesMixin, TreeParentNode):
         self.get_widget().expanded = False
         self.get_widget().update_expanded_icon()
 
+    @property
+    def hidden(self):
+        return all([
+            node.hidden
+            for node in
+            (self._children[k] for k in self.get_child_keys())
+        ])
+
 
 class ChannelGroupNode(ChannelUnionNode):
 
@@ -490,10 +498,6 @@ class ChannelGroupNode(ChannelUnionNode):
     @property
     def identifier(self):
         return ("folder", self.get_key())
-
-    @property
-    def hidden(self):
-        return False
 
 
 class MyTreeListBox(urwid.TreeListBox):
