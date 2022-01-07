@@ -22,35 +22,46 @@ class PositionsTreeWalker(urwid.TreeWalker):
 
         pos = first
         while pos:
+            # if not pos.hidden:
             yield pos
             if reverse:
                 pos = self.get_prev(pos)[1]
             else:
                 pos = self.get_next(pos)[1]
 
-    def get_next(self, start_from):
-        node = start_from
-        while True:
-            target = node.get_widget().next_inorder()
-            if target is None:
-                return None, None
-            elif target.get_node().hidden:
-                node = target.get_node()
-                continue
-            else:
-                return target, target.get_node()
+    def __getitem__(self, pos):
+        if not pos:
+            raise IndexError
+        return pos.get_widget()
 
-    def get_prev(self, start_from):
-        node = start_from
+    def get_prev(self, position):
+        return urwid.ListWalker.get_prev(self, position)
+
+    def get_next(self, position):
+        return urwid.ListWalker.get_next(self, position)
+
+    def prev_position(self, position):
+        target = position.get_widget()
         while True:
-            target = node.get_widget().prev_inorder()
+            target = target.prev_inorder()
             if target is None:
-                return None, None
+                return None
             elif target.get_node().hidden:
-                node = target.get_node()
                 continue
             else:
-                return target, target.get_node()
+                return target.get_node()
+
+    def next_position(self, position):
+        target = position.get_widget()
+        while True:
+            target = target.next_inorder()
+            if target is None:
+                return None
+            elif target.get_node().hidden:
+                continue
+            else:
+                return target.get_node()
+
 
 class HighlightableTreeWidgetMixin(HighlightableTextMixin):
 
