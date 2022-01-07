@@ -381,6 +381,7 @@ class ChannelNode(ChannelPropertiesMixin, TreeNode):
         return self.get_key()
 
     @property
+    @memo(region="long")
     def hidden(self):
         return (
             self.root.tree.config.hide_dormant and self.get_widget().dormant
@@ -459,6 +460,7 @@ class ChannelUnionNode(ChannelPropertiesMixin, TreeParentNode):
         self.get_widget().update_expanded_icon()
 
     @property
+    @memo(region="long")
     def hidden(self):
         return all([
             node.hidden
