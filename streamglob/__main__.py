@@ -591,6 +591,7 @@ def main():
     logging.getLogger("panwid.dropdown").setLevel(logging.INFO)
     logging.getLogger("panwid.keymap").setLevel(logging.INFO)
     logging.getLogger("panwid.datatable").setLevel(logging.INFO)
+    logging.getLogger("streamglob.programs").setLevel(logging.INFO)
     logging.getLogger("aio_mpv_jsonipc").setLevel(logging.INFO)
 
     action, provider, selection, opts = providers.parse_uri(options.uri)
