@@ -757,14 +757,15 @@ class FilesView(
 
 
     def browse_file(self, filename):
-        if filename.startswith(self.root):
-            filename = filename[len(self.root):]
-        if filename.startswith(os.path.sep):
-            filename = filename[1:]
-        logger.info(filename)
+        # if filename.startswith(self.root):
+        #     filename = filename[len(self.root):]
+        # if filename.startswith(os.path.sep):
+        #     filename = filename[1:]
+        # logger.info(filename)
 
         node = self.browser.find_path(filename)
         if not node:
+            logger.info(f"{filename} not found under {self.root}")
             return
         self.browser.body.set_focus(node)
         state.main_view.focus_widget(self)
