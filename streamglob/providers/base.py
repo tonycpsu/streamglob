@@ -128,14 +128,6 @@ class SimpleProviderView(BaseProviderView):
     def cycle_filter(self, n, step):
         self.toolbar.cycle_filter(n, step)
 
-    # def refresh(self):
-    #     self.body.refresh()
-
-    # def reset(self):
-    #     logger.info("reset")
-    #     # import traceback; logger.info("".join(traceback.format_stack()))
-    #     self.body.reset()
-
     def on_keypress(self, source, key):
         self.keypress((100, 100), key)
 
@@ -849,22 +841,13 @@ class BackgroundTasksMixin(object):
                           instant=False,
                           *args, **kwargs):
 
-        logger.info(f"run_in_background {fn.__name__} {interval}")
+        logger.debug(f"run_in_background {fn.__name__} {interval}")
         async def run():
             while True:
-                logger.info(f"running task {fn.__name__} {args} {kwargs}")
-                # self._tasks[fn.__name__] = None
-                # fn(*args, **kwargs)
-                # await state.event_loop.run_in_executor(
-                #     None, lambda: fn(*args, **kwargs)
-                # )
+                logger.debug(f"running task {fn.__name__} {args} {kwargs}")
 
-                # logger.info(fn)
-                # await fn(*args, **kwargs)
                 if instant:
-                    logger.info("foo")
                     state.event_loop.create_task(fn(*args, **kwargs))
-                    logger.info("bar")
                 logger.debug(f"sleeping for {interval}")
                 await asyncio.sleep(interval)
                 # state.event_loop.run_in_executor(None, lambda: fn(*args, **kwargs))
@@ -894,7 +877,7 @@ class BackgroundTasksMixin(object):
     def on_deactivate(self):
         for name, task in self._tasks.items():
             if task:
-                logger.info("deactivate cancel task")
+                logger.debug("deactivate cancel task")
                 task.cancel()
                 self._tasks[name] = None
         super().on_deactivate()
@@ -1147,7 +1130,7 @@ class SynchronizedPlayerMixin(object):
             frame_count = await state.task_manager.preview_player.command(
                 "get_property", "estimated-frame-count"
             )
-            logger.info(f"frame_count: {frame_count}")
+            logger.debug(f"frame_count: {frame_count}")
             if frame_count is None or frame_count <= 1:
                 vf_framerate = f"@framerate:framerate=fps={cfg.fps or 30}"
                 added_filters += [vf_framerate]
@@ -1214,7 +1197,7 @@ class SynchronizedPlayerMixin(object):
                 vf_text=f"""@{element}:lavfi=[drawtext=text='{text}':fontfile='{font}':\
 x='{x}':y='{y}':fontsize=(h/{size}):fontcolor={color}:bordercolor={border_color}:\
 borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow_color}:expansion=none]"""
-                logger.info(vf_text)
+                logger.debug(vf_text)
                 if element in filters:
                     added_filters.append(vf_text)
 
@@ -1277,28 +1260,6 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             try:
                 res = await preview_fn(cfg, listing, source)
                 previews[cfg.mode].set_result(res)
-#                 if res:
-#                     text_cfg = config.settings.profile.display.overlay.text
-#                     text = ffmpeg_escape(", ".join(previews.available_previews))
-#                     font = ffmpeg_escape(text_cfg.font)
-#                     await state.task_manager.preview_player.command(
-#                         "vf", "remove", "@previews"
-#                     )
-#                     # import ipdb; ipdb.set_trace()
-#                     vf_previews = f"""@previews:lavfi=[drawtext=text='{text}':fontfile='{font}':\
-# x=0:y=(h-{text_cfg.size}):fontsize=(h/{text_cfg.size}):fontcolor={text_cfg.color.default}:bordercolor={text_cfg.border.color}:\
-# borderw={text_cfg.border.width}:shadowx={text_cfg.shadow.x}:shadowy={text_cfg.shadow.y}:shadowcolor={text_cfg.shadow.color}:expansion=none]"""
-#                     logger.info(vf_previews)
-#                     self.video_filters.append("@previews")
-#                     await state.task_manager.preview_player.command(
-#                         "vf", "add", vf_previews
-#                     )
-
-                # if res:
-                #     previews[cfg.mode].set_result(res)
-                # else:
-                #     preview[cfg.mode]
-                #     # previews[cfg.mode] = asyncio.Future()
             except asyncio.exceptions.CancelledError:
                 logger.warning("CancelledError from preview function")
                 previews[cfg.mode] = asyncio.Future()
@@ -1380,7 +1341,6 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
 
             duration = await self.preview_duration(cfg, listing)
             if duration is not None: # advance automatically
-                # logger.info(f"sleeping: {duration}")
                 await asyncio.sleep(duration)
             else: # wait for next manual advance
                 break
@@ -1463,7 +1423,7 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
 
     def on_player_load_failed(self, url):
 
-        logger.info(f"on_player_load_failed: {url}")
+        logger.debug(f"on_player_load_failed: {url}")
 
         if state.task_manager.preview_task.provider != self.provider.IDENTIFIER:
             return
@@ -1541,7 +1501,7 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             if idx is None:
                 idx = self.playlist_position
 
-            logger.info(f"playlist_replace: {idx}, {locator}")
+            logger.debug(f"playlist_replace: {idx}, {locator}")
             # FIXME: standardize media source preview locator
             # if hasattr(self.play_items[idx], "locator_preview"):
             self.play_items[idx].locator_preview = locator

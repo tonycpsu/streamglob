@@ -197,7 +197,7 @@ class MainView(urwid.WidgetWrap):
 
 
     def focus_changed(self, foo, x, y):
-        logger.info(f"focus_changed: {foo}, {x}, {y}")
+        logger.debug(f"focus_changed: {foo}, {x}, {y}")
         # self.get_widget(x, y).activate()
         if hasattr(state, "loop"):
             state.loop.draw_screen()
@@ -448,11 +448,11 @@ def run_gui(action, provider, **kwargs):
         asyncio.create_task(start_server_async())
 
     def queue_downloads(loop, user_data):
-        logger.info("queue_downloads")
+        logger.debug("queue_downloads")
         with db_session:
             for download in model.MediaDownload.select():
                 listing = download.media_listing
-                logger.info(f"queuing {listing}")
+                logger.debug(f"queuing {listing}")
                 provider = listing.provider
                 for task in provider.create_download_tasks(listing, index=download.source_index):
                     state.task_manager.download(task)
@@ -594,13 +594,6 @@ def main():
     log_file = os.path.join(config.settings.CONFIG_DIR, f"{__package__}.log")
     fh = logging.FileHandler(log_file)
     add_log_handler(logger, fh)
-    # logging.getLogger("panwid.dropdown").setLevel(logging.INFO)
-    # logging.getLogger("panwid.keymap").setLevel(logging.INFO)
-    # logging.getLogger("panwid.datatable").setLevel(logging.INFO)
-    # logging.getLogger("streamglob.programs").setLevel(logging.INFO)
-    # logging.getLogger("aio_mpv_jsonipc").setLevel(logging.INFO)
-    # logging.getLogger("requests").setLevel(logging.INFO)
-    # logging.getLogger("urllib3").setLevel(logging.INFO)
 
     action, provider, selection, opts = providers.parse_uri(options.uri)
 

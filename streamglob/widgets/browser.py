@@ -168,7 +168,6 @@ class DirectoryNode(FileBrowserTreeNodeMixin, TreeParentNode):
         files = []
         try:
             path = self.get_value()
-            logger.info(f"load_child_keys: {path}")
             # separate dirs and files
             for entry in os.scandir(path):
                 if entry.name.startswith('.'):

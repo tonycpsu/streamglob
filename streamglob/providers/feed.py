@@ -885,7 +885,6 @@ class CachedFeedProviderFooter(urwid.WidgetWrap):
             for i, (name, label, attr, func) in enumerate(self.parent.indicator_bars)
         ]
 
-        logger.info([i.value for i in spark_vals])
         self.set_indicator_widget(
             SparkBarWidget(
                 spark_vals,
@@ -1346,7 +1345,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         self.reset()
 
     def on_custom_change(self, custom, *args):
-        logger.info(f"{custom}, {args}")
+        logger.debug(f"{custom}, {args}")
         self.custom_filters = custom
         with db_session:
             self.provider_data["selected_filter"] = custom
@@ -1372,7 +1371,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         self.view.close_popup()
 
     async def update(self, force=False, resume=False, replace=False):
-        logger.info(f"update: force={force} resume={resume}")
+        logger.debug(f"update: force={force} resume={resume}")
         state.loop.draw_screen()
         # self.open_popup("Updating feeds...")
         # asyncio.create_task(
@@ -1384,7 +1383,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         # update_task = state.event_loop.run_in_executor(None, update_feeds)
 
     async def update_feeds(self, force=False, resume=False, replace=False):
-        logger.info(f"update_feeds: {force} {resume} {replace}")
+        logger.debug(f"update_feeds: {force} {resume} {replace}")
         with db_session:
             # feeds = select(f for f in self.FEED_CLASS if f in self.selected_channels)
             # if not self.feed_entity:
@@ -1407,14 +1406,14 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         return new
 
     def refresh(self):
-        logger.info("+feed provider refresh")
+        logger.debug("+feed provider refresh")
         # self.update_query()
         self.view.refresh()
         # state.loop.draw_screen()
-        logger.info("-feed provider refresh")
+        logger.debug("-feed provider refresh")
 
     def reset(self):
-        logger.info("provider reset")
+        logger.debug("provider reset")
         self.pagination_cursor = None
         self.update_query()
         super().reset()
@@ -1507,7 +1506,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
 
         if isinstance(self.view, InvalidConfigView):
             return
-        logger.info(f"update_query: {cursor}")
+        logger.debug(f"update_query: {cursor}")
         # import ipdb; ipdb.set_trace()
         status_filters =  {
             "all": lambda: True,
@@ -1672,7 +1671,6 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
     @db_session
     async def mark_items_read(self, request):
         media_listing_ids = list(set(request.params))
-        logger.info(f"mark_items_read: {media_listing_ids}")
         with db_session:
             try:
                 for item in self.LISTING_CLASS.select(
