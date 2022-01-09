@@ -1393,6 +1393,7 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
             )
 
     def on_focus(self, source, position):
+        super().on_focus(source, position)
 
         self.preview_stage = -1
         # self.preview_stage = (

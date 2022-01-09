@@ -242,8 +242,8 @@ class FeedMediaListingMixin(object):
     def content_date(self):
         return self.title_date or self.created_date
 
-    def on_focus(self):
-        pass
+    # def on_focus(self):
+    #     pass
 
     @property
     def body(self):

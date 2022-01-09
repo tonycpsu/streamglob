@@ -559,7 +559,7 @@ class ProviderDataTable(
     signals = ["cycle_filter"]
 
     KEYMAP = {
-        ",": "browse_selection",
+        ",": ("browse_selection", {"focus": True}),
         "?": "show_details",
         "h": "add_highlight_rule",
         "H": "remove_highlight_rule",
@@ -579,6 +579,7 @@ class ProviderDataTable(
         # self.strip_emoji = self.provider.strip_emoji
         # self._translator = None
         self.update_task = None
+        self.browse_selection_task = None
         super(ProviderDataTable,  self).__init__(provider, *args, **kwargs)
 
     @property
@@ -674,6 +675,13 @@ class ProviderDataTable(
         for row in self:
             await asyncio.sleep(config.settings.profile.get_path("display.attribute_delay", 1))
             await self.update_row_attribute(row)
+
+    def on_focus(self, source, position):
+        if self.browse_selection_task:
+            self.browse_selection_task.cancel()
+        self.browse_selection_task = state.event_loop.create_task(
+            self.browse_selection(focus=False)
+        )
 
     @property
     def playlist_title(self):
@@ -845,11 +853,17 @@ class ProviderDataTable(
         if self.focus_position < len(self)-1:
             self.focus_position += 1
 
-    async def browse_selection(self):
+    async def browse_selection(self, focus=False):
         listing = self.selected_listing
-        filename = self.selected_source.local_path
-        if filename:
-            state.files_view.browse_file(filename)
+        match = self.selected_source.get_local_path(
+            self.provider.config.output.match_types + ["directory"]
+        )
+        if match:
+            (path, match_type) = match
+            state.files_view.browse_file(path)
+            if focus:
+                # FIXME: util function?
+                state.main_view.focus_widget(state.files_view)
 
     def apply_search_query(self, query):
         self.apply_filters([lambda row: query in row["title"]])

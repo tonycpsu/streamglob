@@ -74,6 +74,10 @@ class StreamglobView(panwid.BaseView):
     def on_view_activate(self):
         pass
 
+    def on_focus(self, source, position):
+        pass
+
+
 class StreamglobScrollBar(ScrollBar):
     pass
     # @property

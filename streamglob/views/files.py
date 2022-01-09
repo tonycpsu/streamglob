@@ -767,9 +767,8 @@ class FilesView(
         if not node:
             logger.info(f"{filename} not found under {self.root}")
             return
-        self.browser.body.set_focus(node)
-        state.main_view.focus_widget(self)
 
+        self.browser.body.set_focus(node)
 
     def activate(self):
 
