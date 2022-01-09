@@ -1217,6 +1217,7 @@ def sqlite_regexp_search(db, conn):
 
 def init(filename=None, *args, **kwargs):
 
+    logger.info("initializing data model")
     if not filename:
         filename = os.path.join(config.settings.CONFIG_DIR, f"{config.PACKAGE_NAME}.sqlite")
     db.bind("sqlite", filename, create_db=True, *args, **kwargs)

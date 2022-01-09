@@ -26,10 +26,10 @@ from .. import utils
 from .. import programs
 from ..utils import strip_emoji, classproperty
 from .. import config
-from ..widgets import *
+# from ..widgets import *
 from ..providers.widgets import *
 from .. import providers
-# from ..widgets.browser import FileBrowser, DirectoryNode, FileNode
+from ..widgets.browser import FileBrowser, DirectoryNode, FileNode
 from ..providers.base import SynchronizedPlayerProviderMixin
 
 DEFAULT_FUZZ_RATIO = 0.9

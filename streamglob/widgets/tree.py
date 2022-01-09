@@ -1,6 +1,3 @@
-import logging
-logger = logging.getLogger(__name__)
-
 import urwid
 from panwid.highlightable import HighlightableTextMixin
 

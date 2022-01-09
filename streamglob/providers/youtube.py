@@ -528,7 +528,7 @@ class YouTubeFeed(FeedMediaChannel):
                 f"&id={self.locator}"
                 f"&part=contentDetails"
             )
-            logger.info(url)
+            logger.debug(url)
             res = await self.provider.session.get(url)
             j = await res.json()
             logger.debug(j)
@@ -687,7 +687,7 @@ class YouTubeFeed(FeedMediaChannel):
 
             for item in listings:
 
-                logger.info(item["guid"])
+                logger.debug(item["guid"])
 
                 listing = AttrDict(
                     channel=self,
@@ -809,7 +809,7 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
             storyboard = await self.combined_for(listing, cfg)
             if not storyboard:
                 return
-            logger.info(storyboard)
+            logger.debug(storyboard)
             # await self.playlist_replace(storyboard.img_file, idx=position)
             state.loop.draw_screen()
             return storyboard.img_file
@@ -1036,7 +1036,7 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         cols = boards[0].cols
         rows = boards[0].rows
 
-        logger.info(board_files)
+        logger.debug(board_files)
 
         i = 0
         tile_width = 0

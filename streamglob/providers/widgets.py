@@ -385,7 +385,7 @@ class ShellCommandViewMixin(object):
                 + list(self.config.commands.items())
         ):
             if "key" in cfg:
-                func = partial(
+                func = functools.partial(
                     self.run_command_on_selection,
                     cfg
                     )

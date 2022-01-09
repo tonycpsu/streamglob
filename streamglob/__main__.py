@@ -49,8 +49,8 @@ from .views import *
 from . import config
 from . import model
 from . import utils
-from . import session
 from . import providers
+from . import session
 from . import programs
 from . import tasks
 from .exceptions import *
@@ -299,6 +299,7 @@ class MainView(urwid.WidgetWrap):
 
 def run_gui(action, provider, **kwargs):
 
+    logger.info("streamglob starting in interactive mode")
     state.palette = load_palette()
     state.screen = urwid.raw_display.Screen()
 
@@ -476,6 +477,7 @@ async def run_tasks(tasks):
 
 def run_cli(action, provider, selection, **kwargs):
 
+    logger.info("running in command line mode")
     try:
         method = getattr(provider, action)
     except AttributeError:
@@ -516,7 +518,6 @@ def pdb_on_exception(debugger="pdb", limit=100):
 def main():
 
     global options
-    global logger
 
     today = datetime.now(pytz.timezone('US/Eastern')).date()
 
@@ -562,6 +563,7 @@ def main():
     logging.captureWarnings(True)
     logger = logging.getLogger(__package__)
     sh = logging.StreamHandler()
+    logger.info("setting up logging")
     setup_logging(
         AttrDict(
             config.settings.profile.log, **{

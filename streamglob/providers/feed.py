@@ -460,7 +460,7 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
                     return 0
                 # self._row_count = len(self.provider.feed.items)
                 self._row_count = self.provider.items_query.count()
-                logger.info(f"row count: {self._row_count}")
+                logger.debug(f"row count: {self._row_count}")
                 self.update_count = False
         return self._row_count
 

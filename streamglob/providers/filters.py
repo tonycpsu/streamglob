@@ -13,9 +13,14 @@ from dateutil.relativedelta import relativedelta
 from orderedattrdict import AttrDict
 
 from .. import config
-from ..widgets import *
+from ..widgets import (
+    Observable,
+    BaseDropdown,
+    TextFilterWidget,
+    IntegerTextFilterWidget
+)
 
-from .widgets import *
+# from .widgets import *
 from ..exceptions import *
 
 
@@ -466,3 +471,4 @@ class ResolutionFilter(ListingFilter):
     @property
     def items(self):
         return self.provider.RESOLUTIONS
+

@@ -1297,6 +1297,8 @@ class ShellCommand(Program):
 # @classmethod
 def load():
 
+    logger.info("initializing external program interface")
+
     state.PROGRAMS = Tree()
 
     # Add configured players
@@ -1312,7 +1314,7 @@ def load():
                 "command",
                 distutils.spawn.find_executable(name)
             )
-            if not path:
+            if not path and not cfg.disabled:
                 logger.warning(f"couldn't find command for {name}")
                 continue
             # First, try to find by "type" config value, if present

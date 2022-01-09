@@ -19,7 +19,7 @@ from orderedattrdict import AttrDict, DefaultAttrDict
 from ..state import *
 from .. import utils
 from .. import config
-from .browser import *
+from . import browser
 
 
 class BaseTabView(TabView):

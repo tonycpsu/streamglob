@@ -11,6 +11,7 @@ from collections.abc import Mapping
 # import textwrap
 # import tempfile
 
+import urwid
 from orderedattrdict import AttrDict, DefaultAttrDict, Tree
 from pony.orm import *
 from panwid.dialog import *
@@ -18,9 +19,11 @@ from panwid.keymap import *
 from pydantic import BaseModel
 from mergedeep import merge
 
-from .widgets import *
-from .filters import *
-from ..session import *
+# from .widgets import *
+from . import widgets
+from .filters import TextFilter
+# from ..session import *
+from ..import session
 from ..state import *
 from ..rules import HighlightRuleConfig, HighlightRule
 from ..programs import Player, Downloader
@@ -28,8 +31,9 @@ from .. import model
 from .. import config
 from  ..utils import *
 
+
 # @keymapped()
-class BaseProviderView(StreamglobView):
+class BaseProviderView(widgets.StreamglobView):
 
     def update(self):
         pass
@@ -77,7 +81,7 @@ class BaseProviderView(StreamglobView):
 @keymapped()
 class SimpleProviderView(BaseProviderView):
 
-    PROVIDER_BODY_CLASS = ProviderDataTable
+    PROVIDER_BODY_CLASS = widgets.ProviderDataTable
 
     KEYMAP = {
         "[": ("cycle_filter", [0, -1]),
@@ -100,7 +104,7 @@ class SimpleProviderView(BaseProviderView):
     def __init__(self, provider, body):
         self.provider = provider
         self.body = body#(self.provider, self)
-        self.toolbar = FilterToolbar(self.provider.filters)
+        self.toolbar = widgets.FilterToolbar(self.provider.filters)
         # self.body = self.PROVIDER_BODY_CLASS(self.provider, self)
         # urwid.connect_signal(self.toolbar, "filter_change", self.filter_change)
         # urwid.connect_signal(self.body, "select", self.provider.on_select)
@@ -188,16 +192,16 @@ class InvalidConfigView(BaseProviderView):
 MEDIA_SPEC_RE=re.compile(r"(?:/([^:]+))?(?::(.*))?")
 
 class BaseProvider(
-        PlayListingProviderMixin,
-        DownloadListingProviderMixin,
+        widgets.PlayListingProviderMixin,
+        widgets.DownloadListingProviderMixin,
         abc.ABC,
-        Observable
+        widgets.Observable
 ):
     """
     Abstract base class from which providers should inherit from
     """
 
-    SESSION_CLASS = StreamSession
+    SESSION_CLASS = session.StreamSession
     LISTING_CLASS = model.TitledMediaListing
 
     MEDIA_TYPES = None
@@ -212,6 +216,7 @@ class BaseProvider(
         self.attributes = self.column_config or self.ATTRIBUTES
         self.filters["search"].connect("changed", self.on_search_change)
         super().__init__(*args, **kwargs)
+        logger.info(f"provider {self.IDENTIFIER} initialized")
 
     @property
     def column_config(self):
@@ -450,10 +455,11 @@ class BaseProvider(
 
     @property
     def VIEW(self):
-        return SimpleProviderView(self, ProviderDataTable(self))
+        return SimpleProviderView(self, widgets.ProviderDataTable(self))
 
     # @abc.abstractmethod
     def make_view(self):
+        logger.info(f"provider {self.IDENTIFIER} initializing view")
         if not self.config_is_valid:
             return InvalidConfigView(self.NAME, getattr(self, "REQUIRED_CONFIG", []))
         return self.VIEW
@@ -1648,7 +1654,11 @@ class DetailBox(urwid.WidgetWrap):
 
 
 @keymapped()
-class DetailDataTable(DecoratedTableMixin, PlayListingViewMixin, DownloadListingViewMixin, BaseDataTable):
+class DetailDataTable(
+        widgets.DecoratedTableMixin,
+        widgets.PlayListingViewMixin,
+        widgets.DownloadListingViewMixin,
+        widgets.BaseDataTable):
 
     KEYMAP = {
         "meta up": "prev_item",

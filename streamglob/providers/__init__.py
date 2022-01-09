@@ -73,13 +73,21 @@ def apply_settings():
 
 def log_plugin_exception(manager, entrypoint, exception):
     logger.error("Failed to load {entrypoint}")
-    logger.error("".join(traceback.format_exc(exception)))
+    logger.error(
+        "".join(
+            traceback.format_exception(
+                type(exception), exception, exception.__traceback__
+            )
+        )
+    )
 
 
 DISABLED_PROVIDERS = ["twitch"] # Broken
 
 def load():
     global PROVIDERS
+
+    logger.info("loading providers")
 
     mgr = extension.ExtensionManager(
         namespace='streamglob.providers',
