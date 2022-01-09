@@ -559,7 +559,15 @@ def main():
     logging.captureWarnings(True)
     logger = logging.getLogger(__package__)
     sh = logging.StreamHandler()
-    setup_logging(options, default_logger=__name__)
+    setup_logging(
+        AttrDict(
+            config.settings.profile.log, **{
+                k: v for k, v in state.options.items()
+                if k not in config.settings.profile.log or v
+            }
+        ),
+        default_logger=__name__
+    )
 
     state.task_manager = tasks.TaskManager()
     providers.load()
