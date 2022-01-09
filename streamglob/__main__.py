@@ -339,7 +339,10 @@ def run_gui(action, provider, **kwargs):
 
     state.log_buffer = LogBuffer()
 
-    log_console = LogViewer(state.event_loop, state.log_buffer)
+    log_console = LogViewer(
+        state.event_loop, state.log_buffer,
+        min_loglevel=config.settings.profile.log.viewer.min_level
+    )
 
     add_log_handler(logger, state.log_buffer)
 

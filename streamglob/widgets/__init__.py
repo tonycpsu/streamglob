@@ -438,12 +438,20 @@ class LogViewer(urwid.Widget):
     _selectable = True
     ignore_focus = True
 
-    def __init__(self, event_loop: asyncio.AbstractEventLoop, log_buffer: LogBuffer) -> None:
+    def __init__(
+            self,
+            event_loop: asyncio.AbstractEventLoop,
+            log_buffer: LogBuffer,
+            min_loglevel=None
+    ) -> None:
         super().__init__()
 
         self.__mode = 'tail'
-        self.__min_loglevel = logging.INFO
-
+        if min_loglevel is None:
+            min_loglevel = "info"
+        if isinstance(min_loglevel, str):
+            min_loglevel = getattr(logging, min_loglevel.upper())
+        self.__min_loglevel = min_loglevel
         self.__cols = 80
         self.__rows = 20
         self.__lines = []  # type: List[str]
