@@ -57,8 +57,6 @@ from .exceptions import *
 
 urwid.AsyncioEventLoop._idle_emulation_delay = 1/20
 
-PACKAGE_NAME=__name__.split('.')[0]
-
 def load_palette():
 
     state.palette_entries = {}
@@ -336,13 +334,14 @@ def run_gui(action, provider, **kwargs):
     state.listings_view.set_provider(provider.IDENTIFIER)
     state.tasks_view = TasksView()
 
-    set_stdout_level(logging.CRITICAL)
+    set_stream_log_level(sys.stdout, logging.CRITICAL)
+    set_stream_log_level(sys.stderr, logging.CRITICAL)
 
     state.log_buffer = LogBuffer()
 
     log_console = LogViewer(state.event_loop, state.log_buffer)
 
-    add_log_handler(state.log_buffer)
+    add_log_handler(logger, state.log_buffer)
 
     class VideoPlaceholder(urwid.WidgetWrap):
 
@@ -541,13 +540,9 @@ def main():
     programs.load()
 
     parser = argparse.ArgumentParser()
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument("-v", "--verbose", action="count", default=0,
-                        help="verbose logging")
-    group.add_argument("-q", "--quiet", action="count", default=0,
-                        help="quiet logging")
-    parser.add_argument("uri", metavar="URI",
-                        help="media URI", nargs="?")
+
+    parser.add_argument("uri", metavar="URI", help="media URI", nargs="?")
+    add_logging_args(parser)
 
     options, args = parser.parse_known_args(args)
 
@@ -562,9 +557,9 @@ def main():
     state.options.config_file = config_file
 
     logging.captureWarnings(True)
-    logger = logging.getLogger()
+    logger = logging.getLogger(__package__)
     sh = logging.StreamHandler()
-    state.logger = setup_logging(options.verbose - options.quiet, quiet_stdout=False)
+    setup_logging(options, default_logger=__name__)
 
     state.task_manager = tasks.TaskManager()
     providers.load()
@@ -574,7 +569,7 @@ def main():
 
     spec = None
 
-    logger.debug(f"{PACKAGE_NAME} starting")
+    logger.debug(f"{__package__} starting")
 
     if config.settings.profile.downloads.max_age > 0:
         with db_session(optimistic=False):
@@ -585,14 +580,16 @@ def main():
     state.start_task_manager()
     # state.task_manager_task = state.event_loop.create_task(state.task_manager.start())
 
-    log_file = os.path.join(config.settings.CONFIG_DIR, f"{PACKAGE_NAME}.log")
+    log_file = os.path.join(config.settings.CONFIG_DIR, f"{__package__}.log")
     fh = logging.FileHandler(log_file)
-    add_log_handler(fh)
-    logging.getLogger("panwid.dropdown").setLevel(logging.INFO)
-    logging.getLogger("panwid.keymap").setLevel(logging.INFO)
-    logging.getLogger("panwid.datatable").setLevel(logging.INFO)
-    logging.getLogger("streamglob.programs").setLevel(logging.INFO)
-    logging.getLogger("aio_mpv_jsonipc").setLevel(logging.INFO)
+    add_log_handler(logger, fh)
+    # logging.getLogger("panwid.dropdown").setLevel(logging.INFO)
+    # logging.getLogger("panwid.keymap").setLevel(logging.INFO)
+    # logging.getLogger("panwid.datatable").setLevel(logging.INFO)
+    # logging.getLogger("streamglob.programs").setLevel(logging.INFO)
+    # logging.getLogger("aio_mpv_jsonipc").setLevel(logging.INFO)
+    # logging.getLogger("requests").setLevel(logging.INFO)
+    # logging.getLogger("urllib3").setLevel(logging.INFO)
 
     action, provider, selection, opts = providers.parse_uri(options.uri)
 

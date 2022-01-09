@@ -450,7 +450,12 @@ class LogViewer(urwid.Widget):
         self.__cursor = 0
 
         self.__formatter = logging.Formatter(
-            "%(asctime)s [%(module)16s:%(lineno)-4d] [%(levelname)8s] %(message)s"
+            config.settings.profile.log.get(
+                "format",
+                "%(asctime)s [%(module)16s:%(lineno)-4d] [%(levelname)8s] %(message)s"
+            ),
+            style="{",
+            datefmt="%Y-%m-%d %H:%M:%S"
         )
 
         self.__event_loop = event_loop
