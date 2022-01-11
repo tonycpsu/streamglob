@@ -21,7 +21,7 @@ class FileTreeWidget(MarkedTreeWidget):
         add_widget(path, self)
 
     def get_display_text(self):
-        return ("browser normal", self.get_node().get_key())
+        return ("tree normal", self.get_node().get_key())
 
 class DeletedFileWidget(FileTreeWidget):
 
@@ -57,7 +57,7 @@ class DirectoryWidget(ExpandableMarkedTreeWidget):
         if self.get_node().get_key() == "..":
             self._w.base_widget.widget_list[0] = urwid.AttrMap(
                 urwid.SelectableIcon(" ", 0),
-                "browser dirmark", "browser dirmark_focus"
+                "tree dirmark", "tree dirmark_focus"
             )
         else:
             super().update_expanded_icon()
@@ -68,9 +68,9 @@ class DirectoryWidget(ExpandableMarkedTreeWidget):
     def get_display_text(self):
         node = self.get_node()
         if node.get_depth() == 0:
-            return ("browser normal", node.tree.top_dir)
+            return ("tree normal", node.tree.top_dir)
         else:
-            return ("browser normal", node.get_key())
+            return ("tree normal", node.get_key())
 
     def keypress(self, size, key):
         key = super().keypress(size, key)
@@ -146,12 +146,15 @@ class DirectoryNode(FileBrowserTreeNodeMixin, TreeParentNode):
         self.tree = tree
         if path == self.tree.top_dir:
             depth = 0
-            key = None
+            key = "."
         else:
             depth = path.count(dir_sep()) - self.tree.top_dir.count(dir_sep())
             key = os.path.basename(path)
         urwid.ParentNode.__init__(self, path, key=key, parent=parent,
                                   depth=depth)
+
+    def __repr__(self):
+        return f"<DirectoryNode: {self.get_key()}>"
 
     @property
     def starts_expanded(self):
@@ -235,21 +238,21 @@ class DirectoryNode(FileBrowserTreeNodeMixin, TreeParentNode):
         return self.get_widget().expanded
 
     def find_path(self, path):
-        d, p = os.path.split(path)
+
         try:
-            node = self.get_first_child()
-        except IndexError:
-            return None
-        while True:
-            if not d:
-                if node.get_key() == p:
-                    return node
-            elif node.get_key() == d:
-                node.expand()
-                return node.find_path(p) or node
-            node = node.next_sibling()
-            if not node:
-                break
+            (d, p) = path.split(os.path.sep, 1)
+        except ValueError:
+            (d, p) = (None, path)
+
+        for key in self.get_child_keys():
+            node = self.get_child_node(key)
+            if d == key and not node.is_leaf:
+                return node.find_path(p)
+            elif p == key:
+                return node
+
+        return None
+            
 
     @property
     def child_dirs(self):
@@ -381,15 +384,15 @@ class FileBrowser(AutoCompleteMixin, urwid.WidgetWrap):
         super().__init__(self.pile)
         self.pile.selectable = lambda: True
         self.change_directory(self.top_dir)
-        if cwd:
-            node = self.find_path(
-                os.path.relpath(
-                    cwd,
-                    self.top_dir
-                )
-            )
-            if node:
-                self.listbox.set_focus(node)
+        # if cwd:
+        #     node = self.find_path(
+        #         os.path.relpath(
+        #             cwd,
+        #             self.top_dir
+        #         )
+        #     )
+        #     if node:
+        #         self.listbox.set_focus(node)
 
     def keypress(self, size, key):
         return super().keypress(size, key)
@@ -491,7 +494,7 @@ class FileBrowser(AutoCompleteMixin, urwid.WidgetWrap):
 
         self.top_dir = directory
         self.tree_root = DirectoryNode(self, self.top_dir)
-        self.listbox = urwid.TreeListBox(PositionsTreeWalker(self.tree_root))
+        self.listbox = urwid.TreeListBox(StickyFocusFancyTreeWalker(self.tree_root))
         # select first item, if present
         try:
             self.listbox.set_focus(
@@ -518,7 +521,6 @@ class FileBrowser(AutoCompleteMixin, urwid.WidgetWrap):
         self.placeholder.original_widget = self.listbox
 
     def on_modified(self):
-
         self._emit("focus", self.focus_position)
 
     def refresh(self):
@@ -644,7 +646,16 @@ class FileBrowser(AutoCompleteMixin, urwid.WidgetWrap):
                 break
 
     def find_path(self, path):
-        return self.tree_root.find_path(os.path.relpath(path, self.top_dir))
+        if os.path.isabs(path):
+            path = os.path.relpath(
+                os.path.join(self.top_dir, path),
+                self.top_dir
+            )
+
+        if path == ".":
+            return self.tree_root
+
+        return self.tree_root.find_path(path)
 
     @property
     def complete_container(self):

@@ -1,7 +1,7 @@
 import urwid
 from panwid.highlightable import HighlightableTextMixin
 
-class PositionsTreeWalker(urwid.TreeWalker):
+class FancyTreeWalker(urwid.TreeWalker):
 
     def positions(self, reverse=False):
 
@@ -60,6 +60,19 @@ class PositionsTreeWalker(urwid.TreeWalker):
                 return target.get_node()
 
 
+class StickyFocusFancyTreeWalker(FancyTreeWalker):
+
+    NORMAL_ATTR = "tree normal"
+    FOCUS_ATTR = "tree selected"
+
+    def set_focus(self, position):
+        if self.focus:
+            w = self.focus.get_widget()
+            w.set_text((self.NORMAL_ATTR, w.get_text()[0]))
+        w = position.get_widget()
+        w.set_text((self.FOCUS_ATTR, w.get_text()[0]))
+        super().set_focus(position)
+
 class HighlightableTreeWidgetMixin(HighlightableTextMixin):
 
     @property
@@ -72,7 +85,7 @@ class HighlightableTreeWidgetMixin(HighlightableTextMixin):
 
     @property
     def highlightable_attr_highlight(self):
-        return "browser highlight"
+        return "tree highlight"
 
     def on_highlight(self):
         self._innerwidget.set_text(self.highlight_content)
@@ -89,11 +102,11 @@ class ExpandableMixin(object):
     # apply an attribute to the expand/unexpand icons
     unexpanded_icon = urwid.AttrMap(
         urwid.TreeWidget.unexpanded_icon,
-        "browser dirmark", "browser dirmark_focus"
+        "tree dirmark", "tree dirmark_focus"
     )
     expanded_icon = urwid.AttrMap(
         urwid.TreeWidget.expanded_icon,
-        "browser dirmark", "browser dirmark_focus"
+        "tree dirmark", "tree dirmark_focus"
     )
 
 
@@ -106,7 +119,9 @@ class ExpandableMixin(object):
         self.update_expanded_icon()
 
     def expand(self):
-        self.get_node().get_parent().refresh()
+        self.get_node().refresh()
+        # if self.get_node().get_parent():
+        #     self.get_node().get_parent().refresh()
         self.expanded = True
         self.update_expanded_icon()
 
@@ -129,7 +144,7 @@ class MarkableMixin(object):
     def __init__(self, node, marked=False):
         super().__init__(node)
         # insert an extra AttrWrap for our own use
-        self._w = urwid.AttrMap(self._w, "browser normal")
+        self._w = urwid.AttrMap(self._w, "tree normal")
         self.marked = marked
         self.update_w()
 
@@ -188,37 +203,39 @@ class MarkableMixin(object):
         # FIXME
         if self.marked:
             self._w.attr_map = {
-                # None: "browser marked",
-                "browser normal": "browser marked",
-                "browser head": "browser head marked",
-                "browser tail": "browser tail marked",
-                "browser head_tail": "browser head_tail marked",
-                "browser dormant": "browser dormant marked",
+                # None: "tree marked",
+                "tree normal": "tree marked",
+                "tree head": "tree head marked",
+                "tree tail": "tree tail marked",
+                "tree head_tail": "tree head_tail marked",
+                "tree dormant": "tree dormant marked",
             }
             self._w.focus_map = {
-                # None: "browser marked_focus",
-                "browser normal": "browser marked_focus",
-                "browser head": "browser head marked_focus",
-                "browser tail": "browser tail marked_focus",
-                "browser head_tail": "browser head_tail marked_focus",
-                "browser dormant": "browser dormant marked_focus",
+                # None: "tree marked_focus",
+                "tree normal": "tree marked_focus",
+                "tree selected": "tree selected marked_focus",
+                "tree head": "tree head marked_focus",
+                "tree tail": "tree tail marked_focus",
+                "tree head_tail": "tree head_tail marked_focus",
+                "tree dormant": "tree dormant marked_focus",
             }
         else:
             self._w.attr_map = {
-                # None: "browser normal",
-                "browser normal": "browser normal",
-                "browser head": "browser head",
-                "browser tail": "browser tail",
-                "browser head_tail": "browser head_tail",
-                "browser dormant": "browser dormant",
+                # None: "tree normal",
+                "tree normal": "tree normal",
+                "tree head": "tree head",
+                "tree tail": "tree tail",
+                "tree head_tail": "tree head_tail",
+                "tree dormant": "tree dormant",
             }
             self._w.focus_map = {
-                # None: "browser focus",
-                "browser normal": "browser focus",
-                "browser head": "browser head focus",
-                "browser tail": "browser tail focus",
-                "browser head_tail": "browser head_tail focus",
-                "browser dormant": "browser dormant focus",
+                # None: "tree focus",
+                "tree normal": "tree focus",
+                "tree selected": "tree selected focus",
+                "tree head": "tree head focus",
+                "tree tail": "tree tail focus",
+                "tree head_tail": "tree head_tail focus",
+                "tree dormant": "tree dormant focus",
             }
 
     def keypress(self, size, key):
@@ -234,6 +251,14 @@ class MarkableMixin(object):
 
 class AttributeTreeWidget(urwid.TreeWidget):
 
+    def __init__(self, *args, **kwargs):
+        # self._attr = self.default_attr
+        self.reset_attr()
+        super().__init__(*args, **kwargs)
+
+    def reset_attr(self):
+        self._attr = self.default_attr
+
     @property
     def text(self):
         return self.get_node().get_key()
@@ -247,9 +272,24 @@ class AttributeTreeWidget(urwid.TreeWidget):
         # logger.info(f"{self.attr}, {self.text}")
         return (self.attr, self.text)
 
+    def get_text(self):
+        return self._innerwidget.get_text()
+
+    def set_text(self, text):
+        self._innerwidget.set_text(text)
+
+    @property
+    def default_attr(self):
+        return "tree normal"
+
     @property
     def attr(self):
-        return "browser normal"
+        return self._attr
+
+    @attr.setter
+    def attr(self, value):
+        logger.info(value)
+        self._attr = value
 
     def selectable(self):
         return True

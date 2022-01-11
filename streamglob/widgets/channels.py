@@ -61,15 +61,15 @@ class ListingCountMixin(object):
 
     @property
     def count_attr(self):
-        return "browser count"
+        return "tree count"
 
     @property
     def count_unread_attr(self):
-        return "browser count_unread"
+        return "tree count_unread"
 
     @property
     def count_total_attr(self):
-        return "browser count_total"
+        return "tree count_total"
 
     @property
     @db_session
@@ -241,17 +241,17 @@ class ChannelWidget(ListingCountMixin,
         error = self.channel and self.channel.attrs.get("error")
 
         if error:
-            return "browser error"
+            return "tree error"
         elif self.dormant:
-            return "browser dormant"
+            return "tree dormant"
         elif head and tail:
-            return "browser head_tail"
+            return "tree head_tail"
         elif head:
-            return "browser head"
+            return "tree head"
         elif tail:
-            return "browser tail"
+            return "tree tail"
         else:
-            return "browser normal"
+            return "tree normal"
 
     # def keypress(self, size, key):
     #     return super().keypress(size, key)
@@ -264,7 +264,7 @@ class ChannelWidget(ListingCountMixin,
 
     @property
     def highlightable_attr_highlight(self):
-        return "browser highlight"
+        return "tree highlight"
 
 
 
@@ -295,11 +295,11 @@ class ChannelGroupWidget(
     # apply an attribute to the expand/unexpand icons
     unexpanded_icon = urwid.AttrMap(
         urwid.TreeWidget.unexpanded_icon,
-        "browser dirmark", "browser dirmark_focus"
+        "tree dirmark", "tree dirmark_focus"
     )
     expanded_icon = urwid.AttrMap(
         urwid.TreeWidget.expanded_icon,
-        "browser dirmark", "browser dirmark_focus")
+        "tree dirmark", "tree dirmark_focus")
 
     def selectable(self):
         return True
@@ -626,7 +626,7 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
     def load(self):
         self._feed_config = None
         self.tree = ChannelGroupNode(self, self.feed_config, key=self.label)
-        self.listbox = MyTreeListBox(PositionsTreeWalker(self.tree))
+        self.listbox = MyTreeListBox(StickyFocusFancyTreeWalker(self.tree))
         self.listbox.offset_rows = 1
         self.scrollbar = StreamglobScrollBar(self.listbox)
         self.placeholder.original_widget = self.scrollbar
