@@ -774,7 +774,8 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
                 thumb_file = os.path.join(self.tmp_dir, f"animation.{listing.guid}webp")
                 try:
                     await self.download_file(url, thumb_file)
-                except (asyncio.CancelledError, aiohttp.client_exceptions.ClientResponseError):
+                except (asyncio.CancelledError, asyncio.TimeoutError, aiohttp.client_exceptions.ClientResponseError) as e:
+                    logger.warn(f"{e} downloading {url}")
                     return
                 img = wand.image.Image(filename=thumb_file)
                 thumb_mp4 = os.path.join(self.tmp_dir, f"animation.{listing.guid}.mp4")
@@ -854,6 +855,7 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
         else:
             dest = path
 
+
         async with self.provider.session.get(url) as res:
             try:
                 res.raise_for_status()
@@ -885,7 +887,8 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
             try:
                 try:
                     await self.download_file(url, board_file)
-                except asyncio.CancelledError:
+                except (asyncio.CancelledError, asyncio.TimeoutError, aiohttp.client_exceptions.ClientResponseError) as e:
+                    logger.warn(f"{e} downloading {url}")
                     return
                 board_files.append(board_file)
             except:
@@ -1023,7 +1026,8 @@ class YouTubeDataTable(MultiSourceListingMixin, CachedFeedProviderDataTable):
             try:
                 try:
                     await self.download_file(url, board_file)
-                except asyncio.CancelledError:
+                except (asyncio.CancelledError, asyncio.TimeoutError, aiohttp.client_exceptions.ClientResponseError) as e:
+                    logger.warn(f"{e} downloading {url}")
                     return
                 board_files.append(board_file)
             except:
