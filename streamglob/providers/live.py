@@ -1,3 +1,4 @@
+from .. import model
 from ..state import *
 
 from .base import *

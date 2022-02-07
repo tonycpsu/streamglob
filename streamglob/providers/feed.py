@@ -56,7 +56,7 @@ class FeedMediaChannel(model.MediaChannel):
 
     @abc.abstractmethod
     async def fetch(self):
-        pass
+        raise NotImplementedError
 
     async def update(self, resume=False, replace=False, *args, **kwargs):
 
@@ -1306,7 +1306,13 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
                     locator=channel.locator
                 )
                 if not feed:
-                    feed = self.FEED_CLASS(
+                    ctype = channel.get_value().type
+                    if ctype:
+                        feed_cls = self.FEED_CLASS.SUBTYPES[ctype]
+                    else:
+                        feed_cls = self.FEED_CLASS
+
+                    feed = feed_cls(
                         provider_id=self.IDENTIFIER,
                         locator=channel.locator
                     )

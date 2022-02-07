@@ -84,7 +84,7 @@ def log_plugin_exception(manager, entrypoint, exception):
 
 DISABLED_PROVIDERS = ["twitch"] # Broken
 
-def load():
+def load(providers):
     global PROVIDERS
 
     logger.info("loading providers")
@@ -97,5 +97,6 @@ def load():
         (x.name, x.plugin())
         for x in mgr
         if x.name not in DISABLED_PROVIDERS
+        and (providers is None or x.name in providers)
     )
 

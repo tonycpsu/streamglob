@@ -98,6 +98,7 @@ setup(name=name,
               "mlb = streamglob.providers.mlb:MLBProvider",
               "nhl = streamglob.providers.nhl:NHLProvider",
               "rss = streamglob.providers.rss:RSSProvider",
+              "scraper = streamglob.providers.scraper:ScraperProvider",
               "twitch = streamglob.providers.twitch:TwitchProvider",
               "youtube = streamglob.providers.youtube:YouTubeProvider",
           ]

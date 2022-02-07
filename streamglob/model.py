@@ -312,6 +312,14 @@ class MediaChannel(MediaChannelMixin, db.Entity):
     listings = Set(lambda: ChannelMediaListing, reverse="channel")
     attrs = Required(Json, default={})
 
+    SUBTYPES = dict()
+
+    @classmethod
+    def __init_subclass__(cls, **kwargs):
+        identifier = utils.camel_to_snake(cls.__name__.replace("MediaChannel", ""))
+        cls.SUBTYPES[identifier] = cls
+
+
 class SafeDict(dict):
     def __missing__(self, key):
         return '{' + key + '}'
@@ -742,7 +750,10 @@ class MediaListingMixin(object):
 
     @property
     def token_aliases(self):
-        cfg = self.channel.config.get_value()
+        try:
+            cfg = self.channel.config.get_value()
+        except AttributeError:
+            return {}
         if not isinstance(cfg, dict):
             return {}
         subject_cfg = cfg.get("subjects", {}).get("find", None)

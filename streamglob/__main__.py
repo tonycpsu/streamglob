@@ -544,8 +544,8 @@ def main():
     programs.load()
 
     parser = argparse.ArgumentParser()
-
-    parser.add_argument("uri", metavar="URI", help="media URI", nargs="?")
+    parser.add_argument("-P", "--providers", nargs="*")
+    parser.add_argument("uri", metavar="URI", help="media URI", nargs="?", default=None)
     add_logging_args(parser)
 
     options, args = parser.parse_known_args(args)
@@ -575,7 +575,7 @@ def main():
     )
 
     state.task_manager = tasks.TaskManager()
-    providers.load()
+    providers.load(state.options.providers)
     model.init()
     providers.load_config(default=state.app_data.selected_provider)
     providers.apply_settings()
