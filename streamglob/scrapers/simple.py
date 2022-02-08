@@ -13,21 +13,32 @@ class SimpleScraper(BaseScraper):
 
     def extract_field(self, element, cfg):
 
-        source = cfg["source"]
+        source = cfg.get("source")
         if source == "attr":
             return element.attrs[cfg["attr"]]
         elif source == "text":
             return element.text
         else:
-            raise NotImplementedError
+            return None
 
 
     def extract_fields(self, element):
 
-        return {
-            field: self.extract_field(element, cfg)
-            for field, cfg in self.attrs["fields"].items()
-        }
+        fields = self.attrs["fields"].copy()
+        url_cfg = fields.pop("url")
+        url = self.extract_field(element, url_cfg)
+
+        guid_cfg = fields.pop("guid", {})
+        guid = self.extract_field(element, guid_cfg) or url
+
+        return dict(
+            url=url,
+            guid=guid,
+            **{
+                field: self.extract_field(element, cfg)
+                for field, cfg in fields.items()
+            }
+        )
 
     async def scrape(self, limit=None, resume=False, reverse=False):
 
@@ -35,24 +46,4 @@ class SimpleScraper(BaseScraper):
         logger.info(html)
 
         for a in html.find(self.attrs["selector"]):
-
-            logger.info(a)
-            fields = self.extract_fields(a)
-            url = fields.pop("url")
-            # guid = self.get_guid(a)
-            # title = self.get_title(a)
-            # url = self.get_url(a)
-
-            listing = AttrDict(
-                channel=self,
-                sources=[
-                    AttrDict(
-                        url=url,
-                        media_type="video"
-                    )
-                ],
-                **fields
-            )
-
-            logger.info(listing)
-            yield listing
+            yield self.extract_fields(a)

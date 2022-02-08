@@ -1300,24 +1300,30 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
 
     def get_or_create_channel(self, locator, cfg={}):
         channel_cls = self.get_channel_class(cfg)
-        channel = channel_cls.get(
-            provider_id=self.CONFIG_IDENTIFIER,
-            locator=locator
-
-        )
 
         (extra_attrs, entity_attrs) = [dict(l) for l in utils.partition(
             lambda t: t[0] in channel_cls._adict_.keys(),
             cfg.items()
         )]
 
-        if not channel:
-            channel = channel_cls(
+        channel = channel_cls.upsert(
+            dict(
                 provider_id=self.CONFIG_IDENTIFIER,
-                locator=locator,
-                **entity_attrs,
-                attrs=extra_attrs
+                locator=locator
+            ),
+            dict(
+                attrs=extra_attrs,
+                **entity_attrs
             )
+        )
+
+        # if not channel:
+        #     channel = channel_cls(
+        #         provider_id=self.CONFIG_IDENTIFIER,
+        #         locator=locator,
+        #         **entity_attrs,
+        #         attrs=extra_attrs
+        #     )
         # feed.name = channel.name
         # feed.attrs.update(channel.attrs)
 

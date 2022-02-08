@@ -6,6 +6,7 @@ from .simple import SimpleScraper
 from stevedore import extension
 from orderedattrdict import AttrDict
 
+import traceback
 import types
 
 SCRAPERS = AttrDict()
@@ -28,6 +29,7 @@ def load():
 
     def make_scraper_channel(scraper_class):
         identifier = scraper_class.__name__.replace("Scraper", "")
+        logger.info(f"loading scraper: {identifier}")
         class_name = f"{identifier}ScraperFeedMediaChannel"
         return types.new_class(
             class_name,
