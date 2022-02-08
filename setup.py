@@ -31,6 +31,7 @@ setup(name=name,
       install_requires=[
           "aio-mpv-jsonipc @ git+https://github.com/tonycpsu/aio-mpv-jsonipc@master#egg=aio-mpv-jsonipc",
           "aiofiles ~= 0.7.0",
+          "aiostream ~= 0.4.4",
           "aiohttp ~= 3.7.4.post0",
           "aiohttp-rpc ~= 1.0.0",
           "aiolimiter ~= 1.0.0",

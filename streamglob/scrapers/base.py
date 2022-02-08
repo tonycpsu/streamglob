@@ -11,27 +11,34 @@ from pony.orm import *
 from orderedattrdict import AttrDict
 
 import types
-
+from aiostream import stream
 
 class BaseScraperMixin(object):
 
     async def fetch(self, limit=None, resume=False, reverse=False, replace=False):
-        async for attrs in self.scrape(limit=limit, resume=resume, reverse=reverse):
-            if not "url" in attrs:
+
+        async def fetch_new():
+            async for item in self.scrape(resume=resume, reverse=reverse):
+                if not self.items.select(lambda i: i.guid == item["guid"]).first():
+                    yield item
+
+        async for item in stream.take(fetch_new(), limit):
+            if not "url" in item:
                 raise RuntimeError("scraper item missing required attribute: url")
-            url = attrs["url"]
-            guid = attrs.pop("guid", url)
+            url = item["url"]
+            guid = item.pop("guid", url)
             listing = AttrDict(
                 channel=self,
                 url=url,
                 guid=guid,
                 sources=[
                     AttrDict(
-                        url=attrs.pop("url"),
+                        url=item.pop("url"),
+                        url_preview=item.pop("url_preview", None),
                         media_type="video"
                     )
                 ],
-                **attrs
+                **item
             )
             yield listing
 
