@@ -738,7 +738,7 @@ class BAMMediaListingMixin(object):
         # if not self.away_team_id:
         #     raise Exception
         return self.provider.TEAM_DATA_CLASS.get(
-            provider_id=self.provider.IDENTIFIER,
+            provider_id=self.provider.CONFIG_IDENTIFIER,
             bam_team_id=self.away_team_id
         )
 
@@ -746,14 +746,14 @@ class BAMMediaListingMixin(object):
     @db_session
     def home_team(self):
         return self.provider.TEAM_DATA_CLASS.get(
-            provider_id=self.provider.IDENTIFIER,
+            provider_id=self.provider.CONFIG_IDENTIFIER,
             bam_team_id=self.home_team_id
         )
 
     @db_session
     def team_box(self, team_id):
 
-        team = self.provider.TEAM_DATA_CLASS.for_id(self.provider.IDENTIFIER, team_id)
+        team = self.provider.TEAM_DATA_CLASS.for_id(self.provider.CONFIG_IDENTIFIER, team_id)
         side = "away" if team_id == self.away_team_id else "home"
         (wins, losses) = getattr(self, f"{side}_record")
         pct = wins/(wins+losses) if (wins+losses) else 0.0
@@ -1242,7 +1242,7 @@ class BAMMediaSourceMixin(object):
     @property
     def uri(self):
         # FIXME: add teams, stream info, etc.?
-        return f"{self.provider.IDENTIFIER}/{self.game_id}"
+        return f"{self.provider.CONFIG_IDENTIFIER}/{self.game_id}"
 
     @property
     def state_indicator(self):
@@ -1723,7 +1723,7 @@ class BAMProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataTable):
                 title=self.selection.data.title,
                 sources = [
                     model.MediaSource(
-                        provider_id=self.provider.IDENTIFIER,
+                        provider_id=self.provider.CONFIG_IDENTIFIER,
                         url = h.url,
                         media_type = "video"
                     )
@@ -1970,14 +1970,14 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
 
         # raise Exception(
         #     [
-        #         self.LISTING_CLASS.from_json(self.IDENTIFIER, g).detach()
+        #         self.LISTING_CLASS.from_json(self.CONFIG_IDENTIFIER, g).detach()
         #         for g in self.game_map.values()
         #     ]
         # )
         return iter(
             sorted(
                 (
-                    self.LISTING_CLASS.from_json(self.IDENTIFIER, g).detach()
+                    self.LISTING_CLASS.from_json(self.CONFIG_IDENTIFIER, g).detach()
                     for g in self.game_map.values()
                 ),
                 key = lambda l:
@@ -2129,7 +2129,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
 
             with db_session:
                 team_id = self.TEAM_DATA_CLASS.get(
-                    provider_id = self.IDENTIFIER,
+                    provider_id = self.CONFIG_IDENTIFIER,
                     bam_sport_id=1, # FIXME
                     abbreviation=team.upper()
                 ).bam_team_id
@@ -2162,7 +2162,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
             )
 
 
-        g = self.LISTING_CLASS.from_json(self.IDENTIFIER, game)
+        g = self.LISTING_CLASS.from_json(self.CONFIG_IDENTIFIER, game)
 
         if team is None:
             team = game["teams"]["home"]["team"]["abbreviation"].lower()
@@ -2209,7 +2209,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
     @property
     def playlist_title(self):
         # return f"[{self.provider}]"
-        return f"[{self.IDENTIFIER}"
+        return f"[{self.CONFIG_IDENTIFIER}"
 
     def get_details(self, listing):
 
@@ -2223,7 +2223,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
                 title=selection.title,
                 sources = [
                     model.MediaSource(
-                        provider_id=self.IDENTIFIER,
+                        provider_id=self.CONFIG_IDENTIFIER,
                         url = selection.url,
                         media_type = "video"
                     )
@@ -2267,7 +2267,7 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
             else selection.home_team.abbreviation
         ).lower()
         start_date = selection.start.strftime("%Y-%m-%d")
-        kwargs["uri"] = f"{self.IDENTIFIER}/{start_date}.{feed_team}?media_id={source.media_id}&media_type={media_type}"
+        kwargs["uri"] = f"{self.CONFIG_IDENTIFIER}/{start_date}.{feed_team}?media_id={source.media_id}&media_type={media_type}"
         if media_type == "video":
             if not "resolution" in kwargs and selection.media_params.resolution:
                 kwargs["resolution"] = selection.media_params.resolution
@@ -2326,5 +2326,5 @@ class BAMProviderMixin(BackgroundTasksMixin, abc.ABC):
             key = team.lower()
         else:
             key = "none"
-        attr = f"{self.IDENTIFIER.lower()}.{color_cfg}.{key}"
+        attr = f"{self.CONFIG_IDENTIFIER.lower()}.{color_cfg}.{key}"
         return attr

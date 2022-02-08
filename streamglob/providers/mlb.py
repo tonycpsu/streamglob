@@ -847,7 +847,7 @@ class MLBProvider(BAMProviderMixin,
                         key=lambda t: t["abbreviation"]
                 ):
                     t = self.TEAM_DATA_CLASS.from_json(
-                        self.IDENTIFIER, team,
+                        self.CONFIG_IDENTIFIER, team,
                         sport_id = sport_id
                     )
 

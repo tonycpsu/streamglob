@@ -203,7 +203,7 @@ class ChannelWidget(ListingCountMixin,
     def channel(self):
         with db_session:
             return model.MediaChannel.get(
-                provider_id=self.provider.IDENTIFIER,
+                provider_id=self.provider.CONFIG_IDENTIFIER,
                 locator=self.get_node().locator
             )
 
@@ -613,7 +613,7 @@ class ChannelTreeBrowser(AutoCompleteMixin, urwid.WidgetWrap):
             self._feed_config = config.Config(
             os.path.join(
                 config.settings._config_dir,
-                self.provider.IDENTIFIER,
+                self.provider.CONFIG_IDENTIFIER,
                 "feeds.yaml"
             )
         )

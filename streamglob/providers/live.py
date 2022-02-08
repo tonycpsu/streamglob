@@ -99,7 +99,7 @@ class LiveStreamProvider(BackgroundTasksMixin, BaseProvider):
             channel = self.CHANNEL_CLASS.orm_class.get(locator=locator)
             if not channel:
                 channel = self.CHANNEL_CLASS.orm_class(
-                    provider_id = self.IDENTIFIER,
+                    provider_id = self.CONFIG_IDENTIFIER,
                     name = name or locator,
                     locator = locator
                     # **self.feed_attrs(name)

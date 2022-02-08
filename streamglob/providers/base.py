@@ -17,7 +17,6 @@ from pony.orm import *
 from panwid.dialog import *
 from panwid.keymap import *
 from pydantic import BaseModel
-from mergedeep import merge
 
 # from .widgets import *
 from . import widgets
@@ -192,6 +191,8 @@ class InvalidConfigView(BaseProviderView):
 MEDIA_SPEC_RE=re.compile(r"(?:/([^:]+))?(?::(.*))?")
 
 class BaseProvider(
+        session.SessionMixin,
+        config.HierarchicalConfigMixin,
         widgets.PlayListingProviderMixin,
         widgets.DownloadListingProviderMixin,
         abc.ABC,
@@ -216,7 +217,7 @@ class BaseProvider(
         self.attributes = self.column_config or self.ATTRIBUTES
         self.filters["search"].connect("changed", self.on_search_change)
         super().__init__(*args, **kwargs)
-        logger.info(f"provider {self.IDENTIFIER} initialized")
+        logger.info(f"provider {self.CONFIG_IDENTIFIER} initialized")
 
     @property
     def column_config(self):
@@ -288,7 +289,7 @@ class BaseProvider(
     @property
     def tmp_dir(self):
         if not hasattr(self, "_tmp_dir"):
-            tmp_dir = os.path.join(state.tmp_dir, self.IDENTIFIER)
+            tmp_dir = os.path.join(state.tmp_dir, self.CONFIG_IDENTIFIER)
             os.makedirs(tmp_dir)
             self._tmp_dir = tmp_dir
         return self._tmp_dir
@@ -298,7 +299,7 @@ class BaseProvider(
         if not hasattr(self, "_conf_dir"):
             conf_dir = os.path.join(
                 config.settings._config_dir,
-                self.IDENTIFIER
+                self.CONFIG_IDENTIFIER
             )
             if not os.path.exists(conf_dir):
                 os.makedirs(conf_dir)
@@ -308,9 +309,9 @@ class BaseProvider(
     def init_config(self):
         with db_session:
             try:
-                self.provider_data = model.ProviderData.get(name=self.IDENTIFIER).settings
+                self.provider_data = model.ProviderData.get(name=self.CONFIG_IDENTIFIER).settings
             except AttributeError:
-                self.provider_data = model.ProviderData(name=self.IDENTIFIER).settings
+                self.provider_data = model.ProviderData(name=self.CONFIG_IDENTIFIER).settings
 
         self.load_rules()
 
@@ -351,7 +352,7 @@ class BaseProvider(
 
     @db_session
     def save_provider_data(self):
-        model.ProviderData.get(name=self.IDENTIFIER).settings = self.provider_data
+        model.ProviderData.get(name=self.CONFIG_IDENTIFIER).settings = self.provider_data
         commit()
 
     @property
@@ -387,26 +388,8 @@ class BaseProvider(
         return None
 
     @property
-    def session_params(self):
-        return {
-            "proxies": config.settings.profile.get("proxies"),
-            "cookies_file": self.config.get("cookies_file"),
-            "cookies_provider": self.config.get("cookies_provider")
-        }
-
-    @property
     def PREVIEW_TYPES(self):
         return ["default"]
-
-    @property
-    def session(self):
-        if self._session is None:
-            session_params = self.session_params
-            self._session = self.SESSION_CLASS.new(
-                self.IDENTIFIER,
-                **session_params
-            )
-        return self._session
 
     @property
     def gui(self):
@@ -459,30 +442,30 @@ class BaseProvider(
 
     # @abc.abstractmethod
     def make_view(self):
-        logger.info(f"provider {self.IDENTIFIER} initializing view")
+        logger.info(f"provider {self.CONFIG_IDENTIFIER} initializing view")
         if not self.config_is_valid:
             return InvalidConfigView(self.NAME, getattr(self, "REQUIRED_CONFIG", []))
         return self.VIEW
 
     @classproperty
-    def IDENTIFIERS(cls):
-        return list(
-            dict.fromkeys(
-                [
-                    c.__module__.split(".")[-1]
-                    for c in cls.__mro__
-                    if issubclass(c, BaseProvider)
-                ]
-            )
-        )
+    def CONFIG_IDENTIFIER_CLASS(cls):
+        return BaseProvider
 
     @classproperty
-    def IDENTIFIER(cls):
-        return cls.IDENTIFIERS[0]
-        # import ipdb; ipdb.set_trace()
-        # return next(
-        #     c.__module__ for c in cls.__mro__
-        #     if __package__ in c.__module__).split(".")[-1]
+    def CONFIG_IDENTIFIER_KEY(cls):
+        return "providers"
+
+    # @classproperty
+    # def IDENTIFIERS(cls):
+    #     return list(
+    #         dict.fromkeys(
+    #             [
+    #                 c.__module__.split(".")[-1]
+    #                 for c in cls.__mro__
+    #                 if issubclass(c, BaseProvider)
+    #             ]
+    #         )
+    #     )
 
     @classproperty
     @abc.abstractmethod
@@ -577,14 +560,14 @@ class BaseProvider(
 
     def new_media_source(self, *args, **kwargs):
         return self.MEDIA_SOURCE_CLASS.attr_class(
-            provider_id = self.IDENTIFIER,
+            provider_id = self.CONFIG_IDENTIFIER,
             *args,
             **kwargs
         )
 
     def new_listing(self, **kwargs):
         return self.LISTING_CLASS.attr_class(
-            provider_id = self.IDENTIFIER,
+            provider_id = self.CONFIG_IDENTIFIER,
             **kwargs
         )
 
@@ -604,7 +587,7 @@ class BaseProvider(
 
     # def new_listing_attr(self, **kwargs):
     #     return self.LISTING_CLASS.attr_class(
-    #         provider_id = self.IDENTIFIER,
+    #         provider_id = self.CONFIG_IDENTIFIER,
     #         **kwargs
     #     )
 
@@ -645,25 +628,6 @@ class BaseProvider(
     #     except StopIteration:
     #         pass
 
-
-    @property
-    def config(self):
-        merged = merge(
-            config.ConfigTree(), *[
-                config.ConfigTree(
-                    config.settings.profile.providers.get(
-                        identifier, config.ConfigTree()
-                    ) or config.ConfigTree()
-                )
-                for identifier in reversed(self.IDENTIFIERS)
-            ]
-        )
-
-        cfg = config.settings.profile.providers.get(
-            self.IDENTIFIER, config.ConfigTree()
-        )
-        cfg.update(merged)
-        return cfg
 
     @property
     def config_is_valid(self):
@@ -767,7 +731,7 @@ class BaseProvider(
 
     @property
     def playlist_title(self):
-        return f"[{self.IDENTIFIER}"
+        return f"[{self.CONFIG_IDENTIFIER}"
 
     @property
     def auto_preview_enabled(self):
@@ -1432,7 +1396,7 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
 
         logger.debug(f"on_player_load_failed: {url}")
 
-        if state.task_manager.preview_task.provider != self.provider.IDENTIFIER:
+        if state.task_manager.preview_task.provider != self.provider.CONFIG_IDENTIFIER:
             return
 
         class RefreshingMessage(BasePopUp):
@@ -1622,7 +1586,7 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
 
     def create_preview_task(self, listing, **kwargs):
         return model.PlayMediaTask.attr_class(
-            provider=self.provider.IDENTIFIER,
+            provider=self.provider.CONFIG_IDENTIFIER,
             title=listing.title,
             sources=listing.sources
         )

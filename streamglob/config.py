@@ -15,9 +15,11 @@ import orderedattrdict.yamlutils
 from orderedattrdict.yamlutils import AttrDictYAMLLoader
 import distutils.spawn
 import tzlocal
-
 import getpass
 import xdg
+from mergedeep import merge
+
+from .utils import classproperty
 
 PACKAGE_NAME="streamglob"
 
@@ -317,10 +319,60 @@ def load(config_file=None, merge_default=False):
         merge_default=merge_default
     )
 
+class HierarchicalConfigMixin(object):
+
+    @classproperty
+    def CONFIG_IDENTIFIER_CLASS(cls):
+        raise NotImplementedError
+
+    @classproperty
+    def CONFIG_IDENTIFIER_KEY(cls):
+        raise NotImplementedError
+
+    @classproperty
+    def CONFIG_IDENTIFIER(cls):
+        return cls.CONFIG_IDENTIFIERS[0]
+
+    @classproperty
+    def CONFIG_IDENTIFIERS(cls):
+        return list(
+            dict.fromkeys(
+                [
+                    c.__module__.split(".")[-1]
+                    for c in cls.__mro__
+                    if issubclass(c, cls.CONFIG_IDENTIFIER_CLASS)
+                ]
+            )
+        )
+
+    @property
+    def config(self):
+        settings_root = getattr(settings, self.CONFIG_IDENTIFIER_KEY)
+        merged = merge(
+            ConfigTree(), *[
+                ConfigTree(
+                    settings_root.get(
+                        identifier, ConfigTree()
+                    ) or ConfigTree()
+                )
+                for identifier in reversed(self.CONFIG_IDENTIFIERS)
+            ]
+        )
+
+        cfg = settings.profile.providers.get(
+            self.CONFIG_IDENTIFIER, ConfigTree()
+        )
+        cfg.update(merged)
+        return cfg
+
+
+
 __all__ = [
     "CONFIG_DIR",
-    "settings"
+    "settings",
 ]
+
+
 
 def main():
     test_settings = Config(

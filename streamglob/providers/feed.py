@@ -292,7 +292,7 @@ class FeedMediaSourceMixin(object):
         with db_session:
             listing = self.provider.LISTING_CLASS[self.listing.media_listing_id]
             try:
-                return f"{self.provider.IDENTIFIER}/{listing.channel.locator}.{listing.guid}"
+                return f"{self.provider.CONFIG_IDENTIFIER}/{listing.channel.locator}.{listing.guid}"
             except AttributeError:
                 raise
 
@@ -774,7 +774,7 @@ class FeedProvider(BaseProvider):
             return list(
                 select(
                     f for f in self.FEED_CLASS
-                    if f.provider_id == self.IDENTIFIER
+                    if f.provider_id == self.CONFIG_IDENTIFIER
                     and f.locator in locators
                 )
             )
@@ -1231,7 +1231,7 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
                     max_age = config.settings.profile.cache.max_age
                 )
         if not isinstance(self.view, InvalidConfigView): # FIXME
-            self.create_feeds()
+            self.create_channels()
             self.channels.load()
 
     def format_feed(feed):
@@ -1295,34 +1295,45 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
     def translate(self):
         return (self.translate_src and super().translate)
 
-    def create_feeds(self):
+    def get_channel_class(self, cfg):
+        return self.FEED_CLASS
+
+    def get_or_create_channel(self, locator, cfg={}):
+        channel_cls = self.get_channel_class(cfg)
+        channel = channel_cls.get(
+            provider_id=self.CONFIG_IDENTIFIER,
+            locator=locator
+
+        )
+
+        (extra_attrs, entity_attrs) = [dict(l) for l in utils.partition(
+            lambda t: t[0] in channel_cls._adict_.keys(),
+            cfg.items()
+        )]
+
+        if not channel:
+            channel = channel_cls(
+                provider_id=self.CONFIG_IDENTIFIER,
+                locator=locator,
+                **entity_attrs,
+                attrs=extra_attrs
+            )
+        # feed.name = channel.name
+        # feed.attrs.update(channel.attrs)
+
+    def create_channels(self):
 
         all_channels = list(self.view.all_channels)
         with db_session:
-            for channel in all_channels:
-
-                feed = self.FEED_CLASS.get(
-                    provider_id=self.IDENTIFIER,
-                    locator=channel.locator
+            for channel_cfg in all_channels:
+                channel = self.get_or_create_channel(
+                    channel_cfg.get_key(),
+                    channel_cfg.get_value()
                 )
-                if not feed:
-                    ctype = channel.get_value().type
-                    if ctype:
-                        feed_cls = self.FEED_CLASS.SUBTYPES[ctype]
-                    else:
-                        feed_cls = self.FEED_CLASS
 
-                    feed = feed_cls(
-                        provider_id=self.IDENTIFIER,
-                        locator=channel.locator
-                    )
-                feed.name = channel.name
-                feed.attrs.update(channel.attrs)
-
-
-            for channel in self.FEED_CLASS.select():
-                if channel.locator not in [ c.get_key() for c in  all_channels ]:
-                    self.FEED_CLASS[channel.channel_id].delete()
+            # for channel in channel_cls.select():
+            #     if channel.locator not in [ c.get_key() for c in  all_channels ]:
+            #         channel_cls[channel.channel_id].delete()
 
 
     def feed_attrs(self, feed_name):
@@ -1690,5 +1701,5 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
 
     @property
     def playlist_title(self):
-        return f"[{self.IDENTIFIER}]"
-        # return f"{self.IDENTIFIER}/{self.feed.locator if self.selected_channels else 'all'}"
+        return f"[{self.CONFIG_IDENTIFIER}]"
+        # return f"{self.CONFIG_IDENTIFIER}/{self.feed.locator if self.selected_channels else 'all'}"

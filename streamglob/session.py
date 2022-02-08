@@ -40,6 +40,32 @@ USER_AGENT = (
     "Gecko/20100101 Firefox/66.0"
 )
 
+class SessionMixin(object):
+
+    @property
+    def SESSION_CLASS(self):
+        raise NotImplementedError
+
+    @property
+    def session(self):
+        if not getattr(self, "_session", None):
+            session_params = self.session_params
+            self._session = self.SESSION_CLASS.new(
+                self.CONFIG_IDENTIFIER,
+                **session_params
+            )
+        return self._session
+
+    @property
+    def session_params(self):
+        return {
+            "proxies": config.settings.profile.get("proxies"),
+            "cookies_file": self.config.get("cookies_file"),
+            "cookies_provider": self.config.get("cookies_provider")
+        }
+
+
+
 class StreamSession(object):
     """
     Top-level stream session interface

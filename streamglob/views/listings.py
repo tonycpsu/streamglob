@@ -42,7 +42,7 @@ class ProviderToolbar(urwid.WidgetWrap):
                       providers.PROVIDERS.items(),
                       key = providers_sort_key
               )]
-        ), label="Provider", default=self.parent.provider.IDENTIFIER, margin=1)
+        ), label="Provider", default=self.parent.provider.CONFIG_IDENTIFIER, margin=1)
 
         urwid.connect_signal(
             self.provider_dropdown, "change",
@@ -215,7 +215,7 @@ class ListingsView(StreamglobView):
             return
         self.provider = providers.get(provider_name)
         if  getattr(self, "toolbar", None):
-            self.toolbar.provider_dropdown.label = self.provider.IDENTIFIER
+            self.toolbar.provider_dropdown.label = self.provider.CONFIG_IDENTIFIER
         else:
             self.toolbar = ProviderToolbar(self)
             self.toolbar_placeholder.original_widget = self.toolbar
@@ -247,7 +247,7 @@ class ListingsView(StreamglobView):
 
         if self.provider:
             self.provider.deactivate()
-        logger.info(f"on_set_provider: {self.provider.IDENTIFIER} {self.provider.view}")
+        logger.info(f"on_set_provider: {self.provider.CONFIG_IDENTIFIER} {self.provider.view}")
         self.provider_view_placeholder.original_widget = self.provider.view
         self.toolbar.update_provider_config(
             self.provider.PREVIEW_TYPES,
@@ -267,7 +267,7 @@ class ListingsView(StreamglobView):
         if self.provider.provider_data.get("selected_view"):
             self.toolbar.view_dropdown.selected_label = self.provider.provider_data.get("selected_view")
 
-        state.app_data.selected_provider = self.provider.IDENTIFIER
+        state.app_data.selected_provider = self.provider.CONFIG_IDENTIFIER
         state.app_data.save()
         self.provider.activate()
         state.files_view.load_browser(self.provider.output_path)
@@ -311,7 +311,7 @@ class ListingsView(StreamglobView):
         return self.toolbar.auto_preview_check_box.get_state()
 
     def activate(self):
-        self.set_provider(self.provider.IDENTIFIER)
+        self.set_provider(self.provider.CONFIG_IDENTIFIER)
 
         async def activate_preview_player():
             if self.provider.auto_preview_enabled:
@@ -337,8 +337,8 @@ class ListingsView(StreamglobView):
         try:
             uri = utils.uri_from_filename(filename)
             (_, provider, _, _) = providers.parse_uri(uri)
-            if provider.IDENTIFIER != self.provider:
-                self.set_provider(provider.IDENTIFIER)
+            if provider.CONFIG_IDENTIFIER != self.provider:
+                self.set_provider(provider.CONFIG_IDENTIFIER)
         except (AttributeError, IndexError):
             pass
         state.main_view.focus_widget(self)

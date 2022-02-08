@@ -50,6 +50,7 @@ from . import config
 from . import model
 from . import utils
 from . import providers
+from . import scrapers
 from . import session
 from . import programs
 from . import tasks
@@ -328,11 +329,11 @@ def run_gui(action, provider, **kwargs):
     tattr[6][termios.VDISCARD] = 0
     termios.tcsetattr(fileno, termios.TCSADRAIN, tattr)
 
-    # state.listings_view = ListingsView(provider.IDENTIFIER)
+    # state.listings_view = ListingsView(provider.CONFIG_IDENTIFIER)
     state.files_provider = FilesProvider()
     state.files_view = state.files_provider.view
     state.listings_view = ListingsView()
-    state.listings_view.set_provider(provider.IDENTIFIER)
+    state.listings_view.set_provider(provider.CONFIG_IDENTIFIER)
     state.tasks_view = TasksView()
 
     set_stream_log_level(sys.stdout, logging.CRITICAL)
@@ -576,6 +577,7 @@ def main():
 
     state.task_manager = tasks.TaskManager()
     providers.load(state.options.providers)
+    scrapers.load()
     model.init()
     providers.load_config(default=state.app_data.selected_provider)
     providers.apply_settings()
