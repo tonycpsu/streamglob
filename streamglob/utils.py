@@ -217,7 +217,7 @@ def stripit(x):
         return [stripit(xx) for xx in x]
 
 
-class UrwidMarkdownRenderer(mistune.Renderer):
+class UrwidMarkdownRenderer(mistune.HTMLRenderer):
 
     def placeholder(self):
         return []
@@ -262,16 +262,24 @@ class UrwidMarkdownRenderer(mistune.Renderer):
     def block_html(self, html):
         return [("block_html", html)]
 
+    def finalize(self, html):
+        out = []
+        map(out.extend, html)
+        if not len(out):
+            out = [""]
+        return out
+
 
 def html_to_markdown(html):
 
-    md2urwid = mistune.Markdown(renderer=UrwidMarkdownRenderer())
     return html_to_text.handle(html)
 
-def html_to_urwid_text_markup(html, excludes=[]):
+def markdown_to_html(markdown):
+    return mistune.html(markdown)
 
-    markdown = html_to_markdown(html)
+def markdown_to_urwid_text_markup(markdown, excludes=[]):
 
+    md2urwid = mistune.Markdown(renderer=UrwidMarkdownRenderer())
     markup = md2urwid(strip_emoji(markdown))
     if excludes:
         markup = [
@@ -287,6 +295,11 @@ def html_to_urwid_text_markup(html, excludes=[]):
         if a != "\n\n"
         or a != b
     ]
+
+def html_to_urwid_text_markup(html, excludes=[]):
+
+    markdown = html_to_markdown(html)
+    return markdown_to_urwid_text_markup(markdown, excludes=excludes)
 
 def sanitize_filename(t):
     return pathvalidate.sanitize_filename(
@@ -349,8 +362,10 @@ __all__ = [
     "format_timedelta",
     "strip_emoji",
     "strip_html",
-    "html_to_urwid_text_markup",
     "html_to_markdown",
+    "markdown_to_html",
+    "html_to_urwid_text_markup",
+    "markdown_to_urwid_text_markup",
     "sanitize_filename",
     "camel_to_snake",
     "snake_to_camel",
