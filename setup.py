@@ -45,6 +45,7 @@ setup(name=name,
           # "googletrans == 4.0.0-rc1",
           "googletrans @ git+https://github.com/tonycpsu/py-googletrans@feature/fix-httpx-dependency#egg=py-googletrans",
           "html2text ~= 2020.1.16",
+          "imgkit ~= 1.2.2",
           "instagrapi ~= 1.15.7", # FIXME
           "isodate ~= 0.6.0",
           "limiter ~= 0.1.2",

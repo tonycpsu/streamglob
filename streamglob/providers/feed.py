@@ -1118,7 +1118,7 @@ class CachedFeedProviderBodyView(urwid.WidgetWrap):
         listing = selection.data_source
         index = getattr(listing, self.body.df.index_name)
         row = self.body.render_item(index)
-        body = listing.body
+        body = utils.markdown_to_urwid_text_markup(listing.body)
         detail = urwid.Pile([
             (1, urwid.Filler(
                 urwid.AttrMap(
