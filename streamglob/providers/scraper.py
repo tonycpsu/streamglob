@@ -3,6 +3,8 @@ logger = logging.getLogger(__name__)
 
 from .. import scrapers
 from .. import model
+from .. import session
+
 from ..state import *
 from .base import *
 from .feed import *
@@ -19,6 +21,8 @@ class ScraperProviderView(SimpleProviderView):
 class ScraperProvider(PaginatedProviderMixin, CachedFeedProvider):
 
     FEED_CLASS = scrapers.base.BaseScraper
+
+    SESSION_CLASS = session.AsyncStreamSession
 
     @property
     def VIEW(self):
