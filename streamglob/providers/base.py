@@ -1103,7 +1103,7 @@ class SynchronizedPlayerMixin(object):
         if set(filters).intersection(set(text_map.keys())):
         # if "playlist" in filters or "title" in filters:
             for element, text_fn in text_map.items():
-                text = ffmpeg_escape(text_fn())
+                text = utils.ffmpeg_escape(text_fn())
                 el_cfg = cfg.get(element, cfg)
                 color = el_cfg.text.color.default or cfg.text.color.default or "white"
                 if self.playlist_position == len(self.play_items)-1:
@@ -1111,7 +1111,7 @@ class SynchronizedPlayerMixin(object):
                 elif getattr(self.active_table.selected_source, "local_path", None):
                     color = el_cfg.text.color.downloaded or cfg.text.color.downloaded or color
 
-                font = ffmpeg_escape(el_cfg.text.font or cfg.text.font or "sans")
+                font = utils.ffmpeg_escape(el_cfg.text.font or cfg.text.font or "sans")
                 size = el_cfg.text.size or cfg.text.size or 50
                 shadow_color = el_cfg.text.shadow.color or cfg.text.shadow.color or "black"
                 border_color = el_cfg.text.border.color or cfg.text.border.color or "black"
