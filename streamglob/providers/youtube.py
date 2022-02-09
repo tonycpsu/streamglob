@@ -98,7 +98,7 @@ class YouTubeMediaListingMixin(object):
         return thumbnail["url"]
 
 @model.attrclass()
-class YouTubeMediaListing(YouTubeMediaListingMixin, model.ContentMediaListing, FeedMediaListing):
+class YouTubeMediaListing(YouTubeMediaListingMixin, FeedMediaListing):
 
     duration_seconds = Optional(int)
     definition = Optional(str) # move to attrs
@@ -643,7 +643,8 @@ class YouTubeFeed(FeedMediaChannel):
                 item for item in page
                 if item not in batch
                 and (not oldest or item.created < oldest)
-                and item.guid not in select(item.guid for item in self.items)
+                and not self.check_guid(item.guid)
+                # and item.guid not in select(item.guid for item in self.items)
             ]
 
             if len(batch) >= self.batch_size or not next_token:

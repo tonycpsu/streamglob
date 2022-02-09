@@ -19,7 +19,7 @@ class BaseScraperMixin(object):
 
         async def fetch_new():
             async for item in self.scrape(resume=resume, reverse=reverse):
-                if not self.items.select(lambda i: i.guid == item["guid"]).first():
+                if not self.find_guid(item["guid"]):
                     yield item
 
         async for item in stream.take(fetch_new(), limit):
@@ -27,10 +27,15 @@ class BaseScraperMixin(object):
                 raise RuntimeError("scraper item missing required attribute: url")
             url = item["url"]
             guid = item.pop("guid", url)
+            content = (
+                item["content_format"].format_map(item)
+                if "content_format" in item
+                else item.pop("content", None)
+            )
             listing = AttrDict(
                 channel=self,
-                url=url,
                 guid=guid,
+                content=content,
                 sources=[
                     AttrDict(
                         url=item.pop("url"),

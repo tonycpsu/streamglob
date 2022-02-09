@@ -333,7 +333,7 @@ class RSSMediaListingMixin(object):
 
 
 @model.attrclass()
-class RSSMediaListing(RSSMediaListingMixin, model.ContentMediaListing, FeedMediaListing):
+class RSSMediaListing(RSSMediaListingMixin, FeedMediaListing):
 
     enclosures = Required(Json, default=[])
 

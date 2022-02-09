@@ -28,7 +28,8 @@ from ..rules import HighlightRuleConfig, HighlightRule
 from ..programs import Player, Downloader
 from .. import model
 from .. import config
-from  ..utils import *
+from .. import utils
+from  ..utils import classproperty
 
 
 # @keymapped()
@@ -566,30 +567,20 @@ class BaseProvider(
         )
 
     def new_listing(self, **kwargs):
+
+        (extra_attrs, entity_attrs) = [dict(l) for l in utils.partition(
+            lambda t: t[0] in self.LISTING_CLASS._adict_.keys(),
+            kwargs.items()
+        )]
+
         return self.LISTING_CLASS.attr_class(
-            provider_id = self.CONFIG_IDENTIFIER,
-            **kwargs
+            provider_id=self.CONFIG_IDENTIFIER,
+            attrs=extra_attrs,
+            **entity_attrs
         )
-
-    # async def play(self, listing, **kwargs):
-    #     import ipdb; ipdb.set_trace()
-    #     task = self.create_play_task(listing, **kwargs)
-    #     yield state.task_manager.play(task)
-
-    # async def download(self, listing, index=None, no_task_manager=False, **kwargs):
-    #     import ipdb; ipdb.set_trace()
-    #     for task in self.create_download_tasks(listing, index=index, **kwargs):
-    #         yield state.task_manager.download(task)
-
 
     def translate_template(self, template):
         return template
-
-    # def new_listing_attr(self, **kwargs):
-    #     return self.LISTING_CLASS.attr_class(
-    #         provider_id = self.CONFIG_IDENTIFIER,
-    #         **kwargs
-    #     )
 
     def sort(self, field, reverse=False):
         self.view.sort(field, reverse=reverse)
@@ -609,25 +600,6 @@ class BaseProvider(
 
     def action_mark_read(self, listing):
         listing.mark_read()
-
-    # def on_new_listing(self, listing):
-    #     try:
-    #         # label = next(
-    #         #     label
-    #         #     for label, pattern in self.rule_map.items()
-    #         #     if pattern.search(listing.title)
-    #         # )
-    #         # listing.label = label
-    #         # for action in self.config.rules.actions.get(label, []):
-    #         #     func = getattr(self, f"action_{action}", None)
-    #         #     if func:
-    #         #         func(listing)
-    #         # if self.should_download(listing):
-    #         #     self.download(listing)
-
-    #     except StopIteration:
-    #         pass
-
 
     @property
     def config_is_valid(self):
@@ -976,9 +948,6 @@ class SynchronizedPlayerMixin(object):
     def play_items(self):
         return []
 
-    def new_listing(self, **kwargs):
-        return model.TitledMediaListing.attr_class(**kwargs)
-
     def new_media_source(self, **kwargs):
         return model.MediaSource.attr_class(**kwargs)
 
@@ -1199,6 +1168,10 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
 
     async def preview_content_default(self, cfg, listing, source):
         return source.locator_preview
+
+    async def preview_content_cover(self, cfg, listing, source):
+        return listing.cover_locator
+        # await self.playlist_replace(source.locator_thumbnail, idx=position)
 
     async def preview_content_thumbnail(self, cfg, listing, source):
         logger.debug(f"preview_content_thumbnail")
@@ -1538,7 +1511,7 @@ class SynchronizedPlayerProviderMixin(SynchronizedPlayerMixin):
         self._play_items = [
             AttrDict(
                 media_listing_id=row.data.media_listing_id,
-                title=sanitize_filename(row.data_source.title),
+                title=utils.sanitize_filename(row.data_source.title),
                 created=getattr(row.data, "created", None),
                 # feed=row.data.channel.name,
                 # locator=row.data.channel.locator,

@@ -366,6 +366,10 @@ class MediaSourceMixin(object):
         return self.locator or self.locator_blank
 
     @property
+    def locator_thumbnail(self):
+        return self.locator_preview or self.locator_blank
+
+    @property
     def locator_preview(self):
         return self.url_preview or self.listing.cover
 
@@ -630,7 +634,7 @@ class MediaSource(MediaSourceMixin, db.Entity):
     provider_id = Required(str)
     listing = Optional(lambda: MultiSourceMediaListing, reverse="sources")
     url = Optional(str, nullable=True, default=None)
-    url_preview = Optional(str, nullable=True, default=None)
+    url_preview = Optional(str, nullable=True, default=None) # FIXME: rename to url_thumbnail
     media_type = Optional(str)
     rank = Required(int, default=0)
     task = Optional(lambda: MediaTask, reverse="sources")
@@ -904,7 +908,7 @@ class ContentMediaListing(ContentMediaListingMixin, MediaListing):
 
 
 @attrclass()
-class ChannelMediaListing(MediaListing):
+class ChannelMediaListing(ContentMediaListing):
 
     channel = Required(lambda: MediaChannel)
 

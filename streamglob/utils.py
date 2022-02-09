@@ -262,10 +262,15 @@ class UrwidMarkdownRenderer(mistune.Renderer):
     def block_html(self, html):
         return [("block_html", html)]
 
-def html_to_urwid_text_markup(html, excludes=[]):
+
+def html_to_markdown(html):
 
     md2urwid = mistune.Markdown(renderer=UrwidMarkdownRenderer())
-    markdown = html_to_text.handle(html)
+    return html_to_text.handle(html)
+
+def html_to_urwid_text_markup(html, excludes=[]):
+
+    markdown = html_to_markdown(html)
 
     markup = md2urwid(strip_emoji(markdown))
     if excludes:
@@ -345,6 +350,7 @@ __all__ = [
     "strip_emoji",
     "strip_html",
     "html_to_urwid_text_markup",
+    "html_to_markdown",
     "sanitize_filename",
     "camel_to_snake",
     "snake_to_camel",

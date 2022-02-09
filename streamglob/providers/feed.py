@@ -119,6 +119,8 @@ class FeedMediaChannel(model.MediaChannel):
             node.refresh()
         return fetched
 
+    def find_guid(self, guid):
+        return self.items.select(lambda i: i.guid == guid).first()
 
     @db_session
     def mark_all_items_read(self):
@@ -247,7 +249,7 @@ class FeedMediaListingMixin(object):
 
     @property
     def body(self):
-        return self.title
+        return self.content or self.title
 
     async def check(self):
         return all([await s.check() for s in self.sources])
