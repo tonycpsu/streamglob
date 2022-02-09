@@ -14,9 +14,8 @@ from http.cookiejar import LWPCookieJar, Cookie
 import browser_cookie3
 from io import StringIO
 import requests
-from requests_html import HTMLSession
+from requests_html import HTMLSession, AsyncHTMLSession
 import asyncio
-import aiohttp
 from aiolimiter import AsyncLimiter
 import lxml
 import lxml, lxml.etree
@@ -184,10 +183,15 @@ class StreamSession(object):
 
     def __getattr__(self, attr):
         if attr in ["delete", "get", "head", "options", "post", "put", "patch"]:
-            # return getattr(self.session, attr)
             session_method = getattr(self.session, attr)
-            return functools.partial(self.request, session_method)
-        # raise AttributeError(attr)
+            return session_method
+
+    # def __getattr__(self, attr):
+    #     if attr in ["delete", "get", "head", "options", "post", "put", "patch"]:
+    #         # return getattr(self.session, attr)
+    #         session_method = getattr(self.session, attr)
+    #         return functools.partial(self.request, session_method)
+    #     # raise AttributeError(attr)
 
     @db_session
     def request(self, method, url, *args, **kwargs):
@@ -293,7 +297,7 @@ class BrowserCookieStreamSessionMixin(object):
 
 class AsyncStreamSession(StreamSession):
 
-    SESSION_CLASS = aiohttp.ClientSession
+    SESSION_CLASS = AsyncHTMLSession
 
     DEFAULT_REQUESTS_PER_MINUTE = 60
 
@@ -316,10 +320,10 @@ class AsyncStreamSession(StreamSession):
     #     # method = getattr(self.session, "get")
     #     return await self.session.get(*args, **kwargs)
 
-    def __getattr__(self, attr):
-        if attr in ["delete", "get", "head", "options", "post", "put", "patch"]:
-            session_method = getattr(self.session, attr)
-            return session_method
+    # def __getattr__(self, attr):
+    #     if attr in ["delete", "get", "head", "options", "post", "put", "patch"]:
+    #         session_method = getattr(self.session, attr)
+    #         return session_method
 
 
 class AuthenticatedStreamSession(StreamSession):
