@@ -17,8 +17,12 @@ try:
 except ImportError:
     import importlib_resources as pkg_resources
 
+with pkg_resources.path(resources, "css") as css_path:
+    globals()["CSS_PATH"] = os.path.join(css_path, "body.css")
+
 with pkg_resources.path(resources, "images") as image_path:
     globals()["BLANK_IMAGE_URI"] = os.path.join(image_path, "video.png")
+
 
 MEDIA_URI_RE=re.compile("uri=(.*)=\.")
 

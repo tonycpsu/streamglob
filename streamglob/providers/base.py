@@ -886,6 +886,7 @@ class SynchronizedPlayerMixin(object):
         self.sync_player_playlist = False
         self.video_filters = []
         self.playlist_lock = asyncio.Lock()
+        self.preview_lock = asyncio.Lock()
         self.preview_stage = -1
 
     @property
@@ -900,7 +901,6 @@ class SynchronizedPlayerMixin(object):
             )
             # self._previews = DefaultAttrDict(lambda: DefaultAttrDict(lambda: asyncio.Future()))
         return self._previews
-
 
     def on_requery(self, source, count):
 
@@ -1192,11 +1192,6 @@ borderw={border_width}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow
         return source.locator_play
         # await self.playlist_replace(source.locator, idx=position)
 
-    async def preview_content_body(self, cfg, listing, source):
-        img_file = os.path.join(self.tmp_dir, f"body.{listing.guid}.png")
-        html = utils.markdown_to_html(listing.content)
-        imgkit.from_string(html, img_file, options=dict(quiet=""))
-        return img_file
 
     async def get_preview(self, stages, listing, source):
 

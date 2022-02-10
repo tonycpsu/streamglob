@@ -20,7 +20,8 @@ from limiter import get_limiter, limit
 from pony.orm import *
 import timeago
 import dateparser
-
+import wand.image
+from wand.color import Color
 from .. import model
 from .. import utils
 
@@ -701,6 +702,94 @@ class CachedFeedProviderDataTable(SynchronizedPlayerProviderMixin, ProviderDataT
         return super().keypress(size, key)
 
 
+    async def preview_content_body(self, cfg, listing, source):
+        if listing.guid not in self.preview_files["body"]:
+            img_file = os.path.join(self.tmp_dir, f"body.{listing.guid}.png")
+            html = utils.markdown_to_html(listing.content)
+            options = {
+                "quiet": "",
+                "width": 240,
+                "disable-smart-width": ""
+            }
+            imgkit.from_string(html, img_file, options=options, css=utils.CSS_PATH)
+            self.preview_files["body"][listing.guid] = img_file
+        return self.preview_files["body"][listing.guid]
+
+    async def preview_content_combined(self, cfg, listing, source):
+
+        if listing.guid not in self.preview_files["combined"]:
+            self.preview_files["combined"][listing.guid] = await self.make_preview_combined(listing, source, cfg)
+        return self.preview_files["combined"][listing.guid].img_file
+
+
+    async def make_preview_combined(self, listing, source, cfg):
+
+        PREVIEW_WIDTH = 1280
+        PREVIEW_HEIGHT = 720
+        ANIMATION_SKIP = 4
+
+        # TILES_X = 5
+        # TILES_Y = 5
+
+        inset_scale = cfg.scale or 0.25
+        inset_offset = cfg.offset or 0
+        border_color = cfg.border.color or "black"
+        border_width = cfg.border.width or 1
+        tile_skip = cfg.skip or None
+
+        combined_img = wand.image.Image(
+            width=PREVIEW_WIDTH, height=PREVIEW_HEIGHT,
+            background="black"
+        )
+
+        thumbnail_url = source.url_preview
+        thumbnail_img = wand.image.Image(filename=thumbnail_url)
+        thumbnail_img.trim(fuzz=20)
+
+        cover_url = listing.cover
+        cover_img = wand.image.Image(filename=cover_url)
+        cover_img.trim(fuzz=20)
+
+        body_url = await self.preview_content_body(cfg, listing, source)
+        body_img = wand.image.Image(filename=body_url)
+        body_img.trim(fuzz=20)
+
+
+        cover_img.transform(resize=f"{PREVIEW_WIDTH/3}x{PREVIEW_HEIGHT/3}")
+
+        body_img.transform(resize=f"{PREVIEW_WIDTH/3}x{PREVIEW_HEIGHT}")
+
+        thumbnail_img.transform(
+            resize=f"{PREVIEW_WIDTH-body_img.width}x{PREVIEW_HEIGHT}^",
+        )
+
+        combined_img.composite(
+            thumbnail_img,
+            left=body_img.width,
+            top=0
+        )
+
+        combined_img.composite(
+            body_img,
+            left=0,
+            top=0
+        )
+
+        combined_img.composite(
+            cover_img,
+            left=combined_img.width-cover_img.width,
+            top=combined_img.height-cover_img.height
+        )
+
+        combined_file = os.path.join(self.tmp_dir, f"combined.{listing.guid}.png")
+        combined_img.save(filename=combined_file)
+
+
+        return AttrDict(
+            img_file=combined_file
+        )
+
+
 class FeedsFilter(HiddenFilterMixin, PropertyFilter):
     pass
 
@@ -1214,6 +1303,8 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         self.pagination_cursor = None
         self.limiter = get_limiter(rate=self.RATE_LIMIT, capacity=self.BURST_LIMIT)
         self.listing_lock = asyncio.Lock()
+        self.preview_lock = asyncio.Lock()
+
 
     @property
     def VIEW(self):
@@ -1711,3 +1802,4 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
     def playlist_title(self):
         return f"[{self.CONFIG_IDENTIFIER}]"
         # return f"{self.CONFIG_IDENTIFIER}/{self.feed.locator if self.selected_channels else 'all'}"
+

@@ -14,6 +14,7 @@ from pony.orm import *
 import httpcore
 httpcore.SyncHTTPTransport = None
 from googletrans import Translator
+from orderedattrdict import DefaultAttrDict
 # from pygoogletranslation import Translator
 
 from . import config
@@ -585,6 +586,12 @@ class ProviderDataTable(
     @property
     def tmp_dir(self):
         return self.provider.tmp_dir
+
+    @property
+    def preview_files(self):
+        if not hasattr(self, "_preview_files"):
+            self._preview_files = DefaultAttrDict(lambda: DefaultAttrDict(None))
+        return self._preview_files
 
     @property
     def NAME(self):
