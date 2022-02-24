@@ -39,13 +39,11 @@ DATETIME_RANGE_RE = re.compile(
     f"({DATETIME_RE})?\s*-?\s*({DATETIME_RE})?"
 )
 
-@model.attrclass()
-class FeedMediaChannel(model.MediaChannel):
-    """
-    A subclass of MediaChannel for providers that can distinguish between
-    individual broadcasts / episodes / events, perhaps with the ability to watch
-    on demand.
-    """
+class FeedMediaChannelMixin(object):
+
+    @property
+    def output_path(self):
+        return self.config.get_value().output.path or self.provider.output_path
 
     DEFAULT_MIN_ITEMS=10
     DEFAULT_MAX_ITEMS=500
@@ -183,11 +181,26 @@ class FeedMediaChannel(model.MediaChannel):
             return self.items.select(lambda i: not i.read).count()
 
 
+
+@model.attrclass()
+class FeedMediaChannel(FeedMediaChannelMixin, model.MediaChannel):
+    """
+    A subclass of MediaChannel for providers that can distinguish between
+    individual broadcasts / episodes / events, perhaps with the ability to watch
+    on demand.
+    """
+    pass
+
+
 class FeedMediaListingMixin(object):
 
     @property
     def feed(self):
         return self.channel
+
+    @property
+    def output_path(self):
+        return self.channel.output_path
 
     @db_session
     def mark_read(self):
@@ -1356,6 +1369,14 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
         )
 
     @property
+    def output_path(self):
+        return (
+            self.channels.selection.get_value().output.path
+            or super().output_path
+        )
+
+
+    @property
     def status(self):
         return self.filters["status"].value
 
@@ -1445,6 +1466,9 @@ class CachedFeedProvider(BackgroundTasksMixin, FeedProvider):
     def on_feed_change(self, source, selection):
         self.provider_data["selected_feed"] = [n.identifier for n in selection]
         self.save_provider_data()
+        if hasattr(state, "files_view"):
+            if self.output_path != state.files_view.root:
+                state.files_view.load_browser(self.output_path)
 
     def on_feed_select(self, source, selection):
         if not self.is_active:

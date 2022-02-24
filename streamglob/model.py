@@ -520,7 +520,7 @@ class MediaSourceMixin(object):
                         SUBJECT_MAP[group] = next(
                         e.name for e in os.scandir(
                             os.path.join(
-                                self.provider.output_path,
+                                listing.output_path,
                                 template_dir
                                 )
                             )
@@ -549,7 +549,7 @@ class MediaSourceMixin(object):
 
         # import ipdb; ipdb.set_trace()
 
-        return os.path.join(self.provider.output_path, outfile)
+        return os.path.join(listing.output_path, outfile)
 
     def __str__(self):
         return self.locator
@@ -686,6 +686,10 @@ class MediaListingMixin(object):
     def provider(self):
         return providers.get(self.provider_id)
         # return self.provider.NAME.lower()
+
+    @property
+    def output_path(self):
+        return self.provider.output_path
 
     @property
     def cover(self):
