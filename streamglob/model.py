@@ -394,17 +394,21 @@ class MediaSourceMixin(object):
 
     @property
     def default_name(self):
-        import time
+        return self.listing.title
 
-        if len(self.content) > 1:
-            raise NotImplementedError
+    # @property
+    # def default_name(self):
+    #     import time
 
-        for s in reversed(self.content[0].locator.split("/")):
-            if not len(s): continue
-            return "".join(
-                [c for c in s if c.isalpha() or c.isdigit() or c in [" ", "-"]]
-            ).rstrip()
-        return "untitled"
+    #     if len(self.content) > 1:
+    #         raise NotImplementedError
+
+    #     for s in reversed(self.content[0].locator.split("/")):
+    #         if not len(s): continue
+    #         return "".join(
+    #             [c for c in s if c.isalpha() or c.isdigit() or c in [" ", "-"]]
+    #         ).rstrip()
+    #     return "untitled"
 
     @property
     def timestamp(self):
@@ -599,8 +603,13 @@ class MediaSourceMixin(object):
             dirname = os.path.dirname(filename)
 
             for match_type in match_types:
+                # import ipdb; ipdb.set_trace()
                 if match_type == "exact":
                     path = filename
+                elif match_type == "title_prefix":
+                    path = os.path.join(dirname, f"{listing.title}*")
+                elif match_type == "title_substring":
+                    path = os.path.join(dirname, f"*{listing.title}*")
                 elif match_type == "uri" and getattr(self, "uri", None):
                     path = os.path.join(dirname, f"*{self.uri.replace('/', '+') +'='}*")
                 elif match_type == "guid" and getattr(listing, "guid", None):
@@ -677,9 +686,10 @@ class MediaListingMixin(object):
 
     @property
     def locators(self):
-        return [self.locator] + [
+        return [
             s.locator
-            for s in self.sources
+            for s in [self] + self.sources
+            if s.locator
         ]
 
     @property

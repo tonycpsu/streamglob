@@ -94,7 +94,7 @@ class WidgetFilter(Filter):
         changed = (self.widget.value != value)
         # self.widget.set_value(value)
         self.widget.value = value
-        if changed and self.provider.is_active:
+        if changed:# and self.provider.is_active:
             self.changed()
 
     @property

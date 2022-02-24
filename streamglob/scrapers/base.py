@@ -15,14 +15,27 @@ from aiostream import stream
 
 class BaseScraperMixin(object):
 
-    async def fetch(self, limit=None, resume=False, reverse=False, replace=False):
+    @property
+    @db_session
+    def page_token(self):
+        return self.attrs.get("page_token", None)
 
-        async def fetch_new():
-            async for item in self.scrape(resume=resume, reverse=reverse):
-                if not self.find_guid(item["guid"]):
-                    yield item
+    @page_token.setter
+    @db_session
+    def page_token(self, value):
+        self.attrs["page_token"] = value
+        commit()
 
-        async for item in stream.take(fetch_new(), limit):
+    async def fetch(
+            self,
+            limit=None, resume=False,
+            reverse=False, replace=False
+    ):
+
+        for item in await self.scrape(
+                resume=resume, reverse=reverse,
+                limit=limit, page_token=self.page_token
+        ):
             if not "url" in item:
                 raise RuntimeError("scraper item missing required attribute: url")
             url = item["url"]
@@ -47,6 +60,8 @@ class BaseScraperMixin(object):
             )
             yield listing
 
+        self.page_token = guid
+
     async def scrape(self, limit=None, resume=False, reverse=False):
         raise NotImplementedError
 
@@ -55,3 +70,5 @@ class BaseScraperMixin(object):
 class BaseScraper(BaseScraperMixin, FeedMediaChannel):
     pass
 
+class PaginatedScraperMixin(object):
+    pass

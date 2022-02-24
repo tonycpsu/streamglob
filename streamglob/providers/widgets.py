@@ -862,8 +862,9 @@ class ProviderDataTable(
 
     async def browse_selection(self, focus=False):
         listing = self.selected_listing
+        match_types = self.provider.config.output.match_types or []
         match = self.selected_source.get_local_path(
-            self.provider.config.output.match_types + ["directory"]
+            match_types + ["directory"]
         )
         if match:
             (path, match_type) = match

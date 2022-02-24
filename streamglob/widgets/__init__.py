@@ -328,7 +328,7 @@ class BaseDropdown(Observable, KeymapMovementMixin, panwid.Dropdown):
         try:
             self.selected_label = value
         except ValueError:
-            import ipdb; ipdb.set_trace()
+            self.selected_value = value
 
 
 class ScrollbackListBox(panwid.listbox.ScrollingListBox):
