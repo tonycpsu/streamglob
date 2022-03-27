@@ -19,6 +19,7 @@ import requests
 import html2text
 import webbrowser
 
+from .. import providers
 from .. import programs
 from .. import config
 from .. import model
