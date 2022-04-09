@@ -12,13 +12,10 @@ from contextlib import contextmanager
 
 from http.cookiejar import LWPCookieJar, Cookie
 import browser_cookie3
-from io import StringIO
 import requests
 from requests_html import HTMLSession, AsyncHTMLSession
 import asyncio
 from aiolimiter import AsyncLimiter
-import lxml
-import lxml, lxml.etree
 import yaml
 from orderedattrdict import AttrDict
 import orderedattrdict.yamlutils

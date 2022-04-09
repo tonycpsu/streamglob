@@ -942,6 +942,11 @@ class BAMMediaListingMixin(object):
     #     return self.provider.NAME.lower()
 
     @property
+    def safe_title(self):
+        # FIXME: duplicates TitledMediaListing
+        return utils.sanitize_filename(self.title)
+
+    @property
     def title(self):
         return f"{self.away_team.abbreviation}@{self.home_team.abbreviation}"
 

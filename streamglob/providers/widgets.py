@@ -321,13 +321,16 @@ class DownloadListingProviderMixin(object):
 
             downloader_spec = downloader_spec or source.download_helper
             with db_session:
-                listing = model.MediaListing[listing.media_listing_id]
-                download = model.MediaDownload.upsert(
-                    dict(
-                        media_listing=listing,
-                        source_index=index
+                try:
+                    listing = model.MediaListing[listing.media_listing_id]
+                    download = model.MediaDownload.upsert(
+                        dict(
+                            media_listing=listing,
+                            source_index=index
+                        )
                     )
-                )
+                except pony.orm.core.ObjectNotFound:
+                    pass
 
             task = model.DownloadMediaTask.attr_class(
                 provider=self.NAME,

@@ -433,7 +433,10 @@ class MediaSourceMixin(object):
 
 
         with db_session:
-            listing = listing.prefetch()
+            try:
+                listing = listing.prefetch()
+            except:
+                pass
 
             if group is None:
                 group = f"{listing.group}" if listing.group else ""
@@ -483,7 +486,7 @@ class MediaSourceMixin(object):
                     # import ipdb; ipdb.set_trace()
                     outfile = s.format_map(
                         SafeDict(
-                            self=self, listing=listing.prefetch(), # FIXME
+                            self=self, listing=listing, # FIXME
                             uri="uri=" + self.uri.replace("/", "+") +"=" if not match_glob else "*",
                             index=self.rank+1,
                             num=num or len(listing.sources) if listing else 0,
@@ -786,6 +789,8 @@ class MediaListingMixin(object):
     @property
     def group(self):
 
+        if not hasattr(self, "channel"):
+            return None
         # import ipdb; ipdb.set_trace()
         group_config = self.channel.config.get_value()
         if not isinstance(group_config, dict):

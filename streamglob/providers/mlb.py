@@ -5,6 +5,7 @@ import random
 import string
 import pkgutil
 import json
+from io import StringIO
 
 import urwid
 from wand.image import Image
@@ -15,6 +16,7 @@ from panwid.dialog import *
 from pony.orm import *
 import requests
 import dateutil.parser
+import lxml, lxml.etree
 
 from .. import session
 
