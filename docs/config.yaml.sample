@@ -243,6 +243,8 @@ profiles:
             min_items: 10
             max_items: 500
             max_age: 90
+        downloads:
+            max_age: 30
         time_zone: America/New_York
         time_format: 12h # or "24h", or any valid strftime format string
         default_resolution: 720p
