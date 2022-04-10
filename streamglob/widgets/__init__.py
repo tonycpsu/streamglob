@@ -436,6 +436,7 @@ class LogBuffer(logging.Handler):
         with self.lock:
             self.__listeners.pop(name, None)
 
+LOG_FORMAT = "{asctime} [{levelname:>8s}] {message}"
 
 class LogViewer(urwid.Widget):
     _sizing = frozenset(['box'])
@@ -463,9 +464,8 @@ class LogViewer(urwid.Widget):
 
         self.__formatter = logging.Formatter(
             config.settings.profile.log.get(
-                "format",
-                "%(asctime)s [%(module)16s:%(lineno)-4d] [%(levelname)8s] %(message)s"
-            ),
+                "format"
+            ) or LOG_FORMAT,
             style="{",
             datefmt="%Y-%m-%d %H:%M:%S"
         )

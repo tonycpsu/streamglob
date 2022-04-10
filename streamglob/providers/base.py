@@ -24,6 +24,7 @@ from . import widgets
 from .filters import TextFilter
 # from ..session import *
 from ..import session
+from ..exceptions import *
 from ..state import *
 from ..rules import HighlightRuleConfig, HighlightRule
 from ..programs import Player, Downloader
