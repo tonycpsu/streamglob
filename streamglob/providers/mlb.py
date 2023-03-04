@@ -1,3 +1,5 @@
+import base64
+import hashlib
 import logging
 logger = logging.getLogger(__name__)
 
@@ -364,6 +366,8 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
 
     AUTHZ_URL = "https://ids.mlb.com/oauth2/aus1m088yK07noBfh356/v1/authorize"
 
+    AUTHZ_TOKEN_URL = "https://ids.mlb.com/oauth2/aus1m088yK07noBfh356/v1/token"
+
     BAM_DEVICES_URL = "https://us.edge.bamgrid.com/devices"
 
     BAM_SESSION_URL = "https://us.edge.bamgrid.com/session"
@@ -547,16 +551,30 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
         # Okta authentication -- used to get media entitlement later
         # ----------------------------------------------------------------------
 
+        # Implements b64encode as per https://www.rfc-editor.org/rfc/rfc7636#appendix-A
+        def pkce_b64encode(s):
+            se = base64.urlsafe_b64encode(s)
+            se = se.split(b'=')[0]
+            se = se.replace(b'+', b'-')
+            se = se.replace(b'/', b'_')
+            return se
+
         def get_okta_token():
 
             STATE = gen_random_string(64)
             NONCE = gen_random_string(64)
 
+            # OAuth 2.0 PKCE
+            code_verifier = gen_random_string(64)
+            code_challenge = pkce_b64encode(hashlib.sha256(code_verifier.encode('ascii')).digest()).decode('ascii')
+
             AUTHZ_PARAMS = {
                 "client_id": self.okta_client_id,
                 "redirect_uri": "https://www.mlb.com/login",
-                "response_type": "id_token token",
+                "response_type": "code",
                 "response_mode": "okta_post_message",
+                "code_challenge": code_challenge,
+                "code_challenge_method": 'S256',
                 "state": STATE,
                 "nonce": NONCE,
                 "prompt": "none",
@@ -565,12 +583,31 @@ class MLBStreamSession(session.AuthenticatedStreamSession):
             }
             authz_response = self.get(self.AUTHZ_URL, params=AUTHZ_PARAMS)
             authz_content = authz_response.text
+
+            code = None
             for line in authz_content.split("\n"):
-                if "data.access_token" in line:
-                    return line.split("'")[1].encode('utf-8').decode('unicode_escape')
+                if "data.code" in line:
+                    code = line.split("'")[1].encode('utf-8').decode('unicode_escape')
                 elif "data.error = 'login_required'" in line:
                     raise SGProviderLoginException
-            raise Exception("could not authenticate: {authz_contet}")
+            if not code:
+                raise Exception(f"could not authenticate: {authz_content}")
+
+
+            AUTHZ_TOKEN_PARAMS = {
+                "client_id": self.okta_client_id,
+                "redirect_uri": "https://www.mlb.com/login",
+                "grant_type": "authorization_code",
+                "code_verifier": code_verifier,
+                "code": code
+            }
+            authz_token_response = self.post(self.AUTHZ_TOKEN_URL, data=AUTHZ_TOKEN_PARAMS)
+            if authz_token_response.status_code >= 400:
+                raise Exception(f"could not authenticate: {authz_token_response.text}")
+
+            authz_token_content = authz_token_response.json()
+            return authz_token_content['access_token']
+
 
         try:
             self.OKTA_ACCESS_TOKEN = get_okta_token()
