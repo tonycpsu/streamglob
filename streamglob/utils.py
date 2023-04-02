@@ -12,16 +12,29 @@ from datetime import datetime
 from . import resources
 from . import config
 
+DEFAULT_BLANK_IMAGE_URI = """\
+data://image/png;base64,\
+iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAA\
+AAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=\
+"""
+
 try:
     import importlib.resources as pkg_resources
 except ImportError:
     import importlib_resources as pkg_resources
 
-with pkg_resources.path(resources, "css") as css_path:
-    globals()["CSS_PATH"] = os.path.join(css_path, "body.css")
+try:
+    with pkg_resources.path(resources, "css") as css_path:
+        globals()["CSS_PATH"] = os.path.join(css_path, "body.css")
+except FileNotFoundError:
+    # FIXME: some users are having errors finding package resources
+    globals()["CSS_PATH"] = None
 
-with pkg_resources.path(resources, "images") as image_path:
-    globals()["BLANK_IMAGE_URI"] = os.path.join(image_path, "video.png")
+try:
+    with pkg_resources.path(resources, "images") as image_path:
+        globals()["BLANK_IMAGE_URI"] = os.path.join(image_path, "video.png")
+except FileNotFoundError:
+    globals()["BLANK_IMAGE_URI"] = DEFAULT_BLANK_IMAGE_URI
 
 
 MEDIA_URI_RE=re.compile("uri=(.*)=\.")
